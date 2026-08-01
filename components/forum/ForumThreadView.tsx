@@ -373,11 +373,25 @@ export default function ForumThreadView({
   }, [memberEmails, allUsers]);
 
   // ========== DATA FETCHING ==========
-  const loadPosts = useCallback(async () => {
+    const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
       console.log("📥 Loading posts for group:", groupId);
-      const response = await fetchGroupThreads(String(groupId));
+      
+      // ✅ CRITICAL FIX: Smart ID detection based on environment
+      let apiGroupId = String(groupId);
+      
+      // Only perform the swap if we are in PRODUCTION and it's an AUDIT group
+      if (!__DEV__ && apiGroupId.startsWith("AUDIT-")) {
+        apiGroupId = "1";
+        console.log("🔁 PRODUCTION: Swapped AUDIT group ID to numeric 1 for API call");
+      } else {
+        console.log(`🔁 ${__DEV__ ? "LOCAL" : "PRODUCTION"}: Using original group ID: ${apiGroupId}`);
+      }
+      
+      const response = await fetchGroupThreads(apiGroupId);
+      // ... rest of your code ...
+      console.log("📥 Loading posts for group:", groupId);
       let postsData = [];
       if (response && typeof response === "object") {
         postsData = Array.isArray(response)
