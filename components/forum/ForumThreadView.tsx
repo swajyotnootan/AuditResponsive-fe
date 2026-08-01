@@ -279,61 +279,48 @@ export default function ForumThreadView({
   }, [memberEmails]);
 
   // ========== ENSURE GROUP EXISTS ==========
-  const ensureGroupExists = async (): Promise<string | number> => {
-    if (!mountedRef.current || !groupId) return groupId;
-
+   // ========== ENSURE GROUP 1 EXISTS IN NEW DB ==========
+  const ensureGroupExists = useCallback(async () => {
+    if (!groupId) return;
+    
     try {
+      // We only do this for AUDIT groups in PRODUCTION
       const idStr = String(groupId);
+      if (!idStr.startsWith("AUDIT-") || __DEV__) return;
 
-      if (idStr.startsWith("AUDIT-") || idStr.includes("_AUDIT_")) {
-        console.log("✅ Audit forum - skipping group creation");
-        return groupId;
-      }
-
-      if (!isNaN(Number(idStr))) {
-        console.log("✅ Numeric group ID - skipping");
-        return groupId;
-      }
-
-      const userEmail = currentUserEmail || "system@jws.com";
-      const safeMemberEmails = Array.isArray(memberEmails) ? memberEmails : [];
-      const memberEmailList = safeMemberEmails
-        .map((m: any) => (typeof m === "string" ? m : m?.email || ""))
-        .filter(Boolean);
-
-      const requestBody = {
-        groupId: idStr,
-        groupName: groupName || `8D Group ${idStr}`,
-        description: `8D Discussion for ${idStr}`,
-        createdBy: userEmail,
-        members: memberEmailList,
-      };
-
-      console.log("📦 Creating/verifying 8D group:", requestBody);
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/forum/8d/groups`,
+      console.log("🛠️ Checking if group 1 exists in the new database...");
+      
+      // 1. Try to create the group (If it exists, the backend just returns it)
+      const createResponse = await fetch(
+        `${API_BASE_URL}/api/forum/groups`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groupName: 'Internal Audit Forum',
+            description: 'General Audit Discussions',
+            createdBy: 'system@jws.com',
+            members: [],
+            groupType: 'GENERAL'
+          })
+        }
       );
-
-      if (!response.ok) {
-        console.log("⚠️ 8D group creation failed, continuing anyway");
-        return groupId;
+      
+      if (!createResponse.ok) {
+        // If it's a 409 Conflict (already exists), that's fine!
+        if (createResponse.status === 409) {
+          console.log("✅ Group 1 already exists in the new database!");
+          return;
+        }
+        throw new Error(`Failed to create group: ${createResponse.status}`);
       }
-
-      const result = await response.json();
-      console.log("✅ 8D group ready:", result);
-      return groupId;
+      
+      console.log("✅ Successfully created group 1 in the new database!");
+      
     } catch (error) {
-      console.log("⚠️ Group creation failed, continuing anyway:", error);
-      return groupId;
+      console.error("❌ Error ensuring group exists:", error);
     }
-  };
-
+  }, [groupId]);
   // ========== FETCH GROUP MEMBERS ==========
   const fetchGroupMembers = useCallback(() => {
     const safeMemberEmails = Array.isArray(memberEmails) ? memberEmails : [];
