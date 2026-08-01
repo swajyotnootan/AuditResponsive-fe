@@ -446,7 +446,7 @@ export default function ForumThreadView({
   }, []);
 
   // ========== MESSAGE HANDLING ==========
-  const handleNewPost = async (newPostData: any) => {
+   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
     const userEmail = currentUser?.email || username || "";
@@ -459,7 +459,18 @@ export default function ForumThreadView({
     });
 
     try {
-      const res = await createForumPost(String(groupId), {
+      // ✅ CRITICAL FIX: Smart ID detection based on environment
+      let apiGroupId = String(groupId);
+      
+      // Only perform the swap if we are in PRODUCTION and it's an AUDIT group
+      if (!__DEV__ && apiGroupId.startsWith("AUDIT-")) {
+        apiGroupId = "1";
+        console.log("🔁 PRODUCTION: Swapped AUDIT group ID to numeric 1 for API call");
+      } else {
+        console.log(`🔁 ${__DEV__ ? "LOCAL" : "PRODUCTION"}: Using original group ID: ${apiGroupId}`);
+      }
+
+      const res = await createForumPost(apiGroupId, {
         content: newPostData.content,
         createdBy: userEmail,
         messageType: newPostData.messageType || "TEXT",

@@ -120,36 +120,30 @@ export const fetchGroupThreads = (groupId: string) => {
 };
 
 // ✅ FIXED: createForumPost with proper error handling
-// ✅ FIXED: createForumPost with conditional title field
 export const createForumPost = async (groupId: string, postData: any) => {
   const base = getApiBase(groupId);
   const endpoint = base === "/forum" ? "posts" : "threads";
   const url = `${API_BASE_URL}/api${base}/groups/${groupId}/${endpoint}`;
 
-  const content = postData.content || "";
-  
-  // ✅ CRITICAL FIX: Build the payload differently for Monolith vs 8D
-  let payload: any = {
-    content: content,
+  // ✅ Ensure postData has the correct structure
+  const payload = {
+    content: postData.content || "",
     createdBy: postData.createdBy || "anonymous",
     messageType: postData.messageType || "TEXT",
     attachments: postData.attachments || [],
   };
 
-  // 8D backend (EVT- groups) expects a "title" field
-  // Monolith backend (AUDIT- and numeric groups) does NOT expect a "title" field
-  if (base === "/forum/8d") {
-    const fallbackTitle = content.substring(0, 50) || "New Post";
-    payload.title = postData.title || fallbackTitle;
-  }
-
   console.log("📤 Creating forum post:", {
     url,
     payload: {
-      title: payload.title || "(No title for Monolith)",
       content: payload.content.substring(0, 50),
       messageType: payload.messageType,
       attachmentsCount: payload.attachments.length,
+      attachments: payload.attachments.map((a: any) => ({
+        type: a.attachmentType,
+        fileName: a.fileName,
+        fileDataLength: a.fileData?.length || 0,
+      })),
     },
   });
 
