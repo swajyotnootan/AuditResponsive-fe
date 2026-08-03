@@ -925,7 +925,7 @@ export default function TopManagementDashboard() {
       let allPlans: any[] = [];
       for (const year of years) {
         try {
-          const response = await fetch(`${API_BASE_URL}/audit-plan/${year}`, {
+          const response = await fetch(`${API_BASE_URL}/api/audit-plan/${year}`, {
             method: "GET",
             credentials: "include",
           });
@@ -987,7 +987,7 @@ export default function TopManagementDashboard() {
       let allDeptPlans: any[] = [];
       for (const year of years) {
         try {
-          const response = await fetch(`${API_BASE_URL}/department-plan/${year}`, {
+          const response = await fetch(`${API_BASE_URL}/api/department-plan/${year}`, {
             method: "GET",
             credentials: "include",
           });
@@ -1040,7 +1040,7 @@ export default function TopManagementDashboard() {
       for (const year of years) {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/audit-schedule/year/${year}`,
+            `${API_BASE_URL}/api/audit-schedule/year/${year}`,
             {
               method: "GET",
               credentials: "include",
@@ -1488,7 +1488,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/audit-plan/${selectedPlan.year}/approve?userId=${user.id}`,
+        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/approve?userId=${user.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1522,7 +1522,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/audit-plan/${selectedPlan.year}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/reject?userId=${user?.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1557,7 +1557,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/department-plan/${selectedDeptPlan.year}/approve?userId=${user?.id}`,
+        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/approve?userId=${user?.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1590,7 +1590,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/department-plan/${selectedDeptPlan.year}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/reject?userId=${user?.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1627,7 +1627,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/approve?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/approve?userId=${user?.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1661,7 +1661,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/reject?userId=${user?.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
