@@ -242,7 +242,7 @@ export default function IATFInternalAuditForm(props: any) {
     let locationHierarchy = getLocationHierarchy(user);
     if (!locationHierarchy) {
       try {
-        const response = await fetch(`${API_BASE_URL}/users/${user.id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
           credentials: "include",
         });
         if (response.ok) {
@@ -307,7 +307,7 @@ export default function IATFInternalAuditForm(props: any) {
   const fetchScheduleDetails = async () => {
     if (!scheduleId) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/audit-schedule/${scheduleId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/audit-schedule/${scheduleId}`, {
         credentials: "include",
       });
       if (response.ok) {
@@ -338,7 +338,7 @@ export default function IATFInternalAuditForm(props: any) {
     const deptUpper = department.toUpperCase().trim();
     if (deptUpper === "QA/QC" || deptUpper === "QC" || deptUpper === "Q.C") {
       try {
-        const res = await fetch(`${API_BASE_URL}/templates/type/IATF_16949`, {
+        const res = await fetch(`${API_BASE_URL}/api/templates/type/IATF_16949`, {
           credentials: "include",
         });
         if (res.ok) {
@@ -351,7 +351,7 @@ export default function IATFInternalAuditForm(props: any) {
     }
     try {
       const response = await fetch(
-        `${API_BASE_URL}/templates/iatf/by-department/${encodeURIComponent(department)}`,
+        `${API_BASE_URL}/api/templates/iatf/by-department/${encodeURIComponent(department)}`,
         { credentials: "include" },
       );
       if (response.ok) return await response.json();
@@ -440,7 +440,7 @@ export default function IATFInternalAuditForm(props: any) {
   const loadSheetQuestions = async (sheet: any) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/templates/${sheet.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/templates/${sheet.id}`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch template");
