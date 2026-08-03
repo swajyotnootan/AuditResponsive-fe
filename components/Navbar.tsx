@@ -1,45 +1,45 @@
 // components/Navbar.tsx
+import { useSidebar } from "@/components/context/SidebarContext";
 import { API_BASE_URL } from '@/config/apiConfig';
 import type { NavigationProp, RouteProp } from "@react-navigation/native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { router } from "expo-router";
 import {
-    ArrowLeft,
-    Bell,
-    Building2,
-    Calendar,
-    ChevronRight,
-    LogOut,
-    Mail,
-    Menu,
-    MoreVertical,
-    Shield,
-    User,
-    X,
+  ArrowLeft,
+  Bell,
+  Building2,
+  Calendar,
+  ChevronRight,
+  LogOut,
+  Mail,
+  Menu,
+  MoreVertical,
+  Shield,
+  User,
+  X,
 } from "lucide-react-native";
 import React, { ReactNode, useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    DeviceEventEmitter, // ✅ Added for native event listening
-    Image,
-    ImageErrorEventData,
-    ImageSourcePropType,
-    Keyboard,
-    Modal,
-    NativeSyntheticEvent,
-    Platform,
-    ScrollView,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    useWindowDimensions,
-    View,
-    ViewStyle,
+  Alert,
+  Animated,
+  DeviceEventEmitter, // ✅ Added for native event listening
+  Image,
+  ImageErrorEventData,
+  ImageSourcePropType,
+  Keyboard,
+  Modal,
+  NativeSyntheticEvent,
+  Platform,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
+  View,
+  ViewStyle,
 } from "react-native";
 import { useAuth } from "../components/context/AuthContext";
-import { useSidebar } from "../components/context/SidebarContext";
 import { getDashboardPath, getRoleDisplayName } from "../utils/roleUtils";
 import { useNotifications } from "./context/NotificationContext";
 import NotificationBell from "./NotificationBell";

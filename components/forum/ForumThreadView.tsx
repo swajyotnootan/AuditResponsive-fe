@@ -279,48 +279,61 @@ export default function ForumThreadView({
   }, [memberEmails]);
 
   // ========== ENSURE GROUP EXISTS ==========
-   // ========== ENSURE GROUP 1 EXISTS IN NEW DB ==========
-  const ensureGroupExists = useCallback(async () => {
-    if (!groupId) return;
-    
-    try {
-      // We only do this for AUDIT groups in PRODUCTION
-      const idStr = String(groupId);
-      if (!idStr.startsWith("AUDIT-") || __DEV__) return;
+  const ensureGroupExists = async (): Promise<string | number> => {
+    if (!mountedRef.current || !groupId) return groupId;
 
-      console.log("🛠️ Checking if group 1 exists in the new database...");
-      
-      // 1. Try to create the group (If it exists, the backend just returns it)
-      const createResponse = await fetch(
-        `${API_BASE_URL}/api/forum/groups`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            groupName: 'Internal Audit Forum',
-            description: 'General Audit Discussions',
-            createdBy: 'system@jws.com',
-            members: [],
-            groupType: 'GENERAL'
-          })
-        }
-      );
-      
-      if (!createResponse.ok) {
-        // If it's a 409 Conflict (already exists), that's fine!
-        if (createResponse.status === 409) {
-          console.log("✅ Group 1 already exists in the new database!");
-          return;
-        }
-        throw new Error(`Failed to create group: ${createResponse.status}`);
+    try {
+      const idStr = String(groupId);
+
+      if (idStr.startsWith("AUDIT-") || idStr.includes("_AUDIT_")) {
+        console.log("✅ Audit forum - skipping group creation");
+        return groupId;
       }
-      
-      console.log("✅ Successfully created group 1 in the new database!");
-      
+
+      if (!isNaN(Number(idStr))) {
+        console.log("✅ Numeric group ID - skipping");
+        return groupId;
+      }
+
+      const userEmail = currentUserEmail || "system@jws.com";
+      const safeMemberEmails = Array.isArray(memberEmails) ? memberEmails : [];
+      const memberEmailList = safeMemberEmails
+        .map((m: any) => (typeof m === "string" ? m : m?.email || ""))
+        .filter(Boolean);
+
+      const requestBody = {
+        groupId: idStr,
+        groupName: groupName || `8D Group ${idStr}`,
+        description: `8D Discussion for ${idStr}`,
+        createdBy: userEmail,
+        members: memberEmailList,
+      };
+
+      console.log("📦 Creating/verifying 8D group:", requestBody);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/forum/8d/groups`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        },
+      );
+
+      if (!response.ok) {
+        console.log("⚠️ 8D group creation failed, continuing anyway");
+        return groupId;
+      }
+
+      const result = await response.json();
+      console.log("✅ 8D group ready:", result);
+      return groupId;
     } catch (error) {
-      console.error("❌ Error ensuring group exists:", error);
+      console.log("⚠️ Group creation failed, continuing anyway:", error);
+      return groupId;
     }
-  }, [groupId]);
+  };
+
   // ========== FETCH GROUP MEMBERS ==========
   const fetchGroupMembers = useCallback(() => {
     const safeMemberEmails = Array.isArray(memberEmails) ? memberEmails : [];
@@ -360,25 +373,11 @@ export default function ForumThreadView({
   }, [memberEmails, allUsers]);
 
   // ========== DATA FETCHING ==========
-    const loadPosts = useCallback(async () => {
+  const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
       console.log("📥 Loading posts for group:", groupId);
-      
-      // ✅ CRITICAL FIX: Smart ID detection based on environment
-      let apiGroupId = String(groupId);
-      
-      // Only perform the swap if we are in PRODUCTION and it's an AUDIT group
-      if (!__DEV__ && apiGroupId.startsWith("AUDIT-")) {
-        apiGroupId = "1";
-        console.log("🔁 PRODUCTION: Swapped AUDIT group ID to numeric 1 for API call");
-      } else {
-        console.log(`🔁 ${__DEV__ ? "LOCAL" : "PRODUCTION"}: Using original group ID: ${apiGroupId}`);
-      }
-      
-      const response = await fetchGroupThreads(apiGroupId);
-      // ... rest of your code ...
-      console.log("📥 Loading posts for group:", groupId);
+      const response = await fetchGroupThreads(String(groupId));
       let postsData = [];
       if (response && typeof response === "object") {
         postsData = Array.isArray(response)
@@ -447,7 +446,7 @@ export default function ForumThreadView({
   }, []);
 
   // ========== MESSAGE HANDLING ==========
-   const handleNewPost = async (newPostData: any) => {
+  const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
     const userEmail = currentUser?.email || username || "";
@@ -460,18 +459,7 @@ export default function ForumThreadView({
     });
 
     try {
-      // ✅ CRITICAL FIX: Smart ID detection based on environment
-      let apiGroupId = String(groupId);
-      
-      // Only perform the swap if we are in PRODUCTION and it's an AUDIT group
-      if (!__DEV__ && apiGroupId.startsWith("AUDIT-")) {
-        apiGroupId = "1";
-        console.log("🔁 PRODUCTION: Swapped AUDIT group ID to numeric 1 for API call");
-      } else {
-        console.log(`🔁 ${__DEV__ ? "LOCAL" : "PRODUCTION"}: Using original group ID: ${apiGroupId}`);
-      }
-
-      const res = await createForumPost(apiGroupId, {
+      const res = await createForumPost(String(groupId), {
         content: newPostData.content,
         createdBy: userEmail,
         messageType: newPostData.messageType || "TEXT",

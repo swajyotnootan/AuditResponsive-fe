@@ -1,353 +1,166 @@
-// config/navigation.config.ts
-import { UserRole } from "@/types/user";
-
-export interface NavigationItem {
-  route: string;
-  title: string;
-  icon: string;
-  badge?: boolean;
-  action?: string;
-  tab?: string; // For tab-based routing (Lead Auditor, Initiator, etc.)
+import { useAuth } from "@/components/context/AuthContext";
+import { getNavigationByRole } from "@/config/navigation.config";
+import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
+import * as Icons from "lucide-react-native";
+import React from "react";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+ 
+interface SmartNavigatorProps {
+  type: "drawer" | "tabs";
+  onClose?: () => void;
 }
-
-// Role-based navigation configuration
-export const getNavigationByRole = (role: string): NavigationItem[] => {
-  const normalizedRole = role?.toUpperCase() as UserRole;
-
-  const commonItems: NavigationItem[] = [
-    { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
-  ];
-
-  switch (normalizedRole) {
-    case UserRole.MASTER:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/master?section=user-management", // ✅ Added ?section=
-          title: "User Management",
-          icon: "Users",
-          action: "user-management",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=enterprise-management", // ✅ Added ?section=
-          title: "Enterprise",
-          icon: "Building",
-          action: "enterprise-management",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=role-management", // ✅ Added ?section=
-          title: "Role Management",
-          icon: "Shield",
-          action: "role-management",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=audit-type-management", // ✅ Added ?section=
-          title: "Audit Types",
-          icon: "Award",
-          action: "audit-type-management",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=competency-management", // ✅ Added ?section=
-          title: "Competency",
-          icon: "GraduationCap",
-          action: "competency-management",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=logo-mgmt", // ✅ Added ?section=
-          title: "Logo Management",
-          icon: "CheckSquare",
-          action: "logo-mgmt",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=line-mgmt", // ✅ Added ?section=
-          title: "Line Management",
-          icon: "ClipboardList",
-          action: "line-mgmt",
-        },
-      ];
-    case UserRole.AUDITOR:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/auditor?tab=my-audits",
-          title: "My Audits",
-          icon: "ClipboardCheck",
-          tab: "my-audits", // ✅ NEW: Use tab parameter
-          badge: true,
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-        {
-          route: "/(app)/(tabs)/auditor?tab=ncr-pending",
-          title: "NCR Pending",
-          icon: "AlertTriangle",
-          tab: "ncr-pending", // ✅ NEW: Use tab parameter
-          badge: true,
-        },
-        {
-          route: "/(app)/(tabs)/auditor?tab=ncr-list",
-          title: "My NCRs",
-          icon: "TrendingUp",
-          tab: "ncr-list", // ✅ NEW: Use tab parameter
-          badge: true,
-        },
-      ];
-    case UserRole.HOD:
-      return [
-        ...commonItems,
-        { route: "/(app)/(tabs)/hod", title: "HOD Panel", icon: "Shield" },
-
-        {
-          route: "/hod/audits",
-          title: "Dept Audits",
-          icon: "ClipboardList",
-          badge: true,
-        },
-        {
-          route: "/hod/ncr-approvals",
-          title: "NCR Approvals",
-          icon: "CheckCircle",
-          badge: true,
-        },
-        { route: "/hod/settings", title: "Settings", icon: "Settings" },
-      ];
-
-    case UserRole.LEAD_AUDITOR:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=overview",
-          title: "Dashboard Overview",
-          icon: "BarChart2",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=audits",
-          title: "Audits",
-          icon: "Calendar",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=responses",
-          title: "CheckSheets",
-          icon: "FileText",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=ncrs",
-          title: "NCR Management",
-          icon: "AlertTriangle",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=auditors",
-          title: "Auditors",
-          icon: "Users",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=auditees",
-          title: "Auditees",
-          icon: "UserCheck",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-      ];
-
-    case UserRole.AUDITEE:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/auditee?tab=my-audits",
-          title: "My Audits",
-          icon: "UserCheck",
-          tab: "my-audits", // ✅ NEW: Use tab parameter
-        },
-        {
-          route: "/(app)/(tabs)/auditee?tab=ncr-pending",
-          title: "NCR Pending",
-          icon: "AlertCircle",
-          tab: "ncr-pending", // ✅ NEW: Use tab parameter
-          badge: true,
-        },
-        {
-          route: "/(app)/(tabs)/auditee?tab=my-ncrs",
-          title: "My NCRs",
-          icon: "TrendingUp",
-          tab: "my-ncrs", // ✅ NEW: Use tab parameter
-          badge: true,
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-      ];
-    case UserRole.AUDIT_MANAGER:
-      return [
-        {
-          route: "/(app)/(tabs)/audit-manager?tab=dashboard",
-          title: "Dashboard",
-          icon: "Home",
-          tab: "dashboard",
-        },
-        {
-          route: "/(app)/(tabs)/audit-manager?tab=schedules",
-          title: "Schedules Workflow",
-          icon: "Folder",
-          tab: "schedules",
-        },
-        {
-          route: "/(app)/(tabs)/audit-manager?tab=ncr",
-          title: "NCR Management",
-          icon: "ClipboardList",
-          tab: "ncr",
-        },
-        {
-          route: "/(app)/(tabs)/audit-manager?tab=requests",
-          title: "Pending Requests",
-          icon: "MessageSquare",
-          tab: "requests",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-      ];
-    case UserRole.INITIATOR:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/initiator",
-          title: "All 8D",
-          icon: "Grid",
-        },
-        {
-          route: "/(app)/(tabs)/fresh-8d",
-          title: "Fresh 8D",
-          icon: "FilePlus",
-        },
-        {
-          route: "/(app)/(tabs)/ncr-8d",
-          title: "NCR 8D",
-          icon: "AlertCircle",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-      ];
-    case UserRole.TOP_MANAGEMENT:
-      return [
-        {
-          route: "/(app)/(tabs)/top-management?tab=overview",
-          title: "Dashboard Overview",
-          icon: "BarChart2",
-          tab: "overview",
-        },
-        {
-          route: "/(app)/(tabs)/top-management?tab=annual",
-          title: "Annual Plan",
-          icon: "Globe",
-          tab: "annual",
-        },
-        {
-          route: "/(app)/(tabs)/top-management?tab=dept",
-          title: "Dept Plan",
-          icon: "List", // or "BarChart2"
-          tab: "dept",
-        },
-        {
-          route: "/(app)/(tabs)/top-management?tab=week",
-          title: "Week Schedule",
-          icon: "Calendar",
-          tab: "week",
-        },
-        {
-          route: "/(app)/(tabs)/top-management?tab=daily",
-          title: "Daily Schedule",
-          icon: "CheckCircle",
-          tab: "daily",
-        },
-        // ... keep calendar/other common items
-      ];
-    // ... (keep the rest of the file the same)
-    case UserRole.HR_ADMIN:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/hr-admin",
-          title: "HR Panel",
-          icon: "Settings",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-        { route: "/admin/users", title: "Users", icon: "Users" },
-        {
-          route: "/admin/competency",
-          title: "Competency",
-          icon: "GraduationCap",
-        },
-      ];
-
-    case UserRole.QMS_ADMIN:
-      return [
-        ...commonItems,
-        {
-          route: "/(app)/(tabs)/qms-admin",
-          title: "QMS Panel",
-          icon: "Shield",
-        },
-        { route: "/compliance", title: "Compliance", icon: "CheckSquare" },
-      ];
-
-    default:
-      return commonItems;
-  }
-};
-
-// Check if user can access a specific route
-export const canAccessRoute = (role: string, route: string): boolean => {
-  const allowedRoutes = getNavigationByRole(role);
-  return allowedRoutes.some((item) => item.route === route);
-};
-
-// Get active tab from route
-export const getActiveTabFromRoute = (
-  role: string,
-  route: string,
-): string | null => {
-  const items = getNavigationByRole(role);
-  const matchedItem = items.find(
-    (item) =>
-      item.route === route ||
-      (item.route.includes("?") && route.includes(item.route.split("?")[0])),
+ 
+export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useLocalSearchParams();
+ 
+  if (!user) return null;
+ 
+  const navigationItems = getNavigationByRole(user.role);
+ 
+  // ✅ EXACT LEAD AUDITOR PATTERN - Simple router.push
+  const handleNavigation = (item: any) => {
+    onClose?.();
+    router.push(item.route as any);
+  };
+ 
+  const handleLogout = async () => {
+    onClose?.();
+    try {
+      await logout();
+      router.replace("/auth/login" as any);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+ 
+  // ✅ EXACT LEAD AUDITOR PATTERN - Simple active check
+  const isActive = (item: any) => {
+    const baseRoute = item.route.split("?")[0];
+ 
+    if (item.tab) {
+      return pathname === baseRoute && params?.tab === item.tab;
+    }
+ 
+    if (baseRoute === "/(app)/(tabs)") {
+      return (
+        (pathname === "/(app)/(tabs)" || pathname === "/(app)/(tabs)/") &&
+        !params?.tab &&
+        !params?.action &&
+        !params?.section
+      );
+    }
+ 
+    return pathname === baseRoute || pathname.startsWith(baseRoute + "/");
+  };
+ 
+  const getIcon = (iconName: string) => {
+    const iconMap: any = {
+      Home: Icons.Home,
+      Award: Icons.Award,
+      Calendar: Icons.Calendar,
+      CheckCircle: Icons.CheckCircle,
+      Users: Icons.Users,
+      Building: Icons.Building,
+      MessageCircle: Icons.MessageCircle,
+      BarChart: Icons.BarChart,
+      ClipboardCheck: Icons.ClipboardCheck,
+      FileText: Icons.FileText,
+      AlertTriangle: Icons.AlertTriangle,
+      Shield: Icons.Shield,
+      Settings: Icons.Settings,
+      Star: Icons.Star,
+      TrendingUp: Icons.TrendingUp,
+      UserCheck: Icons.UserCheck,
+      AlertCircle: Icons.AlertCircle,
+      PlusCircle: Icons.PlusCircle,
+      Globe: Icons.Globe,
+      GraduationCap: Icons.GraduationCap,
+      LayoutGrid: Icons.LayoutGrid,
+      Folder: Icons.Folder,
+      ClipboardList: Icons.ClipboardList,
+      MessageSquare: Icons.MessageSquare,
+      Factory: Icons.Factory,
+      ListChecks: Icons.ListChecks,
+      CheckSquare: Icons.CheckSquare,
+      BarChart2: Icons.BarChart2,
+      Activity: Icons.Activity,
+      FilePlus: Icons.FilePlus,
+      LogOut: Icons.LogOut,
+      Search: Icons.Search,
+    };
+    return iconMap[iconName] || Icons.Circle;
+  };
+ 
+  return (
+    <View
+      className="flex-1 bg-white border-r border-slate-200"
+      style={{ width: 256 }}
+    >
+      <View className="px-5 pt-6 pb-4 border-b border-slate-100">
+        <Text className="text-lg font-bold text-slate-900">Qsutra</Text>
+        <Text className="text-xs text-slate-500">Quality Management</Text>
+      </View>
+ 
+      <ScrollView className="flex-1 pt-2">
+        {navigationItems.map((item, index) => {
+          const IconComponent = getIcon(item.icon);
+          const active = isActive(item);
+ 
+          return (
+            <TouchableOpacity
+              key={`${item.route}-${item.tab || index}`}
+              onPress={() => handleNavigation(item)}
+              className={`flex-row items-center px-5 py-3 mx-3 rounded-lg mb-0.5 ${
+                active
+                  ? "bg-blue-50 border-l-4 border-blue-600"
+                  : "border-l-4 border-transparent"
+              }`}
+              activeOpacity={0.7}
+            >
+              <View
+                className={`p-1.5 rounded-lg ${active ? "bg-blue-100" : ""}`}
+              >
+                <IconComponent
+                  size={20}
+                  color={active ? "#00529B" : "#64748b"}
+                  strokeWidth={active ? 2 : 1.5}
+                />
+              </View>
+              <Text
+                className={`ml-3 text-sm flex-1 ${active ? "text-blue-900 font-semibold" : "text-slate-600"}`}
+              >
+                {item.title}
+              </Text>
+              {item.badge && (
+                <View className="items-center justify-center w-5 h-5 bg-red-500 rounded-full">
+                  <Text className="text-xs font-bold text-white">!</Text>
+                </View>
+              )}
+              {active && (
+                <View className="w-1.5 h-1.5 bg-blue-600 rounded-full ml-2" />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+ 
+      <TouchableOpacity
+        onPress={handleLogout}
+        className="flex-row items-center px-5 py-4 border-t border-slate-100 active:bg-red-50"
+        activeOpacity={0.7}
+      >
+        <Icons.LogOut size={20} color="#ef4444" strokeWidth={1.5} />
+        <Text className="ml-3 text-sm font-medium text-red-500">Logout</Text>
+      </TouchableOpacity>
+ 
+      <View className="px-5 py-2">
+        <Text className="text-xs text-center text-gray-300">v2.0.1</Text>
+      </View>
+    </View>
   );
-  return matchedItem?.tab || matchedItem?.action || null;
-};
-
-// Get navigation items for a specific role with tab parameter
-export const getNavigationWithTab = (
-  role: string,
-  tab?: string,
-): NavigationItem[] => {
-  const items = getNavigationByRole(role);
-  if (tab) {
-    return items.map((item) => ({
-      ...item,
-      route: item.route.includes("?") ? item.route : `${item.route}?tab=${tab}`,
-    }));
-  }
-  return items;
-};
+}
+ 
+ 
