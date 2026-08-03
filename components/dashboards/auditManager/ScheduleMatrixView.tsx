@@ -17,7 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-
+ 
 const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
@@ -31,7 +31,7 @@ const COLORS = {
   primaryDark: "#1e3a8a",
   primaryLight: "#93c5fd",
 };
-
+ 
 const ScheduleMatrixView = ({
   departments,
   deptPlanData,
@@ -48,11 +48,11 @@ const ScheduleMatrixView = ({
   const { width, height } = useWindowDimensions();
   const isDesktop = width >= 768;
   const [popupSchedules, setPopupSchedules] = useState<any>(null);
-
+ 
   // ✅ REPLACE THIS FUNCTION
   const getSchedulesForCell = (department: string, week: string) => {
     if (!schedules || schedules.length === 0) return [];
-
+ 
     return schedules.filter((s: any) => {
       // 1. Normalize Department (case-insensitive, trim spaces)
       const scheduleDept = String(s.department || "")
@@ -61,11 +61,11 @@ const ScheduleMatrixView = ({
       const cellDept = String(department || "")
         .trim()
         .toLowerCase();
-
+ 
       // 2. Normalize Week (extracts only numbers: "W-1" -> "1", "1" -> "1")
       const scheduleWeek = String(s.week || "").replace(/[^0-9]/g, "");
       const cellWeek = String(week || "").replace(/[^0-9]/g, "");
-
+ 
       // 3. Normalize Month (handles "Apr" vs "April" vs "4")
       const scheduleMonth = String(s.month || "")
         .trim()
@@ -73,27 +73,27 @@ const ScheduleMatrixView = ({
       const cellMonth = String(selectedMonth || "")
         .trim()
         .toLowerCase();
-
+ 
       const isDeptMatch = scheduleDept === cellDept;
       const isWeekMatch = scheduleWeek === cellWeek;
       // Check if month matches exactly OR starts with the same 3 letters (Apr == April)
       const isMonthMatch =
         scheduleMonth === cellMonth ||
         scheduleMonth.startsWith(cellMonth.substring(0, 3));
-
+ 
       return isDeptMatch && isWeekMatch && isMonthMatch;
     });
   };
-
+ 
   const getAuditElementsForDept = (department: string) => {
     return (
       deptPlanData[department]?.find((m: any) => m.month === selectedMonth)
         ?.elements || []
     );
   };
-
+ 
   const displayDepartments = departments.length > 0 ? departments : [];
-
+ 
   const getWeekWorkingDays = (year: number, month: string, week: string) => {
     const weekNum = parseInt(week.split("-")[1]);
     const monthMap: Record<string, number> = {
@@ -113,14 +113,14 @@ const ScheduleMatrixView = ({
     const monthNum = monthMap[month];
     if (monthNum === undefined)
       return { hasWorkingDays: true, workingDaysCount: 5 };
-
+ 
     const actualYear =
       month === "Jan" || month === "Feb" || month === "Mar" ? year + 1 : year;
     const firstDayOfMonth = new Date(actualYear, monthNum, 1);
     const firstDayWeekday = firstDayOfMonth.getDay();
     let startDay, endDay;
     const monthDays = new Date(actualYear, monthNum + 1, 0).getDate();
-
+ 
     switch (weekNum) {
       case 1:
         startDay = 1;
@@ -149,19 +149,19 @@ const ScheduleMatrixView = ({
       default:
         return { hasWorkingDays: true, workingDaysCount: 5 };
     }
-
+ 
     startDay = Math.max(1, Math.min(startDay, monthDays));
     endDay = Math.max(startDay, Math.min(endDay, monthDays));
-
+ 
     let workingDaysCount = 0;
     for (let day = startDay; day <= endDay; day++) {
       const dayOfWeek = new Date(actualYear, monthNum, day).getDay();
       if (dayOfWeek >= 1 && dayOfWeek <= 5) workingDaysCount++;
     }
-
+ 
     return { hasWorkingDays: workingDaysCount > 0, workingDaysCount };
   };
-
+ 
   const getDisplayNames = (names: string[], maxDisplay = 2) => {
     if (!names || names.length === 0) return "-";
     if (names.length === 1) return names[0].split(" ")[0];
@@ -172,7 +172,7 @@ const ScheduleMatrixView = ({
       .map((n) => n.split(" ")[0])
       .join(", ")} +${names.length - maxDisplay}`;
   };
-
+ 
   const handlePlusClick = (
     department: string,
     week: string,
@@ -180,9 +180,9 @@ const ScheduleMatrixView = ({
   ) => {
     setPopupSchedules({ department, week, schedules: cellSchedules });
   };
-
+ 
   const closePopup = () => setPopupSchedules(null);
-
+ 
   const handleDeleteFromPopup = (scheduleId: number, scheduleMonth: string) => {
     onDeleteSchedule(scheduleId, scheduleMonth);
     setPopupSchedules((prev: any) => ({
@@ -190,7 +190,7 @@ const ScheduleMatrixView = ({
       schedules: prev.schedules.filter((s: any) => s.id !== scheduleId),
     }));
   };
-
+ 
   return (
     <View style={styles.container}>
       {/* ✅ FIX 1: Add contentContainerStyle={{ flexGrow: 1 }} */}
@@ -231,7 +231,7 @@ const ScheduleMatrixView = ({
               );
             })}
           </View>
-
+ 
           {/* Body */}
           {displayDepartments.length === 0 ? (
             <View style={styles.emptyRow}>
@@ -266,7 +266,7 @@ const ScheduleMatrixView = ({
                     const canClick = canEdit && workingInfo.hasWorkingDays;
                     const hasMultipleSchedules = cellSchedules.length > 1;
                     const primarySchedule = cellSchedules[0];
-
+ 
                     return (
                       <TouchableOpacity
                         key={week}
@@ -300,7 +300,7 @@ const ScheduleMatrixView = ({
                                 </Text>
                               </TouchableOpacity>
                             )}
-
+ 
                             <Text
                               style={styles.leadAuditorText}
                               numberOfLines={1}
@@ -313,7 +313,7 @@ const ScheduleMatrixView = ({
                                 ).split(" ")[0]
                               }
                             </Text>
-
+ 
                             {(
                               primarySchedule.coAuditorNames ||
                               primarySchedule.teamAuditorNames ||
@@ -331,7 +331,7 @@ const ScheduleMatrixView = ({
                                 </Text>
                               </View>
                             )}
-
+ 
                             <Text style={styles.elementsText}>
                               {primarySchedule.auditElements
                                 ?.map(
@@ -340,7 +340,7 @@ const ScheduleMatrixView = ({
                                 )
                                 .join(", ") || "-"}
                             </Text>
-
+ 
                             {(primarySchedule.auditeeNames || []).length >
                               0 && (
                               <Text
@@ -354,11 +354,11 @@ const ScheduleMatrixView = ({
                                 )}
                               </Text>
                             )}
-
+ 
                             <View style={{ marginTop: 4 }}>
                               {getStatusBadge(primarySchedule.status)}
                             </View>
-
+ 
                             {canEdit && !hasMultipleSchedules && (
                               <TouchableOpacity
                                 onPress={() => {
@@ -372,7 +372,7 @@ const ScheduleMatrixView = ({
                                 <Trash2 size={12} color="#EF4444" />
                               </TouchableOpacity>
                             )}
-
+ 
                             {canEdit && (
                               <TouchableOpacity
                                 onPress={() =>
@@ -388,7 +388,7 @@ const ScheduleMatrixView = ({
                         ) : (
                           <View style={styles.emptyCell}>
                             {workingInfo.hasWorkingDays ? (
-                              <>
+                              <View style={{ alignItems: "center" }}>
                                 <Plus
                                   size={16}
                                   color={COLORS.primary}
@@ -397,7 +397,7 @@ const ScheduleMatrixView = ({
                                 <Text style={styles.emptyCellText}>
                                   Click to add
                                 </Text>
-                              </>
+                              </View>
                             ) : (
                               <Text style={styles.noWorkingDaysText}>
                                 No working days
@@ -414,7 +414,7 @@ const ScheduleMatrixView = ({
           )}
         </View>
       </ScrollView>
-
+ 
       {/* Popup for Multiple Schedules */}
       {popupSchedules && (
         <Modal
@@ -451,7 +451,7 @@ const ScheduleMatrixView = ({
                   <X size={20} color="#FFF" />
                 </TouchableOpacity>
               </View>
-
+ 
               {/* Popup Content */}
               <ScrollView style={styles.popupBody}>
                 <View style={styles.popupGrid}>
@@ -468,7 +468,7 @@ const ScheduleMatrixView = ({
                       const auditeeText = (schedule.auditeeNames || []).join(
                         ", ",
                       );
-
+ 
                       return (
                         <View key={schedule.id} style={styles.popupCard}>
                           {/* Compact Header */}
@@ -496,7 +496,7 @@ const ScheduleMatrixView = ({
                             </View>
                             <View>{getStatusBadge(schedule.status)}</View>
                           </View>
-
+ 
                           {/* 2-Column Body */}
                           <View style={styles.popupCardBody}>
                             <View style={styles.popupCardColumn}>
@@ -528,7 +528,7 @@ const ScheduleMatrixView = ({
                               </Text>
                             </View>
                           </View>
-
+ 
                           {/* Compact Remarks */}
                           {schedule.remarks && (
                             <View style={styles.popupCardRemarks}>
@@ -541,7 +541,7 @@ const ScheduleMatrixView = ({
                               </Text>
                             </View>
                           )}
-
+ 
                           {/* Compact Footer Actions */}
                           <View style={styles.popupCardFooter}>
                             {canEdit && (
@@ -584,7 +584,7 @@ const ScheduleMatrixView = ({
                     },
                   )}
                 </View>
-
+ 
                 <View style={styles.popupSummary}>
                   <CheckCircle size={16} color={COLORS.primaryDark} />
                   <Text style={styles.popupSummaryText}>
@@ -593,7 +593,7 @@ const ScheduleMatrixView = ({
                   </Text>
                 </View>
               </ScrollView>
-
+ 
               {/* Popup Footer */}
               <View style={styles.popupFooter}>
                 <TouchableOpacity
@@ -626,7 +626,7 @@ const ScheduleMatrixView = ({
     </View>
   );
 };
-
+ 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.card,
@@ -1070,5 +1070,7 @@ const styles = StyleSheet.create({
     color: COLORS.primaryDark,
   },
 });
-
+ 
 export default ScheduleMatrixView;
+ 
+ 
