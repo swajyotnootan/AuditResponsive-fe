@@ -1115,14 +1115,14 @@ export default function Form5DetailedView({
           Authorization: `Bearer ${token}`, // Adjust if your backend uses a different auth scheme
         };
 
-        const auditorsUrl = `${API_BASE_URL}/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
+        const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
         const auditorsRes = await fetch(auditorsUrl, { headers });
         const auditorsData = await auditorsRes.json();
         setDepartmentAuditors(
           Array.isArray(auditorsData) ? auditorsData : auditorsData.data || [],
         );
 
-        const auditeesUrl = `${API_BASE_URL}/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
+        const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
         const auditeesRes = await fetch(auditeesUrl, { headers });
         const auditeesData = await auditeesRes.json();
         setDepartmentAuditees(
@@ -1797,7 +1797,7 @@ export default function Form5DetailedView({
     setSubmitting(true);
     try {
       // ✅ FIXED: Using fetch with API_BASE_URL
-      const url = `${API_BASE_URL}/audit-schedule/detailed/${scheduleId}/request-changes?userId=${getUserIdAsNumber()}`;
+      const url = `${API_BASE_URL}/api/audit-schedule/detailed/${scheduleId}/request-changes?userId=${getUserIdAsNumber()}`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -2035,7 +2035,7 @@ export default function Form5DetailedView({
       // Fetch auditors and auditees for bulk
       const fetchBulkDepartmentUsers = async () => {
         try {
-          const auditorsUrl = `${API_BASE_URL}/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
+          const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
           const auditorsRes = await fetch(auditorsUrl);
           const auditorsData = await auditorsRes.json();
           setBulkDepartmentAuditors(
@@ -2043,7 +2043,7 @@ export default function Form5DetailedView({
               ? auditorsData
               : auditorsData.data || [],
           );
-          const auditeesUrl = `${API_BASE_URL}/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
+          const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
           const auditeesRes = await fetch(auditeesUrl);
           const auditeesData = await auditeesRes.json();
           setBulkDepartmentAuditees(
