@@ -1,25 +1,25 @@
 // app/services/auditScheduleApi.ts
 
-import { API_BASE_URL } from "@/config/apiConfig";
 import axios, { AxiosResponse } from "axios";
+import { Platform } from "react-native";
 
 // ============================================================================
 // BASE URL CONFIGURATION
 // ============================================================================
-// const getBaseURL = (): string => {
-//   if (__DEV__) {
-//     return (
-//       Platform.select({
-//         ios: "http://10.2.0.95:8080/api",
-//         android: "http://10.2.0.95:8080/api",
-//         default: "http://10.2.0.73:8080/api",
-//       }) || "http://10.2.0.73:8080/api"
-//     );
-//   }
-//   return "https://your-production-api.com/api";
-// };
+const getBaseURL = (): string => {
+  if (__DEV__) {
+    return (
+      Platform.select({
+        ios: "http://10.2.0.95:8080/api",
+        android: "http://10.2.0.95:8080/api",
+        default: "http://10.2.0.73:8080/api",
+      }) || "http://10.2.0.73:8080/api"
+    );
+  }
+  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
+};
 
-// const API_BASE_URL = getBaseURL();
+const API_BASE_URL = getBaseURL();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
