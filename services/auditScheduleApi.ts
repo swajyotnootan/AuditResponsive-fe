@@ -1,8 +1,8 @@
 // app/services/auditScheduleApi.ts
-
+ 
 import axios, { AxiosResponse } from "axios";
 import { Platform } from "react-native";
-
+ 
 // ============================================================================
 // BASE URL CONFIGURATION
 // ============================================================================
@@ -11,23 +11,23 @@ const getBaseURL = (): string => {
     return (
       Platform.select({
         ios: "http://10.2.0.95:8080/api",
-        android: "http://10.2.0.95:8080/api",
-        default: "http://10.2.0.73:8080/api",
-      }) || "http://10.2.0.73:8080/api"
+        android: "http://10.2.0.74:8080/api",
+        default: "http://10.2.0.74:8080/api",
+      }) || "http://10.2.0.74:8080/api"
     );
   }
   return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
 };
-
+ 
 const API_BASE_URL = getBaseURL();
-
+ 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
   withCredentials: true,
 });
-
+ 
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -43,7 +43,7 @@ export interface User {
   department?: string;
   profileImage?: string;
 }
-
+ 
 export interface AuditSchedule {
   id: number | string;
   auditNumber: string;
@@ -69,7 +69,7 @@ export interface AuditSchedule {
   teamAuditorNames?: string[] | string;
   progress?: number;
 }
-
+ 
 export interface PendingRequest {
   requestId: string;
   scheduleId: string | number;
@@ -92,7 +92,7 @@ export interface PendingRequest {
   status: string;
   requestedAt: string;
 }
-
+ 
 export interface NCR {
   id: string;
   ncrNumber: string;
@@ -105,7 +105,7 @@ export interface NCR {
   createdAt: string;
   updatedAt: string;
 }
-
+ 
 export interface ForumMessage {
   id: string;
   content: string;
@@ -114,7 +114,7 @@ export interface ForumMessage {
   createdAt: string;
   updatedAt: string;
 }
-
+ 
 export interface ConflictCheckParams {
   auditorId: string | number;
   auditeeId: string | number;
@@ -123,7 +123,7 @@ export interface ConflictCheckParams {
   planYear: number;
   excludeScheduleId?: string | number | null;
 }
-
+ 
 export interface AuditResponse {
   id?: string | number;
   checkSheet?: { id: string | number; processName?: string } | null;
@@ -152,20 +152,19 @@ export interface AuditResponse {
   reviewerComments?: string;
   approved?: boolean;
 }
-
 // ============================================================================
 // HELPER TYPE FOR API RESPONSE
 // ============================================================================
 type ApiResponse<T = any> = Promise<AxiosResponse<T>>;
-
+ 
 // ============================================================================
 // AUDIT SCHEDULE API
 // ============================================================================
-
-export const auditScheduleApi = {
+ 
+export const auditScheduleAPI = {
   // ========== USER MANAGEMENT ==========
   getUsers: (): ApiResponse<User[]> => api.get("/users"),
-
+ 
   // Get ALL auditors (both AUDITOR and LEAD_AUDITOR)
   getAuditors: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
@@ -173,25 +172,25 @@ export const auditScheduleApi = {
       (u: User) => u.role === "AUDITOR" || u.role === "LEAD_AUDITOR",
     );
   },
-
+ 
   // Get ONLY AUDITEE role (NOT HOD)
   getAuditees: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
     return response.data.filter((u: User) => u.role === "AUDITEE");
   },
-
+ 
   // Get LEAD AUDITORS only
   getLeadAuditors: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
     return response.data.filter((u: User) => u.role === "LEAD_AUDITOR");
   },
-
+ 
   // Get REGULAR AUDITORS only
   getRegularAuditors: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
     return response.data.filter((u: User) => u.role === "AUDITOR");
   },
-
+ 
   // Get all auditors (both LEAD and REGULAR)
   getAllAuditors: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
@@ -199,48 +198,48 @@ export const auditScheduleApi = {
       (u: User) => u.role === "AUDITOR" || u.role === "LEAD_AUDITOR",
     );
   },
-
+ 
   // Get auditees list (only AUDITEE role)
   getAuditeesList: async (): Promise<User[]> => {
     const response: AxiosResponse<User[]> = await api.get("/users");
     return response.data.filter((u: User) => u.role === "AUDITEE");
   },
-
+ 
   // ========== FORUM APIs ==========
   createOrGetForum: (
     auditId: string | number,
     data: { groupName: string; members: string[] },
   ): ApiResponse<any> => api.post(`/forum/audit/${auditId}/init`, data),
-
+ 
   addForumMembers: (
     groupId: string,
     memberEmails: string[],
   ): ApiResponse<any> =>
     api.post(`/forum/groups/${groupId}/members`, { members: memberEmails }),
-
+ 
   getForumDetails: (groupId: string): ApiResponse<any> =>
     api.get(`/forum/groups/${groupId}`),
-
+ 
   updateForumSettings: (
     groupId: string,
     settings: { notificationsEnabled?: boolean; isLocked?: boolean },
   ): ApiResponse<any> => api.put(`/forum/groups/${groupId}/settings`, settings),
-
+ 
   removeForumMember: (groupId: string, memberEmail: string): ApiResponse<any> =>
     api.delete(
       `/forum/groups/${groupId}/members/${encodeURIComponent(memberEmail)}`,
     ),
-
+ 
   getForumMessages: (
     groupId: string,
     page: number = 1,
     limit: number = 50,
   ): ApiResponse<ForumMessage[]> =>
     api.get(`/forum/groups/${groupId}/messages`, { params: { page, limit } }),
-
+ 
   getNCRForumDetails: (groupId: string): Promise<any> =>
     api.get(`/forum/groups/${groupId}`).then((r: AxiosResponse) => r.data),
-
+ 
   sendForumMessage: (
     groupId: string,
     content: string,
@@ -252,11 +251,11 @@ export const auditScheduleApi = {
       authorEmail,
       authorName,
     }),
-
+ 
   // ========== CONFLICT DETECTION APIs ==========
   checkConflict: (params: ConflictCheckParams): ApiResponse<any> =>
     api.get("/audit-schedule/check-conflict", { params }),
-
+ 
   // ========== INDIVIDUAL SCHEDULE APPROVAL METHODS ==========
   submitScheduleForApproval: (
     scheduleId: string | number,
@@ -266,7 +265,7 @@ export const auditScheduleApi = {
       `/audit-schedule/schedule/${scheduleId}/submit?userId=${userId}`,
       {},
     ),
-
+ 
   approveSchedule: (
     scheduleId: string | number,
     userId: string | number,
@@ -276,7 +275,7 @@ export const auditScheduleApi = {
       `/audit-schedule/schedule/${scheduleId}/approve?userId=${userId}`,
       { comments },
     ),
-
+ 
   rejectSchedule: (
     scheduleId: string | number,
     userId: string | number,
@@ -285,7 +284,7 @@ export const auditScheduleApi = {
     api.post(`/audit-schedule/schedule/${scheduleId}/reject?userId=${userId}`, {
       reason,
     }),
-
+ 
   requestChanges: async (
     scheduleId: string | number,
     userId: string | number,
@@ -298,7 +297,7 @@ export const auditScheduleApi = {
     );
     return response.data;
   },
-
+ 
   // ========== DATE-WISE APPROVAL METHODS ==========
   submitDateForApproval: (
     year: number,
@@ -310,7 +309,7 @@ export const auditScheduleApi = {
       `/audit-schedule/date/${year}/${month}/${date}/submit?userId=${userId}`,
       {},
     ),
-
+ 
   approveDateSchedule: (
     year: number,
     month: number,
@@ -322,7 +321,7 @@ export const auditScheduleApi = {
       `/audit-schedule/date/${year}/${month}/${date}/approve?userId=${userId}`,
       { comments },
     ),
-
+ 
   rejectDateSchedule: (
     year: number,
     month: number,
@@ -334,11 +333,11 @@ export const auditScheduleApi = {
       `/audit-schedule/date/${year}/${month}/${date}/reject?userId=${userId}`,
       { reason },
     ),
-
+ 
   // ========== DATE-BASED SCHEDULES ==========
   getDateSchedulesByMonth: (year: number, month: number): ApiResponse<any> =>
     api.get(`/audit-schedule/date-schedules/${year}/${month}`),
-
+ 
   submitDetailedSchedule: (
     year: number,
     month: number,
@@ -348,7 +347,7 @@ export const auditScheduleApi = {
       `/audit-schedule/detailed/${year}/${month}/submit?userId=${userId}`,
       {},
     ),
-
+ 
   saveDetailedSchedule: (
     data: any,
     userId: string | number,
@@ -356,7 +355,7 @@ export const auditScheduleApi = {
     console.log("Sending to backend:", data);
     return api.post(`/audit-schedule/save-detailed?userId=${userId}`, data);
   },
-
+ 
   updateDetailedSchedule: (
     id: string | number,
     data: any,
@@ -365,19 +364,19 @@ export const auditScheduleApi = {
     console.log("Updating detailed schedule:", id, data);
     return api.put(`/audit-schedule/detailed/${id}?userId=${userId}`, data);
   },
-
+ 
   getAvailableTimeSlots: (date: string): ApiResponse<any> =>
     api.get(`/audit-schedule/available-time-slots/${date}`),
-
+ 
   // ========== DETAILED SCHEDULE APIs ==========
   getDetailedSchedules: (year: number): ApiResponse<any> =>
     api.get(`/audit-schedule/detailed/${year}`),
-
+ 
   getDetailedSchedulesByMonth: (
     year: number,
     month: number,
   ): ApiResponse<any> => api.get(`/audit-schedule/detailed/${year}/${month}`),
-
+ 
   downloadDetailedViewPdf: (
     year: number,
     month: number,
@@ -387,19 +386,19 @@ export const auditScheduleApi = {
       params,
       responseType: "blob",
     }),
-
+ 
   getPendingRequests: (): ApiResponse<PendingRequest[]> =>
     api.get("/audit-schedule/pending-requests"),
   // ========== SCHEDULE CRUD ==========
   getByYear: (year: number): ApiResponse<AuditSchedule[]> =>
     api.get(`/audit-schedule/year/${year}`),
-
+ 
   getByYearAndMonth: (
     year: number,
     month: number,
   ): ApiResponse<AuditSchedule[]> =>
     api.get(`/audit-schedule/year/${year}/month/${month}`),
-
+ 
   getByYearMonthAndDepartment: (
     year: number,
     month: number,
@@ -408,51 +407,51 @@ export const auditScheduleApi = {
     api.get(
       `/audit-schedule/year/${year}/month/${month}/department/${department}`,
     ),
-
+ 
   getSchedulesWithStatus: (
     userId: string | number,
   ): ApiResponse<AuditSchedule[]> =>
     api.get(`/audit-schedule/auditor/${userId}/schedules-with-status`),
-
+ 
   create: (
     data: Partial<AuditSchedule>,
     userId: string | number,
   ): ApiResponse<AuditSchedule> =>
     api.post(`/audit-schedule/create?userId=${userId}`, data),
-
+ 
   update: (
     id: string | number,
     data: Partial<AuditSchedule>,
   ): ApiResponse<AuditSchedule> => api.put(`/audit-schedule/${id}`, data),
-
+ 
   delete: (id: string | number): ApiResponse<any> =>
     api.delete(`/audit-schedule/${id}`),
-
+ 
   updateStatus: (id: string | number, status: string): ApiResponse<any> =>
     api.put(`/audit-schedule/${id}/status?status=${status}`, {}),
-
+ 
   // ========== AVAILABLE DATA APIs ==========
   getAvailableMonths: (year: number): ApiResponse<any[]> =>
     api.get(`/audit-schedule/available-months/${year}`),
-
+ 
   getAvailableDepartments: (
     year: number,
     month: number,
   ): ApiResponse<string[]> =>
     api.get(`/audit-schedule/available-departments/${year}/${month}`),
-
+ 
   getAuditElements: (
     year: number,
     month: number,
     department: string,
   ): ApiResponse<any[]> =>
     api.get(`/audit-schedule/audit-elements/${year}/${month}/${department}`),
-
+ 
   getSummary: (year: number, month: number): ApiResponse<any> =>
     api.get(`/audit-schedule/summary/${year}/${month}`),
-
+ 
   // ========== DEPARTMENT & COMPETENCY APIs ==========
-
+ 
   getFullyCompetentAuditors: async (
     department: string,
     auditElements: string[],
@@ -472,7 +471,7 @@ export const auditScheduleApi = {
     );
     return response.data;
   },
-
+ 
   getAuditorCompetencyStatus: async (
     auditorId: string | number,
     department: string,
@@ -489,14 +488,14 @@ export const auditScheduleApi = {
     );
     return response.data;
   },
-
+ 
   getLeadAuditorsByDepartment: async (department: string): Promise<User[]> => {
     const response = await api.get(
       `/audit-schedule/lead-auditors/by-department/${encodeURIComponent(department)}`,
     );
     return response.data;
   },
-
+ 
   getRegularAuditorsByDepartment: async (
     department: string,
   ): Promise<User[]> => {
@@ -505,42 +504,42 @@ export const auditScheduleApi = {
     );
     return response.data;
   },
-
+ 
   getAuditeesByDepartment: async (department: string): Promise<User[]> => {
     const response = await api.get(
       `/audit-schedule/auditees/by-department/${encodeURIComponent(department)}`,
     );
     return response.data;
   },
-
+ 
   getDepartmentMapping: async (department: string): Promise<any> => {
     const response = await api.get(
       `/audit-schedule/department-mapping/${encodeURIComponent(department)}`,
     );
     return response.data;
   },
-
+ 
   // ========== APPROVAL WORKFLOW ==========
   submitForApproval: (
     year: number,
     userId: string | number,
   ): ApiResponse<any> =>
     api.post(`/audit-schedule/${year}/submit?userId=${userId}`, {}),
-
+ 
   submitMonth: (
     year: number,
     month: number,
     userId: string | number,
   ): ApiResponse<any> =>
     api.post(`/audit-schedule/${year}/${month}/submit?userId=${userId}`, {}),
-
+ 
   approvePlan: (
     year: number,
     userId: string | number,
     comments?: string,
   ): ApiResponse<any> =>
     api.post(`/audit-schedule/${year}/approve?userId=${userId}`, { comments }),
-
+ 
   approveMonth: (
     year: number,
     month: number,
@@ -550,14 +549,14 @@ export const auditScheduleApi = {
     api.post(`/audit-schedule/${year}/${month}/approve?userId=${userId}`, {
       comments,
     }),
-
+ 
   rejectPlan: (
     year: number,
     userId: string | number,
     reason: string,
   ): ApiResponse<any> =>
     api.post(`/audit-schedule/${year}/reject?userId=${userId}`, { reason }),
-
+ 
   rejectMonth: (
     year: number,
     month: number,
@@ -567,23 +566,23 @@ export const auditScheduleApi = {
     api.post(`/audit-schedule/${year}/${month}/reject?userId=${userId}`, {
       reason,
     }),
-
+ 
   // ========== DOCUMENT OPERATIONS ==========
   saveDocument: (data: any, userId: string | number): ApiResponse<any> =>
     api.post(`/audit-schedule/save-document?userId=${userId}`, data),
-
+ 
   saveMonthDocument: (data: any, userId: string | number): ApiResponse<any> =>
     api.post(`/audit-schedule/save-month-document?userId=${userId}`, data),
-
+ 
   // ========== AUDIT RESPONSE APIs (Check Sheet Forms) ==========
-
+ 
   saveAuditResponse: (
     responseData: AuditResponse,
   ): ApiResponse<AuditResponse> => {
-    console.log("Saving audit response to:", `${API_BASE_URL}/templates/responses`);
+    console.log("Saving audit response to:", `${API_BASE_URL}/api/templates/responses`);
     return api.post("/templates/responses", responseData);
   },
-
+ 
   updateAuditResponse: (
     responseId: string | number,
     responseData: Partial<AuditResponse>,
@@ -597,35 +596,35 @@ export const auditScheduleApi = {
     };
     return api.put(`/templates/responses/${responseId}`, updateData);
   },
-
+ 
   submitAuditResponse: (
     responseId: string | number,
   ): ApiResponse<AuditResponse> => {
     console.log("Submitting audit response:", responseId);
     return api.put(`/templates/responses/${responseId}/submit`, {});
   },
-
+ 
   getAuditResponse: (
     responseId: string | number,
   ): ApiResponse<AuditResponse> => {
     console.log("Getting audit response:", responseId);
     return api.get(`/templates/responses/${responseId}`);
   },
-
+ 
   getAuditResponsesByCheckSheet: (
     checkSheetId: string | number,
   ): ApiResponse<AuditResponse[]> => {
     console.log("Fetching audit responses by check sheet:", checkSheetId);
     return api.get(`/templates/responses/check-sheet/${checkSheetId}`);
   },
-
+ 
   getAuditResponsesBySchedule: (
     auditScheduleId: string | number,
   ): ApiResponse<AuditResponse[]> => {
     console.log("Fetching audit responses by schedule:", auditScheduleId);
     return api.get(`/templates/responses/schedule/${auditScheduleId}`);
   },
-
+ 
   getAllAuditResponses: async (): Promise<AxiosResponse<AuditResponse[]>> => {
     console.log("Fetching all audit responses");
     try {
@@ -646,7 +645,7 @@ export const auditScheduleApi = {
       }
     }
   },
-
+ 
   reviewAuditResponse: (
     responseId: string | number,
     comments: string,
@@ -658,91 +657,91 @@ export const auditScheduleApi = {
     });
   },
 };
-
+ 
 // ============================================================================
 // AUDIT PLAN API (Form 3)
 // ============================================================================
-
+ 
 export const auditPlanApi = {
   getPlanByYear: (year: number): ApiResponse<any> =>
     api.get(`/audit-plan/${year}`),
-
+ 
   savePlan: (data: any): ApiResponse<any> => api.post("/audit-plan", data),
-
+ 
   updatePlan: (id: string | number, data: any): ApiResponse<any> =>
     api.put(`/audit-plan/${id}`, data),
-
+ 
   submitForApproval: (year: number): ApiResponse<any> =>
     api.post(`/audit-plan/${year}/submit`, {}),
-
+ 
   approvePlan: (year: number, comments?: string): ApiResponse<any> =>
     api.post(`/audit-plan/${year}/approve`, { comments }),
-
+ 
   rejectPlan: (year: number, reason: string): ApiResponse<any> =>
     api.post(`/audit-plan/${year}/reject`, { reason }),
 };
-
+ 
 // ============================================================================
 // DEPARTMENT PLAN API (Form 4)
 // ============================================================================
-
+ 
 export const departmentPlanApi = {
   getPlanByYear: (year: number): ApiResponse<any> =>
     api.get(`/department-plan/${year}`),
-
+ 
   savePlan: (data: any): ApiResponse<any> => api.post("/department-plan", data),
-
+ 
   updatePlan: (id: string | number, data: any): ApiResponse<any> =>
     api.put(`/department-plan/${id}`, data),
-
+ 
   submitForApproval: (year: number): ApiResponse<any> =>
     api.post(`/department-plan/${year}/submit`, {}),
-
+ 
   approvePlan: (year: number, comments?: string): ApiResponse<any> =>
     api.post(`/department-plan/${year}/approve`, { comments }),
-
+ 
   rejectPlan: (year: number, reason: string): ApiResponse<any> =>
     api.post(`/department-plan/${year}/reject`, { reason }),
 };
-
+ 
 // ============================================================================
 // NCR API
 // ============================================================================
-
+ 
 export const ncrApi = {
   getAllNCRs: (): ApiResponse<NCR[]> => api.get("/ncr/all"),
-
+ 
   getNCRById: (id: string): ApiResponse<NCR> => api.get(`/ncr/${id}`),
-
+ 
   getNCRByAuditId: (auditId: string): ApiResponse<NCR[]> =>
     api.get(`/ncr/audit/${auditId}`),
-
+ 
   createNCR: (data: Partial<NCR>): ApiResponse<NCR> => api.post("/ncr", data),
-
+ 
   updateNCR: (id: string, data: Partial<NCR>): ApiResponse<NCR> =>
     api.put(`/ncr/${id}`, data),
-
+ 
   deleteNCR: (id: string): ApiResponse<any> => api.delete(`/ncr/${id}`),
-
+ 
   submitForVerification: (id: string): ApiResponse<NCR> =>
     api.post(`/ncr/${id}/submit`, {}),
-
+ 
   verifyNCR: (
     id: string,
     data: { comments: string; approved: boolean },
   ): ApiResponse<NCR> => api.post(`/ncr/${id}/verify`, data),
-
+ 
   closeNCR: (id: string): ApiResponse<NCR> => api.post(`/ncr/${id}/close`, {}),
 };
-
+ 
 // ============================================================================
 // EXPORT ALL
 // ============================================================================
-
+ 
 // ============================================================================
 // FORUM API - Separate Export
 // ============================================================================
-
+ 
 export const forumApi = {
   create8DGroup: (data: {
     groupId: string;
@@ -751,32 +750,32 @@ export const forumApi = {
     createdBy: string;
     members: string[];
   }) => api.post("/forum/8d/groups", data),
-
+ 
   get8DGroup: (groupId: string) => api.get(`/forum/8d/groups/${groupId}`),
-
+ 
   addMembers: (groupId: string, members: string[]) =>
     api.post(`/forum/8d/groups/${groupId}/members`, { members }),
-
+ 
   removeMember: (groupId: string, email: string) =>
     api.delete(
       `/forum/8d/groups/${groupId}/members/${encodeURIComponent(email)}`,
     ),
-
+ 
   getMessages: (groupId: string, page: number = 1, limit: number = 50) =>
     api.get(`/forum/8d/groups/${groupId}/messages`, {
       params: { page, limit },
     }),
-
+ 
   sendMessage: (
     groupId: string,
     data: { content: string; authorEmail: string; authorName: string },
   ) => api.post(`/forum/8d/groups/${groupId}/messages`, data),
 };
-
+ 
 // ============================================================================
 // USER API - Separate Export
 // ============================================================================
-
+ 
 export const userApi = {
   getAll: () => api.get("/users"),
   getById: (id: string | number) => api.get(`/users/${id}`),
@@ -786,16 +785,18 @@ export const userApi = {
   update: (id: string | number, data: any) => api.put(`/users/${id}`, data),
   delete: (id: string | number) => api.delete(`/users/${id}`),
 };
-
+ 
 // ============================================================================
 // EXPORT ALL
 // ============================================================================
-
+ 
 export default {
-  auditScheduleApi,
+  auditScheduleAPI,
   auditPlanApi,
   departmentPlanApi,
   ncrApi,
   forumApi,
   userApi,
 };
+ 
+ 
