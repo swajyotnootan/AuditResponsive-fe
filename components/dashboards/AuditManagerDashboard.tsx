@@ -31,6 +31,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -46,6 +47,7 @@ import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
 import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
 import Form7DetailView from "@/components/dashboards/auditor/view/Form7DetailView";
 import { apiClient, ncrAPI, userAPI } from "@/services/api";
+
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
@@ -100,6 +102,24 @@ const COLORS = {
   },
 };
 
+const departmentDisplayToEnum: Record<string, string> = {
+  HR: "HR",
+  "R&D": "ENGG",
+  Purchase: "PURCHASE",
+  RMS: "STORES_DESPATCH",
+  SQA: "QA",
+  PPC: "PPC",
+  Production: "PRODUCTION",
+  "QA/QC": "QA",
+  FGS: "STORES_DESPATCH",
+  Marketing: "MARKETING",
+  "IMS (BE)": "MR",
+  Maintenance: "PLANT_MAINTENANCE",
+  Management: "UNIT_HEAD",
+  "Plant Maintenance": "PLANT_MAINTENANCE",
+  "Tool Maintenance": "TOOL_MAINTENANCE",
+  "Stores & Despatch": "STORES_DESPATCH",
+};
 // ============================================================================
 // ANIMATED GLASS CARD
 // ============================================================================
@@ -530,6 +550,14 @@ export default function AuditManagerDashboard() {
   const [additionalAuditorIds, setAdditionalAuditorIds] = useState<string[]>(
     [],
   );
+
+  const [fullyCompetentLeadAuditors, setFullyCompetentLeadAuditors] = useState<
+    any[]
+  >([]);
+  const [fullyCompetentTeamAuditors, setFullyCompetentTeamAuditors] = useState<
+    any[]
+  >([]);
+  const [loadingCompetent, setLoadingCompetent] = useState(false);
   const [showReassignOptions, setShowReassignOptions] = useState(false);
   const [showAddAnotherAuditor, setShowAddAnotherAuditor] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<any>(null);
@@ -650,11 +678,20 @@ export default function AuditManagerDashboard() {
     }
   };
 
-  const fetchDepartmentTeamMembers = async (departmentName: string) => {
+  const fetchDepartmentTeamMembers = async (
+    departmentName: string,
+    auditElements?: any,
+  ) => {
     if (!departmentName) return;
     setLoadingTeamMembers(true);
+    setLoadingCompetent(true);
+
     try {
-      const enumValue = departmentName.toUpperCase().replace(/[&\s\/]+/g, "_");
+      const enumValue =
+        departmentDisplayToEnum[departmentName] ||
+        departmentName.toUpperCase().replace(/[&\s\/]+/g, "_");
+
+      // 1. Fetch regular team members (for lead auditor name, team names, etc.)
       const auditorsRes = await apiClient
         .get(
           `/api/audit-schedule/regular-auditors/by-department/${encodeURIComponent(enumValue)}`,
@@ -669,8 +706,11 @@ export default function AuditManagerDashboard() {
         const leadInfo = await apiClient.get(
           `/api/audit-schedule/lead-auditors/by-department/${encodeURIComponent(enumValue)}`,
         );
-        if (Array.isArray(leadInfo) && leadInfo.length > 0) {
-          leadAuditorName = `${leadInfo[0].firstName} ${leadInfo[0].lastName}`;
+        const leadData = Array.isArray(leadInfo)
+          ? leadInfo
+          : (leadInfo as any)?.data || [];
+        if (leadData.length > 0) {
+          leadAuditorName = `${leadData[0].firstName} ${leadData[0].lastName}`;
         }
       } catch (e) {}
 
@@ -688,7 +728,6 @@ export default function AuditManagerDashboard() {
 
       let teamIds: any[] = [];
       let teamNames: string[] = [];
-
       if (deptSchedule?.teamAuditorIds) {
         teamIds =
           typeof deptSchedule.teamAuditorIds === "string"
@@ -708,10 +747,83 @@ export default function AuditManagerDashboard() {
         leadAuditorName,
         teamAuditorNames: teamNames,
       });
+
+      // 2. Safely parse auditElements
+      let parsedElements: string[] = [];
+      if (auditElements) {
+        if (Array.isArray(auditElements)) {
+          parsedElements = auditElements;
+        } else if (typeof auditElements === "string") {
+          try {
+            parsedElements = JSON.parse(auditElements);
+          } catch (e) {
+            parsedElements = [auditElements];
+          }
+        }
+      }
+
+      // 3. Fetch Fully Competent Auditors using apiClient.get directly (Matching React Web)
+      if (parsedElements.length > 0) {
+        try {
+          const reqMonth = selectedRequest?.currentDate
+            ? new Date(selectedRequest.currentDate).toLocaleString("default", {
+                month: "short",
+              })
+            : "";
+
+          console.log("🔍 Fetching competent auditors with:", {
+            department: enumValue,
+            auditElements: JSON.stringify(parsedElements),
+            planYear: selectedYear,
+            month: reqMonth,
+          });
+
+          // ✅ USE apiClient.get directly to match the working React Web endpoint
+          const competentRes = await apiClient.get(
+            "/api/audit-schedule/fully-competent-auditors/for-schedule",
+            {
+              params: {
+                department: enumValue,
+                auditElements: JSON.stringify(parsedElements),
+                planYear: selectedYear,
+                month: reqMonth,
+              },
+            },
+          );
+
+          const competentAuditors = Array.isArray(competentRes)
+            ? competentRes
+            : (competentRes as any)?.data || [];
+
+          console.log("✅ Competent Auditors Fetched:", competentAuditors);
+
+          setFullyCompetentLeadAuditors(
+            competentAuditors.filter((a: any) => a.role === "LEAD_AUDITOR"),
+          );
+          setFullyCompetentTeamAuditors(
+            competentAuditors.filter((a: any) => a.role === "AUDITOR"),
+          );
+        } catch (e) {
+          console.error("❌ Error fetching competent auditors:", e);
+          setFullyCompetentLeadAuditors([]);
+          setFullyCompetentTeamAuditors([]);
+        }
+      } else {
+        console.log(
+          "⚠️ No audit elements provided, falling back to regular department auditors",
+        );
+        setFullyCompetentLeadAuditors(
+          auditors.filter((a: any) => a.role === "LEAD_AUDITOR"),
+        );
+        setFullyCompetentTeamAuditors(
+          auditors.filter((a: any) => a.role === "AUDITOR" || !a.role),
+        );
+      }
     } catch (error) {
-      console.error("Error fetching team:", error);
+      console.error("❌ Error fetching team:", error);
     } finally {
       setLoadingTeamMembers(false);
+      setLoadingCompetent(false);
     }
   };
 
@@ -777,7 +889,8 @@ export default function AuditManagerDashboard() {
 
   const handleViewRequest = (request: any) => {
     setSelectedRequest(request);
-    fetchDepartmentTeamMembers(request.department);
+    // ✅ Pass auditElements to fetch competent auditors
+    fetchDepartmentTeamMembers(request.department, request.auditElements);
     setShowRequestModal(true);
   };
 
@@ -793,6 +906,11 @@ export default function AuditManagerDashboard() {
     setShowAddAnotherAuditor(false);
     setSelectedRequest(null);
     setConflictWarning(null);
+
+    // ✅ Clear competent auditor states
+    setFullyCompetentLeadAuditors([]);
+    setFullyCompetentTeamAuditors([]);
+
     fetchAllData();
   };
 
@@ -1903,7 +2021,607 @@ export default function AuditManagerDashboard() {
         onRequestClose={resetAndClose}
       >
         <View style={styles.modalOverlay}>
-          <Text>Approve Modal Content (Unchanged)</Text>
+          <View
+            style={[styles.modalContentV2, { width: isDesktop ? 600 : "95%" }]}
+          >
+            <View style={styles.modalHeaderV2}>
+              <View style={styles.headerLeft}>
+                <View style={styles.headerIcon}>
+                  <Check size={24} color={COLORS.primary} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitleV2}>
+                    Approve{" "}
+                    {selectedRequest?.type === "RESCHEDULE"
+                      ? "Reschedule"
+                      : "Extension"}{" "}
+                    Request
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    Review and confirm the approval details
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={resetAndClose}
+                style={styles.closeBtnV2}
+              >
+                <X size={20} color={COLORS.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalBodyV2}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedRequest && (
+                <View style={{ gap: 16 }}>
+                  {/* Audit Info */}
+                  <View style={styles.infoSection}>
+                    <Text style={styles.infoSectionLabel}>Audit</Text>
+                    <Text style={styles.infoSectionValue}>
+                      {selectedRequest.auditType} - {selectedRequest.department}
+                    </Text>
+                  </View>
+
+                  {/* Current Auditor */}
+                  <View
+                    style={[styles.infoSection, { backgroundColor: COLORS.bg }]}
+                  >
+                    <View style={styles.infoSectionLabelRow}>
+                      <UserCheck size={14} color={COLORS.primary} />
+                      <Text
+                        style={[styles.infoSectionLabel, { marginBottom: 0 }]}
+                      >
+                        Current Auditor
+                      </Text>
+                    </View>
+                    <Text style={styles.infoSectionValue}>
+                      {selectedRequest.auditorName}
+                    </Text>
+                  </View>
+
+                  {/* Team Info */}
+                  {!loadingTeamMembers &&
+                    departmentTeamMembers.leadAuditorName && (
+                      <View
+                        style={[
+                          styles.infoSection,
+                          { backgroundColor: COLORS.bg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.infoSectionLabel,
+                            { color: COLORS.dark },
+                          ]}
+                        >
+                          Assigned Audit Team for {selectedRequest.department}:
+                        </Text>
+                        <Text
+                          style={[
+                            styles.infoSectionValue,
+                            {
+                              fontSize: 12,
+                              color: COLORS.primary,
+                              marginTop: 4,
+                            },
+                          ]}
+                        >
+                          ⭐ Lead: {departmentTeamMembers.leadAuditorName}
+                        </Text>
+                        {departmentTeamMembers.teamAuditorNames?.length > 0 && (
+                          <Text
+                            style={[
+                              styles.infoSectionValue,
+                              {
+                                fontSize: 12,
+                                color: COLORS.primary,
+                                marginTop: 2,
+                              },
+                            ]}
+                          >
+                            👥 Team:{" "}
+                            {departmentTeamMembers.teamAuditorNames.join(", ")}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+
+                  {/* Reassign Checkbox */}
+                  <View style={styles.checkboxRowV2}>
+                    <TouchableOpacity
+                      style={[
+                        styles.checkboxV2,
+                        showReassignOptions && styles.checkboxV2Active,
+                      ]}
+                      onPress={() => {
+                        setShowReassignOptions(!showReassignOptions);
+                        if (showReassignOptions)
+                          setSelectedReassignAuditorId("");
+                      }}
+                    >
+                      {showReassignOptions && (
+                        <Check size={14} color={COLORS.white} />
+                      )}
+                    </TouchableOpacity>
+                    <View style={styles.checkboxContent}>
+                      <Text style={styles.checkboxTextV2}>
+                        🔄 Reassign to different auditor
+                      </Text>
+                      <Text style={styles.checkboxSubtext}>
+                        Replace the current auditor with a new one
+                      </Text>
+                    </View>
+                  </View>
+
+                  {showReassignOptions && (
+                    <View style={styles.reassignSection}>
+                      <Text style={styles.reassignLabel}>
+                        Select Primary Auditor *
+                      </Text>
+                      {loadingCompetent ? (
+                        <Text
+                          style={{
+                            color: COLORS.textSub,
+                            textAlign: "center",
+                            padding: 8,
+                          }}
+                        >
+                          Checking competency...
+                        </Text>
+                      ) : fullyCompetentTeamAuditors.length === 0 ? (
+                        <Text
+                          style={{
+                            color: COLORS.dark,
+                            backgroundColor: COLORS.bg,
+                            padding: 8,
+                            borderRadius: 8,
+                          }}
+                        >
+                          No fully competent auditors for these elements
+                        </Text>
+                      ) : (
+                        <ScrollView
+                          style={{ maxHeight: 150 }}
+                          showsVerticalScrollIndicator
+                        >
+                          {fullyCompetentTeamAuditors
+                            .filter((a) => {
+                              // 1. Check by ID (if available in the payload)
+                              const matchesId =
+                                selectedRequest?.auditorId &&
+                                String(a.id) ===
+                                  String(selectedRequest.auditorId);
+
+                              // 2. Check by Name (fallback if auditorId is missing, which is common)
+                              const matchesName =
+                                selectedRequest?.auditorName &&
+                                `${a.firstName} ${a.lastName}`.toLowerCase() ===
+                                  selectedRequest.auditorName.toLowerCase();
+
+                              // If it matches either, hide it from the reassign list
+                              if (matchesId || matchesName) {
+                                return false;
+                              }
+                              return true;
+                            })
+                            .map((auditor) => {
+                              const isSelected =
+                                selectedReassignAuditorId ===
+                                String(auditor.id);
+                              return (
+                                <TouchableOpacity
+                                  key={auditor.id}
+                                  style={[
+                                    styles.auditorOption,
+                                    isSelected && styles.auditorOptionSelected,
+                                  ]}
+                                  onPress={() => {
+                                    setSelectedReassignAuditorId(
+                                      String(auditor.id),
+                                    );
+                                    checkConflictsForAuditor(auditor.id, true);
+                                  }}
+                                >
+                                  <Text style={styles.auditorOptionText}>
+                                    ✅ {auditor.firstName} {auditor.lastName}
+                                  </Text>
+                                  {isSelected && (
+                                    <Check size={16} color={COLORS.primary} />
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+                        </ScrollView>
+                      )}
+                      {checkingAvailability && (
+                        <Text
+                          style={{
+                            color: COLORS.primary,
+                            fontSize: 12,
+                            marginTop: 8,
+                          }}
+                        >
+                          Checking auditor availability...
+                        </Text>
+                      )}
+
+                      {conflictWarning &&
+                        conflictWarning.type === "reassign" && (
+                          <View style={styles.warningBoxV2}>
+                            <Text style={styles.warningTextV2}>
+                              ⚠️ Time Conflict Detected!
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#B91C1C",
+                                marginTop: 4,
+                              }}
+                            >
+                              Auditor {conflictWarning.auditorName} is already
+                              scheduled at this time. Please select a different
+                              auditor.
+                            </Text>
+                          </View>
+                        )}
+                    </View>
+                  )}
+
+                  {/* Add Co-auditor Checkbox */}
+                  <View style={styles.checkboxRowV2}>
+                    <TouchableOpacity
+                      style={[
+                        styles.checkboxV2,
+                        showAddAnotherAuditor && styles.checkboxV2Active,
+                      ]}
+                      onPress={() => {
+                        setShowAddAnotherAuditor(!showAddAnotherAuditor);
+                        if (showAddAnotherAuditor) setAdditionalAuditorIds([]);
+                      }}
+                    >
+                      {showAddAnotherAuditor && (
+                        <Check size={14} color={COLORS.white} />
+                      )}
+                    </TouchableOpacity>
+                    <View style={styles.checkboxContent}>
+                      <Text style={styles.checkboxTextV2}>
+                        ➕ Add another auditor (Co-auditor)
+                      </Text>
+                      <Text style={styles.checkboxSubtext}>
+                        Add additional auditor without removing the primary one
+                      </Text>
+                    </View>
+                  </View>
+
+                  {showAddAnotherAuditor && (
+                    <View style={styles.coAuditorSection}>
+                      <Text style={styles.reassignLabel}>
+                        Select Additional Auditor(s)
+                      </Text>
+
+                      {loadingCompetent ? (
+                        <Text
+                          style={{
+                            color: COLORS.textSub,
+                            textAlign: "center",
+                            padding: 8,
+                          }}
+                        >
+                          Checking competency...
+                        </Text>
+                      ) : fullyCompetentTeamAuditors.length === 0 ? (
+                        <Text
+                          style={{
+                            color: COLORS.dark,
+                            backgroundColor: COLORS.bg,
+                            padding: 8,
+                            borderRadius: 8,
+                          }}
+                        >
+                          No fully competent team auditors for these elements
+                        </Text>
+                      ) : (
+                        <ScrollView
+                          style={{ maxHeight: 150 }}
+                          showsVerticalScrollIndicator
+                        >
+                          {fullyCompetentTeamAuditors
+                            .filter((a) => {
+                              // 1. Check by ID or Name to identify the current auditor
+                              const matchesId =
+                                selectedRequest?.auditorId &&
+                                String(a.id) ===
+                                  String(selectedRequest.auditorId);
+                              const matchesName =
+                                selectedRequest?.auditorName &&
+                                `${a.firstName} ${a.lastName}`.toLowerCase() ===
+                                  selectedRequest.auditorName.toLowerCase();
+
+                              const isCurrentAuditor = matchesId || matchesName;
+
+                              // 2. If we are NOT reassigning, hide the current auditor from the co-auditor list
+                              if (!showReassignOptions && isCurrentAuditor) {
+                                return false;
+                              }
+
+                              // 3. Hide the newly selected primary auditor to avoid duplication
+                              if (
+                                showReassignOptions &&
+                                selectedReassignAuditorId &&
+                                String(a.id) ===
+                                  String(selectedReassignAuditorId)
+                              ) {
+                                return false;
+                              }
+
+                              // 4. Hide already selected co-auditors
+                              if (additionalAuditorIds.includes(String(a.id))) {
+                                return false;
+                              }
+
+                              return true;
+                            })
+                            .map((auditor) => (
+                              <TouchableOpacity
+                                key={auditor.id}
+                                style={styles.auditorOption}
+                                onPress={() => {
+                                  if (
+                                    !additionalAuditorIds.includes(
+                                      String(auditor.id),
+                                    )
+                                  ) {
+                                    setAdditionalAuditorIds([
+                                      ...additionalAuditorIds,
+                                      String(auditor.id),
+                                    ]);
+                                    checkConflictsForAuditor(auditor.id, false);
+                                  }
+                                }}
+                              >
+                                <Text style={styles.auditorOptionText}>
+                                  ✅ {auditor.firstName} {auditor.lastName}
+                                </Text>
+                                <Check size={16} color={COLORS.lighter} />
+                              </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                      )}
+
+                      {checkingAvailability && (
+                        <Text
+                          style={{
+                            color: COLORS.primary,
+                            fontSize: 12,
+                            marginTop: 8,
+                          }}
+                        >
+                          Checking auditor availability...
+                        </Text>
+                      )}
+
+                      {conflictWarning &&
+                        conflictWarning.type === "coauditor" && (
+                          <View
+                            style={[
+                              styles.warningBoxV2,
+                              {
+                                backgroundColor: COLORS.bg,
+                                borderColor: COLORS.lighter,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.warningTextV2,
+                                { color: COLORS.dark },
+                              ]}
+                            >
+                              ⚠️ Potential Time Conflict!
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: COLORS.dark,
+                                marginTop: 4,
+                              }}
+                            >
+                              Auditor {conflictWarning.auditorName} is already
+                              scheduled. You can still add them, but they will
+                              have overlapping schedules.
+                            </Text>
+                          </View>
+                        )}
+
+                      {additionalAuditorIds.length > 0 && (
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={styles.reassignLabel}>
+                            Selected Co-auditors:
+                          </Text>
+                          <View style={styles.selectedAuditors}>
+                            {additionalAuditorIds.map((id) => {
+                              const auditor =
+                                fullyCompetentTeamAuditors.find(
+                                  (a) => String(a.id) === id,
+                                ) ||
+                                departmentTeamMembers.auditors.find(
+                                  (a) => String(a.id) === id,
+                                );
+                              return auditor ? (
+                                <View
+                                  key={id}
+                                  style={styles.selectedAuditorTag}
+                                >
+                                  <Text style={styles.selectedAuditorTagText}>
+                                    {auditor.firstName} {auditor.lastName}
+                                  </Text>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      setAdditionalAuditorIds(
+                                        additionalAuditorIds.filter(
+                                          (aid) => aid !== id,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <X size={14} color={COLORS.danger} />
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null;
+                            })}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Requested Changes */}
+                  <View style={styles.sectionBox}>
+                    <Text style={styles.sectionTitle}>Requested Changes</Text>
+                    {selectedRequest.type === "RESCHEDULE" ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={styles.changeText}>
+                          New Date:{" "}
+                          <Text style={{ fontWeight: "bold" }}>
+                            {selectedRequest.requestedNewDate}
+                          </Text>
+                        </Text>
+                        <Text style={styles.changeText}>
+                          New Time: {selectedRequest.requestedNewStartTime} -{" "}
+                          {selectedRequest.requestedNewEndTime}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.changeText, { marginTop: 8 }]}>
+                        New End Date:{" "}
+                        <Text style={{ fontWeight: "bold" }}>
+                          {selectedRequest.requestedNewToDate}
+                        </Text>
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Comments */}
+                  <View>
+                    <Text style={styles.commentsLabel}>
+                      Comments (Optional)
+                    </Text>
+                    <TextInput
+                      style={styles.commentsInput}
+                      placeholder="Add any comments about this approval..."
+                      value={approvalComment}
+                      onChangeText={setApprovalComment}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  {/* Approval Summary */}
+                  {(showReassignOptions || showAddAnotherAuditor) && (
+                    <View
+                      style={[
+                        styles.infoSection,
+                        { backgroundColor: "#F8FAFC" },
+                      ]}
+                    >
+                      <Text style={styles.sectionTitleSmall}>
+                        Approval Summary:
+                      </Text>
+                      <View style={{ gap: 4, marginTop: 8 }}>
+                        {showReassignOptions && selectedReassignAuditorId && (
+                          <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+                            • Current auditor ({selectedRequest.auditorName})
+                            will be{" "}
+                            <Text
+                              style={{
+                                color: COLORS.primary,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              REPLACED
+                            </Text>
+                          </Text>
+                        )}
+                        {!showReassignOptions && showAddAnotherAuditor && (
+                          <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+                            • Current auditor ({selectedRequest.auditorName})
+                            will be{" "}
+                            <Text
+                              style={{
+                                color: COLORS.secondary,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              KEPT
+                            </Text>{" "}
+                            as primary auditor
+                          </Text>
+                        )}
+                        {additionalAuditorIds.length > 0 && (
+                          <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+                            • {additionalAuditorIds.length} co-auditor(s) will
+                            be{" "}
+                            <Text
+                              style={{
+                                color: COLORS.secondary,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              ADDED
+                            </Text>
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                onPress={resetAndClose}
+                style={[styles.footerBtn, styles.footerBtnCancel]}
+              >
+                <Text style={styles.footerBtnTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleApprove}
+                disabled={
+                  submitting ||
+                  (showReassignOptions && !selectedReassignAuditorId) ||
+                  (showReassignOptions && conflictWarning?.type === "reassign")
+                }
+                style={[
+                  styles.footerBtn,
+                  styles.footerBtnApprove,
+                  (submitting ||
+                    (showReassignOptions && !selectedReassignAuditorId) ||
+                    (showReassignOptions &&
+                      conflictWarning?.type === "reassign")) &&
+                    styles.footerBtnDisabled,
+                ]}
+              >
+                {submitting ? (
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: COLORS.white,
+                      borderTopColor: "transparent",
+                    }}
+                  />
+                ) : (
+                  <Check size={16} color={COLORS.white} />
+                )}
+                <Text style={styles.footerBtnTextWhite}>Approve</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1914,10 +2632,86 @@ export default function AuditManagerDashboard() {
         onRequestClose={resetAndClose}
       >
         <View style={styles.modalOverlay}>
-          <Text>Reject Modal Content (Unchanged)</Text>
+          <View
+            style={[styles.modalContentV2, { width: isDesktop ? 500 : "90%" }]}
+          >
+            <View style={styles.modalHeaderV2}>
+              <View style={styles.headerLeft}>
+                <View
+                  style={[styles.headerIcon, { backgroundColor: "#FEE2E2" }]}
+                >
+                  <X size={24} color={COLORS.danger} />
+                </View>
+                <View>
+                  <Text style={styles.modalTitleV2}>
+                    Reject{" "}
+                    {selectedRequest?.type === "RESCHEDULE"
+                      ? "Reschedule"
+                      : "Extension"}{" "}
+                    Request
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    Please provide a reason for rejection
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={resetAndClose}
+                style={styles.closeBtnV2}
+              >
+                <X size={20} color={COLORS.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBodyV2}>
+              <TextInput
+                style={[styles.commentsInput, { minHeight: 100 }]}
+                placeholder="Enter rejection reason..."
+                value={rejectionReason}
+                onChangeText={setRejectionReason}
+                multiline
+                numberOfLines={4}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                onPress={resetAndClose}
+                style={[styles.footerBtn, styles.footerBtnCancel]}
+              >
+                <Text style={styles.footerBtnTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleReject}
+                disabled={submitting || !rejectionReason.trim()}
+                style={[
+                  styles.footerBtn,
+                  styles.footerBtnReject,
+                  (submitting || !rejectionReason.trim()) &&
+                    styles.footerBtnDisabled,
+                ]}
+              >
+                {submitting ? (
+                  <View
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: COLORS.white,
+                      borderTopColor: "transparent",
+                    }}
+                  />
+                ) : (
+                  <X size={16} color={COLORS.white} />
+                )}
+                <Text style={styles.footerBtnTextWhite}>Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
-
       {showForumModal && selectedAuditForForum && (
         <AuditCheckSheetNCRForumModal
           auditId={selectedAuditForForum.id}
