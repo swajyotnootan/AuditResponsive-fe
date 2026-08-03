@@ -1,19 +1,20 @@
 ﻿// app/components/dashboards/LeadAuditorDashboard.tsx
+import { API_BASE_URL } from '@/config/apiConfig';
 import axios from 'axios';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useAuth } from '../context/AuthContext';
@@ -114,7 +115,6 @@ const isTablet = width >= 768 && width < 1024;
 const isDesktop = width >= 1024;
 const isWeb = Platform.OS === 'web';
 
-const API_BASE_URL = 'http://localhost:8080/api';
 
 const NAVBAR_COLORS = {
   primary: '#00529B',
@@ -208,7 +208,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
   const fetchLeadAuditorDepartment = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/users/${user?.id}`, { withCredentials: true });
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user?.id}`, { withCredentials: true });
       const userData = response.data;
       let department = null;
       if (userData.department) {
@@ -341,11 +341,11 @@ const LeadAuditorDashboardContent: React.FC = () => {
       setLoading(true);
       const department = await fetchLeadAuditorDepartment();
       const [schedulesRes, ncrRes, auditorsRes, auditeesRes, responsesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/audit-schedule/year/${year}`, { withCredentials: true }),
-        axios.get(`${API_BASE_URL}/ncr/all`, { withCredentials: true }).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/audit-schedule/auditors`, { withCredentials: true }).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/audit-schedule/auditees`, { withCredentials: true }).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE_URL}/templates/responses/all`, { withCredentials: true }).catch(() => ({ data: [] }))
+        axios.get(`${API_BASE_URL}/api/audit-schedule/year/${year}`, { withCredentials: true }),
+        axios.get(`${API_BASE_URL}/api/ncr/all`, { withCredentials: true }).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/audit-schedule/auditors`, { withCredentials: true }).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/audit-schedule/auditees`, { withCredentials: true }).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/templates/responses/all`, { withCredentials: true }).catch(() => ({ data: [] }))
       ]);
 
       let schedules = schedulesRes.data || [];
@@ -414,7 +414,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     try {
       const endpoint = reviewApproved ? 'lead-auditor/approve' : 'lead-auditor/reject';
       await axios.put(
-        `${API_BASE_URL}/templates/responses/${reviewingResponse.id}/${endpoint}`,
+        `${API_BASE_URL}/api/templates/responses/${reviewingResponse.id}/${endpoint}`,
         { comment: reviewComment, signature: 'Lead Auditor' },
         { withCredentials: true }
       );
