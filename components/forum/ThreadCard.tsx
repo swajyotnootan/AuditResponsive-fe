@@ -598,8 +598,8 @@ export default function ThreadCard({
 
         // If still no URI, use API URL as fallback
         if (!uri && attachment.id) {
-          uri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
-        }
+// ✅ CRITICAL FIX: Use the 8D files endpoint which returns the correct filename and type
+uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;        }
 
         return {
           ...attachment,
@@ -637,7 +637,7 @@ export default function ThreadCard({
     }));
 
     try {
-      const url = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
+      const url = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       console.log("📥 Fetching image from server:", url);
 
       const response = await fetch(url);
@@ -738,7 +738,7 @@ export default function ThreadCard({
       // ANDROID / IOS
       const url =
         attachment.uri ||
-        `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
+        `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
 
       if (
         attachment.fileType === "application/pdf" ||
