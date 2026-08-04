@@ -757,324 +757,213 @@ export default function ThreadCard({
     }
   };
 
-  const renderAttachment = (attachment: any, index: number) => {
+   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
 
-    switch (attachment.attachmentType) {
-      case "IMAGE": {
-        let imageUri = attachment.uri || "";
-        const hasValidFileData = attachment.hasValidFileData;
-        const hasError = attachment.id && imageErrors[attachment.id];
-        const isLoading = attachment.id && loadingImages[attachment.id];
+    // ✅ 1. IMAGE ATTACHMENT
+    if (attachment.attachmentType === "IMAGE") {
+      let imageUri = attachment.uri || "";
+      
+      // If we have valid base64 data, use it directly
+      if (attachment.hasValidFileData && attachment.fileData) {
+        const mimeType = attachment.fileType || "image/jpeg";
+        imageUri = base64ToUri(attachment.fileData, mimeType);
+      }
+      // If we have cached data, use it
+      else if (attachment.id && imageDataCache[attachment.id]) {
+        imageUri = imageDataCache[attachment.id];
+      }
+      // If no data, fetch it (keeps your existing loadImageData logic)
+      else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) {
+        loadImageData(attachment);
+      }
 
-        // If we have valid fileData, use it directly
-        if (hasValidFileData) {
-          const mimeType = attachment.fileType || "image/jpeg";
-          imageUri = base64ToUri(attachment.fileData, mimeType);
-        }
-        // If we have cached data, use it
-        else if (attachment.id && imageDataCache[attachment.id]) {
-          imageUri = imageDataCache[attachment.id];
-        }
-        // If no data and no error, try to fetch
-        else if (
-          attachment.id &&
-          !hasError &&
-          !isLoading &&
-          !hasValidFileData
-        ) {
-          loadImageData(attachment);
-        }
-
-        // Show loading state
-        if (isLoading && !imageUri) {
-          return (
-            <View key={index} style={styles.attachmentContainer}>
-              <View
-                style={[
-                  styles.imagePreview,
-                  { justifyContent: "center", alignItems: "center" },
-                ]}
-              >
-                <ActivityIndicator size="large" color="#4a90d9" />
-                <Text style={{ marginTop: 8, color: "#666" }}>Loading...</Text>
-              </View>
-            </View>
-          );
-        }
-
-        // Show placeholder or error
-        if (!imageUri || hasError) {
-          const errorMessage = hasValidFileData
-            ? "Invalid image data"
-            : "Image not stored on server";
-
-          return (
-            <View key={index} style={styles.attachmentContainer}>
-              <View
-                style={[
-                  styles.imagePreview,
-                  {
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: "#f3f4f6",
-                  },
-                ]}
-              >
-                <Text style={{ color: "#9ca3af", fontSize: 40 }}>🖼️</Text>
-                <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                  {attachment.fileName || "Image"}
-                </Text>
-                <Text style={{ marginTop: 4, fontSize: 11, color: "#ef4444" }}>
-                  ⚠️ {errorMessage}
-                </Text>
-                {hasError && !hasValidFileData && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (attachment.id) {
-                        setImageErrors((prev) => ({
-                          ...prev,
-                          [attachment.id!]: false,
-                        }));
-                        setImageFetchAttempts((prev) => ({
-                          ...prev,
-                          [attachment.id!]: 0,
-                        }));
-                        loadImageData(attachment);
-                      }
-                    }}
-                    style={{
-                      marginTop: 8,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                      backgroundColor: "#4a90d9",
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, color: "white" }}>Retry</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          );
-        }
-
+      // Show loading or error placeholder
+      if (loadingImages[attachment.id] && !imageUri) {
         return (
           <View key={index} style={styles.attachmentContainer}>
-            <Pressable onPress={() => openImagePreview(imageUri)}>
-              <Image
-                source={{ uri: imageUri }}
-                style={styles.imagePreview}
-                resizeMode="cover"
-                onError={() => {
-                  console.warn(`❌ Image error: ${attachment.fileName}`);
-                  if (attachment.id && !hasValidFileData) {
-                    setImageErrors((prev) => ({
-                      ...prev,
-                      [attachment.id!]: true,
-                    }));
-                  }
-                }}
-                onLoad={() => {
-                  console.log(`✅ Image loaded: ${attachment.fileName}`);
-                }}
-              />
-            </Pressable>
-            <View style={styles.fileInfo}>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {attachment.fileName || "Image"}
-              </Text>
-              <Pressable onPress={() => downloadFile(attachment)}>
-                <Download size={18} color="green" />
-              </Pressable>
+            <View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}>
+              <ActivityIndicator size="large" color="#4a90d9" />
+              <Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text>
             </View>
           </View>
         );
       }
 
-      case "VIDEO": {
-        let videoUri = attachment.uri || "";
-
-        // For video, use fileData if available and valid
-        if (attachment.fileData && attachment.fileData.length > 100) {
-          const mimeType = attachment.fileType || "video/mp4";
-          videoUri = base64ToUri(attachment.fileData, mimeType);
-        } else if (Platform.OS === "web" && attachment.id) {
-          videoUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
-        }
-
+      if (!imageUri || imageErrors[attachment.id]) {
         return (
           <View key={index} style={styles.attachmentContainer}>
-            <Pressable
-              style={styles.videoPreview}
-              onPress={() => {
-                if (videoUri) {
-                  openVideoPreview(videoUri);
-                } else if (attachment.id) {
-                  openVideoPreview(
-                    `${API_BASE_URL}/api/forum/attachments/${attachment.id}`,
-                  );
-                }
+            <View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}>
+              <Text style={{ fontSize: 40 }}>🖼️</Text>
+              <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>
+              {imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}
+            </View>
+          </View>
+        );
+      }
+
+      return (
+        <View key={index} style={styles.attachmentContainer}>
+          <Pressable onPress={() => openImagePreview(imageUri)}>
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.imagePreview}
+              resizeMode="cover"
+              onError={() => {
+                if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true }));
               }}
-            >
-              <View style={styles.videoPlayIconContainer}>
-                <Play size={45} color="white" />
-              </View>
-              <Text style={styles.videoLabel}>
-                {attachment.fileName || "Video"}
-              </Text>
-              {attachment.fileSize && (
-                <Text style={styles.videoSize}>
-                  {formatFileSize(attachment.fileSize)}
-                </Text>
-              )}
+            />
+          </Pressable>
+          <View style={styles.fileInfo}>
+            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text>
+            <Pressable onPress={() => downloadFile(attachment)}>
+              <Download size={18} color="green" />
             </Pressable>
           </View>
-        );
+        </View>
+      );
+    }
+
+    // ✅ 2. VIDEO ATTACHMENT
+    if (attachment.attachmentType === "VIDEO") {
+      let videoUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100) {
+        const mimeType = attachment.fileType || "video/mp4";
+        videoUri = base64ToUri(attachment.fileData, mimeType);
+      } else if (Platform.OS === "web" && attachment.id) {
+        videoUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
       }
 
-      case "AUDIO": {
-        let audioUri = attachment.uri || "";
-
-        // For audio, use fileData if available and valid
-        if (attachment.fileData && attachment.fileData.length > 100) {
-          const mimeType = attachment.fileType || "audio/mpeg";
-          audioUri = base64ToUri(attachment.fileData, mimeType);
-        } else if (Platform.OS === "web" && attachment.id) {
-          audioUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
-        }
-
-        return (
-          <AudioPlayer
-            key={index}
-            uri={audioUri}
-            fileName={attachment.fileName}
-          />
-        );
-      }
-
-      case "LOCATION": {
-        let location: any = {};
-        try {
-          if (attachment.fileData) {
-            const decoded = atob(attachment.fileData);
-            location = JSON.parse(decoded);
-          }
-        } catch (error) {
-          console.log("Location parse error", error);
-        }
-
-        return (
+      return (
+        <View key={index} style={styles.attachmentContainer}>
           <Pressable
-            key={index}
-            style={styles.locationContainer}
+            style={styles.videoPreview}
             onPress={() => {
-              const map = location.url || location.mapUrl;
-              if (map) Linking.openURL(map);
+              if (videoUri) openVideoPreview(videoUri);
+              else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/attachments/${attachment.id}`);
             }}
           >
-            <MapPin size={20} color="red" />
-            <Text>Open shared location</Text>
+            <View style={styles.videoPlayIconContainer}>
+              <Play size={45} color="white" />
+            </View>
+            <Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>
+            {attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}
           </Pressable>
-        );
-      }
-
-      case "EVENT": {
-        let event: any = {};
-        try {
-          if (attachment.fileData) {
-            const decoded = atob(attachment.fileData);
-            event = JSON.parse(decoded);
-          }
-        } catch (error) {
-          console.log("Event parse error", error);
-        }
-
-        return (
-          <View key={index} style={styles.eventContainer}>
-            <Calendar size={22} color="purple" />
-            <View>
-              <Text style={styles.eventTitle}>{event.title || "Event"}</Text>
-              <Text>
-                {event.datetime
-                  ? new Date(event.datetime).toLocaleString()
-                  : "No date"}
-              </Text>
-            </View>
-          </View>
-        );
-      }
-
-      default: {
-        const isPDF =
-          attachment.fileName?.toLowerCase().endsWith(".pdf") ||
-          attachment.fileType === "application/pdf";
-
-        let fileUri = attachment.uri || "";
-
-        if (isPDF) {
-          // For PDF, use fileData if available and valid
-          if (attachment.fileData && attachment.fileData.length > 100) {
-            const mimeType = attachment.fileType || "application/pdf";
-            fileUri = base64ToUri(attachment.fileData, mimeType);
-          } else if (Platform.OS === "web" && attachment.id) {
-            fileUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
-          }
-
-          return (
-            <View key={index} style={styles.documentContainer}>
-              <FileText size={32} color="#dc2626" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fileName} numberOfLines={1}>
-                  {attachment.fileName || "PDF Document"}
-                </Text>
-                <Text style={styles.fileSize}>
-                  {formatFileSize(attachment.fileSize)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  if (fileUri) {
-                    openPdfPreview(
-                      fileUri,
-                      attachment.fileName || "document.pdf",
-                    );
-                  } else if (attachment.id) {
-                    openPdfPreview(
-                      `${API_BASE_URL}/api/forum/attachments/${attachment.id}`,
-                      attachment.fileName || "document.pdf",
-                    );
-                  }
-                }}
-                style={{ padding: 8 }}
-              >
-                <Eye size={20} color="#2563eb" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => downloadFile(attachment)}>
-                <Download size={20} color="green" />
-              </TouchableOpacity>
-            </View>
-          );
-        }
-
-        return (
-          <View key={index} style={styles.documentContainer}>
-            <FileText size={32} color="#555" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fileName} numberOfLines={1}>
-                {attachment.fileName || "File"}
-              </Text>
-              <Text style={styles.fileSize}>
-                {formatFileSize(attachment.fileSize)}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => downloadFile(attachment)}>
-              <Download size={20} color="green" />
-            </TouchableOpacity>
-          </View>
-        );
-      }
+        </View>
+      );
     }
+
+    // ✅ 3. AUDIO ATTACHMENT
+    if (attachment.attachmentType === "AUDIO") {
+      let audioUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100) {
+        const mimeType = attachment.fileType || "audio/mpeg";
+        audioUri = base64ToUri(attachment.fileData, mimeType);
+      } else if (Platform.OS === "web" && attachment.id) {
+        audioUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
+      }
+
+      return (
+        <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />
+      );
+    }
+
+    // ✅ 4. LOCATION ATTACHMENT
+    if (attachment.attachmentType === "LOCATION") {
+      let location: any = {};
+      try {
+        if (attachment.fileData) {
+          const decoded = atob(attachment.fileData);
+          location = JSON.parse(decoded);
+        }
+      } catch (error) { console.log("Location parse error", error); }
+
+      return (
+        <Pressable
+          key={index}
+          style={styles.locationContainer}
+          onPress={() => {
+            const map = location.url || location.mapUrl;
+            if (map) Linking.openURL(map);
+          }}
+        >
+          <MapPin size={20} color="red" />
+          <Text style={{ fontSize: 14 }}>Open shared location</Text>
+        </Pressable>
+      );
+    }
+
+    // ✅ 5. EVENT ATTACHMENT
+    if (attachment.attachmentType === "EVENT") {
+      let event: any = {};
+      try {
+        if (attachment.fileData) {
+          const decoded = atob(attachment.fileData);
+          event = JSON.parse(decoded);
+        }
+      } catch (error) { console.log("Event parse error", error); }
+
+      return (
+        <View key={index} style={styles.eventContainer}>
+          <Calendar size={22} color="purple" />
+          <View>
+            <Text style={styles.eventTitle}>{event.title || "Event"}</Text>
+            <Text style={{ fontSize: 12, color: "#555" }}>
+              {event.datetime ? new Date(event.datetime).toLocaleString() : "No date"}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // ✅ 6. PDF / DOCUMENT ATTACHMENT (FALLBACK)
+    const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
+    let fileUri = attachment.uri || "";
+    
+    if (isPDF) {
+      if (attachment.fileData && attachment.fileData.length > 100) {
+        const mimeType = attachment.fileType || "application/pdf";
+        fileUri = base64ToUri(attachment.fileData, mimeType);
+      } else if (Platform.OS === "web" && attachment.id) {
+        fileUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
+      }
+
+      return (
+        <View key={index} style={styles.documentContainer}>
+          <FileText size={32} color="#dc2626" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text>
+            <Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf");
+              else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/attachments/${attachment.id}`, "document.pdf");
+            }}
+            style={{ padding: 8 }}
+          >
+            <Eye size={20} color="#2563eb" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => downloadFile(attachment)}>
+            <Download size={20} color="green" />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // ✅ 7. GENERIC FILE
+    return (
+      <View key={index} style={styles.documentContainer}>
+        <FileText size={32} color="#555" />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text>
+          <Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text>
+        </View>
+        <TouchableOpacity onPress={() => downloadFile(attachment)}>
+          <Download size={20} color="green" />
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   const getStatus = () => {
