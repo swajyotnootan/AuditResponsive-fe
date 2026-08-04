@@ -3,6 +3,7 @@
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
+import { documentDirectory } from "expo-file-system/legacy";
 import * as Sharing from 'expo-sharing';
 import {
   Calendar,
