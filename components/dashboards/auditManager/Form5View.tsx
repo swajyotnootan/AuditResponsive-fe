@@ -1,31 +1,32 @@
 import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ Added import for the API service
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    ArrowLeft,
-    Calendar,
-    Check,
-    CheckCircle,
-    Clock,
-    Download,
-    FileText,
-    Grid,
-    List,
-    MessageSquare,
-    Plus,
-    RefreshCw,
-    X,
+  ArrowLeft,
+  Calendar,
+  Check,
+  CheckCircle,
+  Clock,
+  Download,
+  FileText,
+  Grid,
+  List,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  X,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    useWindowDimensions,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import DocumentControlSection from "./DocumentControlSection";
@@ -688,27 +689,37 @@ export default function Form5View({
       );
       return;
     }
-    Alert.alert(
-      "Confirm Delete",
-      "Are you sure you want to delete this schedule?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await auditScheduleApi.delete(id);
-              showToast("Schedule deleted successfully!", "success");
-              await fetchSchedules();
-              await fetchSummary();
-            } catch (error) {
-              showToast("Failed to delete schedule", "error");
-            }
-          },
-        },
-      ],
-    );
+
+    const performDelete = async () => {
+      try {
+        await auditScheduleApi.delete(id);
+        showToast("Schedule deleted successfully!", "success");
+        await fetchSchedules();
+        await fetchSummary();
+      } catch (error) {
+        showToast("Failed to delete schedule", "error");
+      }
+    };
+
+    if (Platform.OS === "web") {
+      // ✅ DESKTOP FIX: window.confirm works in browsers and returns true/false
+      const confirmed = window.confirm(
+        "Are you sure you want to delete this schedule?",
+      );
+      if (confirmed) {
+        await performDelete();
+      }
+    } else {
+      // ✅ MOBILE: Native Alert with buttons
+      Alert.alert(
+        "Confirm Delete",
+        "Are you sure you want to delete this schedule?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: performDelete },
+        ],
+      );
+    }
   };
 
   const handleSaveDocument = async () => {
@@ -1809,3 +1820,4 @@ export default function Form5View({
     </View>
   );
 }
+

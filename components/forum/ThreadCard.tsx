@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL FIXED VERSION - Handles all platforms & attachments correctly
+// FINAL STABLE VERSION - Profile, Date, & Attachments Fixed
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -77,6 +77,7 @@ interface ThreadCardProps {
 // Helpers
 // =====================================================
 
+// ✅ RESTORED: Correct Date & Time formatter
 const formatTime = (date?: string) => {
   try {
     const value = new Date(date || "");
@@ -106,9 +107,8 @@ const base64ToUri = (base64: string, mime: string) => {
 };
 
 // =====================================================
-// WEB VIDEO PLAYER (Stays inside Modal)
+// WEB VIDEO PLAYER
 // =====================================================
-
 const WebVideoPlayer = ({
   url,
   onClose,
@@ -286,7 +286,7 @@ const AudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
 };
 
 // =====================================================
-// PDF VIEWER (Stays inside Modal)
+// PDF VIEWER
 // =====================================================
 const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () => void; fileName?: string }) => {
   return (
@@ -385,7 +385,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
   const openImagePreview = (url: string) => setImageModal({ open: true, url });
   const closeImagePreview = () => setImageModal({ open: false, url: "" });
 
-  // ✅ UPDATED: Opens Video INSIDE the app
   const openVideoPreview = (url: string) => {
     console.log("🎬 Opening video inside app:", url);
     if (Platform.OS === "web") {
@@ -396,13 +395,11 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
   };
   const closeVideoPreview = () => setVideoModal({ open: false, url: "" });
 
-  // ✅ UPDATED: Opens PDF INSIDE the app
   const openPdfPreview = (url: string, fileName: string) => {
     setPdfModal({ open: true, url, fileName });
   };
   const closePdfPreview = () => setPdfModal({ open: false, url: "", fileName: "" });
 
-  // ✅ UPDATED: DOWNLOAD logic (Actually saves to device)
   const downloadFile = async (attachment: Attachment) => {
     try {
       setLoading(true);
