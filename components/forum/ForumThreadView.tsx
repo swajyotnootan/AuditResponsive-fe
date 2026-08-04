@@ -459,8 +459,13 @@ export default function ForumThreadView({
     });
 
     try {
+      const content = newPostData.content || "";
+      const title = content.substring(0, 50) || "New Thread";
+
+      // ✅ SIMPLY PASS THE ORIGINAL groupId
       const res = await createForumPost(String(groupId), {
-        content: newPostData.content,
+        title: title,
+        content: content,
         createdBy: userEmail,
         messageType: newPostData.messageType || "TEXT",
         attachments: newPostData.attachments || [],

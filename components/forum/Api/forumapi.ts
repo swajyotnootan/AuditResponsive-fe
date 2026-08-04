@@ -3,8 +3,6 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
-// Helper for authenticated requests
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   const token = await AsyncStorage.getItem("authToken");
   const headers: any = {
@@ -20,7 +18,6 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   });
 };
 
-// ===== SMART API DETECTION =====
 // ===== SMART API DETECTION =====
 const getApiBase = (groupId: string): string => {
   const groupIdStr = String(groupId);
@@ -139,11 +136,6 @@ export const createForumPost = async (groupId: string, postData: any) => {
       content: payload.content.substring(0, 50),
       messageType: payload.messageType,
       attachmentsCount: payload.attachments.length,
-      attachments: payload.attachments.map((a: any) => ({
-        type: a.attachmentType,
-        fileName: a.fileName,
-        fileDataLength: a.fileData?.length || 0,
-      })),
     },
   });
 
