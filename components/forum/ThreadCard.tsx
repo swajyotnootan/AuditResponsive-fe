@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Fixed Time, Profile, & Attachments
+// FINAL VERSION - Fixed Timezone, Added Date, & Attachments
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -77,19 +77,43 @@ interface ThreadCardProps {
 // Helpers
 // =====================================================
 
-// ✅ FIXED: Correct Date & Time formatter (en-US for "10:15 AM" format)
-const formatTime = (date?: string) => {
+// ✅ FIXED: Correct Date & Time formatter (Fixes Timezone & Adds Date)
+const formatDateAndTime = (dateString?: string) => {
   try {
-    const value = new Date(date || "");
-    if (isNaN(value.getTime())) {
-      return "";
+    if (!dateString) return "";
+
+    let dateToParse = dateString;
+    
+    // If the date string is missing timezone info (e.g., "2026-08-04T11:11:00"), 
+    // JavaScript incorrectly assumes it's local time. If your backend sends UTC time, 
+    // appending 'Z' forces JS to parse it as UTC and correctly convert to local time.
+    if (!dateString.includes('Z') && !dateString.match(/([+-]\d{2}:\d{2})$/)) {
+      dateToParse = dateString + 'Z';
     }
-    return value.toLocaleTimeString('en-US', {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+
+    const date = new Date(dateToParse);
+    
+    // Fallback if adding 'Z' breaks the date parsing
+    if (isNaN(date.getTime())) {
+      const fallbackDate = new Date(dateString);
+      if (isNaN(fallbackDate.getTime())) return "";
+      return fallbackDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+
+    return date.toLocaleString('en-US', {
+      month: 'short', // e.g., "Aug"
+      day: 'numeric', // e.g., "4"
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true, // e.g., "04:40 PM"
     });
-  } catch {
+  } catch (error) {
     return "";
   }
 };
@@ -497,7 +521,7 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
     if (attachment.attachmentType === "EVENT") {
       let event: any = {};
       try { if (attachment.fileData) { const decoded = atob(attachment.fileData); event = JSON.parse(decoded); } } catch (error) { console.log("Event parse error", error); }
-      return (<View key={index} style={styles.eventContainer}><Calendar size={22} color="purple" /><View><Text style={styles.eventTitle}>{event.title || "Event"}</Text><Text style={{ fontSize: 12, color: "#555" }}>{event.datetime ? new Date(event.datetime).toLocaleString() : "No date"}</Text></View></View>);
+      return (<View key={index} style={styles.eventContainer}><Calendar size={22} color="purple" /><View><Text style={styles.eventTitle}>{event.title || "Event"}</Text><Text style={{ fontSize: 12, color: "#555" }}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text></View></View>);
     }
 
     // 6. PDF
@@ -546,7 +570,7 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
           {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
-            <Text style={styles.timeText}>{formatTime(thread.createdAt)}</Text>
+            <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {isOwnMessage && (<View style={styles.statusIcon}>{status.icon}</View>)}
           </View>
         </View>
