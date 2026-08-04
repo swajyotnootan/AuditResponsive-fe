@@ -2,6 +2,8 @@
 // FINAL FIXED VERSION - Handles corrupted images gracefully
 
 import { API_BASE_URL } from "@/config/apiConfig";
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   Calendar,
   Check,
@@ -711,10 +713,43 @@ uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;        }
     setVideoModal({ open: false, url: "" });
   };
 
-  const openPdfPreview = (url: string, fileName: string) => {
-    setPdfModal({ open: true, url, fileName });
-  };
+  const openPdfPreview = async (url: string, fileName: string) => {
+    try {
+      // ✅ WEB: Use the JSX logic (window.open)
+      if (Platform.OS === "web") {
+        window.open(url, '_blank');
+        return;
+      }
 
+      // ✅ MOBILE (Android/iOS): Download and save with the correct filename
+      setLoading(true);
+
+      // ✅ FIX: Use the imported documentDirectory variable directly
+      const localUri = documentDirectory + fileName;
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        url,
+        localUri,
+        {}
+      );
+      const result = await downloadResumable.downloadAsync();
+
+      if (result && result.uri) {
+        // Open the downloaded file with the correct name using expo-sharing
+        await Sharing.shareAsync(result.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: fileName,
+        });
+      } else {
+        Alert.alert("Error", "Failed to download the PDF.");
+      }
+    } catch (error) {
+      console.error("PDF preview error:", error);
+      Alert.alert("Error", "Could not open the PDF");
+    } finally {
+      setLoading(false);
+    }
+  };
   const closePdfPreview = () => {
     setPdfModal({ open: false, url: "", fileName: "" });
   };
@@ -917,6 +952,7 @@ uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;        }
     }
 
     // ✅ 6. PDF / DOCUMENT ATTACHMENT (FALLBACK)
+        // ✅ 6. PDF / DOCUMENT ATTACHMENT (FALLBACK)
     const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     
@@ -925,7 +961,7 @@ uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;        }
         const mimeType = attachment.fileType || "application/pdf";
         fileUri = base64ToUri(attachment.fileData, mimeType);
       } else if (Platform.OS === "web" && attachment.id) {
-        fileUri = `${API_BASE_URL}/api/forum/attachments/${attachment.id}`;
+        fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`; // ✅ CORRECTED
       }
 
       return (
@@ -938,7 +974,7 @@ uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;        }
           <TouchableOpacity
             onPress={() => {
               if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf");
-              else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/attachments/${attachment.id}`, "document.pdf");
+              else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf"); // ✅ CORRECTED
             }}
             style={{ padding: 8 }}
           >
