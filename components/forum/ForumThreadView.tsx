@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - All null/undefined checks added
+// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers
 
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
@@ -459,13 +459,8 @@ export default function ForumThreadView({
     });
 
     try {
-      const content = newPostData.content || "";
-      const title = content.substring(0, 50) || "New Thread";
-
-      // ✅ SIMPLY PASS THE ORIGINAL groupId
       const res = await createForumPost(String(groupId), {
-        title: title,
-        content: content,
+        content: newPostData.content,
         createdBy: userEmail,
         messageType: newPostData.messageType || "TEXT",
         attachments: newPostData.attachments || [],
@@ -938,6 +933,27 @@ export default function ForumThreadView({
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
+  // ✅ ADD THIS HELPER FOR DATE HEADERS
+  const getDateLabel = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    // If same day, don't show label
+    if (date.toDateString() === today.toDateString()) return null;
+
+    // If yesterday
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+
+    // Show actual date
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
   const SearchBar = () => (
     <View className="flex-row items-center px-3 py-2 bg-white border-b border-gray-200 gap-2">
       <Search size={16} color="#9ca3af" />
@@ -1198,15 +1214,42 @@ export default function ForumThreadView({
               ref={flatListRef}
               data={displayPosts}
               keyExtractor={(item, index) => item?.id || String(index)}
-              renderItem={({ item }) => (
-                <ThreadCard
-                  thread={item}
-                  currentUser={currentUser}
-                  currentUsername={currentUserEmail}
-                  onRetry={handleRetry}
-                  // groupId={String(groupId)}
-                />
-              )}
+              renderItem={({ item, index }) => {
+                // ✅ CHECK IF WE NEED TO SHOW A DATE HEADER
+                let dateLabel = null;
+                if (index === 0) {
+                  dateLabel = getDateLabel(item.createdAt);
+                } else {
+                  const prevItem = displayPosts[index - 1];
+                  if (prevItem) {
+                    const prevDate = new Date(prevItem.createdAt).toDateString();
+                    const currDate = new Date(item.createdAt).toDateString();
+                    if (prevDate !== currDate) {
+                      dateLabel = getDateLabel(item.createdAt);
+                    }
+                  }
+                }
+
+                return (
+                  <>
+                    {dateLabel && (
+                      <View style={{ alignItems: 'center', marginVertical: 12 }}>
+                        <View style={{ backgroundColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
+                            {dateLabel}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <ThreadCard
+                      thread={item}
+                      currentUser={currentUser}
+                      currentUsername={currentUserEmail}
+                      onRetry={handleRetry}
+                    />
+                  </>
+                );
+              }}
               className="flex-1 bg-gray-50"
               contentContainerStyle={{ paddingVertical: 8 }}
               ListEmptyComponent={
