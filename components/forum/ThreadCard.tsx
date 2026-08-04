@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Fixed Timezone, Added Date, & Attachments
+// FINAL VERSION - Fixed Timezone, Profile API, & Attachments
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -54,7 +54,7 @@ interface Attachment {
 interface Thread {
   id?: string;
   content?: string;
-  createdBy?: string;
+  createdBy?: string; // Usually the User ID or Email
   createdByName?: string;
   createdByProfileImage?: string;
   createdAt: string;
@@ -67,6 +67,7 @@ interface ThreadCardProps {
   thread: Thread;
   currentUsername?: string;
   currentUser?: {
+    id?: string | number; // ✅ ADDED: ID is required to fetch profile photo via API
     email?: string;
     profileImage?: string;
   };
@@ -77,6 +78,19 @@ interface ThreadCardProps {
 // Helpers
 // =====================================================
 
+// ✅ ADDED: Fetches profile photo exactly like Navbar.tsx
+const getProfileImageUrl = (userId?: string | number | null, existingImage?: string) => {
+  // If the backend already returned a full URL or base64, use it directly
+  if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) {
+    return existingImage;
+  }
+  // Otherwise, construct the API URL using the User ID
+  if (userId) {
+    return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
+  }
+  return null;
+};
+
 // ✅ FIXED: Correct Date & Time formatter (Fixes Timezone & Adds Date)
 const formatDateAndTime = (dateString?: string) => {
   try {
@@ -84,16 +98,13 @@ const formatDateAndTime = (dateString?: string) => {
 
     let dateToParse = dateString;
     
-    // If the date string is missing timezone info (e.g., "2026-08-04T11:11:00"), 
-    // JavaScript incorrectly assumes it's local time. If your backend sends UTC time, 
-    // appending 'Z' forces JS to parse it as UTC and correctly convert to local time.
+    // Appends 'Z' if missing to force UTC parsing
     if (!dateString.includes('Z') && !dateString.match(/([+-]\d{2}:\d{2})$/)) {
       dateToParse = dateString + 'Z';
     }
 
     const date = new Date(dateToParse);
     
-    // Fallback if adding 'Z' breaks the date parsing
     if (isNaN(date.getTime())) {
       const fallbackDate = new Date(dateString);
       if (isNaN(fallbackDate.getTime())) return "";
@@ -107,11 +118,11 @@ const formatDateAndTime = (dateString?: string) => {
     }
 
     return date.toLocaleString('en-US', {
-      month: 'short', // e.g., "Aug"
-      day: 'numeric', // e.g., "4"
+      month: 'short', 
+      day: 'numeric', 
       hour: '2-digit',
       minute: '2-digit',
-      hour12: true, // e.g., "04:40 PM"
+      hour12: true, 
     });
   } catch (error) {
     return "";
@@ -547,7 +558,11 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
   };
 
   const status = getStatus();
-  const avatar = isOwnMessage ? currentUser?.profileImage : thread.createdByProfileImage;
+  
+  // ✅ UPDATED: Apply the exact same profile fetching API logic as Navbar
+  const avatar = isOwnMessage 
+    ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) 
+    : getProfileImageUrl(thread.createdBy, thread.createdByProfileImage);
 
   return (
     <>
@@ -563,7 +578,13 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
       {/* Message Bubble */}
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         <View style={styles.avatarContainer}>
-          {avatar && !avatarError ? (<Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />) : (<View style={styles.defaultAvatar}><User size={16} color="#666" /></View>)}
+          {avatar && !avatarError ? (
+            <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
+          ) : (
+            <View style={styles.defaultAvatar}>
+              <User size={16} color="#666" />
+            </View>
+          )}
         </View>
         <View style={[styles.messageBubble, isOwnMessage ? styles.myMessage : styles.otherMessage]}>
           {!isOwnMessage && (<Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>)}
