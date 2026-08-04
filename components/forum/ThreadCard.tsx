@@ -1,9 +1,9 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL STABLE VERSION - Profile, Date, & Attachments Fixed
+// FINAL VERSION - Fixed Time, Profile, & Attachments
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
-import { documentDirectory } from "expo-file-system/legacy";
+import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
   Calendar,
@@ -77,16 +77,17 @@ interface ThreadCardProps {
 // Helpers
 // =====================================================
 
-// ✅ RESTORED: Correct Date & Time formatter
+// ✅ FIXED: Correct Date & Time formatter (en-US for "10:15 AM" format)
 const formatTime = (date?: string) => {
   try {
     const value = new Date(date || "");
     if (isNaN(value.getTime())) {
       return "";
     }
-    return value.toLocaleTimeString([], {
+    return value.toLocaleTimeString('en-US', {
       hour: "2-digit",
       minute: "2-digit",
+      hour12: true,
     });
   } catch {
     return "";
