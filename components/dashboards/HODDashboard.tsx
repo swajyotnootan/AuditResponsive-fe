@@ -39,32 +39,28 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
-const getBaseUrl = () => {
-  // ✅ 1. WEB BROWSER ONLY (Expo Web)
-  if (Platform.OS === "web") {
-    return "http://localhost:8080";
+const getBaseURL = (): string => {
+  if (__DEV__) {
+    return (
+      Platform.select({
+        ios: "http://10.2.0.95:8080/api",
+        android: "http://10.2.0.95:8080/api",
+        default: "http://10.2.0.73:8080/api",
+      }) || "http://10.2.0.73:8080/api"
+    );
   }
-
-  // ✅ 2. PHYSICAL ANDROID PHONE (Your current setup)
-  if (Platform.OS === "android") {
-    return "http://10.2.0.74:8080";
-  }
-
-  // ✅ 3. ANDROID STUDIO EMULATOR (If you are using the emulator instead of a physical phone, use this instead of #2)
-  // if (Platform.OS === "android") {
-  //   return "http://10.0.2.2:8080";
-  // }
-
-  // ✅ 4. iOS (Simulator or Physical)
-  if (Platform.OS === "ios") {
-    return "http://10.2.0.74:8080"; // Physical iPhone needs the IP. Simulator can use localhost.
-  }
-
-  // ✅ 5. FALLBACK
-  return "http://10.2.0.74:8080";
+  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
 };
 
-const API_BASE_URL = getBaseUrl();
+const API_BASE_URL = getBaseURL();
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { "Content-Type": "application/json" },
+  timeout: 30000,
+  withCredentials: true,
+});
+
 console.log("🚀 API Base URL being used:", API_BASE_URL); // <-- WATCH THIS LOG
 
 // ... [Keep your isNcrBasedEvent, isApprovalPendingStatus, StatusBadge, ActionCard, ApprovalCard exactly as they were] ...

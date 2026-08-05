@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
+import axios from 'axios';
 import { eightDAPI, userAPI } from '../../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -28,11 +29,28 @@ const { width } = Dimensions.get('window');
 const isMobile = width < 768;
 
 // FIX 2: Dynamic Base URL for Expo (Web vs Android Emulator vs Physical Device)
-const getBaseUrl = () => {
-  if (typeof window !== 'undefined') return 'http://localhost:8080'; // Web
-  return 'http://10.0.2.2:8080'; // Android Emulator. Change to your PC's IP (e.g., 192.168.1.x) for physical devices.
+const getBaseURL = (): string => {
+  if (__DEV__) {
+    return (
+      Platform.select({
+        ios: "http://10.2.0.95:8080/api",
+        android: "http://10.2.0.95:8080/api",
+        default: "http://10.2.0.73:8080/api",
+      }) || "http://10.2.0.73:8080/api"
+    );
+  }
+  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
 };
-const API_BASE_URL = getBaseUrl();
+
+const API_BASE_URL = getBaseURL();
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { "Content-Type": "application/json" },
+  timeout: 30000,
+  withCredentials: true,
+});
+
 
 // FIX 3: Safe Image Paths. Use require() for local assets, or full URIs for web.
 const companies = [

@@ -47,20 +47,28 @@ import FinalPreview from "../eightd/steps/FinalPreview";
 import ForumThreadView from "../forum/ForumThreadView";
 
 // ✅ DYNAMIC URL HELPER
-const getBaseUrl = () => {
-  if (Platform.OS === "web") {
-    return "http://localhost:8080";
+const getBaseURL = (): string => {
+  if (__DEV__) {
+    return (
+      Platform.select({
+        ios: "http://10.2.0.95:8080/api",
+        android: "http://10.2.0.95:8080/api",
+        default: "http://10.2.0.73:8080/api",
+      }) || "http://10.2.0.73:8080/api"
+    );
   }
-  if (Platform.OS === "android") {
-    return "http://10.2.0.74:8080";
-  }
-  if (Platform.OS === "ios") {
-    return "http://10.2.0.74:8080";
-  }
-  return "http://10.2.0.74:8080";
+  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
 };
 
-const API_BASE_URL = getBaseUrl();
+const API_BASE_URL = getBaseURL();
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { "Content-Type": "application/json" },
+  timeout: 30000,
+  withCredentials: true,
+});
+
 console.log("🚀 LandingPage API Base URL being used:", API_BASE_URL);
 
 const steps = ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"];
