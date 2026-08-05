@@ -1,19 +1,33 @@
+// YearView.tsx - Updated to match JSX version
+
 import { BarChart3, ChevronDown, ChevronUp } from 'lucide-react-native';
 import moment from 'moment';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-export default function YearView({ date, events, onEventClick }: any) {
+export default function YearView({ date, events, onEventClick, onDateClick, onMonthClick }: any) {
   const currentYear = moment(date).year();
+  const today = moment();
   const [showSummary, setShowSummary] = useState(false);
-  const [expandedMonths, setExpandedMonths] = useState<{[key: number]: boolean}>({});
+  const [expandedMonths, setExpandedMonths] = useState<{ [key: number]: boolean }>({});
 
-  const validEvents = useMemo(() => Array.isArray(events) ? events.filter((e: any) => e && e.start) : [], [events]);
+  const validEvents = useMemo(() => {
+    return Array.isArray(events) ? events.filter((e: any) => e && e.start) : [];
+  }, [events]);
 
   const getEventsForMonth = (monthIndex: number) => {
     const start = moment().year(currentYear).month(monthIndex).startOf('month');
     const end = moment().year(currentYear).month(monthIndex).endOf('month');
     return validEvents.filter((e: any) => moment(e.start).isBetween(start, end, 'day', '[]'));
+  };
+
+  const getEventColor = (event: any) => {
+    if (event.isFullyCompleted) return '#059669';
+    if (event.isSubmitted) return '#3B82F6';
+    if (event.status === 'PENDING_APPROVAL') return '#F59E0B';
+    if (event.status === 'OVERDUE' || event.status === 'REJECTED') return '#EF4444';
+    if (event.isDateRange) return '#8B5CF6';
+    return '#0EA5E9';
   };
 
   const renderMiniMonth = (monthIndex: number) => {
@@ -28,7 +42,13 @@ export default function YearView({ date, events, onEventClick }: any) {
       for (let i = 0; i < 7; i++) {
         const day = currentWeek.clone().add(i, 'day');
         const dayEvents = validEvents.filter((e: any) => moment(e.start).isSame(day, 'day'));
-        week.push({ day: day.date(), isCurrentMonth: day.month() === monthIndex, hasEvents: dayEvents.length > 0, isToday: day.isSame(moment(), 'day') });
+        week.push({
+          day: day.date(),
+          isCurrentMonth: day.month() === monthIndex,
+          hasEvents: dayEvents.length > 0,
+          isToday: day.isSame(today, 'day'),
+          date: day.toDate()
+        });
       }
       weeks.push(week);
       currentWeek.add(1, 'week');
@@ -36,81 +56,139 @@ export default function YearView({ date, events, onEventClick }: any) {
     }
 
     return (
-      <View className="mt-2">
-        <View className="flex-row mb-1">
-          {['S','M','T','W','T','F','S'].map((d, i) => (
-            <Text key={i} className="flex-1 text-center text-[10px] font-medium text-gray-500">{d}</Text>
+      <View style={{ marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+            <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontWeight: '500', color: '#9ca3af' }}>
+              {d}
+            </Text>
           ))}
         </View>
         {weeks.map((week, wIdx) => (
-          <View key={wIdx} className="flex-row mb-0.5">
-            {week.map((d, dIdx) => (
-              <View key={dIdx} className={`flex-1 h-6 items-center justify-center rounded-sm ${d.isToday ? 'bg-blue-600' : (d.hasEvents ? 'bg-blue-50' : '')}`}>
-                <Text className={`text-[10px] font-medium ${d.isCurrentMonth ? (d.isToday ? 'text-white' : 'text-gray-800') : 'text-gray-400'}`}>
-                  {d.day}
-                </Text>
-                {d.hasEvents && !d.isToday && <View className="absolute bottom-0 w-1 h-1 bg-blue-500 rounded-full" />}
-              </View>
-            ))}
+          <View key={wIdx} style={{ flexDirection: 'row', marginBottom: 2 }}>
+            {week.map((d, dIdx) => {
+              const hasEvents = d.hasEvents;
+              const isToday = d.isToday;
+              
+              return (
+                <TouchableOpacity
+                  key={dIdx}
+                  style={{
+                    flex: 1,
+                    height: 24,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 4,
+                    backgroundColor: isToday ? '#00529B' : (hasEvents ? '#EFF6FF' : 'transparent'),
+                  }}
+                  onPress={() => {
+                    if (d.isCurrentMonth && onDateClick) {
+                      onDateClick(d.date);
+                    }
+                  }}
+                  disabled={!d.isCurrentMonth}
+                >
+                  <Text style={{
+                    fontSize: 10,
+                    fontWeight: '500',
+                    color: d.isCurrentMonth ? (isToday ? '#FFFFFF' : '#1f2937') : '#9ca3af'
+                  }}>
+                    {d.day}
+                  </Text>
+                  {hasEvents && !isToday && (
+                    <View style={{ position: 'absolute', bottom: 1, width: 4, height: 4, borderRadius: 2, backgroundColor: '#3B82F6' }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         ))}
       </View>
     );
   };
 
+  // Calculate stats
+  const totalEvents = validEvents.length;
+  const completedEvents = validEvents.filter((e: any) => e.isFullyCompleted).length;
+  const pendingEvents = validEvents.filter((e: any) => e.status === 'PENDING_APPROVAL').length;
+
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="p-4 bg-white border-b border-gray-200 flex-row items-center justify-between">
-        <Text className="text-2xl font-bold text-gray-900">{currentYear}</Text>
-        <TouchableOpacity onPress={() => setShowSummary(!showSummary)} className="flex-row items-center px-3 py-1 bg-gray-100 rounded-lg">
+    <ScrollView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      {/* Year Header */}
+      <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#111827' }}>{currentYear}</Text>
+        <TouchableOpacity onPress={() => setShowSummary(!showSummary)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, backgroundColor: '#F3F4F6', borderRadius: 8 }}>
           <BarChart3 size={16} color="#374151" />
-          <Text className="ml-1 text-xs font-medium text-gray-700">Summary</Text>
+          <Text style={{ marginLeft: 4, fontSize: 12, fontWeight: '500', color: '#374151' }}>Summary</Text>
           {showSummary ? <ChevronUp size={16} color="#374151" /> : <ChevronDown size={16} color="#374151" />}
         </TouchableOpacity>
       </View>
 
+      {/* Summary */}
       {showSummary && (
-        <View className="p-4 bg-blue-50 m-4 rounded-xl">
-          <Text className="text-base font-bold text-gray-900 mb-3">{currentYear} Audit Summary</Text>
-          <View className="flex-row flex-wrap gap-3">
-            <View className="flex-1 bg-white p-3 rounded-lg items-center">
-              <Text className="text-xl font-bold text-blue-600">{validEvents.length}</Text>
-              <Text className="text-xs text-gray-500">Total</Text>
+        <View style={{ margin: 16, padding: 16, backgroundColor: '#EFF6FF', borderRadius: 12, borderWidth: 1, borderColor: '#BFDBFE' }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937', marginBottom: 12 }}>{currentYear} Audit Summary</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#2563EB' }}>{totalEvents}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280' }}>Total Audits</Text>
             </View>
-            <View className="flex-1 bg-white p-3 rounded-lg items-center">
-              <Text className="text-xl font-bold text-green-600">{validEvents.filter((e: any) => e.isFullyCompleted).length}</Text>
-              <Text className="text-xs text-gray-500">Completed</Text>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#059669' }}>{completedEvents}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280' }}>Completed</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#F59E0B' }}>{pendingEvents}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280' }}>Pending</Text>
             </View>
           </View>
         </View>
       )}
 
-      <View className="p-4">
-        <View className="flex-row flex-wrap gap-3">
+      {/* Month Grid */}
+      <View style={{ padding: 16 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
           {Array.from({ length: 12 }).map((_, monthIndex) => {
             const monthName = moment().month(monthIndex).format('MMMM');
             const monthEvents = getEventsForMonth(monthIndex);
             const isExpanded = expandedMonths[monthIndex];
-            const isCurrent = moment().month(monthIndex).isSame(moment(), 'month');
+            const isCurrent = moment().month(monthIndex).isSame(today, 'month');
 
             return (
-              <View key={monthIndex} className={`w-[48%] bg-white rounded-lg border-2 p-3 ${isCurrent ? 'border-blue-500' : 'border-gray-200'}`}>
-                <View className="flex-row items-center justify-between border-b border-gray-100 pb-2 mb-2">
-                  <Text className={`text-sm font-semibold ${isCurrent ? 'text-blue-600' : 'text-gray-800'}`}>{monthName}</Text>
-                  <TouchableOpacity onPress={() => setExpandedMonths(prev => ({ ...prev, [monthIndex]: !prev[monthIndex] }))}>
-                    {isExpanded ? <ChevronUp size={16} color="#6b7280" /> : <ChevronDown size={16} color="#6b7280" />}
+              <View key={monthIndex} style={{ width: '47%', backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 2, padding: 12, borderColor: isCurrent ? '#3B82F6' : '#E5E7EB' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 8, marginBottom: 8 }}>
+                  <TouchableOpacity onPress={() => onMonthClick && onMonthClick(moment().year(currentYear).month(monthIndex).toDate())}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: isCurrent ? '#2563EB' : '#1f2937' }}>
+                      {monthName}
+                    </Text>
                   </TouchableOpacity>
+                  <Text style={{ fontSize: 11, color: '#9ca3af' }}>
+                    {monthEvents.length} audit{monthEvents.length !== 1 ? 's' : ''}
+                  </Text>
                 </View>
                 {renderMiniMonth(monthIndex)}
                 {isExpanded && monthEvents.length > 0 && (
-                  <View className="mt-3 pt-3 border-t border-gray-100">
-                    {monthEvents.slice(0, 3).map((e: any, idx: number) => (
-                      <TouchableOpacity key={idx} onPress={() => onEventClick(e)} className="flex-row items-center py-1">
-                        <View className="w-2 h-2 bg-blue-500 rounded-full mr-2" />
-                        <Text className="flex-1 text-xs text-gray-700 truncate">{e.auditType || 'Audit'}</Text>
-                        <Text className="text-[10px] text-gray-500">{moment(e.start).format('MMM DD')}</Text>
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                    {monthEvents.slice(0, 4).map((e: any, idx: number) => (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => onEventClick(e)}
+                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}
+                      >
+                        <View style={{ width: 8, height: 8, borderRadius: 4, marginRight: 8, backgroundColor: getEventColor(e) }} />
+                        <Text style={{ flex: 1, fontSize: 12, color: '#374151' }} numberOfLines={1}>
+                          {e.auditType || 'Audit'}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#9ca3af' }}>
+                          {moment(e.start).format('MMM DD')}
+                        </Text>
                       </TouchableOpacity>
                     ))}
+                    {monthEvents.length > 4 && (
+                      <Text style={{ fontSize: 11, color: '#6b7280', textAlign: 'center', marginTop: 4 }}>
+                        +{monthEvents.length - 4} more
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>

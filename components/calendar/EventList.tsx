@@ -1,9 +1,12 @@
+// EventList.tsx - Updated
+
 import { Calendar as CalendarIcon, Clock, Tag } from 'lucide-react-native';
 import moment from 'moment';
 import React from 'react';
 import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-export default function EventList({ events, onEventClick }: any) {
+export default function EventList({ events, onEventClick, currentDate }: any) {
+  // Group events by date
   const groupedEvents = events.reduce((acc: any, event: any) => {
     const dateKey = event.start || 'Unknown';
     if (!acc[dateKey]) acc[dateKey] = [];
@@ -11,10 +14,12 @@ export default function EventList({ events, onEventClick }: any) {
     return acc;
   }, {});
 
-  const sections = Object.keys(groupedEvents).sort().map(date => ({
-    title: date,
-    data: groupedEvents[date]
-  }));
+  const sections = Object.keys(groupedEvents)
+    .sort()
+    .map(date => ({
+      title: date,
+      data: groupedEvents[date]
+    }));
 
   const formatDate = (dateStr: string) => {
     const eventDate = moment(dateStr);
@@ -26,10 +31,17 @@ export default function EventList({ events, onEventClick }: any) {
 
   const renderItem = ({ item }: any) => {
     const isPast = moment(item.start).isBefore(moment(), 'day');
-    const dotColor = item.isFullyCompleted ? '#059669' : item.isSubmitted ? '#3b82f6' : item.status === 'PENDING_APPROVAL' ? '#f59e0b' : '#0ea5e9';
+    
+    // Determine dot color
+    let dotColor = '#0EA5E9';
+    if (item.isFullyCompleted) dotColor = '#059669';
+    else if (item.isSubmitted) dotColor = '#3B82F6';
+    else if (item.status === 'PENDING_APPROVAL') dotColor = '#F59E0B';
+    else if (item.status === 'REJECTED' || item.status === 'OVERDUE') dotColor = '#EF4444';
+    else if (item.isDateRange) dotColor = '#8B5CF6';
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         onPress={() => onEventClick(item)}
         style={[
           styles.eventCard,
@@ -45,7 +57,9 @@ export default function EventList({ events, onEventClick }: any) {
             </Text>
             <View style={styles.timeBadge}>
               <Clock size={12} color="#6b7280" />
-              <Text style={styles.timeText}>{item.startTime || '09:00 AM'} - {item.endTime || '10:00 AM'}</Text>
+              <Text style={styles.timeText}>
+                {item.startTime || '09:00 AM'} - {item.endTime || '10:00 AM'}
+              </Text>
             </View>
           </View>
           <View style={styles.eventDetails}>
@@ -53,6 +67,16 @@ export default function EventList({ events, onEventClick }: any) {
               <View style={styles.detailRow}>
                 <Tag size={14} color="#9ca3af" />
                 <Text style={styles.detailText}>{item.department}</Text>
+              </View>
+            )}
+            {item.isFullyCompleted && (
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedText}>✓ Completed</Text>
+              </View>
+            )}
+            {item.isSubmitted && !item.isFullyCompleted && (
+              <View style={styles.submittedBadge}>
+                <Text style={styles.submittedText}>⏳ Pending</Text>
               </View>
             )}
           </View>
@@ -68,13 +92,13 @@ export default function EventList({ events, onEventClick }: any) {
         <Text style={styles.emptyTitle}>No events found</Text>
         <Text style={styles.emptyText}>No audits match your current filters.</Text>
       </View>
-);
+    );
   }
 
   return (
     <SectionList
       sections={sections}
-      keyExtractor={(item, index) => item.id || index.toString()}
+      keyExtractor={(item, index) => item.id?.toString() || index.toString()}
       renderItem={renderItem}
       renderSectionHeader={({ section: { title } }) => (
         <View style={styles.sectionHeader}>
@@ -94,14 +118,18 @@ const styles = StyleSheet.create({
   eventCardPast: { backgroundColor: '#f9fafb', borderColor: '#e5e7eb', opacity: 0.75 },
   dotIndicator: { width: 12, height: 12, borderRadius: 6, marginTop: 4, marginRight: 12 },
   eventContent: { flex: 1 },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   eventTitle: { fontSize: 16, fontWeight: '600', color: '#111827', flex: 1 },
   textPast: { color: '#4b5563' },
   timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   timeText: { fontSize: 12, fontWeight: '500', color: '#374151', marginLeft: 4 },
-  eventDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  eventDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   detailRow: { flexDirection: 'row', alignItems: 'center' },
   detailText: { fontSize: 14, color: '#6b7280', marginLeft: 4 },
+  completedBadge: { backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  completedText: { fontSize: 11, fontWeight: '600', color: '#047857' },
+  submittedBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  submittedText: { fontSize: 11, fontWeight: '600', color: '#1d4ed8' },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1f2937', marginTop: 16 },
   emptyText: { fontSize: 14, color: '#6b7280', marginTop: 4 },
