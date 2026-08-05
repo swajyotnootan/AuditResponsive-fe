@@ -1,16 +1,18 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Fixed Timezone, Profile API, & Attachments
+// FINAL VERSION - Profile Modal API Added
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
 import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
+  Building2, // ✅ ADDED
   Calendar,
   Check,
   Download,
   Eye,
   FileText,
+  Mail, // ✅ ADDED
   MapPin,
   Pause,
   Play,
@@ -28,6 +30,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView, // ✅ ADDED
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -54,7 +57,7 @@ interface Attachment {
 interface Thread {
   id?: string;
   content?: string;
-  createdBy?: string; // Usually the User ID or Email
+  createdBy?: string; 
   createdByName?: string;
   createdByProfileImage?: string;
   createdAt: string;
@@ -67,24 +70,33 @@ interface ThreadCardProps {
   thread: Thread;
   currentUsername?: string;
   currentUser?: {
-    id?: string | number; // ✅ ADDED: ID is required to fetch profile photo via API
+    id?: string | number; 
     email?: string;
     profileImage?: string;
   };
   onRetry?: (thread: Thread) => void;
 }
 
+// ✅ ADDED: Profile Data Type
+interface UserProfile {
+  id?: string | number;
+  name?: string;
+  email?: string;
+  username?: string;
+  role?: string;
+  department?: string;
+  profilePhoto?: string;
+}
+
 // =====================================================
 // Helpers
 // =====================================================
 
-// ✅ ADDED: Fetches profile photo exactly like Navbar.tsx
+// ✅ Fetches profile photo exactly like Navbar.tsx
 const getProfileImageUrl = (userId?: string | number | null, existingImage?: string) => {
-  // If the backend already returned a full URL or base64, use it directly
   if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) {
     return existingImage;
   }
-  // Otherwise, construct the API URL using the User ID
   if (userId) {
     return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
   }
@@ -363,6 +375,12 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [imageFetchAttempts, setImageFetchAttempts] = useState<Record<string, number>>({});
 
+  // ✅ ADDED: Profile Modal State
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [fetchedProfile, setFetchedProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
 
@@ -474,6 +492,49 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
     }
   };
 
+  // ✅ ADDED: Fetches Profile Data
+  const handleProfileClick = async (userId?: string | number | null) => {
+    if (!userId) return;
+    setProfileModalOpen(true);
+    setProfileLoading(true);
+    setProfileError(null);
+    setFetchedProfile(null);
+
+    try {
+      let url = `${API_BASE_URL}/api/users/${userId}`;
+      let response = await fetch(url);
+      
+      // If 404 and userId looks like an email, try by-email endpoint
+      if (!response.ok && typeof userId === 'string' && userId.includes('@')) {
+        response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userId)}`);
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        setFetchedProfile(data);
+      } else {
+        // Fallback to local thread data
+        setFetchedProfile({
+          id: userId,
+          name: thread.createdByName || "User",
+          email: typeof userId === 'string' && userId.includes('@') ? userId : undefined,
+        });
+        if (response.status === 404 || response.status === 400) {
+           setProfileError("Detailed profile not found on server.");
+        }
+      }
+    } catch (error) {
+      console.error("Profile fetch error:", error);
+      setProfileError("Failed to load profile data.");
+      setFetchedProfile({
+        id: userId,
+        name: thread.createdByName || "User",
+      });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
 
@@ -559,7 +620,7 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
 
   const status = getStatus();
   
-  // ✅ UPDATED: Apply the exact same profile fetching API logic as Navbar
+  // ✅ Apply the exact same profile fetching API logic as Navbar
   const avatar = isOwnMessage 
     ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) 
     : getProfileImageUrl(thread.createdBy, thread.createdByProfileImage);
@@ -575,19 +636,99 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
       {Platform.OS === "web" && (<Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide"><WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} /></Modal>)}
       <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
 
+      {/* ✅ ADDED: Profile Modal */}
+      <Modal
+        visible={profileModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProfileModalOpen(false)}
+      >
+        <Pressable style={styles.profileModalBackdrop} onPress={() => setProfileModalOpen(false)}>
+          <Pressable style={styles.profileModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.profileModalHeader}>
+              <Text style={styles.profileModalHeaderText}>User Profile</Text>
+              <TouchableOpacity onPress={() => setProfileModalOpen(false)} style={styles.profileModalClose}>
+                <X size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.profileModalBody}>
+              {profileLoading ? (
+                <View style={styles.profileLoadingContainer}>
+                  <ActivityIndicator size="large" color="#00529B" />
+                  <Text style={{ marginTop: 10, color: "#666" }}>Loading profile...</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.profileAvatarContainer}>
+                    <View style={styles.profileAvatarWrapper}>
+                      {getProfileImageUrl(fetchedProfile?.id, fetchedProfile?.profilePhoto) ? (
+                        <Image 
+                          source={{ uri: getProfileImageUrl(fetchedProfile?.id, fetchedProfile?.profilePhoto)! }} 
+                          style={styles.profileAvatarImage} 
+                        />
+                      ) : (
+                        <Text style={styles.profileAvatarInitials}>
+                          {fetchedProfile?.name ? fetchedProfile.name.charAt(0).toUpperCase() : "?"}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.profileModalName}>{fetchedProfile?.name || fetchedProfile?.username || "User"}</Text>
+                    {fetchedProfile?.role && <Text style={styles.profileModalRole}>{fetchedProfile.role}</Text>}
+                    {profileError && <Text style={styles.profileErrorText}>{profileError}</Text>}
+                  </View>
+
+                  <View style={styles.profileDetailsContainer}>
+                    {fetchedProfile?.email && (
+                      <View style={styles.profileDetailRow}>
+                        <Mail size={18} color="#00529B" />
+                        <Text style={styles.profileDetailLabel}>Email:</Text>
+                        <Text style={styles.profileDetailValue}>{fetchedProfile.email}</Text>
+                      </View>
+                    )}
+                    {fetchedProfile?.username && (
+                      <View style={styles.profileDetailRow}>
+                        <User size={18} color="#00529B" />
+                        <Text style={styles.profileDetailLabel}>Username:</Text>
+                        <Text style={styles.profileDetailValue}>{fetchedProfile.username}</Text>
+                      </View>
+                    )}
+                    {fetchedProfile?.department && (
+                      <View style={styles.profileDetailRow}>
+                        <Building2 size={18} color="#00529B" />
+                        <Text style={styles.profileDetailLabel}>Department:</Text>
+                        <Text style={styles.profileDetailValue}>{fetchedProfile.department}</Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Message Bubble */}
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         <View style={styles.avatarContainer}>
-          {avatar && !avatarError ? (
-            <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
-          ) : (
-            <View style={styles.defaultAvatar}>
-              <User size={16} color="#666" />
-            </View>
-          )}
+          {/* ✅ Clickable Avatar */}
+          <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
+            {avatar && !avatarError ? (
+              <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
+            ) : (
+              <View style={styles.defaultAvatar}>
+                <User size={16} color="#666" />
+              </View>
+            )}
+          </Pressable>
         </View>
         <View style={[styles.messageBubble, isOwnMessage ? styles.myMessage : styles.otherMessage]}>
-          {!isOwnMessage && (<Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>)}
+          {!isOwnMessage && (
+            // ✅ Clickable Sender Name
+            <Pressable onPress={() => handleProfileClick(thread.createdBy)}>
+              <Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>
+            </Pressable>
+          )}
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
           {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
@@ -613,7 +754,7 @@ const styles = StyleSheet.create({
   myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
   otherMessage: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#eeeeee" },
   messageText: { fontSize: 15, color: "#222", lineHeight: 21 },
-  senderName: { fontSize: 12, fontWeight: "600", color: "#666", marginBottom: 4 },
+  senderName: { fontSize: 12, fontWeight: "600", color: "#00529B", marginBottom: 4, textDecorationLine: 'underline' }, // ✅ Styled as clickable
   timeRow: { flexDirection: "row", alignItems: "center", marginTop: 5 },
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
@@ -666,4 +807,24 @@ const styles = StyleSheet.create({
   pdfHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#f5f5f5" },
   pdfTitle: { fontSize: 18, fontWeight: "600", color: "#000" },
   pdfCloseButton: { padding: 8 },
+
+  // ✅ ADDED: Profile Modal Styles
+  profileModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  profileModalContent: { width: "85%", maxWidth: 400, backgroundColor: "white", borderRadius: 16, overflow: "hidden", elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 },
+  profileModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#eee" },
+  profileModalHeaderText: { fontSize: 18, fontWeight: "700", color: "#333" },
+  profileModalClose: { padding: 4 },
+  profileModalBody: { maxHeight: 400 },
+  profileLoadingContainer: { padding: 40, alignItems: "center", justifyContent: "center" },
+  profileAvatarContainer: { alignItems: "center", paddingVertical: 24, backgroundColor: "#f8f9fa", borderBottomWidth: 1, borderBottomColor: "#eee" },
+  profileAvatarWrapper: { width: 90, height: 90, borderRadius: 45, backgroundColor: "#e2e8f0", alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#fff", elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, overflow: "hidden" },
+  profileAvatarImage: { width: "100%", height: "100%" },
+  profileAvatarInitials: { fontSize: 36, fontWeight: "bold", color: "#00529B" },
+  profileModalName: { fontSize: 20, fontWeight: "700", color: "#111", marginTop: 12, textAlign: "center" },
+  profileModalRole: { fontSize: 14, color: "#666", marginTop: 4, textAlign: "center" },
+  profileErrorText: { fontSize: 12, color: "#dc2626", marginTop: 8, textAlign: "center" },
+  profileDetailsContainer: { padding: 20 },
+  profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
+  profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
+  profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
 });
