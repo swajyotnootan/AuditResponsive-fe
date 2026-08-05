@@ -1,6 +1,7 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers
+// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers & Email Modal
 
+import EmailNotificationModal from '@/components/comform/EmailNotificationModal'; // ✅ ADDED
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import {
@@ -135,6 +136,7 @@ export default function ForumThreadView({
   // ---- Email & Settings ----
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [inspectionId, setInspectionId] = useState<string | null>(null); // ✅ ADDED
   const [selectedMic, setSelectedMic] = useState("");
   const [selectedCamera, setSelectedCamera] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState("");
@@ -930,6 +932,18 @@ export default function ForumThreadView({
     handleCallEnded,
   ]);
 
+  // ========== EMAIL MODAL HANDLERS ==========
+  const handleOpenEmailModal = () => {
+    setInspectionId(String(groupId));
+    setShowEmailModal(true);
+  };
+
+  const handleProceedAfterEmail = async() => {
+    console.log('✅ [FORUM] Email sent successfully, proceeding...');
+    setShowEmailModal(false);
+    // Add any post-email logic here
+  };
+
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
@@ -1289,6 +1303,16 @@ export default function ForumThreadView({
 
       {/* Modals */}
       <IncomingCallModal />
+
+      {/* 📧 NEW: Email Notification Modal */}
+      {showEmailModal && (
+        <EmailNotificationModal
+          isOpen={true}
+          onClose={() => setShowEmailModal(false)}
+          inspectionId={inspectionId || String(groupId)}
+          onProceed={handleProceedAfterEmail}
+        />
+      )}
     </View>
   );
 }
