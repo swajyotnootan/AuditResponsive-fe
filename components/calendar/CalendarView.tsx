@@ -1,4 +1,4 @@
-// CalendarView.tsx - Complete fixed version
+// CalendarView.tsx - UPDATED with proper event display
 
 import { API_BASE_URL } from '@/config/apiConfig';
 import {
@@ -23,10 +23,11 @@ import { Calendar, LocaleConfig, WeekCalendar } from 'react-native-calendars';
 
 import { useAuth } from '../context/AuthContext';
 import { CalendarEvent, EventFilter, ViewType } from './CalendarTypes';
-import { buildMarkedDates } from './CalendarUtils';
+import { buildMarkedDates, getEventColor, getStatusDisplay, isEventOverdue } from './CalendarUtils';
 import EventList from './EventList';
 import EventModal from './EventModal';
 import { useResponsive } from './Responsive';
+import UserAvatar from './UserAvatar';
 import YearView from './YearView';
 
 // Configure calendar locale
@@ -39,6 +40,92 @@ LocaleConfig.locales['en'] = {
 };
 LocaleConfig.defaultLocale = 'en';
 
+
+// Custom component to render events on calendar days
+const CustomDay = ({ date, state, marking, onPress }: any) => {
+  const isToday = state === 'today';
+  const isSelected = state === 'selected';
+  const dots = marking?.dots || [];
+  const hasEvents = dots.length > 0;
+
+  return (
+    <TouchableOpacity
+      onPress={() => onPress && onPress(date)}
+      style={[
+        styles.dayContainer,
+        isToday && styles.dayToday,
+        isSelected && styles.daySelected,
+      ]}
+    >
+      <Text style={[
+        styles.dayText,
+        isToday && styles.dayTextToday,
+        isSelected && styles.dayTextSelected,
+        !isToday && !isSelected && styles.dayTextNormal,
+      ]}>
+        {date.day}
+      </Text>
+      
+      {/* Event dots at bottom */}
+      {hasEvents && (
+        <View style={styles.dayDotsContainer}>
+          {dots.slice(0, 3).map((dot: any, index: number) => (
+            <View
+              key={index}
+              style={[
+                styles.dayDot,
+                { backgroundColor: dot.color },
+                dots.length > 3 && index === 2 && styles.dayDotMore,
+              ]}
+            />
+          ))}
+          {dots.length > 3 && (
+            <Text style={styles.dayDotMoreText}>+{dots.length - 3}</Text>
+          )}
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+// Custom event component for calendar
+const CalendarEventComponent = ({ event }: any) => {
+  const color = getEventColor(event);
+  const isOverdue = isEventOverdue(event);
+  const isCompleted = event.isFullyCompleted;
+  const isSubmitted = event.isSubmitted;
+  
+  // Get short audit type
+  const getShortType = (type: string) => {
+    const types: Record<string, string> = {
+      '5S Audit': '5S',
+      'IATF 16949': 'IATF',
+      'Process Audit': 'PRC',
+      'Product Audit': 'PRD',
+      'ISO 9001': 'ISO',
+      'System Audit (ISO9001)': 'ISO',
+      'System Audit (IATF16949)': 'IATF',
+    };
+    return types[type] || type?.substring(0, 3).toUpperCase() || 'AUD';
+  };
+
+  let textColor = '#374151';
+  if (isOverdue) textColor = '#DC2626';
+  else if (isCompleted) textColor = '#059669';
+  else if (isSubmitted) textColor = '#3B82F6';
+
+  return (
+    <View style={styles.calendarEventContainer}>
+      <View style={[styles.calendarEventDot, { backgroundColor: color }]} />
+      <Text style={[styles.calendarEventText, { color: textColor }]} numberOfLines={1}>
+        {getShortType(event.auditType)}
+      </Text>
+      {(isCompleted || isSubmitted) && (
+        <Text style={styles.calendarEventCheck}>✓</Text>
+      )}
+    </View>
+  );
+};
 
 export default function CalendarView() {
   const { user } = useAuth();
@@ -59,6 +146,8 @@ export default function CalendarView() {
   const [eventFilter, setEventFilter] = useState<EventFilter>('all');
   const [expandedLegend, setExpandedLegend] = useState(true);
   const [userRole, setUserRole] = useState<string>('AUDITOR');
+  const [selectedDateEvents, setSelectedDateEvents] = useState<CalendarEvent[]>([]);
+  const [showDateEventsModal, setShowDateEventsModal] = useState(false);
 
   // Determine user role
   useEffect(() => {
@@ -70,7 +159,7 @@ export default function CalendarView() {
     }
   }, [user]);
 
-  // Load events - FIXED VERSION
+  // Load events
   const loadEvents = useCallback(async () => {
     try {
       setLoading(true);
@@ -182,6 +271,23 @@ export default function CalendarView() {
     setRefreshing(true);
     await loadEvents();
   }, [loadEvents]);
+
+  // Handle day press - show events for that day
+  const handleDayPress = useCallback((day: any) => {
+    const dateStr = day.dateString;
+    setCurrentDate(dateStr);
+    
+    // Get events for this date
+    const dayEvents = events.filter(event => {
+      const eventDate = event.start;
+      return eventDate === dateStr;
+    });
+    
+    if (dayEvents.length > 0) {
+      setSelectedDateEvents(dayEvents);
+      setShowDateEventsModal(true);
+    }
+  }, [events]);
 
   // Filtered events
   const filteredEvents = useMemo(() => {
@@ -340,18 +446,38 @@ export default function CalendarView() {
               markingType="multi-dot"
               markedDates={markedDates}
               enableSwipeMonths
-              onDayPress={(day: any) => setCurrentDate(day.dateString)}
+              onDayPress={handleDayPress}
               onMonthChange={(month: any) => {
                 if (month.dateString !== currentDate) setCurrentDate(month.dateString);
               }}
               theme={{
                 todayTextColor: '#00529B',
                 selectedDayBackgroundColor: '#00529B',
+                selectedDayTextColor: '#FFFFFF',
                 arrowColor: '#00529B',
                 textMonthFontWeight: '700',
                 textDayFontSize: fontSmall,
                 textMonthFontSize: fontMedium,
-              }}
+                calendarBackground: '#FFFFFF',
+                backgroundColor: '#FFFFFF',
+                'stylesheet.calendar.header': {
+                  week: {
+                    marginTop: 7,
+                    flexDirection: 'row',
+                    justifyContent: 'space-around',
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                  },
+                },
+                'stylesheet.day.basic': {
+                  dayContainer: {
+                    flex: 1,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 4,
+                  },
+                },
+              }as any}
               style={styles.calendar}
             />
           )}
@@ -363,17 +489,25 @@ export default function CalendarView() {
                   current={currentDate}
                   markedDates={markedDates}
                   firstDay={1}
-                  onDayPress={(day: any) => setCurrentDate(day.dateString)}
+                  onDayPress={handleDayPress}
                   theme={{
                     todayTextColor: '#00529B',
                     selectedDayBackgroundColor: '#00529B',
-                    selectedDayTextColor: '#ffffff',
+                    selectedDayTextColor: '#FFFFFF',
                     arrowColor: '#00529B',
                     textDayFontWeight: '500',
                     textDayFontSize: fontSmall,
-                    calendarBackground: '#ffffff',
-                    backgroundColor: '#ffffff',
-                  }}
+                    calendarBackground: '#FFFFFF',
+                    backgroundColor: '#FFFFFF',
+                    'stylesheet.week': {
+                      week: {
+                        flexDirection: 'row',
+                        justifyContent: 'space-around',
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                      },
+                    },
+                  }as any}
                   style={styles.weekCalendar}
                 />
               </View>
@@ -411,6 +545,69 @@ export default function CalendarView() {
           )}
         </View>
       </View>
+
+      {/* Date Events Modal - Shows all events for a selected day */}
+      <Modal
+        visible={showDateEventsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDateEventsModal(false)}
+      >
+        <View style={styles.dateEventsOverlay}>
+          <View style={styles.dateEventsModal}>
+            <View style={styles.dateEventsHeader}>
+              <Text style={styles.dateEventsTitle}>
+                {moment(currentDate).format('dddd, MMMM DD, YYYY')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowDateEventsModal(false)} style={styles.dateEventsClose}>
+                <Text style={{ color: '#6B7280', fontSize: 20 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.dateEventsList}>
+              {selectedDateEvents.map((event) => (
+                <TouchableOpacity
+                  key={event.id}
+                  style={styles.dateEventCard}
+                  onPress={() => {
+                    setShowDateEventsModal(false);
+                    setSelectedEvent(event);
+                    setShowModal(true);
+                  }}
+                >
+                  <View style={[styles.dateEventDot, { backgroundColor: getEventColor(event) }]} />
+                  <View style={styles.dateEventContent}>
+                    <Text style={styles.dateEventTitle}>{event.auditType}</Text>
+                    <Text style={styles.dateEventDept}>{event.department}</Text>
+                    <View style={styles.dateEventMeta}>
+                      <Text style={styles.dateEventTime}>
+                        {event.startTime} - {event.endTime}
+                      </Text>
+                      <Text style={[styles.dateEventStatus, 
+                        event.isFullyCompleted && styles.statusCompleted,
+                        event.isSubmitted && styles.statusSubmitted,
+                      ]}>
+                        {getStatusDisplay(event)}
+                      </Text>
+                    </View>
+                    {/* Show auditor with avatar */}
+                    <UserAvatar 
+                      userId={event.auditorId} 
+                      userName={event.auditorName} 
+                      size="xs" 
+                      showName={true} 
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {selectedDateEvents.length === 0 && (
+                <View style={styles.dateEventsEmpty}>
+                  <Text style={styles.dateEventsEmptyText}>No events on this day</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Event Modal */}
       <EventModal
@@ -568,4 +765,186 @@ const styles = StyleSheet.create({
   
   weekContainer: { width: 900, backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden' },
   weekCalendar: { width: 900, height: 110 },
+
+  // Calendar Day Styles
+  dayContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    minHeight: 40,
+    borderRadius: 8,
+  },
+  dayToday: {
+    backgroundColor: 'rgba(0, 82, 155, 0.1)',
+    borderWidth: 1,
+    borderColor: '#00529B',
+  },
+  daySelected: {
+    backgroundColor: '#00529B',
+  },
+  dayText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  dayTextNormal: {
+    color: '#1F2937',
+  },
+  dayTextToday: {
+    color: '#00529B',
+    fontWeight: '700',
+  },
+  dayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dayDotsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    gap: 2,
+    height: 12,
+  },
+  dayDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dayDotMore: {
+    width: 8,
+    height: 6,
+    borderRadius: 3,
+  },
+  dayDotMoreText: {
+    fontSize: 8,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+
+  // Calendar Event Styles
+  calendarEventContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    gap: 4,
+  },
+  calendarEventDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  calendarEventText: {
+    fontSize: 11,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  calendarEventCheck: {
+    fontSize: 10,
+    color: '#10B981',
+    flexShrink: 0,
+  },
+
+  // Date Events Modal
+  dateEventsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateEventsModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  dateEventsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  dateEventsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  dateEventsClose: {
+    padding: 8,
+  },
+  dateEventsList: {
+    padding: 16,
+  },
+  dateEventCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 8,
+  },
+  dateEventDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  dateEventContent: {
+    flex: 1,
+  },
+  dateEventTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  dateEventDept: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  dateEventMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  dateEventTime: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  dateEventStatus: {
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    color: '#6B7280',
+  },
+  statusCompleted: {
+    backgroundColor: '#D1FAE5',
+    color: '#065F46',
+  },
+  statusSubmitted: {
+    backgroundColor: '#DBEAFE',
+    color: '#1D4ED8',
+  },
+  dateEventsEmpty: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  dateEventsEmptyText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
 });

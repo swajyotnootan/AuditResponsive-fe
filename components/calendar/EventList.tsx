@@ -1,9 +1,11 @@
-// EventList.tsx - Updated
+// EventList.tsx - UPDATED with avatar and all fields
 
 import { Calendar as CalendarIcon, Clock, Tag } from 'lucide-react-native';
 import moment from 'moment';
 import React from 'react';
 import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getEventColor, getStatusDisplay } from './CalendarUtils';
+import UserAvatar from './UserAvatar';
 
 export default function EventList({ events, onEventClick, currentDate }: any) {
   // Group events by date
@@ -31,14 +33,8 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
 
   const renderItem = ({ item }: any) => {
     const isPast = moment(item.start).isBefore(moment(), 'day');
-    
-    // Determine dot color
-    let dotColor = '#0EA5E9';
-    if (item.isFullyCompleted) dotColor = '#059669';
-    else if (item.isSubmitted) dotColor = '#3B82F6';
-    else if (item.status === 'PENDING_APPROVAL') dotColor = '#F59E0B';
-    else if (item.status === 'REJECTED' || item.status === 'OVERDUE') dotColor = '#EF4444';
-    else if (item.isDateRange) dotColor = '#8B5CF6';
+    const color = getEventColor(item);
+    const statusDisplay = getStatusDisplay(item);
 
     return (
       <TouchableOpacity
@@ -49,7 +45,7 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
         ]}
         activeOpacity={0.7}
       >
-        <View style={[styles.dotIndicator, { backgroundColor: dotColor }]} />
+        <View style={[styles.dotIndicator, { backgroundColor: color }]} />
         <View style={styles.eventContent}>
           <View style={styles.eventHeader}>
             <Text style={[styles.eventTitle, isPast && styles.textPast]} numberOfLines={1}>
@@ -62,13 +58,29 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
               </Text>
             </View>
           </View>
-          <View style={styles.eventDetails}>
-            {item.department && (
-              <View style={styles.detailRow}>
-                <Tag size={14} color="#9ca3af" />
-                <Text style={styles.detailText}>{item.department}</Text>
-              </View>
-            )}
+          
+          {/* Department */}
+          {item.department && (
+            <View style={styles.detailRow}>
+              <Tag size={14} color="#9ca3af" />
+              <Text style={styles.detailText}>{item.department}</Text>
+            </View>
+          )}
+          
+          {/* Auditor with Profile Photo */}
+          {item.auditorName && (
+            <View style={styles.auditorRow}>
+              <UserAvatar 
+                userId={item.auditorId} 
+                userName={item.auditorName} 
+                size="xs" 
+                showName={true} 
+              />
+            </View>
+          )}
+          
+          {/* Status badges */}
+          <View style={styles.statusRow}>
             {item.isFullyCompleted && (
               <View style={styles.completedBadge}>
                 <Text style={styles.completedText}>✓ Completed</Text>
@@ -76,8 +88,11 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
             )}
             {item.isSubmitted && !item.isFullyCompleted && (
               <View style={styles.submittedBadge}>
-                <Text style={styles.submittedText}>⏳ Pending</Text>
+                <Text style={styles.submittedText}>⏳ Pending Approval</Text>
               </View>
+            )}
+            {!item.isFullyCompleted && !item.isSubmitted && (
+              <Text style={styles.statusText}>{statusDisplay}</Text>
             )}
           </View>
         </View>
@@ -118,18 +133,20 @@ const styles = StyleSheet.create({
   eventCardPast: { backgroundColor: '#f9fafb', borderColor: '#e5e7eb', opacity: 0.75 },
   dotIndicator: { width: 12, height: 12, borderRadius: 6, marginTop: 4, marginRight: 12 },
   eventContent: { flex: 1 },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   eventTitle: { fontSize: 16, fontWeight: '600', color: '#111827', flex: 1 },
   textPast: { color: '#4b5563' },
-  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, flexShrink: 0 },
   timeText: { fontSize: 12, fontWeight: '500', color: '#374151', marginLeft: 4 },
-  eventDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  detailRow: { flexDirection: 'row', alignItems: 'center' },
-  detailText: { fontSize: 14, color: '#6b7280', marginLeft: 4 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  detailText: { fontSize: 13, color: '#6b7280', marginLeft: 4 },
+  auditorRow: { marginTop: 4 },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   completedBadge: { backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   completedText: { fontSize: 11, fontWeight: '600', color: '#047857' },
   submittedBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   submittedText: { fontSize: 11, fontWeight: '600', color: '#1d4ed8' },
+  statusText: { fontSize: 11, fontWeight: '500', color: '#6b7280' },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1f2937', marginTop: 16 },
   emptyText: { fontSize: 14, color: '#6b7280', marginTop: 4 },

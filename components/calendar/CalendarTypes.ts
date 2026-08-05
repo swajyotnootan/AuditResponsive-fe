@@ -1,4 +1,4 @@
-// CalendarTypes.ts - Full updated types
+// CalendarTypes.ts - COMPLETE version
 
 export type ViewType = 'month' | 'week' | 'day' | 'agenda' | 'year' | 'list';
 export type EventFilter = 'all' | 'owned' | 'attending';
@@ -21,7 +21,7 @@ export interface CalendarEvent {
   isAttendee: boolean;
   isCoAuditor: boolean;
   
-  // People
+  // People - WITH IDs for profile photos
   auditorName: string;
   auditorId: number | null;
   auditeeName: string;
