@@ -624,7 +624,8 @@ const AuditListItem = ({
           !isExpired &&
           !allFormsCompleted &&
           hasPendingForms &&
-          nextPendingForm ? (
+          nextPendingForm &&
+          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
           <TouchableOpacity
             onPress={() => handleViewForm(audit, nextPendingForm)}
             className="px-3 py-2 border border-blue-200 rounded-lg bg-blue-50"
@@ -636,14 +637,15 @@ const AuditListItem = ({
         ) : !hasPendingReschedule &&
           !hasPendingExtension &&
           !hasStartedWork &&
-          !isExpired ? (
+          !isExpired &&
+          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
           <TouchableOpacity
             onPress={() => handleViewForm(audit, audit.formDetails?.[0])}
             className="px-3 py-2 bg-blue-600 rounded-lg"
           >
             <Text className="text-xs font-semibold text-white">Start</Text>
           </TouchableOpacity>
-        ) : audit.formDetails?.[0]?.responseId ? ( // ✅ FIXED: Changed 'formDetails' to 'audit.formDetails'
+        ) : audit.formDetails?.[0]?.responseId && allFormsCompleted ? ( // ✅ Added && allFormsCompleted
           <TouchableOpacity
             onPress={() =>
               handleViewReport(
@@ -655,7 +657,7 @@ const AuditListItem = ({
             className="px-3 py-2 border rounded-lg bg-emerald-50 border-emerald-200"
           >
             <Text className="text-xs font-semibold text-emerald-700">
-              {allFormsCompleted ? "View Report" : "View Draft"}
+              View Report
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -803,11 +805,15 @@ const AuditCard = ({
     <View
       className={`flex-1 border shadow-sm rounded-2xl border-slate-200 ${getCardBgColor()}`}
     >
-      <View className="p-4">
-        {/* ✅ ADDED: Date Display Section (Matches React Web) */}
-        <View className="flex-row items-start justify-between mb-3">
-          {/* Left Side: Badges (Added flex-1 and mr-2 to share space) */}
-          <View className="flex-row flex-wrap flex-1 gap-2 mr-2">
+      <View className="flex-1 p-4">
+        {/* ✅ ROW 1: Status badges at the TOP (full width, wrap safely) */}
+        {/* ✅ HEADER: Status badges (LEFT) + Date (RIGHT) on the SAME line */}
+        <View className="flex-row items-center justify-between gap-2 mb-3">
+          {/* LEFT: badges — can wrap/shrink, so they never collide with the date */}
+          <View
+            className="flex-row flex-wrap items-center gap-2"
+            style={{ flexShrink: 1 }}
+          >
             {getStatusBadge()}
             {isMultiForm && (
               <View className="flex-row items-center gap-1 px-2 py-1 border rounded-lg bg-slate-100 border-slate-200">
@@ -825,59 +831,35 @@ const AuditCard = ({
             )}
           </View>
 
-          {/* ✅ Date Display - Right Side (Added maxWidth to prevent overflow) */}
+          {/* RIGHT: date chip — same line, capped at 55% so it can't overlap the badges */}
           <View
-            className="flex-col items-end flex-shrink-0 gap-1"
-            style={{ maxWidth: "50%" }}
+            className={`flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg border ${
+              audit.originalScheduledDate
+                ? "bg-emerald-50 border-emerald-200"
+                : "bg-slate-50 border-slate-200"
+            }`}
+            style={{ flexShrink: 0, maxWidth: "55%" }}
           >
-            {audit.originalScheduledDate && (
-              <View className="flex-row items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded">
-                <Calendar size={10} color="#94a3b8" />
-                <Text
-                  className="text-[9px] text-slate-400 line-through"
-                  numberOfLines={1}
-                >
-                  Was: {audit.originalScheduledDate}
-                </Text>
-              </View>
-            )}
-            <View
-              className={`flex-row items-start gap-1 px-1.5 py-1 rounded border ${
+            <Calendar
+              size={12}
+              color={audit.originalScheduledDate ? "#059669" : "#94a3b8"}
+            />
+            <Text
+              className={`text-[11px] font-medium ${
                 audit.originalScheduledDate
-                  ? "bg-emerald-50 border-emerald-200"
-                  : "bg-slate-50 border-slate-200"
+                  ? "text-emerald-700"
+                  : "text-slate-600"
               }`}
+              numberOfLines={1}
             >
-              <Calendar
-                size={10}
-                color={audit.originalScheduledDate ? "#059669" : "#94a3b8"}
-                style={{ marginTop: 1 }}
-              />
-              <View className="flex-row flex-wrap items-center gap-0.5">
-                <Text
-                  className={`text-[11px] ${
-                    audit.originalScheduledDate
-                      ? "text-emerald-700 font-medium"
-                      : "text-slate-500"
-                  }`}
-                  numberOfLines={2} // ✅ Prevents vertical overflow
-                >
-                  {audit.fromDate &&
-                  audit.toDate &&
-                  audit.fromDate !== audit.toDate
-                    ? `${audit.fromDate} → ${audit.toDate}`
-                    : audit.scheduledDate}
-                </Text>
-                {audit.originalScheduledDate && (
-                  <Text className="text-[8px] font-medium text-emerald-700">
-                    (Rescheduled)
-                  </Text>
-                )}
-              </View>
-            </View>
+              {audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate
+                ? `${audit.fromDate} → ${audit.toDate}`
+                : audit.scheduledDate}
+            </Text>
           </View>
         </View>
 
+        {/* ✅ ROW 2: Title */}
         <Text
           className="mb-3 text-sm font-bold text-slate-800"
           numberOfLines={2}
@@ -885,13 +867,17 @@ const AuditCard = ({
           {audit.auditType || "Audit"} - {audit.department || "General"}
         </Text>
 
+        {/* ✅ ROW 3: ALL meta chips together — Date + Time + Auditee (wrap naturally, overlap impossible) */}
         <View className="flex-row flex-wrap gap-2 mb-3">
+          {/* 🕐 Time chip */}
           <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
             <Clock size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
               {audit.startTime} - {audit.endTime}
             </Text>
           </View>
+
+          {/* 👤 Auditee chip */}
           <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
             <UserCheck size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
@@ -900,6 +886,7 @@ const AuditCard = ({
           </View>
         </View>
 
+        {/* ✅ Overdue warnings (keep as-is) */}
         {isOverdueNoWork && !hasPendingReschedule && (
           <View className="flex-row items-center gap-2 p-3 mb-3 border text-rose-700 bg-rose-50 rounded-xl border-rose-200">
             <AlertCircle size={14} color="#be123c" />
@@ -1048,27 +1035,28 @@ const AuditCard = ({
             </TouchableOpacity>
           )}
 
-          {/* ✅ NEW: View Report Button (Shows when ALL forms are SUBMITTED) */}
-          {formDetails?.[0]?.responseId && (
-            <TouchableOpacity
-              onPress={() =>
-                onViewReport(formDetails[0].responseId, audit, formDetails[0])
-              }
-              className="flex-row items-center gap-1.5 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200"
-            >
-              <Eye size={14} color="#047857" />
-              <Text className="text-xs font-semibold text-emerald-700">
-                {allFormsCompleted ? "View Report" : "View Draft"}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* ✅ NEW: Continue Button (Shows when started but NOT fully completed) */}
+          {/* ✅ View Report Button */}
+          {formDetails?.[0]?.responseId &&
+            allFormsCompleted && ( // ✅ Added && allFormsCompleted
+              <TouchableOpacity
+                onPress={() =>
+                  onViewReport(formDetails[0].responseId, audit, formDetails[0])
+                }
+                className="flex-row items-center gap-1.5 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200"
+              >
+                <Eye size={14} color="#047857" />
+                <Text className="text-xs font-semibold text-emerald-700">
+                  View Report {/* ✅ Removed ternary, strictly "View Report" */}
+                </Text>
+              </TouchableOpacity>
+            )}
+          {/* ✅ Continue Button */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
             hasFormData &&
             !allFormsCompleted &&
-            !isExpired && (
+            !isExpired &&
+            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
               <TouchableOpacity
                 onPress={() => {
                   const nextForm =
@@ -1085,11 +1073,12 @@ const AuditCard = ({
               </TouchableOpacity>
             )}
 
-          {/* ✅ Start Audit Button (Shows when NOT started and NOT expired) */}
+          {/* ✅ Start Audit Button */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
             !hasFormData &&
-            !isExpired && (
+            !isExpired &&
+            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
               <TouchableOpacity
                 onPress={() => {
                   const first = formDetails?.[0];
@@ -1303,7 +1292,6 @@ export default function AuditorDashboard() {
   const { width } = useWindowDimensions();
 
   const isMobile = width < 768;
-  const gridCardWidth = isMobile ? "100%" : "31%";
 
   // ✅ FIX 1: These MUST be on separate lines
   const { user, loading: authLoading } = useAuth();
@@ -1892,6 +1880,15 @@ export default function AuditorDashboard() {
         .includes(searchQuery.toLowerCase()),
   );
 
+  // ✅ NEW: how many columns the grid currently shows (must match the flex layout)
+  // 3 cols need: 3×300 (minWidth) + 2×16 (gap-4) = 932px | 2 cols need: 616px
+  const containerWidth = Math.min(width - 32, 1200);
+  const cols = containerWidth >= 932 ? 3 : containerWidth >= 616 ? 2 : 1;
+
+  // ✅ NEW: how many invisible placeholders are needed to complete the last row
+  const remainder = filteredAudits.length % cols;
+  const placeholders = remainder === 0 ? 0 : cols - remainder;
+
   return (
     <SafeAreaView
       className="flex-1"
@@ -2031,11 +2028,15 @@ export default function AuditorDashboard() {
                   </Text>
                 </View>
               ) : viewMode === "grid" ? (
-                <View className="flex-row flex-wrap gap-8">
+                <View className="flex-row flex-wrap gap-4">
                   {filteredAudits.map((item: any, index: number) => (
                     <View
                       key={item.schedule?.id || index}
-                      style={{ width: gridCardWidth as any }}
+                      style={
+                        isMobile
+                          ? { width: "100%" }
+                          : { flexGrow: 1, flexBasis: "31%", minWidth: 300 }
+                      }
                     >
                       <AuditCard
                         audit={item.schedule}
@@ -2065,6 +2066,19 @@ export default function AuditorDashboard() {
                         onOpenForum={() => addToast("Forum opened", "success")}
                       />
                     </View>
+                  ))}
+                  {/* ✅ NEW: invisible fillers so the last card doesn't stretch */}
+                  {Array.from({ length: placeholders }).map((_, i) => (
+                    <View
+                      key={`placeholder-${i}`}
+                      style={{
+                        flexGrow: 1,
+                        flexBasis: "31%",
+                        minWidth: 300,
+                        height: 0,
+                      }}
+                      pointerEvents="none"
+                    />
                   ))}
                 </View>
               ) : (
