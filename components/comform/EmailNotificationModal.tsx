@@ -37,6 +37,9 @@ interface EmailNotificationModalProps {
 // =============================================
 // Custom Native Dropdown Component
 // =============================================
+// =============================================
+// Custom Native Dropdown Component (Now Creatable)
+// =============================================
 const NativeDropdown = ({
   options,
   value,
@@ -45,6 +48,18 @@ const NativeDropdown = ({
   isMulti = false,
 }: any) => {
   const [visible, setVisible] = useState(false);
+  const [searchText, setSearchText] = useState("");
+
+  // Filter options based on search text
+  const filteredOptions = options.filter((opt: any) =>
+    opt.label.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+  // Check if the search text looks like an email
+  const isValidEmail = (text: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(text);
+  };
 
   const handleSelect = (option: any) => {
     if (isMulti) {
@@ -57,6 +72,25 @@ const NativeDropdown = ({
     } else {
       onChange(option);
       setVisible(false);
+    }
+    setSearchText("");
+  };
+
+  // ✅ NEW: Handle creating a new email from search text
+  const handleCreateNew = () => {
+    if (isValidEmail(searchText)) {
+      const newOption = {
+        value: searchText,
+        label: `Send to: ${searchText}`,
+        email: searchText,
+      };
+      if (isMulti) {
+        onChange([...value, newOption]);
+      } else {
+        onChange(newOption);
+        setVisible(false);
+      }
+      setSearchText("");
     }
   };
 
@@ -84,8 +118,18 @@ const NativeDropdown = ({
           onPress={() => setVisible(false)}
         >
           <View style={styles.dropdownModal}>
+            {/* ✅ NEW: Search Input to type new email */}
+            <TextInput
+              style={styles.dropdownSearchInput}
+              placeholder="Type email and press Enter..."
+              value={searchText}
+              onChangeText={setSearchText}
+              autoFocus
+              onSubmitEditing={handleCreateNew}
+            />
+
             <ScrollView style={{ maxHeight: 300 }}>
-              {options.map((opt: any) => {
+              {filteredOptions.map((opt: any) => {
                 const isSelected = isMulti
                   ? value.some((v: any) => v.value === opt.value)
                   : value?.value === opt.value;
@@ -101,6 +145,18 @@ const NativeDropdown = ({
                   </TouchableOpacity>
                 );
               })}
+
+              {/* ✅ NEW: "Create new" button when search text is a valid email */}
+              {searchText.length > 0 && isValidEmail(searchText) && (
+                <TouchableOpacity
+                  onPress={handleCreateNew}
+                  style={styles.dropdownCreateItem}
+                >
+                  <Text style={styles.dropdownCreateText}>
+                    ➕ Add "{searchText}"
+                  </Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -679,6 +735,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     maxHeight: 400,
+  },
+    dropdownSearchInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    marginBottom: 12,
+    backgroundColor: '#f9fafb',
+  },
+  dropdownCreateItem: {
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+  },
+  dropdownCreateText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16a34a',
   },
   dropdownItem: {
     paddingVertical: 12,
