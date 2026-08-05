@@ -1110,18 +1110,22 @@ export default function ForumThreadView({
     // ================================================================
   // ⚙️ NEW: MEDIA SETTINGS MODAL
   // ================================================================
+   // ================================================================
+  // ⚙️ NEW: MEDIA SETTINGS MODAL (LOOP FIXED)
+  // ================================================================
   const MediaSettingsModal = () => {
     const [audioDevices, setAudioDevices] = useState<any[]>([]);
     const [videoDevices, setVideoDevices] = useState<any[]>([]);
     const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
     const [loadingDevices, setLoadingDevices] = useState(false);
+    const [hasLoaded, setHasLoaded] = useState(false); // ✅ FLAG TO PREVENT LOOP
 
-    // Load device list when modal opens
+    // Load device list when modal opens (BUT ONLY ONCE)
     useEffect(() => {
-      if (showSettingsModal) {
+      if (showSettingsModal && !hasLoaded) {
         loadDevices();
       }
-    }, [showSettingsModal]);
+    }, [showSettingsModal, hasLoaded]);
 
     const loadDevices = async () => {
       setLoadingDevices(true);
@@ -1135,6 +1139,8 @@ export default function ForumThreadView({
         setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
         
         stream.getTracks().forEach(track => track.stop());
+        
+        setHasLoaded(true); // ✅ MARK AS LOADED
       } catch (err) {
         console.warn("Could not enumerate devices:", err);
       } finally {
@@ -1164,7 +1170,7 @@ export default function ForumThreadView({
             {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+              <TouchableOpacity onPress={() => { setShowSettingsModal(false); setHasLoaded(false); }}>
                 <X size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -1260,7 +1266,7 @@ export default function ForumThreadView({
 
                 {/* Close Button */}
                 <TouchableOpacity
-                  onPress={() => setShowSettingsModal(false)}
+                  onPress={() => { setShowSettingsModal(false); setHasLoaded(false); }}
                   style={{
                     marginTop: 16,
                     padding: 12,

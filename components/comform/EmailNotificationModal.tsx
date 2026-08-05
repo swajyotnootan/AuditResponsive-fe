@@ -40,6 +40,9 @@ interface EmailNotificationModalProps {
 // =============================================
 // Custom Native Dropdown Component (Now Creatable)
 // =============================================
+// =============================================
+// Custom Native Dropdown Component (Now Creatable)
+// =============================================
 const NativeDropdown = ({
   options,
   value,
@@ -76,7 +79,7 @@ const NativeDropdown = ({
     setSearchText("");
   };
 
-  // ✅ NEW: Handle creating a new email from search text
+  // Handle creating a new email from search text
   const handleCreateNew = () => {
     if (isValidEmail(searchText)) {
       const newOption = {
@@ -112,13 +115,18 @@ const NativeDropdown = ({
       </TouchableOpacity>
 
       <Modal visible={visible} transparent animationType="fade">
+        {/* ✅ FIX: Use 'TouchableWithoutFeedback' or stop propagation */}
         <TouchableOpacity
           style={styles.dropdownOverlay}
           activeOpacity={1}
           onPress={() => setVisible(false)}
         >
-          <View style={styles.dropdownModal}>
-            {/* ✅ NEW: Search Input to type new email */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()} // ✅ PREVENTS CLOSING ON TYPING
+            style={styles.dropdownModal}
+          >
+            {/* Search Input to type new email */}
             <TextInput
               style={styles.dropdownSearchInput}
               placeholder="Type email and press Enter..."
@@ -146,7 +154,7 @@ const NativeDropdown = ({
                 );
               })}
 
-              {/* ✅ NEW: "Create new" button when search text is a valid email */}
+              {/* "Create new" button when search text is a valid email */}
               {searchText.length > 0 && isValidEmail(searchText) && (
                 <TouchableOpacity
                   onPress={handleCreateNew}
@@ -158,7 +166,7 @@ const NativeDropdown = ({
                 </TouchableOpacity>
               )}
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </View>
