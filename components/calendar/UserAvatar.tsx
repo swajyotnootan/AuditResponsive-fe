@@ -1,11 +1,11 @@
-// UserAvatar.tsx - NEW FILE
+// UserAvatar.tsx - COMPLETE
 
 import { API_BASE_URL } from '@/config/apiConfig';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 interface UserAvatarProps {
-  userId: number | null;
+  userId: number | null | undefined;
   userName: string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   showName?: boolean;
@@ -28,7 +28,7 @@ export default function UserAvatar({
   };
 
   const getInitials = (name: string) => {
-    if (!name) return '?';
+    if (!name || name === 'Unassigned') return '?';
     return name
       .split(' ')
       .map(n => n[0])
@@ -43,7 +43,7 @@ export default function UserAvatar({
       '#EF4444', '#3B82F6', '#10B981', '#F59E0B', 
       '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'
     ];
-    const colorIndex = userId ? userId % colors.length : Math.floor(Math.random() * colors.length);
+    const colorIndex = userId ? Math.abs(userId) % colors.length : Math.floor(Math.random() * colors.length);
     const bgColor = colors[colorIndex];
 
     return (

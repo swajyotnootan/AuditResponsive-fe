@@ -1,4 +1,4 @@
-// EventList.tsx - UPDATED with avatar and all fields
+// EventList.tsx - FIXED with Avatar and proper status
 
 import { Calendar as CalendarIcon, Clock, Tag } from 'lucide-react-native';
 import moment from 'moment';
@@ -35,6 +35,12 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
     const isPast = moment(item.start).isBefore(moment(), 'day');
     const color = getEventColor(item);
     const statusDisplay = getStatusDisplay(item);
+    
+    // ✅ FIXED: Proper status check for badges
+    const isCompleted = item.isFullyCompleted || item.status === 'COMPLETED';
+    const isSubmitted = item.isSubmitted || item.status === 'SUBMITTED';
+    const isPending = item.status === 'PENDING_APPROVAL';
+    const isOverdue = item.status === 'OVERDUE';
 
     return (
       <TouchableOpacity
@@ -54,7 +60,7 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
             <View style={styles.timeBadge}>
               <Clock size={12} color="#6b7280" />
               <Text style={styles.timeText}>
-                {item.startTime || '09:00 AM'} - {item.endTime || '10:00 AM'}
+                {item.startTime || '09:00 AM'} - {item.endTime || '10:00 AM'} IST
               </Text>
             </View>
           </View>
@@ -67,7 +73,7 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
             </View>
           )}
           
-          {/* Auditor with Profile Photo */}
+          {/* ✅ FIXED: Auditor with Profile Photo */}
           {item.auditorName && (
             <View style={styles.auditorRow}>
               <UserAvatar 
@@ -79,19 +85,29 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
             </View>
           )}
           
-          {/* Status badges */}
+          {/* ✅ FIXED: Status badges with proper conditions */}
           <View style={styles.statusRow}>
-            {item.isFullyCompleted && (
+            {isCompleted && (
               <View style={styles.completedBadge}>
                 <Text style={styles.completedText}>✓ Completed</Text>
               </View>
             )}
-            {item.isSubmitted && !item.isFullyCompleted && (
+            {isSubmitted && !isCompleted && (
               <View style={styles.submittedBadge}>
                 <Text style={styles.submittedText}>⏳ Pending Approval</Text>
               </View>
             )}
-            {!item.isFullyCompleted && !item.isSubmitted && (
+            {isPending && !isSubmitted && !isCompleted && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>⏳ Pending Schedule</Text>
+              </View>
+            )}
+            {isOverdue && !isCompleted && !isSubmitted && (
+              <View style={styles.overdueBadge}>
+                <Text style={styles.overdueText}>⚠️ Overdue</Text>
+              </View>
+            )}
+            {!isCompleted && !isSubmitted && !isPending && !isOverdue && (
               <Text style={styles.statusText}>{statusDisplay}</Text>
             )}
           </View>
@@ -128,30 +144,166 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
 }
 
 const styles = StyleSheet.create({
-  eventCard: { flexDirection: 'row', padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
-  eventCardActive: { backgroundColor: '#ffffff', borderColor: '#e5e7eb' },
-  eventCardPast: { backgroundColor: '#f9fafb', borderColor: '#e5e7eb', opacity: 0.75 },
-  dotIndicator: { width: 12, height: 12, borderRadius: 6, marginTop: 4, marginRight: 12 },
-  eventContent: { flex: 1 },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  eventTitle: { fontSize: 16, fontWeight: '600', color: '#111827', flex: 1 },
-  textPast: { color: '#4b5563' },
-  timeBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, flexShrink: 0 },
-  timeText: { fontSize: 12, fontWeight: '500', color: '#374151', marginLeft: 4 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  detailText: { fontSize: 13, color: '#6b7280', marginLeft: 4 },
-  auditorRow: { marginTop: 4 },
-  statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  completedBadge: { backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  completedText: { fontSize: 11, fontWeight: '600', color: '#047857' },
-  submittedBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  submittedText: { fontSize: 11, fontWeight: '600', color: '#1d4ed8' },
-  statusText: { fontSize: 11, fontWeight: '500', color: '#6b7280' },
-  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1f2937', marginTop: 16 },
-  emptyText: { fontSize: 14, color: '#6b7280', marginTop: 4 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  sectionHeaderText: { fontSize: 14, fontWeight: '600', color: '#1e3a8a', marginRight: 12 },
-  sectionLine: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
-  sectionCount: { fontSize: 12, color: '#6b7280', marginLeft: 12 }
+  eventCard: { 
+    flexDirection: 'row', 
+    padding: 16, 
+    borderRadius: 12, 
+    borderWidth: 1, 
+    marginBottom: 8 
+  },
+  eventCardActive: { 
+    backgroundColor: '#ffffff', 
+    borderColor: '#e5e7eb' 
+  },
+  eventCardPast: { 
+    backgroundColor: '#f9fafb', 
+    borderColor: '#e5e7eb', 
+    opacity: 0.75 
+  },
+  dotIndicator: { 
+    width: 12, 
+    height: 12, 
+    borderRadius: 6, 
+    marginTop: 4, 
+    marginRight: 12 
+  },
+  eventContent: { 
+    flex: 1 
+  },
+  eventHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 4 
+  },
+  eventTitle: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#111827', 
+    flex: 1 
+  },
+  textPast: { 
+    color: '#4b5563' 
+  },
+  timeBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#f3f4f6', 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 12, 
+    flexShrink: 0 
+  },
+  timeText: { 
+    fontSize: 12, 
+    fontWeight: '500', 
+    color: '#374151', 
+    marginLeft: 4 
+  },
+  detailRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginTop: 2 
+  },
+  detailText: { 
+    fontSize: 13, 
+    color: '#6b7280', 
+    marginLeft: 4 
+  },
+  auditorRow: { 
+    marginTop: 4 
+  },
+  statusRow: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 6, 
+    marginTop: 4 
+  },
+  completedBadge: { 
+    backgroundColor: '#ecfdf5', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 12 
+  },
+  completedText: { 
+    fontSize: 11, 
+    fontWeight: '600', 
+    color: '#047857' 
+  },
+  submittedBadge: { 
+    backgroundColor: '#eff6ff', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 12 
+  },
+  submittedText: { 
+    fontSize: 11, 
+    fontWeight: '600', 
+    color: '#1d4ed8' 
+  },
+  pendingBadge: { 
+    backgroundColor: '#fefce8', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 12 
+  },
+  pendingText: { 
+    fontSize: 11, 
+    fontWeight: '600', 
+    color: '#a16207' 
+  },
+  overdueBadge: { 
+    backgroundColor: '#fef2f2', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 12 
+  },
+  overdueText: { 
+    fontSize: 11, 
+    fontWeight: '600', 
+    color: '#b91c1c' 
+  },
+  statusText: { 
+    fontSize: 11, 
+    fontWeight: '500', 
+    color: '#6b7280' 
+  },
+  emptyContainer: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: 24 
+  },
+  emptyTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: '#1f2937', 
+    marginTop: 16 
+  },
+  emptyText: { 
+    fontSize: 14, 
+    color: '#6b7280', 
+    marginTop: 4 
+  },
+  sectionHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 12 
+  },
+  sectionHeaderText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#1e3a8a', 
+    marginRight: 12 
+  },
+  sectionLine: { 
+    flex: 1, 
+    height: 1, 
+    backgroundColor: '#e5e7eb' 
+  },
+  sectionCount: { 
+    fontSize: 12, 
+    color: '#6b7280', 
+    marginLeft: 12 
+  }
 });

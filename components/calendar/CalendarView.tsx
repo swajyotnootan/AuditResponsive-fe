@@ -441,75 +441,63 @@ export default function CalendarView() {
         {/* Calendar Content */}
         <View style={styles.calendarContainer}>
           {view === 'month' && (
-            <Calendar
-              current={currentDate}
-              markingType="multi-dot"
-              markedDates={markedDates}
-              enableSwipeMonths
-              onDayPress={handleDayPress}
-              onMonthChange={(month: any) => {
-                if (month.dateString !== currentDate) setCurrentDate(month.dateString);
-              }}
-              theme={{
-                todayTextColor: '#00529B',
-                selectedDayBackgroundColor: '#00529B',
-                selectedDayTextColor: '#FFFFFF',
-                arrowColor: '#00529B',
-                textMonthFontWeight: '700',
-                textDayFontSize: fontSmall,
-                textMonthFontSize: fontMedium,
-                calendarBackground: '#FFFFFF',
-                backgroundColor: '#FFFFFF',
-                'stylesheet.calendar.header': {
-                  week: {
-                    marginTop: 7,
-                    flexDirection: 'row',
-                    justifyContent: 'space-around',
-                    paddingHorizontal: 10,
-                    paddingVertical: 7,
-                  },
-                },
-                'stylesheet.day.basic': {
-                  dayContainer: {
-                    flex: 1,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 4,
-                  },
-                },
-              }as any}
-              style={styles.calendar}
-            />
-          )}
+            // CalendarView.tsx - FIXED calendar styling (only relevant parts)
+
+// In the Calendar component:
+<Calendar
+  current={currentDate}
+  markingType="multi-dot"
+  markedDates={markedDates}
+  enableSwipeMonths
+  onDayPress={handleDayPress}
+  onMonthChange={(month: any) => {
+    if (month.dateString !== currentDate) setCurrentDate(month.dateString);
+  }}
+  theme={{
+    // ✅ FIXED: Proper colors
+    todayTextColor: '#00529B',
+    selectedDayBackgroundColor: '#00529B',
+    selectedDayTextColor: '#FFFFFF',
+    arrowColor: '#00529B',
+    textMonthFontWeight: '700',
+    textDayFontSize: fontSmall,
+    textMonthFontSize: fontMedium,
+    calendarBackground: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
+    // ✅ Added: Better day text colors
+    dayTextColor: '#1F2937',
+    textDisabledColor: '#9CA3AF',
+    dotColor: '#00529B',
+    selectedDotColor: '#FFFFFF',
+  }}
+  style={styles.calendar}
+/>
+
+   )}
 
           {view === 'week' && (
             <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 10 }}>
               <View style={styles.weekContainer}>
-                <WeekCalendar
-                  current={currentDate}
-                  markedDates={markedDates}
-                  firstDay={1}
-                  onDayPress={handleDayPress}
-                  theme={{
-                    todayTextColor: '#00529B',
-                    selectedDayBackgroundColor: '#00529B',
-                    selectedDayTextColor: '#FFFFFF',
-                    arrowColor: '#00529B',
-                    textDayFontWeight: '500',
-                    textDayFontSize: fontSmall,
-                    calendarBackground: '#FFFFFF',
-                    backgroundColor: '#FFFFFF',
-                    'stylesheet.week': {
-                      week: {
-                        flexDirection: 'row',
-                        justifyContent: 'space-around',
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                      },
-                    },
-                  }as any}
-                  style={styles.weekCalendar}
-                />
+<WeekCalendar
+  current={currentDate}
+  markedDates={markedDates}
+  firstDay={1}
+  onDayPress={handleDayPress}
+  theme={{
+    todayTextColor: '#00529B',
+    selectedDayBackgroundColor: '#00529B',
+    selectedDayTextColor: '#FFFFFF',
+    arrowColor: '#00529B',
+    textDayFontWeight: '500',
+    textDayFontSize: fontSmall,
+    calendarBackground: '#FFFFFF',
+    backgroundColor: '#FFFFFF',
+    dayTextColor: '#1F2937',
+    textDisabledColor: '#9CA3AF',
+  }}
+  style={styles.weekCalendar}
+/>
+       
               </View>
             </ScrollView>
           )}

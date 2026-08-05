@@ -1,4 +1,4 @@
-// CalendarUtils.ts - UPDATED
+// CalendarUtils.ts - FIXED status detection
 
 import { CalendarEvent } from './CalendarTypes';
 
@@ -16,14 +16,78 @@ export const STATUS_COLORS = {
 };
 
 export function getEventColor(event: CalendarEvent): string {
-  if (event.isFullyCompleted) return STATUS_COLORS.COMPLETED;
-  if (event.isSubmitted) return STATUS_COLORS.SUBMITTED;
-  if (event.status === 'PENDING_APPROVAL') return STATUS_COLORS.PENDING_APPROVAL;
-  if (event.status === 'OVERDUE' || event.status === 'REJECTED') return STATUS_COLORS.OVERDUE;
-  if (event.isDateRange) return STATUS_COLORS.DATE_RANGE;
-  if (event.status === 'APPROVED') return STATUS_COLORS.APPROVED;
-  if (event.status === 'CHANGE_REQUESTED') return STATUS_COLORS.CHANGE_REQUESTED;
+  // ✅ FIXED: Check isFullyCompleted first
+  if (event.isFullyCompleted || event.status === 'COMPLETED') {
+    return STATUS_COLORS.COMPLETED;
+  }
+  if (event.isSubmitted || event.status === 'SUBMITTED') {
+    return STATUS_COLORS.SUBMITTED;
+  }
+  if (event.status === 'PENDING_APPROVAL') {
+    return STATUS_COLORS.PENDING_APPROVAL;
+  }
+  if (event.status === 'OVERDUE') {
+    return STATUS_COLORS.OVERDUE;
+  }
+  if (event.status === 'REJECTED') {
+    return STATUS_COLORS.REJECTED;
+  }
+  if (event.isDateRange) {
+    return STATUS_COLORS.DATE_RANGE;
+  }
+  if (event.status === 'APPROVED') {
+    return STATUS_COLORS.APPROVED;
+  }
+  if (event.status === 'CHANGE_REQUESTED') {
+    return STATUS_COLORS.CHANGE_REQUESTED;
+  }
   return STATUS_COLORS.SCHEDULED;
+}
+
+export function isEventOverdue(event: CalendarEvent): boolean {
+  if (!event || !event.end) return false;
+  
+  const eventEnd = new Date(event.end);
+  const now = new Date();
+  
+  // ✅ FIXED: Check completion status first
+  if (event.isFullyCompleted || event.status === 'COMPLETED') return false;
+  if (event.isSubmitted || event.status === 'SUBMITTED') return false;
+  if (event.status === 'PENDING_APPROVAL') return false;
+  if (event.status === 'REJECTED') return false;
+  
+  if ((event.status === 'APPROVED' || event.status === 'SCHEDULED') && eventEnd < now) {
+    return true;
+  }
+  
+  return false;
+}
+
+export function getStatusDisplay(event: CalendarEvent): string {
+  // ✅ FIXED: Check in correct order
+  if (event.isFullyCompleted || event.status === 'COMPLETED') {
+    return '✓ Audit Completed';
+  }
+  if (event.isSubmitted || event.status === 'SUBMITTED') {
+    return '⏳ Pending Auditee Approval';
+  }
+  if (isEventOverdue(event)) {
+    return '⚠️ OVERDUE';
+  }
+  if (event.status === 'REJECTED') {
+    return '❌ Rejected';
+  }
+  if (event.status === 'CHANGE_REQUESTED') {
+    return '🔄 Changes Requested';
+  }
+  
+  const statusMap: Record<string, string> = {
+    'SCHEDULED': '📅 Scheduled',
+    'PENDING_APPROVAL': '⏳ Pending Schedule Approval',
+    'APPROVED': '✅ Schedule Approved',
+    'DRAFT': '📝 Draft',
+  };
+  return statusMap[event.status] || event.status;
 }
 
 export function buildMarkedDates(events: CalendarEvent[]) {
@@ -39,15 +103,6 @@ export function buildMarkedDates(events: CalendarEvent[]) {
         dots: [],
         selected: true,
         selectedColor: 'rgba(37,99,235,0.1)',
-        // Add custom styling
-        customStyles: {
-          container: {
-            backgroundColor: 'transparent',
-          },
-          text: {
-            color: '#1F2937',
-          },
-        },
       };
     }
 
@@ -56,47 +111,11 @@ export function buildMarkedDates(events: CalendarEvent[]) {
       selectedDotColor: '#FFFFFF',
     });
 
-    // If there are multiple events, show multiple dots
-    if (marked[event.start].dots.length > 1) {
+    // Limit dots to 3
+    if (marked[event.start].dots.length > 3) {
       marked[event.start].dots = marked[event.start].dots.slice(0, 3);
     }
   });
 
   return marked;
-}
-
-// Helper to check if event is overdue
-export function isEventOverdue(event: CalendarEvent): boolean {
-  if (!event || !event.end) return false;
-  
-  const eventEnd = new Date(event.end);
-  const now = new Date();
-  
-  if (event.isFullyCompleted) return false;
-  if (event.isSubmitted) return false;
-  if (event.status === 'PENDING_APPROVAL') return false;
-  if (event.status === 'REJECTED') return false;
-  
-  if ((event.status === 'APPROVED' || event.status === 'SCHEDULED') && eventEnd < now) {
-    return true;
-  }
-  
-  return false;
-}
-
-// Helper to get status display text
-export function getStatusDisplay(event: CalendarEvent): string {
-  if (event.isFullyCompleted) return '✓ Audit Completed';
-  if (event.isSubmitted) return '⏳ Pending Auditee Approval';
-  if (isEventOverdue(event)) return 'OVERDUE';
-  
-  const statusMap: Record<string, string> = {
-    'SCHEDULED': 'Scheduled',
-    'PENDING_APPROVAL': 'Pending Schedule Approval',
-    'APPROVED': 'Schedule Approved',
-    'REJECTED': 'Rejected',
-    'DRAFT': 'Draft',
-    'CHANGE_REQUESTED': 'Changes Requested',
-  };
-  return statusMap[event.status] || event.status;
 }
