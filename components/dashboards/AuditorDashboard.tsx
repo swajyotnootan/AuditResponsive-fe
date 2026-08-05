@@ -1421,6 +1421,31 @@ export default function AuditorDashboard() {
     }
   };
 
+   // ============================================================
+  // ✅ CRITICAL FIX: Timezone-safe date helpers
+  // ============================================================
+  const toDateString = (date: any) => {
+    if (!date) return null;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split('T')[0];
+  };
+
+  const parseTimeToMinutes = (timeStr: string) => {
+    if (!timeStr) return 0;
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return 0;
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const meridian = match[3].toUpperCase();
+    if (meridian === "PM" && hours !== 12) hours += 12;
+    if (meridian === "AM" && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  };
+
+  // ============================================================
+  // ✅ FIXED: Full fetchSchedulesWithStatus
+  // ============================================================
   const fetchSchedulesWithStatus = async (year = selectedYear) => {
     try {
       setIsFetching(true);
@@ -1515,16 +1540,18 @@ export default function AuditorDashboard() {
         });
       }
 
+      // ✅ CRITICAL: Determine today's UTC date string
+const todayStr = toDateString(new Date()) || ''; // ✅ Ensures it's always a string
       const enhancedData = filteredSchedules.map((item: any) => {
         const schedule = item.schedule || item;
         const scheduleId = schedule.id;
 
-        // ✅ Find all saved responses for this specific schedule
+        // Find all saved responses for this specific schedule
         const scheduleResponses = allResponses.filter(
           (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
         );
 
-        // ✅ Calculate actual completion stats
+        // Calculate actual completion stats
         const totalForms =
           scheduleResponses.length > 0 ? scheduleResponses.length : 1;
         const completedForms = scheduleResponses.filter(
@@ -1535,7 +1562,7 @@ export default function AuditorDashboard() {
           completedForms === totalForms && totalForms > 0;
         const pendingForms = totalForms - completedForms;
 
-        // ✅ Build accurate form details based on saved responses
+        // Build accurate form details
         const formDetails =
           scheduleResponses.length > 0
             ? scheduleResponses.map((r: any) => ({
@@ -1555,31 +1582,62 @@ export default function AuditorDashboard() {
                 },
               ];
 
+        // ✅ FIXED: Timezone-safe status logic
+        let timeStatus = "SCHEDULED";
+        let canStart = false;
+
+        if (schedule.scheduledDate) {
+          const scheduleStr = toDateString(schedule.scheduledDate);
+          if (scheduleStr) {
+            if (scheduleStr < todayStr) {
+              timeStatus = "EXPIRED";
+            } else if (scheduleStr === todayStr) {
+              const now = new Date();
+              const nowMinutes = now.getHours() * 60 + now.getMinutes();
+              const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
+              const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
+
+              if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
+                timeStatus = "ACTIVE";
+                canStart = true;
+              } else if (nowMinutes < startMinutes) {
+                timeStatus = "UPCOMING";
+              } else {
+                timeStatus = "EXPIRED";
+              }
+            } else if (scheduleStr > todayStr) {
+              timeStatus = "UPCOMING";
+            }
+          }
+        }
+
         return {
           ...item,
           schedule: {
             ...schedule,
-            hasFormData, // ✅ Now dynamic
-            totalForms, // ✅ Now dynamic
-            completedForms, // ✅ Now dynamic
-            pendingForms, // ✅ Now dynamic
-            allFormsCompleted, // ✅ Now dynamic
-            formDetails, // ✅ Now dynamic
+            hasFormData,
+            totalForms,
+            completedForms,
+            pendingForms,
+            allFormsCompleted,
+            formDetails,
             rescheduleRequested: pendingRescheduleIds.has(scheduleId),
             extensionRequested: pendingExtensionIds.has(scheduleId),
             coAuditorNames: schedule.coAuditorNames || [],
           },
-          timeStatus: item.timeStatus,
-          canStart: item.canStart,
+          timeStatus,
+          canStart,
         };
       });
+
       setSchedules(enhancedData);
+
+      // ✅ FIXED: Stats using the correct timeStatus
       setStats({
         upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
           .length,
-        active: enhancedData.filter(
-          (s: any) => s.timeStatus === "ACTIVE" && s.canStart,
-        ).length,
+        active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
+          .length,
         inProgress: enhancedData.filter(
           (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
         ).length,
