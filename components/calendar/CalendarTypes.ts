@@ -1,4 +1,4 @@
-// CalendarTypes.ts - COMPLETE version
+// CalendarTypes.ts - ADD isOverdue to the interface
 
 export type ViewType = 'month' | 'week' | 'day' | 'agenda' | 'year' | 'list';
 export type EventFilter = 'all' | 'owned' | 'attending';
@@ -37,6 +37,7 @@ export interface CalendarEvent {
   // Status flags
   isFullyCompleted: boolean;
   isSubmitted: boolean;
+  isOverdue: boolean;  // ✅ ADD THIS
   auditNumber: string;
   
   // History

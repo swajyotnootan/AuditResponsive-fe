@@ -1,4 +1,4 @@
-// EventModal.tsx - COMPLETE FIXED VERSION
+// EventModal.tsx - FIXED time parsing
 
 import { AlertCircle, Calendar, Clock, Crown, Tag, UserCheck, X } from 'lucide-react-native';
 import moment from 'moment';
@@ -9,6 +9,41 @@ import UserAvatar from './UserAvatar';
 
 export default function EventModal({ visible, event, onClose, onRefresh }: any) {
   if (!event) return null;
+
+  // ✅ FIXED: Parse time from description if startTime/endTime are N/A
+  const parseTimeFromDescription = (description: string) => {
+    if (!description) return null;
+    
+    // Look for "Time: 10:30 AM - 12:30 PM"
+    const timeMatch = description.match(/Time:\s*([0-9]{1,2}:[0-9]{2}\s*(?:AM|PM)\s*-\s*[0-9]{1,2}:[0-9]{2}\s*(?:AM|PM))/i);
+    if (timeMatch) {
+      return timeMatch[1];
+    }
+    
+    // Look for bullet format: "• Time: 09:00 AM - 10:00 AM"
+    const bulletMatch = description.match(/[•●]\s*Time:\s*([^\n]+)/i);
+    if (bulletMatch) {
+      return bulletMatch[1].trim();
+    }
+    
+    return null;
+  };
+
+  // ✅ FIXED: Get display time
+  const getDisplayTime = () => {
+    // First check if startTime/endTime exist and are not N/A
+    if (event.startTime && event.startTime !== 'N/A' && event.endTime && event.endTime !== 'N/A') {
+      return `${event.startTime} - ${event.endTime}`;
+    }
+    
+    // Try to parse from description
+    const parsedTime = parseTimeFromDescription(event.description);
+    if (parsedTime) {
+      return parsedTime;
+    }
+    
+    return 'N/A - N/A';
+  };
 
   // ✅ FIXED: Proper status detection
   const getStatusBadge = () => {
@@ -21,7 +56,7 @@ export default function EventModal({ visible, event, onClose, onRefresh }: any) 
       return { bg: '#eff6ff', text: '#1d4ed8', label: '⏳ Pending Auditee Approval' };
     }
     // OVERDUE
-    if (event.status === 'OVERDUE') {
+    if (event.status === 'OVERDUE' || event.isOverdue) {
       return { bg: '#fef2f2', text: '#b91c1c', label: '⚠️ OVERDUE' };
     }
     // REJECTED
@@ -46,18 +81,13 @@ export default function EventModal({ visible, event, onClose, onRefresh }: any) 
 
   const badge = getStatusBadge();
   const dotColor = getEventColor(event);
-  const isOverdue = event.status === 'OVERDUE';
+  const displayTime = getDisplayTime();
+  const isOverdue = event.status === 'OVERDUE' || event.isOverdue;
 
   // Format date properly
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'N/A';
     return moment(dateStr).format('dddd, MMMM DD, YYYY');
-  };
-
-  // Format time
-  const formatTime = (timeStr: string) => {
-    if (!timeStr) return 'N/A';
-    return timeStr;
   };
 
   // Check if date range
@@ -114,16 +144,14 @@ export default function EventModal({ visible, event, onClose, onRefresh }: any) 
                   </Text>
                 </View>
 
-                {/* Time */}
+                {/* ✅ FIXED: Time - uses parsed time from description */}
                 <View style={styles.infoRow}>
                   <Clock size={16} color="#9ca3af" />
                   <Text style={styles.infoLabel}>Time:</Text>
-                  <Text style={styles.infoValue}>
-                    {formatTime(event.startTime)} - {formatTime(event.endTime)}
-                  </Text>
+                  <Text style={styles.infoValue}>{displayTime}</Text>
                 </View>
 
-                {/* ✅ FIXED: Auditor with Avatar */}
+                {/* Auditor with Avatar */}
                 <View style={styles.infoRow}>
                   <Crown size={16} color="#3b82f6" />
                   <Text style={styles.infoLabel}>Auditor:</Text>
@@ -137,7 +165,7 @@ export default function EventModal({ visible, event, onClose, onRefresh }: any) 
                   </View>
                 </View>
 
-                {/* ✅ FIXED: Auditee with Avatar */}
+                {/* Auditee with Avatar */}
                 <View style={styles.infoRow}>
                   <UserCheck size={16} color="#10b981" />
                   <Text style={styles.infoLabel}>Auditee:</Text>

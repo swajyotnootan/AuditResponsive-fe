@@ -224,6 +224,7 @@ export default function CalendarView() {
             startTime: eventData.startTime || '',
             endTime: eventData.endTime || '',
             status: displayStatus,
+            isOverdue: isEventOverdue(eventData), // ✅ Add thi
             description: eventData.description || '',
             isOwner: eventData.isOwner === true,
             isAttendee: eventData.isAttendee === true,

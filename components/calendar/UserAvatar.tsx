@@ -1,4 +1,4 @@
-// UserAvatar.tsx - COMPLETE
+// UserAvatar.tsx - FIXED
 
 import { API_BASE_URL } from '@/config/apiConfig';
 import React, { useState } from 'react';
@@ -10,7 +10,6 @@ interface UserAvatarProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
   showName?: boolean;
 }
-
 
 export default function UserAvatar({ 
   userId, 
@@ -28,7 +27,7 @@ export default function UserAvatar({
   };
 
   const getInitials = (name: string) => {
-    if (!name || name === 'Unassigned') return '?';
+    if (!name || name === 'Unassigned' || name === 'N/A') return '?';
     return name
       .split(' ')
       .map(n => n[0])
@@ -63,7 +62,7 @@ export default function UserAvatar({
     );
   }
 
-  // Show image
+  // ✅ FIXED: Use the correct API_BASE_URL from config
   const photoUrl = `${API_BASE_URL}/api/users/${userId}/profile-photo`;
 
   return (
