@@ -61,7 +61,7 @@ const NAVBAR_COLORS = {
 // ✅ NATIVE FETCH HELPER
 // ============================================================================
 const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = `${API_BASE_URL}/api${endpoint}`;
   const token = await AsyncStorage.getItem("token");
   const config: RequestInit = {
     headers: {
