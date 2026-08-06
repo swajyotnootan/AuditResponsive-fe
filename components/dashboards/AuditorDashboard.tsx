@@ -1446,217 +1446,252 @@ export default function AuditorDashboard() {
   // ============================================================
   // ✅ FIXED: Full fetchSchedulesWithStatus
   // ============================================================
-  const fetchSchedulesWithStatus = async (year = selectedYear) => {
-    try {
-      setIsFetching(true);
-      setRefreshing(true);
-      const [
-        responsesData,
-        ncrData,
-        rescheduleData,
-        extensionData,
-        schedulesData,
-      ] = await Promise.all([
-        apiFetch("/templates/responses/all").catch(() => []),
-        apiFetch("/ncr/all").catch(() => []),
-        apiFetch(
-          `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
-        ).catch(() => []),
-        apiFetch(
-          `/audit-schedule/extension-requests/auditor/${user?.id}`,
-        ).catch(() => []),
-        apiFetch(
-          `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
-        ).catch(() => []),
-      ]);
+ const fetchSchedulesWithStatus = async (year = selectedYear) => {
+  try {
+    setIsFetching(true);
+    setRefreshing(true);
+    const [
+      responsesData,
+      ncrData,
+      rescheduleData,
+      extensionData,
+      schedulesData,
+    ] = await Promise.all([
+      apiFetch("/templates/responses/all").catch(() => []),
+      apiFetch("/ncr/all").catch(() => []),
+      apiFetch(
+        `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
+      ).catch(() => []),
+      apiFetch(
+        `/audit-schedule/extension-requests/auditor/${user?.id}`,
+      ).catch(() => []),
+      apiFetch(
+        `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
+      ).catch(() => []),
+    ]);
 
-      const pendingRescheduleIds = new Set();
-      (rescheduleData || []).forEach((req: any) => {
-        if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
-      });
-      const pendingExtensionIds = new Set();
-      (extensionData || []).forEach((req: any) => {
-        if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
+    const pendingRescheduleIds = new Set();
+    (rescheduleData || []).forEach((req: any) => {
+      if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
+    });
+    const pendingExtensionIds = new Set();
+    (extensionData || []).forEach((req: any) => {
+      if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
+    });
+
+    const allResponses: any[] = responsesData || [];
+    const existingNcrAuditIds = new Set(
+      (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
+    );
+
+    const pendingNcrItems = allResponses
+      .filter((r: any) => {
+        const isMyAudit = Number(r.auditorId) === Number(user?.id);
+        if (!isMyAudit) {
+          console.log(
+            `⚠️ [NCR DEBUG] Skipped response ${r.id}: auditorId (${r.auditorId}) !== userId (${user?.id})`,
+          );
+        }
+        return isMyAudit;
+      })
+      .map((r: any) => {
+        const answers = parseResponseAnswers(r);
+        return {
+          responseId: r.id,
+          auditReportNumber: getAuditReportNumber(answers, r),
+          formName: answers.formName || r.checkSheet?.name || "Audit Form",
+          department: r.department || answers.department || "Production",
+          auditeeId: r.auditeeId || answers.auditeeId || "",
+          auditeeName: r.auditeeName || answers.auditeeName || "",
+          shift: r.shift || answers.shift || "Day",
+          findings: getNcrFindingEntries(answers),
+          createdAt: r.createdAt,
+        };
+      })
+      .filter((item: any) => {
+        const itemYear = item.createdAt
+          ? new Date(item.createdAt).getFullYear()
+          : new Date().getFullYear();
+        const hasFindings = item.findings.length > 0;
+        const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
+        const isCurrentYear = itemYear === year;
+
+        return hasFindings && notRaised && isCurrentYear;
       });
 
-      const allResponses: any[] = responsesData || [];
-      const existingNcrAuditIds = new Set(
-        (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
+    setPendingNcrAudits(pendingNcrItems);
+
+    let filteredSchedules = schedulesData || [];
+    if (year) {
+      filteredSchedules = filteredSchedules.filter((item: any) => {
+        const schedule = item.schedule || item;
+        if (!schedule) return false;
+        if (
+          schedule.scheduledDate &&
+          new Date(schedule.scheduledDate).getFullYear() === year
+        )
+          return true;
+        if (schedule.fromDate && schedule.toDate) {
+          const fromYear = new Date(schedule.fromDate).getFullYear();
+          const toYear = new Date(schedule.toDate).getFullYear();
+          if (fromYear <= year && toYear >= year) return true;
+        }
+        return false;
+      });
+    }
+
+    const todayStr = toDateString(new Date()) || '';
+
+    const enhancedData = filteredSchedules.map((item: any) => {
+      const schedule = item.schedule || item;
+      const scheduleId = schedule.id;
+
+      // Find all saved responses for this specific schedule
+      const scheduleResponses = allResponses.filter(
+        (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
       );
 
-      const pendingNcrItems = allResponses
-        .filter((r: any) => {
-          const isMyAudit = Number(r.auditorId) === Number(user?.id);
-          if (!isMyAudit) {
-            console.log(
-              `⚠️ [NCR DEBUG] Skipped response ${r.id}: auditorId (${r.auditorId}) !== userId (${user?.id})`,
-            );
-          }
-          return isMyAudit;
-        })
-        .map((r: any) => {
-          const answers = parseResponseAnswers(r);
-          return {
-            responseId: r.id,
-            auditReportNumber: getAuditReportNumber(answers, r),
-            formName: answers.formName || r.checkSheet?.name || "Audit Form",
-            department: r.department || answers.department || "Production",
-            auditeeId: r.auditeeId || answers.auditeeId || "",
-            auditeeName: r.auditeeName || answers.auditeeName || "",
-            shift: r.shift || answers.shift || "Day",
-            findings: getNcrFindingEntries(answers),
-            createdAt: r.createdAt,
-          };
-        })
-        .filter((item: any) => {
-          const itemYear = item.createdAt
-            ? new Date(item.createdAt).getFullYear()
-            : new Date().getFullYear();
-          const hasFindings = item.findings.length > 0;
-          const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
-          const isCurrentYear = itemYear === year;
+      // Calculate actual completion stats
+      const totalForms =
+        scheduleResponses.length > 0 ? scheduleResponses.length : 1;
+      const completedForms = scheduleResponses.filter(
+        (r: any) => r.status === "SUBMITTED",
+      ).length;
+      const hasFormData = scheduleResponses.length > 0;
+      const allFormsCompleted =
+        completedForms === totalForms && totalForms > 0;
+      const pendingForms = totalForms - completedForms;
 
-          return hasFindings && notRaised && isCurrentYear;
-        });
+      // Build accurate form details
+      const formDetails =
+        scheduleResponses.length > 0
+          ? scheduleResponses.map((r: any) => ({
+              id: r.checkSheet?.id || 1,
+              name: r.checkSheet?.name || schedule.auditType || "Audit Form",
+              processName:
+                r.checkSheet?.processName || schedule.auditType || "Audit",
+              completed: r.status === "SUBMITTED",
+              responseId: r.id,
+            }))
+          : [
+              {
+                id: schedule.checkSheet?.id || 1,
+                name: schedule.auditType || "Audit Form",
+                processName: schedule.auditType || "Audit",
+                completed: false,
+              },
+            ];
 
-      setPendingNcrAudits(pendingNcrItems);
+      // ✅ FIXED: Timezone-safe status logic with date range support
+      let timeStatus = "SCHEDULED";
+      let canStart = false;
 
-      let filteredSchedules = schedulesData || [];
-      if (year) {
-        filteredSchedules = filteredSchedules.filter((item: any) => {
-          const schedule = item.schedule || item;
-          if (!schedule) return false;
-          if (
-            schedule.scheduledDate &&
-            new Date(schedule.scheduledDate).getFullYear() === year
-          )
-            return true;
-          if (schedule.fromDate && schedule.toDate) {
-            const fromYear = new Date(schedule.fromDate).getFullYear();
-            const toYear = new Date(schedule.toDate).getFullYear();
-            if (fromYear <= year && toYear >= year) return true;
-          }
-          return false;
-        });
-      }
+      // ✅ Check if audit has a date range
+      const hasDateRange = schedule.fromDate && schedule.toDate && schedule.fromDate !== schedule.toDate;
 
-      // ✅ CRITICAL: Determine today's UTC date string
-const todayStr = toDateString(new Date()) || ''; // ✅ Ensures it's always a string
-      const enhancedData = filteredSchedules.map((item: any) => {
-        const schedule = item.schedule || item;
-        const scheduleId = schedule.id;
+      if (hasDateRange) {
+        // ✅ DATE RANGE LOGIC
+        const fromStr = toDateString(schedule.fromDate);
+        const toStr = toDateString(schedule.toDate);
+        
+        if (fromStr && toStr) {
+          if (todayStr < fromStr) {
+            // Today is BEFORE the range starts
+            timeStatus = "UPCOMING";
+          } else if (todayStr >= fromStr && todayStr <= toStr) {
+            // Today is WITHIN the range
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
+            const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
 
-        // Find all saved responses for this specific schedule
-        const scheduleResponses = allResponses.filter(
-          (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
-        );
-
-        // Calculate actual completion stats
-        const totalForms =
-          scheduleResponses.length > 0 ? scheduleResponses.length : 1;
-        const completedForms = scheduleResponses.filter(
-          (r: any) => r.status === "SUBMITTED",
-        ).length;
-        const hasFormData = scheduleResponses.length > 0;
-        const allFormsCompleted =
-          completedForms === totalForms && totalForms > 0;
-        const pendingForms = totalForms - completedForms;
-
-        // Build accurate form details
-        const formDetails =
-          scheduleResponses.length > 0
-            ? scheduleResponses.map((r: any) => ({
-                id: r.checkSheet?.id || 1,
-                name: r.checkSheet?.name || schedule.auditType || "Audit Form",
-                processName:
-                  r.checkSheet?.processName || schedule.auditType || "Audit",
-                completed: r.status === "SUBMITTED",
-                responseId: r.id,
-              }))
-            : [
-                {
-                  id: schedule.checkSheet?.id || 1,
-                  name: schedule.auditType || "Audit Form",
-                  processName: schedule.auditType || "Audit",
-                  completed: false,
-                },
-              ];
-
-        // ✅ FIXED: Timezone-safe status logic
-        let timeStatus = "SCHEDULED";
-        let canStart = false;
-
-        if (schedule.scheduledDate) {
-          const scheduleStr = toDateString(schedule.scheduledDate);
-          if (scheduleStr) {
-            if (scheduleStr < todayStr) {
-              timeStatus = "EXPIRED";
-            } else if (scheduleStr === todayStr) {
-              const now = new Date();
-              const nowMinutes = now.getHours() * 60 + now.getMinutes();
-              const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
-              const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
-
-              if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
-                timeStatus = "ACTIVE";
-                canStart = true;
-              } else if (nowMinutes < startMinutes) {
-                timeStatus = "UPCOMING";
-              } else {
-                timeStatus = "EXPIRED";
-              }
-            } else if (scheduleStr > todayStr) {
+            if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
+              timeStatus = "ACTIVE";
+              canStart = true;
+            } else if (nowMinutes < startMinutes) {
               timeStatus = "UPCOMING";
+            } else {
+              // After end time on a date within range
+              timeStatus = "ACTIVE"; // Still active, just outside working hours
+              canStart = false;
             }
+          } else if (todayStr > toStr) {
+            // Today is AFTER the range ends
+            timeStatus = "EXPIRED";
           }
         }
+      } else if (schedule.scheduledDate) {
+        // ✅ SINGLE DATE LOGIC
+        const scheduleStr = toDateString(schedule.scheduledDate);
+        if (scheduleStr) {
+          if (scheduleStr < todayStr) {
+            timeStatus = "EXPIRED";
+          } else if (scheduleStr === todayStr) {
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
+            const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
 
-        return {
-          ...item,
-          schedule: {
-            ...schedule,
-            hasFormData,
-            totalForms,
-            completedForms,
-            pendingForms,
-            allFormsCompleted,
-            formDetails,
-            rescheduleRequested: pendingRescheduleIds.has(scheduleId),
-            extensionRequested: pendingExtensionIds.has(scheduleId),
-            coAuditorNames: schedule.coAuditorNames || [],
-          },
-          timeStatus,
-          canStart,
-        };
-      });
+            if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
+              timeStatus = "ACTIVE";
+              canStart = true;
+            } else if (nowMinutes < startMinutes) {
+              timeStatus = "UPCOMING";
+            } else {
+              timeStatus = "EXPIRED";
+            }
+          } else if (scheduleStr > todayStr) {
+            timeStatus = "UPCOMING";
+          }
+        }
+      }
 
-      setSchedules(enhancedData);
+      return {
+        ...item,
+        schedule: {
+          ...schedule,
+          hasFormData,
+          totalForms,
+          completedForms,
+          pendingForms,
+          allFormsCompleted,
+          formDetails,
+          rescheduleRequested: pendingRescheduleIds.has(scheduleId),
+          extensionRequested: pendingExtensionIds.has(scheduleId),
+          coAuditorNames: schedule.coAuditorNames || [],
+        },
+        timeStatus,
+        canStart,
+      };
+    });
 
-      // ✅ FIXED: Stats using the correct timeStatus
-      setStats({
-        upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
-          .length,
-        active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
-          .length,
-        inProgress: enhancedData.filter(
-          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
-        ).length,
-        expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
-          .length,
-        partiallyCompleted: 0,
-        completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
-          .length,
-        overdueNoWork: 0,
-        overduePartialWork: 0,
-      });
-    } catch (error) {
-      console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
-      addToast("Failed to load schedules", "error");
-    } finally {
-      setIsFetching(false);
-      setRefreshing(false);
-    }
-  };
+    setSchedules(enhancedData);
+
+    // ✅ FIXED: Stats using the correct timeStatus
+    setStats({
+      upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
+        .length,
+      active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
+        .length,
+      inProgress: enhancedData.filter(
+        (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
+      ).length,
+      expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
+        .length,
+      partiallyCompleted: 0,
+      completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
+        .length,
+      overdueNoWork: 0,
+      overduePartialWork: 0,
+    });
+  } catch (error) {
+    console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
+    addToast("Failed to load schedules", "error");
+  } finally {
+    setIsFetching(false);
+    setRefreshing(false);
+  }
+};
 
   useEffect(() => {
     if (user?.id) {
