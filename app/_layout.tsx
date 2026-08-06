@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from '@/components/context/AuthContext';
 import { NotificationProvider } from '@/components/context/NotificationContext';
 import { SidebarProvider } from '@/components/context/SidebarContext';
+import { ToastProvider } from '@/components/context/ToastContext'; // ✅ Add this import
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -112,7 +113,10 @@ export default function RootLayout() {
     <AuthProvider>
       <NotificationProvider>
         <SidebarProvider>
-          <RootLayoutContent />
+          {/* ✅ 2. WRAP EVERYTHING IN TOAST PROVIDER */}
+          <ToastProvider>
+            <RootLayoutContent />
+          </ToastProvider>
         </SidebarProvider>
       </NotificationProvider>
     </AuthProvider>

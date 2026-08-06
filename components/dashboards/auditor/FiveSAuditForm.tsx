@@ -1,25 +1,40 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditAPI } from "@/services/api";
-import { auditScheduleApi } from "@/services/auditScheduleApi";
+import {
+  auditScheduleApi,
+  EvidenceFile,
+  prepareEvidenceForApi,
+} from "@/services/auditScheduleApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { Audio, Video as ExpoVideo, ResizeMode } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library"; // ✅ ADD THIS
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Calendar,
+  Camera,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   FileCheck,
+  Film,
+  Mic,
   PenTool,
+  Play,
   Save,
   Send,
   Sparkles,
   Star,
   TrendingUp,
+  Upload,
   User,
+  X,
 } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -27,6 +42,7 @@ import {
   Animated,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -179,7 +195,7 @@ export default function FiveSAuditForm(props: any) {
   const urlAuditeeId = props.auditeeId || params.auditeeId;
   const urlAuditeeName = props.auditeeName || params.auditeeName;
   const urlLocation = props.location || params.location;
-
+  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,6 +206,31 @@ export default function FiveSAuditForm(props: any) {
   const [currentCheckSheet, setCurrentCheckSheet] = useState<any>(null);
   const [fiveSCheckSheetIds, setFiveSCheckSheetIds] = useState<any[]>([]);
 
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  type LocalEvidenceFile = {
+    uri: string;
+    type: "image" | "video" | "audio";
+    name: string;
+    quality: string;
+    capturedAt: string;
+  };
+  const [evidences, setEvidences] = useState<
+    Record<
+      number,
+      {
+        image?: LocalEvidenceFile;
+        video?: LocalEvidenceFile;
+        audio?: LocalEvidenceFile;
+      }
+    >
+  >({});
+
+  const [imageModal, setImageModal] = useState({ open: false, url: "" });
+  const [videoModal, setVideoModal] = useState({ open: false, url: "" });
+
+  const [selectedQuality, setSelectedQuality] = useState<string>("720p");
+  const qualityOptions = ["1080p", "720p", "480p", "360p"];
   // ✅ Changed to 'string' and initialized to "" to satisfy React Native's Image component
   const [auditorSignatureImage, setAuditorSignatureImage] =
     useState<string>("");
@@ -229,6 +270,708 @@ export default function FiveSAuditForm(props: any) {
     auditorSignature: "",
     createdAt: new Date().toISOString(),
   });
+
+  const getQualityValue = (q: string) => {
+    switch (q) {
+      case "1080p":
+        return 1.0;
+      case "720p":
+        return 0.7;
+      case "480p":
+        return 0.4;
+      case "360p":
+        return 0.2;
+      default:
+        return 0.7;
+    }
+  };
+
+  const pickImageLive = async (qSlNo: number) => {
+    try {
+      // ==========================================
+      // ✅ WEB IMPLEMENTATION
+      // ==========================================
+
+      if (Platform.OS === "web") {
+  const isMobileWeb =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    );
+
+  // ✅ For mobile web: Use file input with capture attribute (opens camera)
+  if (isMobileWeb) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.capture = "environment";
+    input.style.display = "none";
+    document.body.appendChild(input);
+
+    const timeoutId = setTimeout(() => {
+      addToast("Camera dialog timed out. Please try again.", "error");
+      if (document.body.contains(input)) document.body.removeChild(input);
+    }, 10000);
+
+    input.onchange = (e: any) => {
+      clearTimeout(timeoutId);
+      const file = e.target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const uri = event.target?.result as string;
+          const captureTime = new Date().toLocaleString();
+          setEvidences((prev) => ({
+            ...prev,
+            [qSlNo]: {
+              ...(prev[qSlNo] || {}),
+              image: {
+                uri: uri,
+                type: "image",
+                name: file.name || `photo_${Date.now()}.jpg`,
+                quality: selectedQuality,
+                capturedAt: captureTime,
+              },
+            },
+          }));
+          addToast("📸 Photo captured successfully!", "success");
+        };
+        reader.onerror = () => addToast("Failed to read image file", "error");
+        reader.readAsDataURL(file);
+      }
+      if (document.body.contains(input)) document.body.removeChild(input);
+    };
+
+    input.oncancel = () => {
+      clearTimeout(timeoutId);
+      addToast("Camera capture cancelled", "info");
+      if (document.body.contains(input)) document.body.removeChild(input);
+    };
+
+    input.click();
+    return;
+  }
+
+  // ✅ For desktop web: Use getUserMedia API (opens actual camera)
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:12px;";
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.9);z-index:99999;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;
+    `;
+
+    const container = document.createElement("div");
+    container.style.cssText = "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
+    container.appendChild(video);
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:16px;margin-top:20px;justify-content:center;";
+
+    const captureBtn = document.createElement("button");
+    captureBtn.textContent = "📸 Capture";
+    captureBtn.style.cssText = "padding:12px 32px;background:#00529B;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "✕ Cancel";
+    cancelBtn.style.cssText = "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(captureBtn);
+    overlay.appendChild(container);
+    overlay.appendChild(btnRow);
+    document.body.appendChild(overlay);
+
+    await new Promise<void>((resolve) => {
+      video.onloadedmetadata = () => resolve();
+      video.play().catch(() => resolve());
+    });
+
+    captureBtn.onclick = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL("image/jpeg", getQualityValue(selectedQuality));
+
+      stream.getTracks().forEach((t) => t.stop());
+      document.body.removeChild(overlay);
+
+      const captureTime = new Date().toLocaleString();
+      setEvidences((prev) => ({
+        ...prev,
+        [qSlNo]: {
+          ...(prev[qSlNo] || {}),
+          image: {
+            uri: dataUrl,
+            type: "image",
+            name: `photo_${Date.now()}.jpg`,
+            quality: selectedQuality,
+            capturedAt: captureTime,
+          },
+        },
+      }));
+      addToast("📸 Photo captured successfully!", "success");
+    };
+
+    cancelBtn.onclick = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      document.body.removeChild(overlay);
+      addToast("Camera capture cancelled", "info");
+    };
+
+    return;
+  } catch (error: any) {
+    console.error("❌ Camera Error:", error);
+    if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      addToast("Camera permission denied. Please allow camera access.", "error");
+    } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      addToast("No camera found on this device. Please use Upload option.", "error");
+    } else {
+      addToast(`Camera error: ${error.message || "Please try Upload instead"}`, "error");
+    }
+    return;
+  }
+}
+
+      // ==========================================
+      // ✅ NATIVE (iOS/Android) IMPLEMENTATION
+      // ==========================================
+      // Step 1: Request camera permission explicitly
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        addToast("Camera permission is required!", "error");
+        return;
+      }
+
+      // Step 2: Configure proper options
+      const options: any = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Set to false for faster capture
+        quality: getQualityValue(selectedQuality),
+        includeBase64: false,
+        presentationStyle: "fullScreen", // Better UX on iOS
+      };
+
+      // Step 3: Launch camera with proper error handling
+      let result = await ImagePicker.launchCameraAsync(options);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const uri = asset.uri;
+        const captureTime = new Date().toLocaleString();
+
+        // Step 4: Save to gallery (optional)
+        try {
+          const { status: mediaStatus } =
+            await MediaLibrary.requestPermissionsAsync();
+          if (mediaStatus === "granted") {
+            await MediaLibrary.saveToLibraryAsync(uri);
+          }
+        } catch (err) {
+          console.warn("Gallery save failed, continuing anyway...", err);
+        }
+
+        setEvidences((prev) => ({
+          ...prev,
+          [qSlNo]: {
+            ...(prev[qSlNo] || {}),
+            image: {
+              uri: uri,
+              type: "image",
+              name: `photo_${Date.now()}.jpg`,
+              quality: selectedQuality,
+              capturedAt: captureTime,
+            },
+          },
+        }));
+        addToast("📸 Photo captured successfully!", "success");
+      } else if (result.canceled) {
+        addToast("Camera capture cancelled", "info");
+      }
+    } catch (error: any) {
+      console.error("❌ Camera Error:", error);
+      if (error.message?.includes("permission")) {
+        addToast(
+          "Camera permission denied. Please enable in settings.",
+          "error",
+        );
+      } else {
+        addToast("Failed to open camera. Please try again.", "error");
+      }
+    }
+  };
+
+  // ==========================================
+  // 2. VIDEO (Live Capture & Upload) - UNIFIED
+  // ==========================================
+  const pickVideoLive = async (qSlNo: number) => {
+    try {
+      // ==========================================
+      // ✅ WEB IMPLEMENTATION (VIDEO)
+      // ==========================================
+      if (Platform.OS === "web") {
+  const isMobileWeb =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    );
+
+  // ✅ For mobile web: Use file input with capture attribute
+  if (isMobileWeb) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.capture = "environment";
+    input.style.display = "none";
+    document.body.appendChild(input);
+
+    const timeoutId = setTimeout(() => {
+      addToast("Camera dialog timed out. Please try again.", "error");
+      if (document.body.contains(input)) document.body.removeChild(input);
+    }, 10000);
+
+    input.onchange = (e: any) => {
+      clearTimeout(timeoutId);
+      const file = e.target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const uri = event.target?.result as string;
+          const captureTime = new Date().toLocaleString();
+          setEvidences((prev) => ({
+            ...prev,
+            [qSlNo]: {
+              ...(prev[qSlNo] || {}),
+              video: {
+                uri: uri,
+                type: "video",
+                name: file.name || `video_${Date.now()}.mp4`,
+                quality: selectedQuality,
+                capturedAt: captureTime,
+              },
+            },
+          }));
+          addToast("🎥 Video captured successfully!", "success");
+        };
+        reader.onerror = () => addToast("Failed to read video file", "error");
+        reader.readAsDataURL(file);
+      }
+      if (document.body.contains(input)) document.body.removeChild(input);
+    };
+
+    input.oncancel = () => {
+      clearTimeout(timeoutId);
+      addToast("Video capture cancelled", "info");
+      if (document.body.contains(input)) document.body.removeChild(input);
+    };
+
+    input.click();
+    return;
+  }
+
+  // ✅ For desktop web: Use getUserMedia with MediaRecorder for video recording
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true,
+    });
+
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+    const chunks: Blob[] = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const uri = event.target?.result as string;
+        const captureTime = new Date().toLocaleString();
+        setEvidences((prev) => ({
+          ...prev,
+          [qSlNo]: {
+            ...(prev[qSlNo] || {}),
+            video: {
+              uri: uri,
+              type: "video",
+              name: `video_${Date.now()}.webm`,
+              quality: selectedQuality,
+              capturedAt: captureTime,
+            },
+          },
+        }));
+        addToast("🎥 Video recorded successfully!", "success");
+      };
+      reader.readAsDataURL(blob);
+      stream.getTracks().forEach((t) => t.stop());
+    };
+
+    // Create video preview
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.muted = true;
+    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:12px;";
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.9);z-index:99999;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;
+    `;
+
+    const container = document.createElement("div");
+    container.style.cssText = "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
+    container.appendChild(video);
+
+    const statusText = document.createElement("div");
+    statusText.textContent = "⏺ Ready to record";
+    statusText.style.cssText = "color:#ef4444;font-size:14px;font-weight:600;text-align:center;margin-top:12px;";
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:16px;margin-top:16px;justify-content:center;";
+
+    const recordBtn = document.createElement("button");
+    recordBtn.textContent = "⏺ Start Recording";
+    recordBtn.style.cssText = "padding:12px 32px;background:#ef4444;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "✕ Cancel";
+    cancelBtn.style.cssText = "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(recordBtn);
+    overlay.appendChild(container);
+    overlay.appendChild(statusText);
+    overlay.appendChild(btnRow);
+    document.body.appendChild(overlay);
+
+    let isRecording = false;
+
+    recordBtn.onclick = () => {
+      if (!isRecording) {
+        mediaRecorder.start();
+        isRecording = true;
+        recordBtn.textContent = "⏹ Stop Recording";
+        recordBtn.style.background = "#16a34a";
+        statusText.textContent = "⏺ Recording...";
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        document.body.removeChild(overlay);
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      if (isRecording) mediaRecorder.stop();
+      stream.getTracks().forEach((t) => t.stop());
+      document.body.removeChild(overlay);
+      addToast("Video recording cancelled", "info");
+    };
+
+    return;
+  } catch (error: any) {
+    console.error("❌ Video Error:", error);
+    if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      addToast("Camera/Mic permission denied. Please allow access.", "error");
+    } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      addToast("No camera found. Please use Upload button.", "error");
+    } else {
+      addToast(`Video error: ${error.message || "Please try Upload instead"}`, "error");
+    }
+    return;
+  }
+}
+
+      // ==========================================
+      // ✅ NATIVE (iOS/Android) IMPLEMENTATION
+      // ==========================================
+      // Step 1: Request camera permission explicitly
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        addToast("Camera permission is required!", "error");
+        return;
+      }
+
+      // Step 2: Configure proper options
+      const options: any = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        quality: getQualityValue(selectedQuality),
+        presentationStyle: "fullScreen", // Better UX on iOS
+      };
+
+      // Step 3: Launch camera with proper error handling
+      let result = await ImagePicker.launchCameraAsync(options);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const uri = asset.uri;
+        const captureTime = new Date().toLocaleString();
+
+        // Step 4: Save to gallery (optional)
+        try {
+          const { status: mediaStatus } =
+            await MediaLibrary.requestPermissionsAsync();
+          if (mediaStatus === "granted") {
+            await MediaLibrary.saveToLibraryAsync(uri);
+          }
+        } catch (err) {
+          console.warn("Gallery save failed, continuing anyway...", err);
+        }
+
+        setEvidences((prev) => ({
+          ...prev,
+          [qSlNo]: {
+            ...(prev[qSlNo] || {}),
+            video: {
+              uri: uri,
+              type: "video",
+              name: `video_${Date.now()}.mp4`,
+              quality: selectedQuality,
+              capturedAt: captureTime,
+            },
+          },
+        }));
+        addToast("🎥 Video captured successfully!", "success");
+      } else if (result.canceled) {
+        addToast("Video capture cancelled", "info");
+      }
+    } catch (error: any) {
+      console.error("❌ Video Error:", error);
+      if (error.message?.includes("permission")) {
+        addToast(
+          "Camera permission denied. Please enable in settings.",
+          "error",
+        );
+      } else {
+        addToast("Failed to open camera. Please try again.", "error");
+      }
+    }
+  };
+  const pickImageUpload = async (qSlNo: number) => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: getQualityValue(selectedQuality),
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setEvidences((prev) => ({
+        ...prev,
+        [qSlNo]: {
+          ...(prev[qSlNo] || {}),
+          image: {
+            uri: result.assets[0].uri,
+            type: "image",
+            name: result.assets[0].fileName || `photo_${Date.now()}.jpg`,
+            quality: selectedQuality,
+            capturedAt: new Date().toLocaleString(),
+          },
+        },
+      }));
+    }
+  };
+
+  // ==========================================
+  const pickVideoUpload = async (qSlNo: number) => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: getQualityValue(selectedQuality),
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setEvidences((prev) => ({
+        ...prev,
+        [qSlNo]: {
+          ...(prev[qSlNo] || {}),
+          video: {
+            uri: result.assets[0].uri,
+            type: "video",
+            name: result.assets[0].fileName || `video_${Date.now()}.mp4`,
+            quality: selectedQuality,
+            capturedAt: new Date().toLocaleString(),
+          },
+        },
+      }));
+    }
+  };
+
+  // ==========================================
+  // 3. AUDIO (Live Microphone Recording & Upload)
+  // ==========================================
+  const startRecording = async () => {
+    try {
+      // ✅ Request microphone permissions
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        addToast("Microphone permission is required!", "error");
+        return;
+      }
+
+      // ✅ Configure audio mode for recording
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // ✅ Create recording with proper options
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+      addToast("🎙️ Recording started...", "info");
+    } catch (err: any) {
+      console.error("Failed to start recording", err);
+      if (err.message?.includes("permission")) {
+        addToast(
+          "Microphone permission denied. Please enable in settings.",
+          "error",
+        );
+      } else {
+        addToast("Failed to start recording. Please try again.", "error");
+      }
+    }
+  };
+
+  const stopRecording = async (qSlNo: number) => {
+    if (!recording) {
+      addToast("No recording in progress", "error");
+      return;
+    }
+    setIsRecording(false);
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        const captureTime = new Date().toISOString(); // Use ISO string
+        const fileName = `audio_${Date.now()}.m4a`;
+        let finalUri = uri;
+
+        // ✅ FIX: Convert ANY local URI to Base64 (handles file://, content://, or raw paths)
+        if (
+          Platform.OS !== "web" &&
+          !uri.startsWith("data:") &&
+          !uri.startsWith("http")
+        ) {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(uri, {
+              encoding: "base64", // ⚠️ MUST be the exact string literal "base64"
+            });
+            finalUri = `data:audio/m4a;base64,${base64}`;
+          } catch (e) {
+            console.error("Failed to read audio file as base64", e);
+            // If it fails, don't send a corrupted data URI. Send raw URI so backend skips decoding.
+            finalUri = uri;
+          }
+        }
+        // ✅ FIX 2: Convert Native File Path to Base64
+        else if (Platform.OS !== "web" && uri.startsWith("file:")) {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(uri, {
+              encoding: "base64", // ✅ FIX: Use string literal 'base64' instead of FileSystem.EncodingType.Base64
+            });
+            finalUri = `data:audio/m4a;base64,${base64}`;
+          } catch (e) {
+            console.error("Failed to read audio file as base64", e);
+          }
+        }
+        // Save to media library (Native only)
+        if (Platform.OS !== "web") {
+          try {
+            const { status: mediaStatus } =
+              await MediaLibrary.requestPermissionsAsync();
+            if (mediaStatus === "granted")
+              await MediaLibrary.createAssetAsync(uri);
+          } catch (e) {
+            console.warn("Could not save audio to media library", e);
+          }
+        }
+
+        setEvidences((prev) => ({
+          ...prev,
+          [qSlNo]: {
+            ...(prev[qSlNo] || {}),
+            audio: {
+              uri: finalUri,
+              type: "audio",
+              name: fileName,
+              quality: "Original",
+              capturedAt: captureTime,
+            },
+          },
+        }));
+        addToast("🎙️ Audio recording saved!", "success");
+      } else {
+        addToast("No audio recorded", "error");
+      }
+    } catch (e) {
+      console.error("Error stopping recording", e);
+      addToast("Failed to save recording", "error");
+    }
+  };
+
+  const pickAudioUpload = async (qSlNo: number) => {
+    let result = await DocumentPicker.getDocumentAsync({
+      type: ["audio/mpeg", "audio/wav", "audio/mp4", "audio/aac", "audio/*"],
+      copyToCacheDirectory: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setEvidences((prev) => ({
+        ...prev,
+        [qSlNo]: {
+          ...(prev[qSlNo] || {}),
+          audio: {
+            uri: result.assets[0].uri,
+            type: "audio",
+            name: result.assets[0].name,
+            quality: "Original",
+            capturedAt: new Date().toLocaleString(),
+          },
+        },
+      }));
+    }
+  };
+
+  const removeEvidence = (qSlNo: number, type: "image" | "video" | "audio") => {
+    setEvidences((prev) => {
+      const current = prev[qSlNo] || {};
+      const updated = { ...current };
+      delete updated[type]; // ✅ Only deletes the specific type
+
+      // If no media left, remove the question key entirely
+      if (Object.keys(updated).length === 0) {
+        const newEvidences = { ...prev };
+        delete newEvidences[qSlNo];
+        return newEvidences;
+      }
+      return { ...prev, [qSlNo]: updated };
+    });
+  };
 
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
@@ -420,7 +1163,7 @@ export default function FiveSAuditForm(props: any) {
       }
 
       const formattedQuestions = parsedQuestions.map((q: any, idx: number) => ({
-        slNo: q.sNo || q.slNo || idx + 1,
+        slNo: Number(q.sNo || q.slNo || idx + 1), // ✅ CRITICAL: Force Number type
         checkpoint: q.displayLabel,
         category: q.category || "",
         documentsVerified:
@@ -455,6 +1198,28 @@ export default function FiveSAuditForm(props: any) {
       setLoadingQuestions(false);
     }
   };
+
+  // ✅ DEBUG: Watch local evidence state changes
+  useEffect(() => {
+    if (Object.keys(evidences).length > 0) {
+      console.log("🗂️ [DEBUG] Local Evidences State Updated:", evidences);
+      for (const qSlNo in evidences) {
+        const ev = evidences[qSlNo];
+        if (ev.image)
+          console.log(
+            `  📷 Q${qSlNo} Image Captured: ${ev.image.name} (Size: ${(ev.image.uri.length / 1024).toFixed(2)} KB)`,
+          );
+        if (ev.video)
+          console.log(
+            `  🎥 Q${qSlNo} Video Captured: ${ev.video.name} (Size: ${(ev.video.uri.length / 1024).toFixed(2)} KB)`,
+          );
+        if (ev.audio)
+          console.log(
+            `  🎙️ Q${qSlNo} Audio Captured: ${ev.audio.name} (Size: ${(ev.audio.uri.length / 1024).toFixed(2)} KB)`,
+          );
+      }
+    }
+  }, [evidences]);
 
   useEffect(() => {
     fetchQuestionsFromBackend();
@@ -539,6 +1304,37 @@ export default function FiveSAuditForm(props: any) {
     }
   }, [user, editId]);
 
+  useEffect(() => {
+    // ✅ Check permissions on mount
+    const checkPermissions = async () => {
+      try {
+        // Check camera permission
+        const cameraStatus = await ImagePicker.getCameraPermissionsAsync();
+        if (cameraStatus.status !== "granted") {
+          console.log("Camera permission not granted");
+        }
+
+        // Check media library permission (skip on Web)
+        if (Platform.OS !== "web") {
+          const mediaStatus = await MediaLibrary.getPermissionsAsync();
+          if (mediaStatus.status !== "granted") {
+            console.log("Media library permission not granted");
+          }
+        }
+
+        // Check audio permission
+        const audioStatus = await Audio.getPermissionsAsync();
+        if (audioStatus.status !== "granted") {
+          console.log("Audio permission not granted");
+        }
+      } catch (error) {
+        console.error("Error checking permissions:", error);
+      }
+    };
+
+    checkPermissions();
+  }, []);
+
   const loadAuditData = async () => {
     setLoading(true);
     try {
@@ -582,6 +1378,46 @@ export default function FiveSAuditForm(props: any) {
           auditeeName: savedAuditeeName,
           auditeeId: audit.auditeeId || prev.auditeeId,
         }));
+
+        // ✅ Load existing evidence
+        if (audit.id) {
+          try {
+            const evidenceResponse =
+              await auditScheduleApi.getEvidenceForResponse(audit.id);
+            const existingEvidences = evidenceResponse.data || [];
+
+            if (existingEvidences.length > 0) {
+              console.log(
+                `📥 Loaded ${existingEvidences.length} evidence files`,
+              );
+
+              // Convert evidence to the format expected by the component
+              const loadedEvidences: Record<number, any> = {};
+              existingEvidences.forEach((evidence: EvidenceFile) => {
+                const questionSlNo = evidence.questionSlNo;
+
+                if (!loadedEvidences[questionSlNo]) {
+                  loadedEvidences[questionSlNo] = {};
+                }
+
+                // Map the server evidence type to the local format
+                const evidenceType = evidence.evidenceType;
+                loadedEvidences[questionSlNo][evidenceType] = {
+                  uri: evidence.uri || evidence.filePath || "",
+                  type: evidence.evidenceType,
+                  name: evidence.fileName,
+                  quality: evidence.quality || "720p",
+                  capturedAt:
+                    evidence.capturedAt || new Date().toLocaleString(),
+                };
+              });
+
+              setEvidences(loadedEvidences);
+            }
+          } catch (evidenceError) {
+            console.warn("Could not load evidence:", evidenceError);
+          }
+        }
 
         auditLoaded.current = true;
       }
@@ -665,6 +1501,59 @@ export default function FiveSAuditForm(props: any) {
         maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
       const roundedPercentage = Math.round(percentage * 100) / 100;
 
+      // ✅ Prepare evidence for API submission
+      // ✅ Prepare evidence for API submission (with await)
+const preparedEvidences = [];
+for (const questionKey in evidences) {
+  const evidenceData = evidences[questionKey];
+
+  if (evidenceData.image) {
+    try {
+      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+        type: "image",
+        uri: evidenceData.image.uri,
+        name: evidenceData.image.name,
+        quality: evidenceData.image.quality,
+        capturedAt: evidenceData.image.capturedAt,
+      });
+      preparedEvidences.push(prepared);
+    } catch (error) {
+      console.error(`Error preparing image evidence:`, error);
+    }
+  }
+
+  if (evidenceData.video) {
+    try {
+      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+        type: "video",
+        uri: evidenceData.video.uri,
+        name: evidenceData.video.name,
+        quality: evidenceData.video.quality,
+        capturedAt: evidenceData.video.capturedAt,
+      });
+      preparedEvidences.push(prepared);
+    } catch (error) {
+      console.error(`Error preparing video evidence:`, error);
+    }
+  }
+
+  if (evidenceData.audio) {
+    try {
+      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+        type: "audio",
+        uri: evidenceData.audio.uri,
+        name: evidenceData.audio.name,
+        quality: evidenceData.audio.quality || "Original",
+        capturedAt: evidenceData.audio.capturedAt,
+      });
+      preparedEvidences.push(prepared);
+    } catch (error) {
+      console.error(`Error preparing audio evidence:`, error);
+    }
+  }
+}
+
+      // ✅ Create answers object WITHOUT evidences (we'll upload them separately)
       const answersObject = {
         documentNumber: formData.documentNumber,
         department: formData.department,
@@ -713,14 +1602,28 @@ export default function FiveSAuditForm(props: any) {
 
       let saved;
       if (responseId) {
+        // ✅ Update existing response
         await auditScheduleApi.updateAuditResponse(responseId, payload);
+
+        // ✅ Upload evidences separately using bulk upload
+        if (preparedEvidences.length > 0) {
+          console.log(
+            `📤 Uploading ${preparedEvidences.length} evidence files...`,
+          );
+          await auditScheduleApi.bulkUploadEvidence(
+            responseId,
+            preparedEvidences,
+          );
+          console.log("✅ All evidence uploaded successfully");
+        }
+
         saved = { id: responseId };
         addToast("Draft updated successfully", "success");
       } else {
+        // ✅ Create new response
         const response = await auditScheduleApi.saveAuditResponse(payload);
-        console.log("💾 Draft Save API Response:", response); // ✅ DEBUG LOG
+        console.log("💾 Draft Save API Response:", response);
 
-        // ✅ FIX: Safely handle both { data: { id: ... } } and direct { id: ... } responses
         saved = response?.data || response;
 
         if (!saved || !saved.id) {
@@ -730,6 +1633,19 @@ export default function FiveSAuditForm(props: any) {
         }
 
         setResponseId(saved.id);
+
+        // ✅ Upload evidences after response is created
+        if (preparedEvidences.length > 0) {
+          console.log(
+            `📤 Uploading ${preparedEvidences.length} evidence files...`,
+          );
+          await auditScheduleApi.bulkUploadEvidence(
+            saved.id,
+            preparedEvidences,
+          );
+          console.log("✅ All evidence uploaded successfully");
+        }
+
         addToast("Draft saved successfully", "success");
 
         if (props.onUpdateEditId) {
@@ -752,141 +1668,243 @@ export default function FiveSAuditForm(props: any) {
     }
   };
 
-  const submitAudit = async () => {
-    if (!isManualSubmitRef.current) return;
-    isManualSubmitRef.current = false;
+ const submitAudit = async () => {
+  if (!isManualSubmitRef.current) return;
+  isManualSubmitRef.current = false;
 
-    const unanswered = questions.filter(
-      (q) =>
-        formData.scores[q.slNo] === undefined ||
-        formData.scores[q.slNo] === null,
+  const unanswered = questions.filter(
+    (q) =>
+      formData.scores[q.slNo] === undefined ||
+      formData.scores[q.slNo] === null,
+  );
+  if (unanswered.length > 0) {
+    addToast(
+      `Please rate all ${unanswered.length} remaining questions`,
+      "error",
     );
-    if (unanswered.length > 0) {
-      addToast(
-        `Please rate all ${unanswered.length} remaining questions`,
-        "error",
+    setCurrentStep(2);
+    setCurrentCheckpointIndex(
+      questions.findIndex((q) => formData.scores[q.slNo] === undefined),
+    );
+    return;
+  }
+
+  if (!auditeeInfo.auditeeName?.trim()) {
+    addToast("Please enter auditee name", "error");
+    setCurrentStep(3);
+    return;
+  }
+
+  if (!auditorSignatureImage && !formData.auditorSignature.trim()) {
+    addToast("Please provide auditor signature", "error");
+    setCurrentStep(3);
+    return;
+  }
+
+  setSaving(true);
+  try {
+    if (!currentCheckSheet || !currentCheckSheet.id)
+      throw new Error(
+        "Check sheet not loaded. Please refresh and try again.",
       );
-      setCurrentStep(2);
-      setCurrentCheckpointIndex(
-        questions.findIndex((q) => formData.scores[q.slNo] === undefined),
-      );
-      return;
+
+    const totalScore = calculateTotalScore();
+    const maxPossibleScore = questions.length * 4;
+    const percentage =
+      maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+    const roundedPercentage = Math.round(percentage * 100) / 100;
+
+    // ✅ FIXED: Added `await` before each prepareEvidenceForApi call
+    const preparedEvidences = [];
+    for (const questionKey in evidences) {
+      const evidenceData = evidences[questionKey];
+
+      if (evidenceData.image) {
+        try {
+          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+            type: "image",
+            uri: evidenceData.image.uri,
+            name: evidenceData.image.name,
+            quality: evidenceData.image.quality,
+            capturedAt: evidenceData.image.capturedAt,
+          });
+          preparedEvidences.push(prepared);
+        } catch (error) {
+          console.error(`Error preparing image evidence:`, error);
+        }
+      }
+
+      if (evidenceData.video) {
+        try {
+          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+            type: "video",
+            uri: evidenceData.video.uri,
+            name: evidenceData.video.name,
+            quality: evidenceData.video.quality,
+            capturedAt: evidenceData.video.capturedAt,
+          });
+          preparedEvidences.push(prepared);
+        } catch (error) {
+          console.error(`Error preparing video evidence:`, error);
+        }
+      }
+
+      if (evidenceData.audio) {
+        try {
+          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+            type: "audio",
+            uri: evidenceData.audio.uri,
+            name: evidenceData.audio.name,
+            quality: evidenceData.audio.quality || "Original",
+            capturedAt: evidenceData.audio.capturedAt,
+          });
+          preparedEvidences.push(prepared);
+        } catch (error) {
+          console.error(`Error preparing audio evidence:`, error);
+        }
+      }
     }
 
-    if (!auditeeInfo.auditeeName?.trim()) {
-      addToast("Please enter auditee name", "error");
-      setCurrentStep(3);
-      return;
-    }
+    const answersObject = {
+      documentNumber: formData.documentNumber,
+      department: formData.department,
+      supervisor: formData.supervisor,
+      area: formData.area,
+      date: formData.date,
+      hodEmail: formData.hodEmail,
+      scores: formData.scores,
+      comments: formData.comments,
+      totalScore: totalScore,
+      percentage: roundedPercentage,
+      auditorSignature: auditorSignatureImage || formData.auditorSignature,
+      auditeeName: auditeeInfo.auditeeName,
+      completedBy: formData.auditorName,
+      formName: "5S Audit Checklist",
+      evidenceCount: preparedEvidences.length,
+    };
 
-    if (!auditorSignatureImage && !formData.auditorSignature.trim()) {
-      addToast("Please provide auditor signature", "error");
-      setCurrentStep(3);
-      return;
-    }
+    const auditorIdValue = formData.auditorId
+      ? Number(formData.auditorId)
+      : user?.id
+        ? Number(user.id)
+        : null;
 
-    setSaving(true);
-    try {
-      if (!currentCheckSheet || !currentCheckSheet.id)
-        throw new Error(
-          "Check sheet not loaded. Please refresh and try again.",
+    const payload = {
+      checkSheet: { id: currentCheckSheet.id },
+      auditScheduleId: scheduleId ? parseInt(String(scheduleId)) : null,
+      department: formData.department,
+      shift: formData.shift,
+      auditDate: formData.date,
+      auditorName: formData.auditorName,
+      auditorId: auditorIdValue,
+      auditeeId: auditeeInfo.auditeeId
+        ? parseInt(String(auditeeInfo.auditeeId))
+        : null,
+      auditeeName: auditeeInfo.auditeeName,
+      auditeeIds: auditeeInfo.auditeeIds,
+      auditeeAcknowledged: false,
+      answers: JSON.stringify(answersObject),
+      totalScore: totalScore,
+      maxPossibleScore: maxPossibleScore,
+      percentageScore: roundedPercentage,
+      summary: null,
+      recommendations: null,
+      status: "SUBMITTED",
+    };
+
+    let saved;
+    if (responseId) {
+      await auditScheduleApi.updateAuditResponse(responseId, payload);
+
+      // ✅ Upload evidences before submitting
+      if (preparedEvidences.length > 0) {
+        await auditScheduleApi.bulkUploadEvidence(
+          responseId,
+          preparedEvidences,
         );
+      }
 
-      const totalScore = calculateTotalScore();
-      const maxPossibleScore = questions.length * 4;
-      const percentage =
-        maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
-      const roundedPercentage = Math.round(percentage * 100) / 100;
+      await auditScheduleApi.submitAuditResponse(responseId);
+      saved = { id: responseId };
+    } else {
+      const response = await auditScheduleApi.saveAuditResponse(payload);
+      saved = response?.data || response;
 
-      const answersObject = {
-        documentNumber: formData.documentNumber,
-        department: formData.department,
-        supervisor: formData.supervisor,
-        area: formData.area,
-        date: formData.date,
-        hodEmail: formData.hodEmail,
-        scores: formData.scores,
-        comments: formData.comments,
-        totalScore: totalScore,
-        percentage: roundedPercentage,
-        auditorSignature: auditorSignatureImage || formData.auditorSignature,
-        auditeeName: auditeeInfo.auditeeName,
-        completedBy: formData.auditorName,
-        formName: "5S Audit Checklist",
-      };
+      if (!saved || !saved.id) {
+        throw new Error(
+          "Failed to get ID from submit response. Check console logs.",
+        );
+      }
 
-      const auditorIdValue = formData.auditorId
-        ? Number(formData.auditorId)
-        : user?.id
-          ? Number(user.id)
-          : null;
+      setResponseId(saved.id);
 
-      const payload = {
-        checkSheet: { id: currentCheckSheet.id },
-        auditScheduleId: scheduleId ? parseInt(String(scheduleId)) : null,
-        department: formData.department,
-        shift: formData.shift,
-        auditDate: formData.date,
-        auditorName: formData.auditorName,
-        auditorId: auditorIdValue,
-        auditeeId: auditeeInfo.auditeeId
-          ? parseInt(String(auditeeInfo.auditeeId))
-          : null,
-        auditeeName: auditeeInfo.auditeeName,
-        auditeeIds: auditeeInfo.auditeeIds,
-        auditeeAcknowledged: false,
-        answers: JSON.stringify(answersObject),
-        totalScore: totalScore,
-        maxPossibleScore: maxPossibleScore,
-        percentageScore: roundedPercentage,
-        summary: null,
-        recommendations: null,
-        status: "SUBMITTED",
-      };
+      // ✅ Upload evidences before submitting
+      if (preparedEvidences.length > 0) {
+        await auditScheduleApi.bulkUploadEvidence(
+          saved.id,
+          preparedEvidences,
+        );
+      }
 
-      let saved;
-      if (responseId) {
-        await auditScheduleApi.updateAuditResponse(responseId, payload);
-        await auditScheduleApi.submitAuditResponse(responseId);
-        saved = { id: responseId };
-      } else {
-        const response = await auditScheduleApi.saveAuditResponse(payload);
-        console.log("🚀 Submit Save API Response:", response); // ✅ DEBUG LOG
+      await auditScheduleApi.submitAuditResponse(saved.id);
+    }
 
-        // ✅ FIX: Safely handle both { data: { id: ... } } and direct { id: ... } responses
-        saved = response?.data || response;
+    let ratingText = "";
+    if (roundedPercentage >= 90) ratingText = "Excellent!";
+    else if (roundedPercentage >= 75) ratingText = "Good";
+    else if (roundedPercentage >= 60) ratingText = "Needs Improvement";
+    else ratingText = "Poor - Immediate Action Required";
 
-        if (!saved || !saved.id) {
-          throw new Error(
-            "Failed to get ID from submit response. Check console logs.",
+    addToast(
+      `5S Audit submitted! Score: ${totalScore}/${maxPossibleScore} (${roundedPercentage}%) - ${ratingText}`,
+      "success",
+    );
+
+    if (props.onClose) {
+      props.onClose();
+    } else {
+      router.replace("/auditor");
+    }
+  } catch (error: any) {
+    console.error("Error submitting audit:", error);
+    addToast(`Failed to submit audit: ${error.message}`, "error");
+  } finally {
+    setSaving(false);
+  }
+};
+
+  // Add this function after the removeEvidence function
+  const syncEvidences = async (
+    responseId: string | number,
+    currentEvidences: Record<number, any>,
+  ) => {
+    try {
+      // Get existing evidence from server
+      const response =
+        await auditScheduleApi.getEvidenceForResponse(responseId);
+      const serverEvidences = response.data || [];
+
+      // Find evidence that exists on server but not in current state (was removed)
+      const removedEvidences = serverEvidences.filter((serverEvidence) => {
+        const currentEvidence = currentEvidences[serverEvidence.questionSlNo];
+        if (!currentEvidence) return true;
+
+        // Check if the specific type still exists
+        const type = serverEvidence.evidenceType;
+        return !currentEvidence[type];
+      });
+
+      // Delete removed evidence from server
+      for (const removed of removedEvidences) {
+        if (removed.id) {
+          await auditScheduleApi.deleteEvidenceById(removed.id);
+          console.log(
+            `🗑️ Deleted evidence ${removed.id} for question ${removed.questionSlNo}`,
           );
         }
-
-        setResponseId(saved.id);
-        await auditScheduleApi.submitAuditResponse(saved.id);
       }
-
-      let ratingText = "";
-      if (roundedPercentage >= 90) ratingText = "Excellent!";
-      else if (roundedPercentage >= 75) ratingText = "Good";
-      else if (roundedPercentage >= 60) ratingText = "Needs Improvement";
-      else ratingText = "Poor - Immediate Action Required";
-
-      addToast(
-        `5S Audit submitted! Score: ${totalScore}/${maxPossibleScore} (${roundedPercentage}%) - ${ratingText}`,
-        "success",
-      );
-
-      if (props.onClose) {
-        props.onClose();
-      } else {
-        router.replace("/auditor");
-      }
-    } catch (error: any) {
-      console.error("Error submitting audit:", error);
-      addToast(`Failed to submit audit: ${error.message}`, "error");
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error("Error syncing evidence:", error);
     }
   };
 
@@ -931,16 +1949,109 @@ export default function FiveSAuditForm(props: any) {
     scrollViewRef.current?.scrollTo({ y: 0, animated: true });
   };
 
+  useEffect(() => {
+    if (Platform.OS === "web" && currentStep === 2) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable
+        )
+          return;
+
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          if (currentCheckpointIndex < questions.length - 1) {
+            const nextIndex = currentCheckpointIndex + 1;
+            const nextQ = questions[nextIndex];
+            const nextSectionIndex = FIVE_S_SECTIONS.findIndex((s) =>
+              s.slNos.includes(Number(nextQ.slNo)),
+            );
+            if (
+              nextSectionIndex !== -1 &&
+              nextSectionIndex !== activeSectionIndex
+            ) {
+              setActiveSectionIndex(nextSectionIndex);
+            }
+            setCurrentCheckpointIndex(nextIndex);
+            scrollToTop();
+          }
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          if (currentCheckpointIndex > 0) {
+            const prevIndex = currentCheckpointIndex - 1;
+            const prevQ = questions[prevIndex];
+            const prevSectionIndex = FIVE_S_SECTIONS.findIndex((s) =>
+              s.slNos.includes(Number(prevQ.slNo)),
+            );
+            if (
+              prevSectionIndex !== -1 &&
+              prevSectionIndex !== activeSectionIndex
+            ) {
+              setActiveSectionIndex(prevSectionIndex);
+            }
+            setCurrentCheckpointIndex(prevIndex);
+            scrollToTop();
+          }
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [currentStep, questions, currentCheckpointIndex, activeSectionIndex]); // ✅ Updated dependencies
+  const handleTabChange = (index: number) => {
+    setActiveSectionIndex(index);
+    const section = FIVE_S_SECTIONS[index];
+
+    // Find the first question that belongs to this section
+    const globalIndex = questions.findIndex((q) =>
+      section.slNos.includes(Number(q.slNo)),
+    );
+
+    if (globalIndex !== -1) {
+      setCurrentCheckpointIndex(globalIndex);
+      scrollToTop();
+    }
+  };
+
   const nextCheckpoint = () => {
+    // ✅ Direct index math - no findIndex needed!
     if (currentCheckpointIndex < questions.length - 1) {
-      setCurrentCheckpointIndex(currentCheckpointIndex + 1);
+      const nextIndex = currentCheckpointIndex + 1;
+      const nextQ = questions[nextIndex];
+
+      // Automatically switch tabs if the next question belongs to a new section
+      const nextSectionIndex = FIVE_S_SECTIONS.findIndex((s) =>
+        s.slNos.includes(Number(nextQ.slNo)),
+      );
+
+      if (nextSectionIndex !== -1 && nextSectionIndex !== activeSectionIndex) {
+        setActiveSectionIndex(nextSectionIndex);
+      }
+
+      setCurrentCheckpointIndex(nextIndex);
       scrollToTop();
     }
   };
 
   const prevCheckpoint = () => {
+    // ✅ Direct index math - no findIndex needed!
     if (currentCheckpointIndex > 0) {
-      setCurrentCheckpointIndex(currentCheckpointIndex - 1);
+      const prevIndex = currentCheckpointIndex - 1;
+      const prevQ = questions[prevIndex];
+
+      // Automatically switch tabs if the prev question belongs to a previous section
+      const prevSectionIndex = FIVE_S_SECTIONS.findIndex((s) =>
+        s.slNos.includes(Number(prevQ.slNo)),
+      );
+
+      if (prevSectionIndex !== -1 && prevSectionIndex !== activeSectionIndex) {
+        setActiveSectionIndex(prevSectionIndex);
+      }
+
+      setCurrentCheckpointIndex(prevIndex);
       scrollToTop();
     }
   };
@@ -983,6 +2094,14 @@ export default function FiveSAuditForm(props: any) {
       scrollToTop();
     }
   };
+
+  const activeSection = FIVE_S_SECTIONS[activeSectionIndex];
+  const sectionQuestions = questions.filter(
+    (q) => activeSection?.slNos.includes(Number(q.slNo)), // ✅ Added Number()
+  );
+  const currentLocalIndex = sectionQuestions.findIndex(
+    (q) => Number(q.slNo) === Number(currentQ?.slNo), // ✅ Added Number()
+  );
 
   const currentSection = getCurrentSection();
   const shiftOptions = ["Morning", "Evening", "Night", "General"];
@@ -1495,41 +2614,94 @@ export default function FiveSAuditForm(props: any) {
             {/* Step 2: 5S Checkpoints */}
             {currentStep === 2 && currentQ && (
               <FadeInView delay={200}>
-                <View className="p-5 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-                  <View className="flex-row items-center justify-between mb-4">
-                    <View className="flex-row items-center gap-3">
-                      <Text className="text-sm font-medium text-slate-600">
-                        Checkpoint {currentCheckpointIndex + 1} of{" "}
-                        {questions.length}
-                      </Text>
-                      {currentSection && (
-                        <View
-                          className="px-3 py-1 rounded-full"
-                          style={{ backgroundColor: NAVBAR_COLORS.bg }}
-                        >
-                          <Text
-                            className="text-xs font-semibold"
-                            style={{ color: NAVBAR_COLORS.primary }}
+                {/* 5S Tabs */}
+                <View className="p-2 mb-4 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View className="flex-row gap-2">
+                      {FIVE_S_SECTIONS.map((section, index) => {
+                        const isActive = activeSectionIndex === index;
+                        const sectionScore = getSectionScore(section);
+                        return (
+                          <TouchableOpacity
+                            key={index}
+                            onPress={() => handleTabChange(index)}
+                            className={`px-4 py-2.5 rounded-xl border flex-row items-center gap-2 ${
+                              isActive
+                                ? "bg-[#00529B] border-[#00529B]"
+                                : "bg-white border-slate-200"
+                            }`}
                           >
-                            {currentSection.name} (Max:{" "}
-                            {currentSection.maxScore})
-                          </Text>
-                        </View>
-                      )}
+                            <Text
+                              className={`text-sm font-bold ${
+                                isActive ? "text-white" : "text-slate-700"
+                              }`}
+                            >
+                              {section.name}
+                            </Text>
+                            <View
+                              className={`px-2 py-0.5 rounded-full ${
+                                isActive ? "bg-white/20" : "bg-slate-100"
+                              }`}
+                            >
+                              <Text
+                                className={`text-[10px] font-semibold ${
+                                  isActive ? "text-white" : "text-slate-500"
+                                }`}
+                              >
+                                {sectionScore}/{section.maxScore}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
-                    <View className="flex-row gap-4">
+                  </ScrollView>
+                </View>
+
+                {/* Question Navigation inside Tab */}
+                <View className="p-5 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                  {/* ✅ FIX: Added flex-wrap and gap-y-3 to prevent overflow on mobile */}
+                  <View className="flex-row flex-wrap items-center justify-between mb-4 gap-y-3">
+                    <View className="flex-row flex-wrap items-center gap-2">
+                      <Text
+                        className="text-sm font-medium text-slate-600"
+                        numberOfLines={1}
+                      >
+                        Question{" "}
+                        {currentLocalIndex !== -1 ? currentLocalIndex + 1 : 1}{" "}
+                        of {sectionQuestions.length}
+                      </Text>
+                      <View
+                        className="px-3 py-1 rounded-full"
+                        style={{ backgroundColor: NAVBAR_COLORS.bg }}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{ color: NAVBAR_COLORS.primary }}
+                          numberOfLines={1}
+                        >
+                          {activeSection.name}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="flex-row flex-wrap items-center gap-3">
                       <View className="flex-row items-center gap-1.5">
                         <Star size={12} color={NAVBAR_COLORS.primary} />
                         <Text
                           className="text-xs font-medium"
                           style={{ color: NAVBAR_COLORS.primary }}
+                          numberOfLines={1}
                         >
                           Score: {stats.totalScore}/{stats.maxScore}
                         </Text>
                       </View>
                       <View className="flex-row items-center gap-1.5">
                         <TrendingUp size={12} color="#64748b" />
-                        <Text className="text-xs font-medium text-slate-500">
+                        <Text
+                          className="text-xs font-medium text-slate-500"
+                          numberOfLines={1}
+                        >
                           {stats.percentage}%
                         </Text>
                       </View>
@@ -1542,16 +2714,17 @@ export default function FiveSAuditForm(props: any) {
                     className="pb-2"
                   >
                     <View className="flex-row gap-2">
-                      {questions.map((q, idx) => {
+                      {sectionQuestions.map((q, idx) => {
                         const hasScore =
                           formData.scores[q.slNo] !== undefined &&
                           formData.scores[q.slNo] !== null;
                         const score = formData.scores[q.slNo];
+                        const isCurrent = currentQ?.slNo === q.slNo;
                         let bgColor = "#f8fafc",
                           borderColor = "#e2e8f0",
                           textColor = "#64748b";
 
-                        if (currentCheckpointIndex === idx) {
+                        if (isCurrent) {
                           bgColor = NAVBAR_COLORS.primary;
                           borderColor = NAVBAR_COLORS.primary;
                           textColor = "#ffffff";
@@ -1582,7 +2755,13 @@ export default function FiveSAuditForm(props: any) {
                         return (
                           <TouchableOpacity
                             key={q.slNo}
-                            onPress={() => navigateToCheckpoint(idx)}
+                            onPress={() => {
+                              const globalIndex = questions.findIndex(
+                                (gq) => gq.slNo === q.slNo,
+                              );
+                              setCurrentCheckpointIndex(globalIndex);
+                              scrollToTop();
+                            }}
                             className="items-center justify-center flex-shrink-0 border rounded-lg w-9 h-9"
                             style={{
                               backgroundColor: bgColor,
@@ -1604,7 +2783,9 @@ export default function FiveSAuditForm(props: any) {
                 </View>
 
                 <View
-                  className={`bg-white border shadow-sm rounded-2xl overflow-hidden border-l-4 ${getScoreColor(formData.scores[currentQ.slNo])}`}
+                  className={`bg-white border shadow-sm rounded-2xl overflow-hidden border-l-4 ${getScoreColor(
+                    formData.scores[currentQ.slNo],
+                  )}`}
                 >
                   <View className="p-6">
                     <View className="flex-row flex-wrap items-center justify-between gap-3 mb-5">
@@ -1614,22 +2795,22 @@ export default function FiveSAuditForm(props: any) {
                           style={{ backgroundColor: NAVBAR_COLORS.primary }}
                         >
                           <Text className="font-bold text-white">
-                            {currentQ.slNo}
+                            {currentLocalIndex !== -1
+                              ? currentLocalIndex + 1
+                              : 1}
                           </Text>
                         </View>
-                        {currentSection && (
-                          <View
-                            className="px-3 py-1 rounded-full"
-                            style={{ backgroundColor: NAVBAR_COLORS.bg }}
+                        <View
+                          className="px-3 py-1 rounded-full"
+                          style={{ backgroundColor: NAVBAR_COLORS.bg }}
+                        >
+                          <Text
+                            className="text-xs font-semibold"
+                            style={{ color: NAVBAR_COLORS.primary }}
                           >
-                            <Text
-                              className="text-xs font-semibold"
-                              style={{ color: NAVBAR_COLORS.primary }}
-                            >
-                              {currentSection.name}
-                            </Text>
-                          </View>
-                        )}
+                            {activeSection.name}
+                          </Text>
+                        </View>
                         {formData.scores[currentQ.slNo] !== undefined &&
                           formData.scores[currentQ.slNo] !== null && (
                             <View className="px-3 py-1 border rounded-full bg-slate-100 border-slate-200">
@@ -1747,10 +2928,311 @@ export default function FiveSAuditForm(props: any) {
                       />
                     </View>
 
+                    {/* ✅ ADD EVIDENCE SECTION */}
+                    <View className="p-4 mb-6 border bg-slate-50 border-slate-200 rounded-xl">
+                      <Text className="mb-3 text-sm font-bold text-slate-700">
+                        📎 Add Evidence (Limit: 1 File)
+                      </Text>
+
+                      {/* Quality Selector */}
+                      <View className="mb-4">
+                        <Text className="mb-2 text-xs font-semibold text-slate-500">
+                          Select Quality (for Photo/Video):
+                        </Text>
+                        <View className="flex-row flex-wrap gap-2">
+                          {qualityOptions.map((q) => (
+                            <TouchableOpacity
+                              key={q}
+                              onPress={() => setSelectedQuality(q)}
+                              className={`px-3 py-1.5 rounded-lg border ${
+                                selectedQuality === q
+                                  ? "bg-[#00529B] border-[#00529B]"
+                                  : "bg-white border-slate-200"
+                              }`}
+                            >
+                              <Text
+                                className={`text-xs font-bold ${
+                                  selectedQuality === q
+                                    ? "text-white"
+                                    : "text-slate-600"
+                                }`}
+                              >
+                                {q}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Action Buttons */}
+                      {/* Action Buttons */}
+                      <View className="gap-3 mb-4">
+                        {/* PHOTO ROW */}
+                        <View>
+                          <Text className="text-xs font-bold text-slate-600 mb-1.5">
+                            📷 Photo Evidence
+                          </Text>
+                          <View className="flex-row gap-2">
+                            <TouchableOpacity
+                              onPress={() => pickImageLive(currentQ.slNo)}
+                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-[#00529B] rounded-xl shadow-sm"
+                            >
+                              <Camera size={16} color="#fff" />
+                              <Text className="text-xs font-bold text-white">
+                                Live Capture
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => pickImageUpload(currentQ.slNo)}
+                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                            >
+                              <Upload size={16} color="#00529B" />
+                              <Text className="text-xs font-bold text-[#00529B]">
+                                Upload
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* VIDEO ROW */}
+                        <View>
+                          <Text className="text-xs font-bold text-slate-600 mb-1.5 mt-2">
+                            🎥 Video Evidence
+                          </Text>
+                          <View className="flex-row gap-2">
+                            <TouchableOpacity
+                              onPress={() => pickVideoLive(currentQ.slNo)}
+                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-[#00529B] rounded-xl shadow-sm"
+                            >
+                              <Film size={16} color="#fff" />
+                              <Text className="text-xs font-bold text-white">
+                                Live Capture
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => pickVideoUpload(currentQ.slNo)}
+                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                            >
+                              <Upload size={16} color="#00529B" />
+                              <Text className="text-xs font-bold text-[#00529B]">
+                                Upload
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* AUDIO ROW */}
+                        <View>
+                          <Text className="text-xs font-bold text-slate-600 mb-1.5 mt-2">
+                            🎙️ Audio Evidence
+                          </Text>
+                          <View className="flex-row gap-2">
+                            <TouchableOpacity
+                              onPress={() =>
+                                isRecording
+                                  ? stopRecording(currentQ.slNo)
+                                  : startRecording()
+                              }
+                              className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-xl shadow-sm ${isRecording ? "bg-rose-500" : "bg-[#00529B]"}`}
+                            >
+                              <Mic size={16} color="#fff" />
+                              <Text className="text-xs font-bold text-white">
+                                {isRecording ? "Stop Recording" : "Live Record"}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => pickAudioUpload(currentQ.slNo)}
+                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                            >
+                              <Upload size={16} color="#00529B" />
+                              <Text className="text-xs font-bold text-[#00529B]">
+                                Upload
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Preview Area */}
+                      {evidences[currentQ.slNo] && (
+                        <View className="gap-3 mt-4">
+                          {/* IMAGE PREVIEW */}
+                          {evidences[currentQ.slNo].image && (
+                            <View className="p-3 bg-white border border-slate-200 rounded-xl">
+                              <View className="flex-row items-center justify-between mb-1">
+                                <Text
+                                  className="flex-1 text-xs font-bold text-slate-800"
+                                  numberOfLines={1}
+                                >
+                                  📷 {evidences[currentQ.slNo].image?.name}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    removeEvidence(currentQ.slNo, "image")
+                                  }
+                                >
+                                  <Text className="ml-2 text-xs font-bold text-rose-500">
+                                    Remove
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                              <Text className="text-[10px] text-slate-500 mb-2">
+                                🕒 Captured:{" "}
+                                {evidences[currentQ.slNo].image?.capturedAt} •
+                                Quality:{" "}
+                                {evidences[currentQ.slNo].image?.quality}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() =>
+                                  setImageModal({
+                                    open: true,
+                                    url: evidences[currentQ.slNo].image!.uri,
+                                  })
+                                }
+                              >
+                                <Image
+                                  source={{
+                                    uri: evidences[currentQ.slNo].image?.uri,
+                                  }}
+                                  style={{
+                                    width: "100%",
+                                    height: 200,
+                                    borderRadius: 8,
+                                    backgroundColor: "#f1f5f9",
+                                  }}
+                                  resizeMode="contain"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          )}
+
+                          {/* VIDEO PREVIEW */}
+                          {evidences[currentQ.slNo].video && (
+                            <View className="p-3 bg-white border border-slate-200 rounded-xl">
+                              <View className="flex-row items-center justify-between mb-1">
+                                <Text
+                                  className="flex-1 text-xs font-bold text-slate-800"
+                                  numberOfLines={1}
+                                >
+                                  🎥 {evidences[currentQ.slNo].video?.name}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    removeEvidence(currentQ.slNo, "video")
+                                  }
+                                >
+                                  <Text className="ml-2 text-xs font-bold text-rose-500">
+                                    Remove
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                              <Text className="text-[10px] text-slate-500 mb-2">
+                                🕒 Captured:{" "}
+                                {evidences[currentQ.slNo].video?.capturedAt} •
+                                Quality:{" "}
+                                {evidences[currentQ.slNo].video?.quality}
+                              </Text>
+
+                              {/* ✅ REPLACED Inline ExpoVideo with Thumbnail + Play Button (Matches ThreadCard) */}
+                              <TouchableOpacity
+                                onPress={() =>
+                                  setVideoModal({
+                                    open: true,
+                                    url: evidences[currentQ.slNo].video!.uri,
+                                  })
+                                }
+                                style={{
+                                  width: "100%",
+                                  height: 200,
+                                  borderRadius: 8,
+                                  backgroundColor: "#111",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  position: "relative",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <View
+                                  style={{
+                                    width: 60,
+                                    height: 60,
+                                    borderRadius: 30,
+                                    backgroundColor: "rgba(255,255,255,0.2)",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <Play size={32} color="white" />
+                                </View>
+                                <Text
+                                  style={{
+                                    color: "white",
+                                    marginTop: 8,
+                                    fontSize: 12,
+                                    fontWeight: "500",
+                                  }}
+                                >
+                                  Tap to play video
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          {/* AUDIO PREVIEW - Web Compatible */}
+                          {evidences[currentQ.slNo]?.audio && (
+                            <View className="p-4 bg-white border border-slate-200 rounded-xl">
+                              <View className="flex-row items-center justify-between mb-2">
+                                <Text
+                                  className="flex-1 text-sm font-semibold text-slate-800"
+                                  numberOfLines={1}
+                                >
+                                  🎵 {evidences[currentQ.slNo].audio?.name}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    removeEvidence(currentQ.slNo, "audio")
+                                  }
+                                >
+                                  <Text className="ml-2 text-xs font-bold text-rose-500">
+                                    Remove
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                              <Text className="text-[10px] text-slate-500 mb-2">
+                                🕒 Attached:{" "}
+                                {evidences[currentQ.slNo].audio?.capturedAt}
+                              </Text>
+
+                              {/* ✅ Platform specific audio player */}
+                              {Platform.OS === "web" ? (
+                                <audio
+                                  controls
+                                  src={evidences[currentQ.slNo].audio?.uri}
+                                  style={{ width: "100%", height: 40 }}
+                                />
+                              ) : (
+                                <ExpoVideo
+                                  source={{
+                                    uri: evidences[currentQ.slNo].audio?.uri,
+                                  }}
+                                  style={{ width: "100%", height: 50 }}
+                                  useNativeControls
+                                  resizeMode={ResizeMode.CONTAIN}
+                                  isLooping={false}
+                                  shouldPlay={false}
+                                />
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+
                     <View className="flex-row items-center justify-between pt-5 mt-5 border-t border-slate-100">
                       <TouchableOpacity
                         onPress={prevCheckpoint}
-                        disabled={currentCheckpointIndex === 0}
+                        disabled={
+                          currentLocalIndex === 0 && activeSectionIndex === 0
+                        }
                         className="flex-row items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl disabled:opacity-50 shadow-sm"
                       >
                         <ChevronLeft size={16} color="#334155" />
@@ -1781,7 +3263,8 @@ export default function FiveSAuditForm(props: any) {
                       <TouchableOpacity
                         onPress={nextCheckpoint}
                         disabled={
-                          currentCheckpointIndex === questions.length - 1
+                          currentLocalIndex === sectionQuestions.length - 1 &&
+                          activeSectionIndex === FIVE_S_SECTIONS.length - 1
                         }
                         className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl disabled:opacity-50 shadow-md"
                         style={{ backgroundColor: NAVBAR_COLORS.primary }}
@@ -2177,6 +3660,96 @@ export default function FiveSAuditForm(props: any) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* ✅ FULLSCREEN IMAGE MODAL */}
+      <Modal
+        visible={imageModal.open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setImageModal({ open: false, url: "" })}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.95)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 50,
+              right: 20,
+              zIndex: 10,
+              padding: 10,
+            }}
+            onPress={() => setImageModal({ open: false, url: "" })}
+          >
+            <X size={30} color="white" />
+          </TouchableOpacity>
+          {imageModal.url && (
+            <Image
+              source={{ uri: imageModal.url }}
+              style={{ width: "95%", height: "85%" }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* ✅ FULLSCREEN VIDEO MODAL */}
+      <Modal
+        visible={videoModal.open}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setVideoModal({ open: false, url: "" })}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "black",
+            justifyContent: "center",
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 50,
+              right: 20,
+              zIndex: 10,
+              padding: 10,
+            }}
+            onPress={() => setVideoModal({ open: false, url: "" })}
+          >
+            <X size={30} color="white" />
+          </TouchableOpacity>
+
+          {videoModal.url &&
+            (Platform.OS === "web" ? (
+              // ✅ HTML5 Video for Web (Better controls & compatibility)
+              <video
+                src={videoModal.url}
+                controls
+                autoPlay
+                playsInline
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "#000",
+                  objectFit: "contain",
+                }}
+              />
+            ) : (
+              // ✅ Expo Video for Native (iOS/Android)
+              <ExpoVideo
+                source={{ uri: videoModal.url }}
+                style={{ width: "100%", height: "100%" }}
+                useNativeControls
+                resizeMode={ResizeMode.CONTAIN}
+              />
+            ))}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

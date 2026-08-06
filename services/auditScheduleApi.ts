@@ -145,13 +145,219 @@ export interface AuditResponse {
   summary?: string | null;
   recommendations?: string | null;
   status: string;
-  createdAt?: string; // ✅ ADDED: Fixes the "Property 'createdAt' does not exist" error
-  updatedAt?: string; // ✅ ADDED: Good practice for tracking record updates
+  createdAt?: string;
+  updatedAt?: string;
   submittedAt?: string;
   reviewedAt?: string;
   reviewerComments?: string;
   approved?: boolean;
+
+  // ✅ ADD THESE NEW FIELDS FOR EVIDENCE
+  evidences?: EvidenceFile[]; // Array of evidence files
 }
+
+// ✅ ADD THIS INTERFACE - Evidence Upload Request
+export interface EvidenceUploadRequest {
+  questionSlNo: number;
+  type: "image" | "video" | "audio" | "report";
+  uri: string;
+  name: string;
+  quality?: string;
+  capturedAt: string;
+}
+
+// ✅ ADD THIS INTERFACE - Evidence File Response
+export interface EvidenceFile {
+  id?: string | number;
+  questionSlNo: number;
+  evidenceType: "image" | "video" | "audio" | "report";
+  fileName: string;
+  filePath?: string;
+  quality?: string;
+  capturedAt: string;
+  uploadedAt?: string;
+  fileSize?: number;
+  mimeType?: string;
+  uri?: string;
+}
+
+// ============================================================================
+// EVIDENCE HELPER FUNCTIONS
+// ============================================================================
+
+
+
+/**
+ * Convert a file URI to Base64 data URI
+ * This is useful for React Native when you need to upload files
+ */
+export const fileToBase64 = async (uri: string): Promise<string> => {
+  // This function would need to be implemented differently for React Native vs Web
+  // For React Native, you might use react-native-fs or expo-file-system
+  // For Web, you can use fetch or FileReader
+
+  if (Platform.OS === "web") {
+    // Web implementation
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } else {
+    // React Native implementation - you'll need to import a library
+    // For expo: import * as FileSystem from 'expo-file-system';
+    // const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    // return `data:image/jpeg;base64,${base64}`;
+    throw new Error("Platform not supported");
+  }
+};
+
+/**
+ * Extract evidence from answers object
+ */
+export const extractEvidences = (
+  answers: Record<string, any>,
+): EvidenceFile[] => {
+  const evidences: EvidenceFile[] = [];
+
+  if (answers.evidences) {
+    for (const questionKey in answers.evidences) {
+      const evidenceData = answers.evidences[questionKey];
+      evidences.push({
+        questionSlNo: parseInt(questionKey, 10),
+        evidenceType: evidenceData.type,
+        fileName:
+          evidenceData.name ||
+          `evidence_${Date.now()}.${getFileExtension(evidenceData.type)}`,
+        quality: evidenceData.quality,
+        capturedAt: evidenceData.capturedAt || new Date().toISOString(),
+        uri: evidenceData.uri,
+        // Add other fields as needed
+      });
+    }
+  }
+
+  return evidences;
+};
+
+/**
+ * Get file extension based on evidence type
+ */
+const getFileExtension = (type: string): string => {
+  switch (type) {
+    case "image":
+      return "jpg";
+    case "video":
+      return "mp4";
+    case "audio":
+      return "m4a";
+    default:
+      return "bin";
+  }
+};
+
+/**
+ * Validate evidence data before upload
+ */
+export const validateEvidence = (evidence: {
+  type: string;
+  uri: string;
+  name?: string;
+  capturedAt?: string;
+}): boolean => {
+  // Check if required fields are present
+  if (!evidence.type || !evidence.uri) {
+    console.error("Evidence missing required fields:", evidence);
+    return false;
+  }
+
+  // Check if type is valid
+  if (!["image", "video", "audio"].includes(evidence.type)) {
+    console.error("Invalid evidence type:", evidence.type);
+    return false;
+  }
+
+  // Check if URI is valid (not empty)
+  if (evidence.uri.trim().length === 0) {
+    console.error("Evidence URI is empty");
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Prepare evidence for API submission
+ */
+// In app/services/auditScheduleApi.ts
+
+/**
+ * Prepare evidence for API submission with blob URL conversion
+ */
+export const prepareEvidenceForApi = async (
+  questionSlNo: number,
+  evidence: {
+    type: "image" | "video" | "audio";
+    uri: string;
+    name: string;
+    quality?: string;
+    capturedAt: string;
+  },
+): Promise<any> => {
+  // Validate the evidence
+  if (!validateEvidence(evidence)) {
+    throw new Error(`Invalid evidence for question ${questionSlNo}`);
+  }
+
+  let processedUri = evidence.uri;
+
+  // ✅ Convert blob URLs to base64 (for Web)
+  if (evidence.uri && evidence.uri.startsWith("blob:")) {
+    try {
+      const response = await fetch(evidence.uri);
+      const blob = await response.blob();
+      processedUri = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+      console.log(`✅ Converted blob to base64 for ${evidence.name}`);
+    } catch (error) {
+      console.error("Failed to convert blob to base64:", error);
+      processedUri = evidence.uri;
+    }
+  }
+
+  // ✅ Convert file:// URIs to base64 (for Native)
+  if (Platform.OS !== "web" && evidence.uri && evidence.uri.startsWith("file://")) {
+    try {
+      const FileSystem = require("expo-file-system/legacy");
+      const base64 = await FileSystem.readAsStringAsync(evidence.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const mimeType = evidence.type === "image" ? "image/jpeg" : 
+                      evidence.type === "video" ? "video/mp4" : "audio/m4a";
+      processedUri = `data:${mimeType};base64,${base64}`;
+      console.log(`✅ Converted file to base64 for ${evidence.name}`);
+    } catch (error) {
+      console.error("Failed to convert file to base64:", error);
+      processedUri = evidence.uri;
+    }
+  }
+
+  // Return in the format expected by the API
+  return {
+    questionSlNo,
+    type: evidence.type,
+    uri: processedUri,
+    name: evidence.name,
+    quality: evidence.quality || "720p",
+    capturedAt: evidence.capturedAt || new Date().toISOString(),
+  };
+};
 
 // ============================================================================
 // HELPER TYPE FOR API RESPONSE
@@ -659,7 +865,94 @@ export const auditScheduleApi = {
       approved,
     });
   },
+  // ========== EVIDENCE APIs ==========
+
+  // Upload evidence for a response
+  uploadEvidence: (
+    responseId: string | number,
+    questionSlNo: number,
+    evidenceData: {
+      type: "image" | "video" | "audio";
+      uri: string; // Base64 data
+      name: string;
+      quality?: string;
+      capturedAt: string;
+    },
+  ): ApiResponse<EvidenceFile> => {
+    console.log(
+      `Uploading evidence for response ${responseId}, question ${questionSlNo}`,
+    );
+    return api.post(`/templates/responses/${responseId}/evidence`, {
+      questionSlNo,
+      ...evidenceData,
+    });
+  },
+
+  // Get all evidence for a response
+  getEvidenceForResponse: (
+    responseId: string | number,
+  ): ApiResponse<EvidenceFile[]> => {
+    console.log(`Getting evidence for response ${responseId}`);
+    return api.get(`/templates/responses/${responseId}/evidence`);
+  },
+
+  // Get evidence for a specific question
+  getEvidenceForQuestion: (
+    responseId: string | number,
+    questionSlNo: number,
+  ): ApiResponse<EvidenceFile[]> => {
+    console.log(
+      `Getting evidence for response ${responseId}, question ${questionSlNo}`,
+    );
+    return api.get(
+      `/templates/responses/${responseId}/evidence/question/${questionSlNo}`,
+    );
+  },
+
+  // Delete evidence for a specific question
+  deleteEvidenceForQuestion: (
+    responseId: string | number,
+    questionSlNo: number,
+  ): ApiResponse<void> => {
+    console.log(
+      `Deleting evidence for response ${responseId}, question ${questionSlNo}`,
+    );
+    return api.delete(
+      `/templates/responses/${responseId}/evidence/question/${questionSlNo}`,
+    );
+  },
+
+  // Delete specific evidence by ID
+  deleteEvidenceById: (evidenceId: string | number): ApiResponse<void> => {
+    console.log(`Deleting evidence ${evidenceId}`);
+    return api.delete(`/templates/responses/evidence/${evidenceId}`);
+  },
+
+  // In auditScheduleAPI.ts - bulkUploadEvidence
+  bulkUploadEvidence: (
+    responseId: string | number,
+    evidences: {
+      questionSlNo: number;
+      type: "image" | "video" | "audio";
+      uri: string;
+      name: string;
+      quality?: string;
+      capturedAt: string;
+    }[],
+  ): ApiResponse<EvidenceFile[]> => {
+    console.log(
+      `Bulk uploading ${evidences.length} evidence files for response ${responseId}`,
+    );
+
+    // ✅ Wrap in the expected format
+    return api.post(`/templates/responses/${responseId}/evidence/bulk`, {
+      evidences: evidences, // This matches BulkEvidenceUploadRequest
+    });
+  },
 };
+
+
+
 
 // ============================================================================
 // AUDIT PLAN API (Form 3)
@@ -789,6 +1082,106 @@ export const userApi = {
   delete: (id: string | number) => api.delete(`/users/${id}`),
 };
 
+// ============================================================
+// CHUNKED / SINGLE EVIDENCE UPLOAD (One file at a time)
+// ADD THIS ENTIRE BLOCK
+// ============================================================
+
+/**
+ * Upload a SINGLE evidence file (chunked upload)
+ * This prevents timeout issues with large bulk uploads
+ */
+export const uploadSingleEvidence = async (
+  responseId: string | number,
+  evidence: EvidenceUploadRequest
+): Promise<{ data: any }> => {
+  try {
+    const url = `${API_BASE_URL}/templates/responses/${responseId}/evidence/single`;
+    
+    // For Web: use fetch directly for better progress tracking
+    if (Platform.OS === 'web') {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(evidence),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || 'Upload failed');
+      }
+      
+      const data = await response.json();
+      return { data };
+    }
+    
+    // Native: use axios
+    const response = await axios.post(url, evidence, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 60000, // 60 second timeout per file
+    });
+    
+    return response;
+  } catch (error: any) {
+    console.error('❌ Single evidence upload failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * Upload multiple evidence files ONE AT A TIME (Chunked)
+ * This prevents network timeouts and memory issues
+ */
+export const uploadEvidenceChunked = async (
+  responseId: string | number,
+  evidences: EvidenceUploadRequest[],
+  onProgress?: (completed: number, total: number, current: EvidenceUploadRequest) => void
+): Promise<{ success: boolean; failed: any[]; uploaded: number }> => {
+  const failed: any[] = [];
+  let uploaded = 0;
+  const total = evidences.length;
+  
+  console.log(`📤 Starting chunked upload: ${total} files`);
+  
+  // Upload ONE AT A TIME
+  for (let i = 0; i < evidences.length; i++) {
+    const evidence = evidences[i];
+    
+    try {
+      console.log(`📤 Uploading ${i + 1}/${total}: ${evidence.type} - ${evidence.name}`);
+      
+      await uploadSingleEvidence(responseId, evidence);
+      uploaded++;
+      
+      // Call progress callback
+      if (onProgress) {
+        onProgress(uploaded, total, evidence);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Failed to upload ${evidence.type} for question ${evidence.questionSlNo}:`, error);
+      failed.push({
+        ...evidence,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Continue with next file - don't stop on failure
+    }
+  }
+  
+  console.log(`✅ Chunked upload complete: ${uploaded}/${total} files uploaded`);
+  
+  return {
+    success: failed.length === 0,
+    failed,
+    uploaded,
+  };
+};
+
 // ============================================================================
 // EXPORT ALL
 // ============================================================================
@@ -800,4 +1193,7 @@ export default {
   ncrApi,
   forumApi,
   userApi,
+  uploadSingleEvidence,
+  uploadEvidenceChunked,
+  prepareEvidenceForApi,
 };

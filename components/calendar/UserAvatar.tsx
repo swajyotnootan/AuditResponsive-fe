@@ -1,8 +1,8 @@
 // UserAvatar.tsx - FIXED
 
-import { API_BASE_URL } from '@/config/apiConfig';
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 interface UserAvatarProps {
   userId: number | null | undefined;

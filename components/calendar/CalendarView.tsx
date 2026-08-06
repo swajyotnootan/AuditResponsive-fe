@@ -226,15 +226,29 @@ export default function CalendarView() {
             status: displayStatus,
             isOverdue: isEventOverdue(eventData), // ✅ Add thi
             description: eventData.description || '',
+            // ✅ CRITICAL: Make sure these are mapped correctly
             isOwner: eventData.isOwner === true,
             isAttendee: eventData.isAttendee === true,
             isCoAuditor: eventData.isCoAuditor === true,
-            auditorName: eventData.auditorName || '',
-            auditorId: eventData.auditorId || null,
-            auditeeName: eventData.auditeeName || '',
-            auditeeId: eventData.auditeeId || null,
-            coAuditorNames: eventData.coAuditorNames || [],
-            coAuditorIdList: eventData.coAuditorIdList || [],
+  
+          // ✅ CRITICAL: Auditor and Auditee names with fallbacks
+           auditorName: eventData.auditorName || eventData.auditor?.name || 'Unassigned',
+           auditorId: eventData.auditorId || eventData.auditor?.id || null,
+           auditeeName: eventData.auditeeName || eventData.auditee?.name || 'Unassigned',
+           auditeeId: eventData.auditeeId || eventData.auditee?.id || null,
+  
+           // ✅ Co-auditors
+           coAuditorNames: eventData.coAuditorNames || eventData.coAuditors?.map((a: any) => a.name) || [],
+           coAuditorIdList: eventData.coAuditorIdList || eventData.coAuditors?.map((a: any) => a.id) || [],
+            // isOwner: eventData.isOwner === true,
+            // isAttendee: eventData.isAttendee === true,
+            // isCoAuditor: eventData.isCoAuditor === true,
+            // auditorName: eventData.auditorName || '',
+            // auditorId: eventData.auditorId || null,
+            // auditeeName: eventData.auditeeName || '',
+            // auditeeId: eventData.auditeeId || null,
+            // coAuditorNames: eventData.coAuditorNames || [],
+            // coAuditorIdList: eventData.coAuditorIdList || [],
             isDateRange: eventData.isDateRange || false,
             fromDate: eventData.fromDate || null,
             toDate: eventData.toDate || null,
