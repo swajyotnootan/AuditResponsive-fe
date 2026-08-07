@@ -2712,30 +2712,31 @@ export default function AuditManagerDashboard() {
           </View>
         </View>
       </Modal>
-      {showForumModal && selectedAuditForForum && (
-        <AuditCheckSheetNCRForumModal
-          auditId={selectedAuditForForum.id}
-          auditNumber={selectedAuditForForum.auditNumber}
-          auditTitle={selectedAuditForForum.auditType}
-          auditStatus="IN_PROGRESS"
-          auditType={selectedAuditForForum.auditType}
-          department={selectedAuditForForum.department}
-          auditorId={selectedAuditForForum.auditorId}
-          auditorName={selectedAuditForForum.auditorName}
-          auditeeId={selectedAuditForForum.auditeeId}
-          auditeeName={selectedAuditForForum.auditeeName}
-          hodEmail={selectedAuditForForum.hodEmail}
-          hodName={selectedAuditForForum.hodName}
-          memberEmails={selectedAuditForForum.memberEmails || []}
-          isOpen={showForumModal}
-          onClose={() => {
-            setShowForumModal(false);
-            setSelectedAuditForForum(null);
-          }}
-          currentUser={user}
-          allUsers={allUsersList}
-        />
-      )}
+      // In AuditManagerDashboard.tsx
+{showForumModal && selectedAuditForForum && (
+  <AuditCheckSheetNCRForumModal
+    auditId={selectedAuditForForum.id}
+    auditNumber={selectedAuditForForum.auditNumber}
+    auditTitle={selectedAuditForForum.auditType}
+    auditStatus="IN_PROGRESS"
+    auditType={selectedAuditForForum.auditType}
+    department={selectedAuditForForum.department}
+    auditorId={selectedAuditForForum.auditorId}
+    auditorName={selectedAuditForForum.auditorName}
+    auditeeId={selectedAuditForForum.auditeeId}
+    auditeeName={selectedAuditForForum.auditeeName}
+    hodEmail={selectedAuditForForum.hodEmail}  // ✅ Passed
+    hodName={selectedAuditForForum.hodName}    // ✅ Passed
+    memberEmails={selectedAuditForForum.memberEmails || []}
+    isOpen={showForumModal}
+    onClose={() => {
+      setShowForumModal(false);
+      setSelectedAuditForForum(null);
+    }}
+    currentUser={user}
+    allUsers={allUsersList}
+  />
+)}
     </SafeAreaView>
   );
 }
