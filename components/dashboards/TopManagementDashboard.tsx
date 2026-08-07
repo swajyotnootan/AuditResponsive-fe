@@ -2200,44 +2200,49 @@ export default function TopManagementDashboard() {
             <View className="flex-row items-center self-start gap-3 md:self-auto">
              <TouchableOpacity
   onPress={() => {
-    // Find an audit manager or lead auditor for demo
+    // Find Audit Manager
     const auditManager = allUsersList.find((u: any) => 
-      u.role?.toUpperCase().includes('AUDIT_MANAGER') ||
-      u.role?.toUpperCase().includes('LEAD_AUDITOR')
+      u.role?.toUpperCase().includes('AUDIT_MANAGER')
     );
+    
+    // Find Top Management
     const topManagement = allUsersList.find((u: any) => 
       u.role?.toUpperCase().includes('TOP_MANAGEMENT')
     );
-    const availableUser = auditManager || topManagement || user;
     
-    // Build member emails
+    // Build member emails - ONLY Audit Manager and Top Management
     const memberEmails: string[] = [];
-    if (user?.email) memberEmails.push(user.email);
-    if (availableUser?.email && availableUser.email !== user?.email) {
-      memberEmails.push(availableUser.email);
+    if (auditManager?.email) memberEmails.push(auditManager.email);
+    if (topManagement?.email && topManagement.email !== auditManager?.email) {
+      memberEmails.push(topManagement.email);
+    }
+    
+    // Add current user if they are either Audit Manager or Top Management
+    if (user?.email && !memberEmails.includes(user.email)) {
+      const userRole = user.role?.toUpperCase() || '';
+      if (userRole.includes('AUDIT_MANAGER') || userRole.includes('TOP_MANAGEMENT')) {
+        memberEmails.push(user.email);
+      }
     }
     
     const forumData = {
-      id: "demo-" + Date.now(),
-      auditNumber: "AUD-DEMO-001",
-      auditType: "System Audit (ISO9001)",
-      department: "Quality Assurance",
-      auditorId: user?.id,
-      auditorName: user?.name || user?.email || "Unknown",
-      auditeeId: availableUser?.id,
-      auditeeName: availableUser?.name || availableUser?.email || "N/A",
-      hodEmail: availableUser?.email || null,
-      hodName: availableUser?.name || null,
+      id: "top-management-forum-" + Date.now(),
+      auditNumber: "TOP-MGMT-FORUM",
+      auditType: "Management Discussion",
+      department: "Management",
+      auditorId: auditManager?.id || user?.id,
+      auditorName: auditManager?.name || user?.name || "Audit Manager",
+      auditeeId: topManagement?.id,
+      auditeeName: topManagement?.name || "Top Management",
+      hodEmail: null,
+      hodName: null,
       memberEmails: memberEmails,
-      auditStatus: "IN_PROGRESS",
-      auditTitle: "Demo Audit Discussion"
+      auditStatus: "ACTIVE",
+      auditTitle: "Top Management Communication Forum"
     };
     
-    console.log("🔍 Opening forum with data:", forumData);
-    console.log("👥 All users available:", allUsersList.length);
-    
-    setSelectedAuditForForum(forumData);
-    setShowForumModal(true);
+    // ✅ USE THE FUNCTION instead of inline code
+    openAuditForum(forumData);
   }}
   className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
   style={{ backgroundColor: COLORS.primary }}
