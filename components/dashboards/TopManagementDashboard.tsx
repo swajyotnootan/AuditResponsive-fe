@@ -2226,7 +2226,7 @@ export default function TopManagementDashboard() {
     }
     
     const forumData = {
-      id: "top-management-forum-" + Date.now(),
+      id: "top-management-forum", // ✅ FIXED: Removed Date.now()
       auditNumber: "TOP-MGMT-FORUM",
       auditType: "Management Discussion",
       department: "Management",

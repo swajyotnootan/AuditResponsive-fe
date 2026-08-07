@@ -969,58 +969,51 @@ export default function AuditManagerDashboard() {
     }
   };
 
- const openAuditForum = (auditData: any) => {
-  // Start with the passed memberEmails
-  const memberEmails: string[] = [];
-  
-  // Preserve passed memberEmails
-  if (auditData.memberEmails) {
-    const emails = Array.isArray(auditData.memberEmails) 
-      ? auditData.memberEmails 
-      : [auditData.memberEmails];
-    memberEmails.push(...emails);
-  }
-  
-  // Add current user if not already included
-  if (user?.email && !memberEmails.includes(user.email)) {
-    memberEmails.push(user.email);
-  }
-  
-  // Try to find auditor by ID (if not already included)
-  if (auditData.auditorId) {
-    const auditor = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditorId) ||
-      String(u.id) === String(auditData.auditorId)
+    const openAuditForum = () => {
+    // 1. Find all Top Management and Audit Manager users from the fetched list
+    const topManagers = allUsersList.filter((u: any) =>
+      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
     );
-    if (auditor?.email && !memberEmails.includes(auditor.email)) {
-      memberEmails.push(auditor.email);
-      auditData.auditorName = auditor.name;
-    }
-  }
-  
-  // Try to find auditee by ID (if not already included)
-  if (auditData.auditeeId) {
-    const auditee = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditeeId) ||
-      String(u.id) === String(auditData.auditeeId)
+    const auditManagers = allUsersList.filter((u: any) =>
+      u.role?.toUpperCase().includes('AUDIT_MANAGER')
     );
-    if (auditee?.email && !memberEmails.includes(auditee.email)) {
-      memberEmails.push(auditee.email);
-      auditData.auditeeName = auditee.name;
+
+    // 2. Build a unique list of member emails
+    const memberEmails: string[] = [];
+    
+    topManagers.forEach((tm: any) => {
+      if (tm.email && !memberEmails.includes(tm.email)) {
+        memberEmails.push(tm.email);
+      }
+    });
+    
+    auditManagers.forEach((am: any) => {
+      if (am.email && !memberEmails.includes(am.email)) {
+        memberEmails.push(am.email);
+      }
+    });
+
+    // Ensure current user is included just in case their role is named differently
+    if (user?.email && !memberEmails.includes(user.email)) {
+      memberEmails.push(user.email);
     }
-  }
-  
-  // Add HOD if provided
-  if (auditData.hodEmail && !memberEmails.includes(auditData.hodEmail)) {
-    memberEmails.push(auditData.hodEmail);
-  }
-  
-  // Remove duplicates
-  auditData.memberEmails = [...new Set(memberEmails)];
-  
-  setSelectedAuditForForum(auditData);
-  setShowForumModal(true);
-};
+
+    // 3. Set the forum data
+    setSelectedAuditForForum({
+      id: "general-forum", // ✅ Keep this static so messages persist
+      auditNumber: "GENERAL",
+      auditType: "General Audit Discussion",
+      department: "All Departments",
+      auditorId: user?.id || null,
+      auditorName: user?.name || "Unknown User",
+      auditeeId: null,
+      auditeeName: "N/A",
+      hodEmail: null,
+      hodName: "N/A",
+      memberEmails: memberEmails, // ✅ Now correctly includes Top Management & Audit Managers
+    });
+    setShowForumModal(true);
+  };
 
   const getWorkflowSteps = () => {
     const isForm3Approved = form3Status.status === "APPROVED";
