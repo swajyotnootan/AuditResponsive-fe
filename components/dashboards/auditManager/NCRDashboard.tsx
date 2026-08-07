@@ -3,25 +3,25 @@ import { ncrService } from "@/services/ncrService";
 import { Feather } from "@expo/vector-icons";
 
 import ForumThreadView from "@/components/forum/ForumThreadView";
+import AuditCheckSheetNCRForumModal from "@/components/modals/AuditCheckSheetNCRForumModal";
+import { API_BASE_URL } from "@/config/apiConfig";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Form7DetailView from "../auditor/view/Form7DetailView";
-import AuditCheckSheetNCRForumModal from "../topManagement/AuditCheckSheetNCRForumModal";
 
-const API_BASE_URL = "http://localhost:8080/api";
 
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
@@ -313,7 +313,7 @@ const NCRDashboard = ({
 
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users`, {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Network response was not ok");
@@ -1238,31 +1238,34 @@ const NCRDashboard = ({
         </Modal>
 
         {/* NCR Forum Modal */}
-        <Modal visible={showForumModal} transparent animationType="slide">
-          {selectedNCRForForum && (
-            <AuditCheckSheetNCRForumModal
-              auditId={selectedNCRForForum.id}
-              auditNumber={selectedNCRForForum.ncrNumber}
-              auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
-              auditStatus={selectedNCRForForum.status}
-              auditType="NCR Resolution"
-              department={selectedNCRForForum.department}
-              auditorId={selectedNCRForForum.auditorId}
-              auditorName={selectedNCRForForum.auditorName}
-              auditeeId={selectedNCRForForum.auditeeId}
-              auditeeName={selectedNCRForForum.auditeeName}
-              memberEmails={selectedNCRForForum.memberEmails || []}
-              isOpen={showForumModal}
-              onClose={() => {
-                setShowForumModal(false);
-                setSelectedNCRForForum(null);
-              }}
-              currentUser={user}
-              allUsers={allUsersList}
-            />
-          )}
-        </Modal>
-
+       {/* NCR Forum Modal */}
+<Modal visible={showForumModal} transparent animationType="slide">
+  {selectedNCRForForum && (
+    <AuditCheckSheetNCRForumModal
+      auditId={selectedNCRForForum.id}
+      auditNumber={selectedNCRForForum.ncrNumber}
+      auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
+      auditStatus={selectedNCRForForum.status}
+      auditType="NCR Resolution"
+      department={selectedNCRForForum.department}
+      auditorId={selectedNCRForForum.auditorId}
+      auditorName={selectedNCRForForum.auditorName}
+      auditeeId={selectedNCRForForum.auditeeId}
+      auditeeName={selectedNCRForForum.auditeeName}
+      // ✅ ADD THESE - required by the modal
+      hodEmail={null}
+      hodName={null}
+      memberEmails={selectedNCRForForum.memberEmails || []}
+      isOpen={showForumModal}
+      onClose={() => {
+        setShowForumModal(false);
+        setSelectedNCRForForum(null);
+      }}
+      currentUser={user}
+      allUsers={allUsersList}
+    />
+  )}
+</Modal>
         {/* 8D Forum Drawer */}
         <Modal visible={show8DForumDrawer} transparent animationType="slide">
           <View className="flex-1 bg-black/30">
