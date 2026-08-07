@@ -1,10 +1,12 @@
 // CalendarTypes.ts - ADD isOverdue to the interface
 
-export type ViewType = 'month' | 'week' | 'day' | 'agenda' | 'year' | 'list';
-export type EventFilter = 'all' | 'owned' | 'attending';
+export type ViewType = "month" | "week" | "day" | "agenda" | "year" | "list";
+export type EventFilter = "all" | "owned" | "attending";
 
 export interface CalendarEvent {
-  id: number;
+  id: number | string;
+  originalAuditId?: number | string; // ✅ Added for deduplication in modals
+
   title: string;
   auditType: string;
   department: string;
@@ -15,31 +17,32 @@ export interface CalendarEvent {
   status: string;
   location?: string;
   description?: string;
-  
+
   // User relationships
   isOwner: boolean;
   isAttendee: boolean;
   isCoAuditor: boolean;
-  
+  userRelationship?: "owner" | "co_auditor" | "attendee" | "none"; // ✅ Added
+
   // People - WITH IDs for profile photos
   auditorName: string;
   auditorId: number | null;
   auditeeName: string;
   auditeeId: number | null;
   coAuditorNames: string[];
-  coAuditorIdList: number[];
-  
+  coAuditorIdList: any[];
+
   // Date range
   isDateRange: boolean;
   fromDate: string | null;
   toDate: string | null;
-  
+
   // Status flags
   isFullyCompleted: boolean;
   isSubmitted: boolean;
-  isOverdue: boolean;  // ✅ ADD THIS
+  isOverdue: boolean; // ✅ ADD THIS
   auditNumber: string;
-  
+
   // History
   originalScheduledDate: string | null;
   rescheduleHistory: any[];

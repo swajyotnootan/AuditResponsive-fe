@@ -557,6 +557,17 @@ const DatePickerField = ({
     </>
   );
 };
+
+// ✅ Helper function to fix draft submit button
+const isSubmittableDraft = (status?: string | null): boolean => {
+  const normalized = (status ?? "").toUpperCase().trim();
+
+  return (
+    normalized === "" ||
+    normalized === "DRAFT" ||
+    normalized === "CHANGE_REQUESTED"
+  );
+};
 // ═════ MAIN COMPONENT ═════
 interface Form5DetailedViewProps {
   year?: number;
@@ -1640,51 +1651,113 @@ export default function Form5DetailedView({
     }
   };
 
-  const handleSubmitAllDraftSchedules = async () => {
-    const draftSchedules = filteredAuditSchedules.filter(
-      (s) => s.detailedApprovalStatus === "DRAFT",
-    );
-    if (draftSchedules.length === 0) {
-      showToast(
-        `No draft schedules to submit for "${globalAuditType || "All"}"`,
-        "warning",
-      );
+ const handleSubmitAllDraftSchedules = async () => {
+    const userId = getUserIdAsNumber();
+
+    if (!userId) {
+      showToast("Logged-in user is invalid", "error");
       return;
     }
-    Alert.alert(
-      "Confirm Submit",
-      `Are you sure you want to submit ${draftSchedules.length} draft schedule(s) for "${globalAuditType}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Submit",
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              let submittedCount = 0;
-              for (const schedule of draftSchedules) {
-                await auditScheduleApi.submitScheduleForApproval(
-                  schedule.id!,
-                  getUserIdAsNumber(),
-                );
-                submittedCount++;
-              }
-              showToast(
-                `${submittedCount} schedule(s) submitted for approval!`,
-                "success",
-              );
-              await fetchDetailedSchedules();
-            } catch (error) {
-              console.error("Error submitting schedules:", error);
-              showToast("Failed to submit some schedules", "error");
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ],
+
+    const draftSchedules = filteredAuditSchedules.filter(
+      (s) => s.id != null && isSubmittableDraft(s.detailedApprovalStatus),
     );
+
+    console.log(
+      "[SubmitAll] filtered schedules:",
+      filteredAuditSchedules.length,
+    );
+    console.log("[SubmitAll] draft schedules:", draftSchedules.length);
+    console.log(
+      "[SubmitAll] statuses:",
+      filteredAuditSchedules.map((s) => s.detailedApprovalStatus),
+    );
+
+    if (draftSchedules.length === 0) {
+      const message = globalAuditType
+        ? `No draft schedules to submit for "${globalAuditType}"`
+        : "No draft schedules to submit";
+
+      showToast(message, "warning");
+      return;
+    }
+
+    const submitDrafts = async () => {
+      setSubmitting(true);
+
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        for (const schedule of draftSchedules) {
+          try {
+            if (!schedule.id) continue;
+
+            await auditScheduleApi.submitScheduleForApproval(
+              schedule.id,
+              userId,
+            );
+
+            successCount++;
+          } catch (error: any) {
+            console.error(`Failed to submit schedule ${schedule.id}:`, error);
+            failCount++;
+          }
+        }
+
+        if (successCount > 0 && failCount === 0) {
+          showToast(
+            `✅ ${successCount} schedule(s) submitted for approval!`,
+            "success",
+          );
+        } else if (successCount > 0 && failCount > 0) {
+          showToast(
+            `⚠️ ${successCount} submitted, ${failCount} failed`,
+            "warning",
+          );
+        } else {
+          showToast(
+            "❌ Failed to submit any schedules. Check console/network.",
+            "error",
+          );
+        }
+
+        await fetchDetailedSchedules();
+      } catch (error) {
+        console.error("Error in submit all:", error);
+        showToast("An unexpected error occurred", "error");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    const confirmMessage = `Are you sure you want to submit ${draftSchedules.length} draft schedule(s) for "${globalAuditType || "All"}"?`;
+
+    if (Platform.OS === "web") {
+      const confirmed =
+        typeof window !== "undefined" &&
+        typeof (window as any).confirm === "function"
+          ? (window as any).confirm(confirmMessage)
+          : true;
+
+      if (confirmed) {
+        await submitDrafts();
+      }
+
+      return;
+    }
+
+    Alert.alert("Confirm Submit", confirmMessage, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Submit",
+        onPress: async () => {
+          await submitDrafts();
+        },
+      },
+    ]);
   };
+
 
   const handleDelete = async (id: number) => {
     const scheduleToDelete = auditSchedules.find((s) => s.id === id);
