@@ -2200,6 +2200,13 @@ export default function TopManagementDashboard() {
             <View className="flex-row items-center self-start gap-3 md:self-auto">
              <TouchableOpacity
   onPress={() => {
+
+    const getFullName = (u: any) => {
+      if (!u) return "Unknown User";
+      if (u.name) return u.name;
+      return `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email || "Unknown User";
+    };
+    
     // Find Audit Manager
     const auditManager = allUsersList.find((u: any) => 
       u.role?.toUpperCase().includes('AUDIT_MANAGER')
@@ -2231,9 +2238,9 @@ export default function TopManagementDashboard() {
       auditType: "Management Discussion",
       department: "Management",
       auditorId: auditManager?.id || user?.id,
-      auditorName: auditManager?.name || user?.name || "Audit Manager",
+      auditorName: getFullName(auditManager || user), // ✅ GUARANTEED NAME
       auditeeId: topManagement?.id,
-      auditeeName: topManagement?.name || "Top Management",
+      auditeeName: getFullName(topManagement), // ✅ GUARANTEED NAME
       hodEmail: null,
       hodName: null,
       memberEmails: memberEmails,
