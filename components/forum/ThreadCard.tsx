@@ -635,13 +635,44 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
     return { icon: <Check size={13} color="blue" />, text: "Sent" };
   };
 
-  const status = getStatus();
+    const status = getStatus();
   
-  // ✅ Apply the exact same profile fetching API logic as Navbar
+  // ✅ BULLETPROOF FIX: Translates Email -> Numeric ID, prevents 400 Bad Request API calls
+  const getAvatarUserId = () => {
+    if (isOwnMessage) return currentUser?.id;
+    
+    const senderIdentifier = thread.createdBy;
+    if (!senderIdentifier) return null;
+
+    // 1. If it's already a valid number, return it
+    if (typeof senderIdentifier === 'number') return senderIdentifier;
+    if (typeof senderIdentifier === 'string' && !isNaN(Number(senderIdentifier)) && !senderIdentifier.includes('@')) {
+      return Number(senderIdentifier);
+    }
+
+    // 2. If it's an email, search allUsers to find the numeric ID
+    if (allUsers && allUsers.length > 0 && typeof senderIdentifier === 'string' && senderIdentifier.includes('@')) {
+      const matchedUser = allUsers.find((u: any) => 
+        String(u.email || "").toLowerCase() === senderIdentifier.toLowerCase() ||
+        String(u.username || "").toLowerCase() === senderIdentifier.toLowerCase()
+      );
+      if (matchedUser) {
+        console.log(`✅ Found numeric ID ${matchedUser.id} for avatar: ${senderIdentifier}`);
+        return matchedUser.id; // Return the actual database ID
+      }
+    }
+    
+    // ❌ CRITICAL: If we couldn't find a numeric ID, return null. 
+    // This prevents the app from calling /api/users/email@domain.com/profile-photo
+    return null; 
+  };
+
+  const avatarUserId = getAvatarUserId();
+
+  // Apply the profile image URL logic using the safe numeric ID
   const avatar = isOwnMessage 
     ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) 
-    : getProfileImageUrl(thread.createdBy, thread.createdByProfileImage);
-
+    : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
   return (
     <>
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
