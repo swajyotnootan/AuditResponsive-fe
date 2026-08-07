@@ -902,6 +902,8 @@ export default function TopManagementDashboard() {
   const [approvalStatusData, setApprovalStatusData] = useState<any[]>([]);
   const [auditTypeDistribution, setAuditTypeDistribution] = useState<any[]>([]);
   const [completionTrendData, setCompletionTrendData] = useState<any[]>([]);
+  const [allUsersList, setAllUsersList] = useState<any[]>([]);
+
 
   const pendingCounts = useMemo(
     () => ({
@@ -916,6 +918,24 @@ export default function TopManagementDashboard() {
   // ============================================================================
   // API CALLS
   // ============================================================================
+  const fetchAllUsers = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (response.ok) {
+      const data = await response.json();
+      setAllUsersList(data || []);
+      console.log(`✅ Fetched ${data.length} users for forum`);
+    } else {
+      console.error("Failed to fetch users:", response.status);
+    }
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    setAllUsersList([]);
+  }
+};
   const fetchAnnualPlans = async () => {
     try {
       const currentYear = new Date().getFullYear();
@@ -1467,6 +1487,7 @@ export default function TopManagementDashboard() {
   };
 
   useEffect(() => {
+      fetchAllUsers(); // ✅ ADD THIS
     fetchDashboardData();
   }, []);
 
@@ -1829,6 +1850,55 @@ export default function TopManagementDashboard() {
     }
   };
 
+  const openAuditForum = (auditData: any) => {
+  const memberEmails: string[] = [];
+  
+  // Add current user
+  if (user?.email) memberEmails.push(user.email);
+  
+  // Try to find auditor by ID
+  if (auditData.auditorId) {
+    const auditor = allUsersList.find((u: any) => 
+      Number(u.id) === Number(auditData.auditorId) ||
+      String(u.id) === String(auditData.auditorId)
+    );
+    if (auditor?.email) {
+      memberEmails.push(auditor.email);
+      auditData.auditorName = auditor.name;
+    }
+  }
+  
+  // Try to find auditee by ID
+  if (auditData.auditeeId) {
+    const auditee = allUsersList.find((u: any) => 
+      Number(u.id) === Number(auditData.auditeeId) ||
+      String(u.id) === String(auditData.auditeeId)
+    );
+    if (auditee?.email) {
+      memberEmails.push(auditee.email);
+      auditData.auditeeName = auditee.name;
+    }
+  }
+  
+  // Add HOD
+  if (auditData.hodEmail) memberEmails.push(auditData.hodEmail);
+  
+  // Add memberEmails
+  if (auditData.memberEmails) {
+    const emails = Array.isArray(auditData.memberEmails) 
+      ? auditData.memberEmails 
+      : [auditData.memberEmails];
+    memberEmails.push(...emails);
+  }
+  
+  // Remove duplicates
+  auditData.memberEmails = [...new Set(memberEmails)];
+  
+  setSelectedAuditForForum(auditData);
+  setShowForumModal(true);
+};
+
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
@@ -2129,21 +2199,40 @@ export default function TopManagementDashboard() {
             </View>
             <View className="flex-row items-center self-start gap-3 md:self-auto">
               <TouchableOpacity
-                onPress={() => {
-                  setSelectedAuditForForum({
-                    id: "demo",
-                    auditNumber: "AUD-001",
-                    auditType: "System Audit",
-                  });
-                  setShowForumModal(true);
-                }}
-                className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
-                style={{ backgroundColor: COLORS.primary }}
-                activeOpacity={0.8}
-              >
-                <MessageCircle size={18} color="#ffffff" />
-                <Text className="text-sm font-semibold text-white">Forum</Text>
-              </TouchableOpacity>
+  onPress={() => {
+    // Find an audit manager or lead auditor for demo
+    const auditManager = allUsersList.find((u: any) => 
+      u.role?.toUpperCase().includes('AUDIT_MANAGER') ||
+      u.role?.toUpperCase().includes('LEAD_AUDITOR')
+    );
+    const topManagement = allUsersList.find((u: any) => 
+      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
+    );
+    const availableUser = auditManager || topManagement || user;
+    
+    openAuditForum({
+      id: "demo-" + Date.now(),
+      auditNumber: "AUD-DEMO-001",
+      auditType: "System Audit (ISO9001)",
+      department: "Quality Assurance",
+      auditorId: user?.id,
+      auditorName: user?.name || user?.email,
+      auditeeId: availableUser?.id,
+      auditeeName: availableUser?.name || availableUser?.email,
+      hodEmail: availableUser?.email,
+      hodName: availableUser?.name || availableUser?.email,
+      memberEmails: [user?.email, availableUser?.email].filter(Boolean),
+      auditStatus: "IN_PROGRESS",
+      auditTitle: "Demo Audit Discussion"
+    });
+  }}
+  className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
+  style={{ backgroundColor: COLORS.primary }}
+  activeOpacity={0.8}
+>
+  <MessageCircle size={18} color="#ffffff" />
+  <Text className="text-sm font-semibold text-white">Forum</Text>
+</TouchableOpacity>
               <TouchableOpacity
                 onPress={handleRefresh}
                 disabled={refreshing}
@@ -2865,33 +2954,32 @@ export default function TopManagementDashboard() {
       )}
 
       {showForumModal && selectedAuditForForum && (
-        <AuditCheckSheetNCRForumModal
-          isOpen={showForumModal}
-          onClose={() => {
-            setShowForumModal(false);
-            setSelectedAuditForForum(null);
-          }}
-          auditId={
-            selectedAuditForForum.id || selectedAuditForForum.auditId || "demo"
-          }
-          auditNumber={selectedAuditForForum.auditNumber}
-          auditType={selectedAuditForForum.auditType}
-          auditTitle={
-            selectedAuditForForum.auditTitle || selectedAuditForForum.auditType
-          }
-          auditStatus={selectedAuditForForum.auditStatus || "IN_PROGRESS"}
-          department={selectedAuditForForum.department}
-          auditorId={user?.id}
-          auditorName={user?.name}
-          auditeeId={selectedAuditForForum.auditeeId}
-          auditeeName={selectedAuditForForum.auditeeName}
-          hodEmail={selectedAuditForForum.hodEmail}
-          hodName={selectedAuditForForum.hodName}
-          memberEmails={selectedAuditForForum.memberEmails || []}
-          currentUser={user}
-          allUsers={[]}
-        />
-      )}
+  <AuditCheckSheetNCRForumModal
+    isOpen={showForumModal}
+    onClose={() => {
+      setShowForumModal(false);
+      setSelectedAuditForForum(null);
+    }}
+    auditId={selectedAuditForForum.id || selectedAuditForForum.auditId || "demo"}
+    auditNumber={selectedAuditForForum.auditNumber || "AUD-001"}
+    auditTitle={selectedAuditForForum.auditTitle || selectedAuditForForum.auditType || "Audit Discussion"}
+    auditStatus={selectedAuditForForum.auditStatus || "IN_PROGRESS"}
+    auditType={selectedAuditForForum.auditType || "System Audit"}
+    department={selectedAuditForForum.department || "Quality"}
+    auditorId={selectedAuditForForum.auditorId || user?.id}
+    auditorName={selectedAuditForForum.auditorName || user?.name || user?.email || "Unknown"}
+    auditeeId={selectedAuditForForum.auditeeId}
+    auditeeName={selectedAuditForForum.auditeeName}
+    hodEmail={selectedAuditForForum.hodEmail}
+    hodName={selectedAuditForForum.hodName}
+    memberEmails={selectedAuditForForum.memberEmails || []}
+    currentUser={user}
+    allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST
+  />
+)}
+
+
+
 
       {showForm5Details && selectedForm5Plan && (
         <Modal visible={true} transparent animationType="fade">
