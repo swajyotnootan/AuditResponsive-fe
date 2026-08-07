@@ -1440,6 +1440,7 @@ export default function ForumThreadView({
                       thread={item}
                       currentUser={currentUser}
                       currentUsername={currentUserEmail}
+                      allUsers={allUsers} // ✅ ADD THIS LINE!
                       onRetry={handleRetry}
                     />
                   </>
