@@ -2198,7 +2198,7 @@ export default function TopManagementDashboard() {
               </Text>
             </View>
             <View className="flex-row items-center self-start gap-3 md:self-auto">
-              <TouchableOpacity
+             <TouchableOpacity
   onPress={() => {
     // Find an audit manager or lead auditor for demo
     const auditManager = allUsersList.find((u: any) => 
@@ -2210,21 +2210,34 @@ export default function TopManagementDashboard() {
     );
     const availableUser = auditManager || topManagement || user;
     
-    openAuditForum({
+    // Build member emails
+    const memberEmails: string[] = [];
+    if (user?.email) memberEmails.push(user.email);
+    if (availableUser?.email && availableUser.email !== user?.email) {
+      memberEmails.push(availableUser.email);
+    }
+    
+    const forumData = {
       id: "demo-" + Date.now(),
       auditNumber: "AUD-DEMO-001",
       auditType: "System Audit (ISO9001)",
       department: "Quality Assurance",
       auditorId: user?.id,
-      auditorName: user?.name || user?.email,
+      auditorName: user?.name || user?.email || "Unknown",
       auditeeId: availableUser?.id,
-      auditeeName: availableUser?.name || availableUser?.email,
-      hodEmail: availableUser?.email,
-      hodName: availableUser?.name || availableUser?.email,
-      memberEmails: [user?.email, availableUser?.email].filter(Boolean),
+      auditeeName: availableUser?.name || availableUser?.email || "N/A",
+      hodEmail: availableUser?.email || null,
+      hodName: availableUser?.name || null,
+      memberEmails: memberEmails,
       auditStatus: "IN_PROGRESS",
       auditTitle: "Demo Audit Discussion"
-    });
+    };
+    
+    console.log("🔍 Opening forum with data:", forumData);
+    console.log("👥 All users available:", allUsersList.length);
+    
+    setSelectedAuditForForum(forumData);
+    setShowForumModal(true);
   }}
   className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
   style={{ backgroundColor: COLORS.primary }}
@@ -2953,7 +2966,7 @@ export default function TopManagementDashboard() {
         />
       )}
 
-      {showForumModal && selectedAuditForForum && (
+     {showForumModal && selectedAuditForForum && (
   <AuditCheckSheetNCRForumModal
     isOpen={showForumModal}
     onClose={() => {
@@ -2974,7 +2987,7 @@ export default function TopManagementDashboard() {
     hodName={selectedAuditForForum.hodName}
     memberEmails={selectedAuditForForum.memberEmails || []}
     currentUser={user}
-    allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST
+    allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST - THIS IS THE KEY FIX
   />
 )}
 
