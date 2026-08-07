@@ -40,7 +40,7 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import AuditCheckSheetNCRForumModal from "./topManagement/AuditCheckSheetNCRForumModal";
+import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import DeptPlanDetailsModal from "./topManagement/DeptPlanDetailsModal";
 import PlanDetailsModal from "./topManagement/PlanDetailsModal";
 import RejectModal from "./topManagement/RejectModal";
