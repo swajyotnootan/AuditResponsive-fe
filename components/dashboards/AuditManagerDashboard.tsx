@@ -1882,14 +1882,55 @@ export default function AuditManagerDashboard() {
                     availableYears={availableYears}
                   />
                   <TouchableOpacity
-                    style={styles.forumBtn}
-                    onPress={openAuditForum}
-                  >
-                    <MessageSquare size={16} color={COLORS.white} />
-                    {!isSmallMobile && (
-                      <Text style={styles.forumBtnText}>Forum</Text>
-                    )}
-                  </TouchableOpacity>
+  style={styles.forumBtn}
+  onPress={() => {
+    // Find Audit Manager
+    const auditManager = allUsersList.find((u: any) => 
+      u.role?.toUpperCase().includes('AUDIT_MANAGER')
+    );
+    
+    // Find Top Management
+    const topManagement = allUsersList.find((u: any) => 
+      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
+    );
+    
+    // Build member emails - ONLY Audit Manager and Top Management
+    const memberEmails: string[] = [];
+    if (auditManager?.email) memberEmails.push(auditManager.email);
+    if (topManagement?.email && topManagement.email !== auditManager?.email) {
+      memberEmails.push(topManagement.email);
+    }
+    
+    // Add current user if they are either Audit Manager or Top Management
+    if (user?.email && !memberEmails.includes(user.email)) {
+      const userRole = user.role?.toUpperCase() || '';
+      if (userRole.includes('AUDIT_MANAGER') || userRole.includes('TOP_MANAGEMENT')) {
+        memberEmails.push(user.email);
+      }
+    }
+    
+    const forumData = {
+      id: "audit-manager-forum-" + Date.now(),
+      auditNumber: "AUDIT-MGR-FORUM",
+      auditType: "Audit Manager Discussion",
+      department: "Management",
+      auditorId: auditManager?.id || user?.id,
+      auditorName: auditManager?.name || user?.name || "Audit Manager",
+      auditeeId: topManagement?.id,
+      auditeeName: topManagement?.name || "Top Management",
+      hodEmail: null,
+      hodName: null,
+      memberEmails: memberEmails,
+      auditStatus: "ACTIVE",
+      auditTitle: "Audit Manager Communication Forum"
+    };
+    
+    openAuditForum(forumData);
+  }}
+>
+  <MessageSquare size={16} color={COLORS.white} />
+  <Text style={styles.forumBtnText}>Forum</Text>
+</TouchableOpacity>
                 </View>
               </View>
             </AnimatedGlassCard>
