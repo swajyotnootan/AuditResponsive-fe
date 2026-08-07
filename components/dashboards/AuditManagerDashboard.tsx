@@ -969,58 +969,23 @@ export default function AuditManagerDashboard() {
     }
   };
 
- const openAuditForum = (auditData: any) => {
-  // Start with the passed memberEmails
-  const memberEmails: string[] = [];
-  
-  // Preserve passed memberEmails
-  if (auditData.memberEmails) {
-    const emails = Array.isArray(auditData.memberEmails) 
-      ? auditData.memberEmails 
-      : [auditData.memberEmails];
-    memberEmails.push(...emails);
-  }
-  
-  // Add current user if not already included
-  if (user?.email && !memberEmails.includes(user.email)) {
-    memberEmails.push(user.email);
-  }
-  
-  // Try to find auditor by ID (if not already included)
-  if (auditData.auditorId) {
-    const auditor = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditorId) ||
-      String(u.id) === String(auditData.auditorId)
-    );
-    if (auditor?.email && !memberEmails.includes(auditor.email)) {
-      memberEmails.push(auditor.email);
-      auditData.auditorName = auditor.name;
-    }
-  }
-  
-  // Try to find auditee by ID (if not already included)
-  if (auditData.auditeeId) {
-    const auditee = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditeeId) ||
-      String(u.id) === String(auditData.auditeeId)
-    );
-    if (auditee?.email && !memberEmails.includes(auditee.email)) {
-      memberEmails.push(auditee.email);
-      auditData.auditeeName = auditee.name;
-    }
-  }
-  
-  // Add HOD if provided
-  if (auditData.hodEmail && !memberEmails.includes(auditData.hodEmail)) {
-    memberEmails.push(auditData.hodEmail);
-  }
-  
-  // Remove duplicates
-  auditData.memberEmails = [...new Set(memberEmails)];
-  
-  setSelectedAuditForForum(auditData);
-  setShowForumModal(true);
-};
+  const openAuditForum = () => {
+    setSelectedAuditForForum({
+      id: "general-forum",
+      auditNumber: "GENERAL",
+      auditType: "General Audit Discussion",
+      department: "All Departments",
+      auditorId: user?.id || null,
+      auditorName: user?.name || "Unknown User",
+      auditeeId: null,
+      auditeeName: "N/A",
+      hodEmail: null,
+      hodName: "N/A",
+      memberEmails: user?.email ? [user.email] : [],
+    });
+    setShowForumModal(true);
+  };
+
   const getWorkflowSteps = () => {
     const isForm3Approved = form3Status.status === "APPROVED";
     const isForm4Approved = form4Status.status === "APPROVED";
@@ -1882,55 +1847,14 @@ export default function AuditManagerDashboard() {
                     availableYears={availableYears}
                   />
                   <TouchableOpacity
-  style={styles.forumBtn}
-  onPress={() => {
-    // Find Audit Manager
-    const auditManager = allUsersList.find((u: any) => 
-      u.role?.toUpperCase().includes('AUDIT_MANAGER')
-    );
-    
-    // Find Top Management
-    const topManagement = allUsersList.find((u: any) => 
-      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
-    );
-    
-    // Build member emails - ONLY Audit Manager and Top Management
-    const memberEmails: string[] = [];
-    if (auditManager?.email) memberEmails.push(auditManager.email);
-    if (topManagement?.email && topManagement.email !== auditManager?.email) {
-      memberEmails.push(topManagement.email);
-    }
-    
-    // Add current user if they are either Audit Manager or Top Management
-    if (user?.email && !memberEmails.includes(user.email)) {
-      const userRole = user.role?.toUpperCase() || '';
-      if (userRole.includes('AUDIT_MANAGER') || userRole.includes('TOP_MANAGEMENT')) {
-        memberEmails.push(user.email);
-      }
-    }
-    
-    const forumData = {
-      id: "audit-manager-forum-" + Date.now(),
-      auditNumber: "AUDIT-MGR-FORUM",
-      auditType: "Audit Manager Discussion",
-      department: "Management",
-      auditorId: auditManager?.id || user?.id,
-      auditorName: auditManager?.name || user?.name || "Audit Manager",
-      auditeeId: topManagement?.id,
-      auditeeName: topManagement?.name || "Top Management",
-      hodEmail: null,
-      hodName: null,
-      memberEmails: memberEmails,
-      auditStatus: "ACTIVE",
-      auditTitle: "Audit Manager Communication Forum"
-    };
-    
-    openAuditForum(forumData);
-  }}
->
-  <MessageSquare size={16} color={COLORS.white} />
-  <Text style={styles.forumBtnText}>Forum</Text>
-</TouchableOpacity>
+                    style={styles.forumBtn}
+                    onPress={openAuditForum}
+                  >
+                    <MessageSquare size={16} color={COLORS.white} />
+                    {!isSmallMobile && (
+                      <Text style={styles.forumBtnText}>Forum</Text>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
             </AnimatedGlassCard>
@@ -2788,30 +2712,30 @@ export default function AuditManagerDashboard() {
           </View>
         </View>
       </Modal>
-{showForumModal && selectedAuditForForum && (
-  <AuditCheckSheetNCRForumModal
-    auditId={selectedAuditForForum.id}
-    auditNumber={selectedAuditForForum.auditNumber}
-    auditTitle={selectedAuditForForum.auditType}
-    auditStatus="IN_PROGRESS"
-    auditType={selectedAuditForForum.auditType}
-    department={selectedAuditForForum.department}
-    auditorId={selectedAuditForForum.auditorId}
-    auditorName={selectedAuditForForum.auditorName}
-    auditeeId={selectedAuditForForum.auditeeId}
-    auditeeName={selectedAuditForForum.auditeeName}
-    hodEmail={selectedAuditForForum.hodEmail}  // ✅ Passed
-    hodName={selectedAuditForForum.hodName}    // ✅ Passed
-    memberEmails={selectedAuditForForum.memberEmails || []}
-    isOpen={showForumModal}
-    onClose={() => {
-      setShowForumModal(false);
-      setSelectedAuditForForum(null);
-    }}
-    currentUser={user}
-    allUsers={allUsersList}
-  />
-)}
+      {showForumModal && selectedAuditForForum && (
+        <AuditCheckSheetNCRForumModal
+          auditId={selectedAuditForForum.id}
+          auditNumber={selectedAuditForForum.auditNumber}
+          auditTitle={selectedAuditForForum.auditType}
+          auditStatus="IN_PROGRESS"
+          auditType={selectedAuditForForum.auditType}
+          department={selectedAuditForForum.department}
+          auditorId={selectedAuditForForum.auditorId}
+          auditorName={selectedAuditForForum.auditorName}
+          auditeeId={selectedAuditForForum.auditeeId}
+          auditeeName={selectedAuditForForum.auditeeName}
+          hodEmail={selectedAuditForForum.hodEmail}
+          hodName={selectedAuditForForum.hodName}
+          memberEmails={selectedAuditForForum.memberEmails || []}
+          isOpen={showForumModal}
+          onClose={() => {
+            setShowForumModal(false);
+            setSelectedAuditForForum(null);
+          }}
+          currentUser={user}
+          allUsers={allUsersList}
+        />
+      )}
     </SafeAreaView>
   );
 }
