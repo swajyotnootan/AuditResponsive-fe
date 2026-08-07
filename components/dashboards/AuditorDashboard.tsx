@@ -178,40 +178,56 @@ const getViewRoute = (audit: any) => {
 
 const isAuditExpired = (audit: any) => {
   if (!audit || audit.status === "COMPLETED") return false;
-  const isDateRange =
-    audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // ✅ FIXED: Check if audit has a date range
+  const isDateRange = audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate;
+  
   if (isDateRange) {
+    // ✅ DATE RANGE LOGIC
+    const fromDate = new Date(audit.fromDate);
     const toDate = new Date(audit.toDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    fromDate.setHours(0, 0, 0, 0);
     toDate.setHours(23, 59, 59, 999);
-    if (toDate < today) return true;
-    if (toDate.toDateString() === today.toDateString() && audit.endTime) {
-      const now = new Date();
-      const parseTime = (timeStr: string) => {
-        const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-        if (!match) return { hours: 23, minutes: 59 };
-        let hours = parseInt(match[1]);
-        const minutes = parseInt(match[2]);
-        const meridian = match[3].toUpperCase();
-        if (meridian === "PM" && hours !== 12) hours += 12;
-        if (meridian === "AM" && hours === 12) hours = 0;
-        return { hours, minutes };
-      };
-      const endTime = parseTime(audit.endTime);
-      if (
-        now.getHours() * 60 + now.getMinutes() >
-        endTime.hours * 60 + endTime.minutes
-      )
-        return true;
+    
+    // If today is BEFORE the range starts → NOT EXPIRED
+    if (today < fromDate) return false;
+    
+    // If today is AFTER the range ends → EXPIRED
+    if (today > toDate) return true;
+    
+    // If today is WITHIN the range → Check time
+    if (today >= fromDate && today <= toDate) {
+      // If today is the end date, check if end time has passed
+      if (today.toDateString() === toDate.toDateString() && audit.endTime) {
+        const now = new Date();
+        const parseTime = (timeStr: string) => {
+          const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (!match) return { hours: 23, minutes: 59 };
+          let hours = parseInt(match[1]);
+          const minutes = parseInt(match[2]);
+          const meridian = match[3].toUpperCase();
+          if (meridian === "PM" && hours !== 12) hours += 12;
+          if (meridian === "AM" && hours === 12) hours = 0;
+          return { hours, minutes };
+        };
+        const endTime = parseTime(audit.endTime);
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const endMinutes = endTime.hours * 60 + endTime.minutes;
+        return nowMinutes > endMinutes;
+      }
+      return false; // Within range, not expired
     }
     return false;
   }
+  
+  // ✅ SINGLE DATE LOGIC (original behavior)
   if (!audit?.scheduledDate) return false;
   const scheduleDate = new Date(audit.scheduledDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
   scheduleDate.setHours(0, 0, 0, 0);
+  
   if (scheduleDate < today) return true;
   if (scheduleDate.getTime() === today.getTime() && audit.endTime) {
     const now = new Date();
