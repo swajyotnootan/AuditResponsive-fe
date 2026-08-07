@@ -2226,7 +2226,7 @@ export default function TopManagementDashboard() {
     }
     
     const forumData = {
-      id: "top-management-forum", // ✅ FIXED: Removed Date.now()
+      id: "general-forum", // ✅ Keep this static so messages persist
       auditNumber: "TOP-MGMT-FORUM",
       auditType: "Management Discussion",
       department: "Management",
