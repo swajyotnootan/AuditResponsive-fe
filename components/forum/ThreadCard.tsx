@@ -74,6 +74,7 @@ interface ThreadCardProps {
     email?: string;
     profileImage?: string;
   };
+    allUsers?: any[]; // ✅ ADD THIS
   onRetry?: (thread: Thread) => void;
 }
 
@@ -362,8 +363,7 @@ const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () =
 // =====================================================
 // COMPONENT
 // =====================================================
-export default function ThreadCard({ thread, currentUsername, currentUser, onRetry }: ThreadCardProps) {
-  if (!thread) return null;
+export default function ThreadCard({ thread, currentUsername, currentUser, allUsers, onRetry }: ThreadCardProps) {  if (!thread) return null;
 
   const [imageModal, setImageModal] = useState({ open: false, url: "" });
   const [videoModal, setVideoModal] = useState({ open: false, url: "" });
@@ -493,41 +493,58 @@ export default function ThreadCard({ thread, currentUsername, currentUser, onRet
   };
 
   // ✅ ADDED: Fetches Profile Data
-  const handleProfileClick = async (userId?: string | number | null) => {
-    if (!userId) return;
+   const handleProfileClick = async (userIdentifier?: string | number | null) => {
+    if (!userIdentifier) return;
     setProfileModalOpen(true);
     setProfileLoading(true);
     setProfileError(null);
     setFetchedProfile(null);
 
+    // ✅ 1. INSTANT LOCAL LOOKUP (Fixes the 404 error when ID is actually an email)
+    if (allUsers && allUsers.length > 0) {
+      const localUser = allUsers.find((u: any) => 
+        String(u.id) === String(userIdentifier) || 
+        String(u.email).toLowerCase() === String(userIdentifier).toLowerCase()
+      );
+      
+      if (localUser) {
+        setFetchedProfile({
+          id: localUser.id,
+          name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim(),
+          email: localUser.email,
+          username: localUser.username,
+          role: localUser.role,
+          department: localUser.department,
+          profilePhoto: localUser.profilePhoto || localUser.profileImage,
+        });
+        setProfileLoading(false);
+        return; // Stop here, no API call needed!
+      }
+    }
+
+    // 2. Fallback to API if not found in allUsers
     try {
-      let url = `${API_BASE_URL}/api/users/${userId}`;
+      let url = `${API_BASE_URL}/api/users/${userIdentifier}`;
       let response = await fetch(url);
       
-      // If 404 and userId looks like an email, try by-email endpoint
-      if (!response.ok && typeof userId === 'string' && userId.includes('@')) {
-        response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userId)}`);
+      if (!response.ok && typeof userIdentifier === 'string' && userIdentifier.includes('@')) {
+        response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userIdentifier)}`);
       }
       
       if (response.ok) {
         const data = await response.json();
         setFetchedProfile(data);
       } else {
-        // Fallback to local thread data
         setFetchedProfile({
-          id: userId,
-          name: thread.createdByName || "User",
-          email: typeof userId === 'string' && userId.includes('@') ? userId : undefined,
+          id: userIdentifier,
+          name: thread.createdByName || (typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier.split('@')[0] : "User"),
+          email: typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier : undefined,
         });
-        if (response.status === 404 || response.status === 400) {
-           setProfileError("Detailed profile not found on server.");
-        }
       }
     } catch (error) {
       console.error("Profile fetch error:", error);
-      setProfileError("Failed to load profile data.");
       setFetchedProfile({
-        id: userId,
+        id: userIdentifier,
         name: thread.createdByName || "User",
       });
     } finally {
