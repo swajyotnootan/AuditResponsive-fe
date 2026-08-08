@@ -595,35 +595,7 @@ const AuditCheckSheetNCRForumModal: React.FC<AuditCheckSheetNCRForumModalProps> 
           >
             <View style={styles.drawer}>
               {/* Header */}
-              <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                  <TouchableOpacity onPress={onClose} style={styles.backButton}>
-                    <Icon name="arrow-left" size={20} color="#6B7280" />
-                  </TouchableOpacity>
-                  
-                </View>
-
-                <View style={styles.headerRight}>
-                  {permissions.canAddMembers && (
-                    <TouchableOpacity
-                      onPress={() => setShowAddMembers(true)}
-                      style={styles.headerButton}
-                    >
-                      <Icon name="user-plus" size={18} color="#6B7280" />
-                    </TouchableOpacity>
-                  )}
-
-                  {permissions.canModerate && (
-                    <TouchableOpacity onPress={toggleForumLock} style={styles.headerButton}>
-                      <Icon name={forumSettings.isLocked ? 'lock' : 'unlock'} size={18} color="#6B7280" />
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                    <Icon name="x" size={20} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              
 
               {/* Participants List */}
               <MemberList
