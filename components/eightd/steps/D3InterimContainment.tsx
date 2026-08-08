@@ -1,22 +1,22 @@
 // app/components/eightd/steps/D3InterimContainment.tsx
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import { eightDAPI } from '../../../services/api';
-import { useToast } from '../../context/ToastContext';
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Icon from "react-native-vector-icons/Feather";
+import { eightDAPI } from "../../../services/api";
+import { useToast } from "../../context/ToastContext";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const isMobile = width < 768;
 
 interface ActionItem {
@@ -36,20 +36,23 @@ interface D3InterimContainmentProps {
   updateParent?: (data: D3FormData[]) => void;
 }
 
-export default function D3InterimContainment({ eventId, updateParent }: D3InterimContainmentProps) {
+export default function D3InterimContainment({
+  eventId,
+  updateParent,
+}: D3InterimContainmentProps) {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [recordId, setRecordId] = useState<string | null>(null);
-  const [newAction, setNewAction] = useState('');
+  const [newAction, setNewAction] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editValue, setEditValue] = useState("");
   const [hoverValue, setHoverValue] = useState<number | null>(null);
 
   const [formData, setFormData] = useState<D3FormData>({
-    eventId: eventId || '',
-    problemStatement: '',
-    hasContainment: 'No',
+    eventId: eventId || "",
+    problemStatement: "",
+    hasContainment: "No",
     actions: [],
   });
 
@@ -64,31 +67,31 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
         const response = await eightDAPI.getById(eventId);
         if (response?.success && response.data?.content?.d3?.[0]) {
           const d3Data = response.data.content.d3[0];
-          
+
           let actions: ActionItem[] = [];
           if (Array.isArray(d3Data.actions)) {
             actions = d3Data.actions.map((item: any) => {
-              if (typeof item === 'string') {
+              if (typeof item === "string") {
                 return { action: item, rating: 5 };
               }
               return {
-                action: item.action || item.actionText || '',
-                rating: typeof item.rating === 'number' ? item.rating : 5,
+                action: item.action || item.actionText || "",
+                rating: typeof item.rating === "number" ? item.rating : 5,
               };
             });
           }
 
           setFormData({
             eventId: d3Data.eventId || eventId,
-            problemStatement: d3Data.problemStatement || '',
-            hasContainment: d3Data.hasContainment || 'No',
+            problemStatement: d3Data.problemStatement || "",
+            hasContainment: d3Data.hasContainment || "No",
             actions: actions,
           });
           setRecordId(eventId);
         }
       } catch (error) {
-        console.error('Error fetching D3 data:', error);
-        addToast('Error loading D3 data', 'error');
+        console.error("Error fetching D3 data:", error);
+        addToast("Error loading D3 data", "error");
       } finally {
         setLoading(false);
       }
@@ -98,21 +101,35 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
   }, [eventId]);
 
   const handleChange = (field: keyof D3FormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAutoFill = () => {
+    const mockData: D3FormData = {
+      eventId: formData.eventId,
+      problemStatement: "Product X shows cracks after 2 hours of operation.",
+      hasContainment: "Yes",
+      actions: [
+        { action: "Quarantine all affected batches immediately.", rating: 5 },
+      ],
+    };
+    setFormData(mockData);
+    if (updateParent) updateParent([mockData]);
+    addToast("D3 form auto-filled!", "success");
   };
 
   const addAction = () => {
     if (newAction.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         actions: [...prev.actions, { action: newAction.trim(), rating: 5 }],
       }));
-      setNewAction('');
+      setNewAction("");
     }
   };
 
   const deleteAction = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       actions: prev.actions.filter((_, i) => i !== index),
     }));
@@ -125,19 +142,28 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
 
   const saveEdit = (index: number) => {
     const updatedActions = [...formData.actions];
-    updatedActions[index] = { ...updatedActions[index], action: editValue.trim() };
-    setFormData(prev => ({ ...prev, actions: updatedActions }));
+    updatedActions[index] = {
+      ...updatedActions[index],
+      action: editValue.trim(),
+    };
+    setFormData((prev) => ({ ...prev, actions: updatedActions }));
     setEditingIndex(null);
-    setEditValue('');
+    setEditValue("");
   };
 
   const updateRating = (index: number, rating: number) => {
     const updatedActions = [...formData.actions];
     updatedActions[index] = { ...updatedActions[index], rating };
-    setFormData(prev => ({ ...prev, actions: updatedActions }));
+    setFormData((prev) => ({ ...prev, actions: updatedActions }));
   };
 
-  const StarRating = ({ value, onChange }: { value: number; onChange: (rating: number) => void }) => (
+  const StarRating = ({
+    value,
+    onChange,
+  }: {
+    value: number;
+    onChange: (rating: number) => void;
+  }) => (
     <View style={styles.starContainer}>
       {[1, 2, 3, 4, 5].map((star) => (
         <TouchableOpacity
@@ -148,7 +174,7 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
           <Icon
             name="star"
             size={16}
-            color={star <= (hoverValue ?? value) ? '#F59E0B' : '#D1D5DB'}
+            color={star <= (hoverValue ?? value) ? "#F59E0B" : "#D1D5DB"}
           />
         </TouchableOpacity>
       ))}
@@ -157,8 +183,8 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
   );
 
   const handleSubmit = async () => {
-    if (formData.hasContainment === 'Yes' && formData.actions.length === 0) {
-      addToast('Please add at least one containment action', 'error');
+    if (formData.hasContainment === "Yes" && formData.actions.length === 0) {
+      addToast("Please add at least one containment action", "error");
       return;
     }
 
@@ -166,7 +192,7 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
     try {
       const payload = { d3: [formData] };
       const formDataToSend = new FormData();
-      formDataToSend.append('jsonContent', JSON.stringify(payload));
+      formDataToSend.append("jsonContent", JSON.stringify(payload));
 
       let response;
       if (recordId) {
@@ -178,12 +204,12 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
       if (response?.success) {
         const savedId = response.data?.id;
         if (savedId && !recordId) setRecordId(savedId);
-        addToast('D3 form saved successfully!', 'success');
+        addToast("D3 form saved successfully!", "success");
         if (updateParent) updateParent([formData]);
       }
     } catch (error: any) {
-      console.error('Error saving D3:', error);
-      addToast(error?.message || 'Failed to save D3 form', 'error');
+      console.error("Error saving D3:", error);
+      addToast(error?.message || "Failed to save D3 form", "error");
     } finally {
       setSaving(false);
     }
@@ -203,22 +229,30 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Icon name="shield" size={20} color="#FFFFFF" />
-          <Text style={styles.headerTitle}>D3 – Interim Containment Actions</Text>
+          <Text style={styles.headerTitle}>
+            D3 – Interim Containment Actions
+          </Text>
           {eventId && (
             <View style={styles.headerBadge}>
               <Text style={styles.headerBadgeText}>{eventId}</Text>
             </View>
           )}
         </View>
+        <TouchableOpacity
+          style={styles.autoFillButton}
+          onPress={handleAutoFill}
+        >
+          <Icon name="zap" size={16} color="#FFFFFF" />
+          <Text style={styles.autoFillButtonText}>Auto-fill</Text>
+        </TouchableOpacity>
       </View>
-
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Event ID</Text>
           <TextInput
             style={styles.input}
             value={formData.eventId}
-            onChangeText={(text) => handleChange('eventId', text)}
+            onChangeText={(text) => handleChange("eventId", text)}
             placeholder="Enter Event ID"
             editable={false}
           />
@@ -229,7 +263,7 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
           <TextInput
             style={[styles.input, styles.textArea]}
             value={formData.problemStatement}
-            onChangeText={(text) => handleChange('problemStatement', text)}
+            onChangeText={(text) => handleChange("problemStatement", text)}
             placeholder="Reference the problem statement with 5W2H"
             multiline
             numberOfLines={3}
@@ -238,22 +272,30 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Are there interim containment actions?</Text>
+          <Text style={styles.label}>
+            Are there interim containment actions?
+          </Text>
           <View style={styles.radioGroup}>
-            {['Yes', 'No'].map((option) => (
+            {["Yes", "No"].map((option) => (
               <TouchableOpacity
                 key={option}
                 style={[
                   styles.radioOption,
-                  formData.hasContainment === option && styles.radioOptionActive
+                  formData.hasContainment === option &&
+                    styles.radioOptionActive,
                 ]}
-                onPress={() => handleChange('hasContainment', option)}
+                onPress={() => handleChange("hasContainment", option)}
               >
-                <View style={[
-                  styles.radioCircle,
-                  formData.hasContainment === option && styles.radioCircleActive
-                ]}>
-                  {formData.hasContainment === option && <View style={styles.radioInner} />}
+                <View
+                  style={[
+                    styles.radioCircle,
+                    formData.hasContainment === option &&
+                      styles.radioCircleActive,
+                  ]}
+                >
+                  {formData.hasContainment === option && (
+                    <View style={styles.radioInner} />
+                  )}
                 </View>
                 <Text style={styles.radioText}>{option}</Text>
               </TouchableOpacity>
@@ -261,10 +303,10 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
           </View>
         </View>
 
-        {formData.hasContainment === 'Yes' && (
+        {formData.hasContainment === "Yes" && (
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Containment Actions</Text>
-            
+
             {formData.actions.map((item, index) => (
               <View key={index} style={styles.actionCard}>
                 <View style={styles.actionRow}>
@@ -307,7 +349,10 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
                   </View>
                 </View>
                 {editingIndex !== index && (
-                  <StarRating value={item.rating} onChange={(val) => updateRating(index, val)} />
+                  <StarRating
+                    value={item.rating}
+                    onChange={(val) => updateRating(index, val)}
+                  />
                 )}
               </View>
             ))}
@@ -320,7 +365,10 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
                 placeholder="Enter an action and press Add..."
                 onSubmitEditing={addAction}
               />
-              <TouchableOpacity style={styles.addActionButton} onPress={addAction}>
+              <TouchableOpacity
+                style={styles.addActionButton}
+                onPress={addAction}
+              >
                 <Icon name="plus" size={16} color="#FFFFFF" />
                 <Text style={styles.addActionButtonText}>Add</Text>
               </TouchableOpacity>
@@ -347,51 +395,51 @@ export default function D3InterimContainment({ eventId, updateParent }: D3Interi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 40,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
+    color: "#6B7280",
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#2242a1',
+    backgroundColor: "#2242a1",
     borderTopWidth: 4,
-    borderTopColor: '#EE161F',
+    borderTopColor: "#EE161F",
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   headerTitle: {
     fontSize: isMobile ? 16 : 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   headerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
   },
   headerBadgeText: {
     fontSize: 12,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   content: {
     flex: 1,
@@ -402,31 +450,31 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontWeight: "500",
+    color: "#374151",
     marginBottom: 4,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
   },
   textArea: {
     minHeight: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   radioGroup: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 16,
     marginTop: 4,
   },
   radioOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   radioOptionActive: {
@@ -437,65 +485,65 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#D1D5DB",
+    justifyContent: "center",
+    alignItems: "center",
   },
   radioCircleActive: {
-    borderColor: '#3B82F6',
+    borderColor: "#3B82F6",
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
   },
   radioText: {
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
   },
   actionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     marginBottom: 8,
   },
   actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   actionNumber: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
   },
   actionNumberText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   actionText: {
     flex: 1,
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
   },
   actionInput: {
     flex: 1,
   },
   actionButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   starContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginTop: 4,
   },
@@ -504,11 +552,11 @@ const styles = StyleSheet.create({
   },
   starText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
     marginLeft: 8,
   },
   addActionContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginTop: 4,
   },
@@ -516,23 +564,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
   },
   addActionButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '500',
+    color: "#FFFFFF",
+    fontWeight: "500",
   },
   submitButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 20,
   },
@@ -541,7 +589,21 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  autoFillButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

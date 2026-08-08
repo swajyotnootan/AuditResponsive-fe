@@ -1,32 +1,32 @@
 // app/components/eightd/steps/D2FormProblem.tsx
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import { eightDAPI } from '../../../services/api';
-import { useToast } from '../../context/ToastContext';
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Icon from "react-native-vector-icons/Feather";
+import { eightDAPI } from "../../../services/api";
+import { useToast } from "../../context/ToastContext";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const isMobile = width < 768;
 
 const workAreas = [
-  'Assembly Line',
-  'Packaging Area',
-  'Testing Lab',
-  'Warehouse',
-  'Quality Control',
-  'Maintenance Workshop',
-  'Other',
+  "Assembly Line",
+  "Packaging Area",
+  "Testing Lab",
+  "Warehouse",
+  "Quality Control",
+  "Maintenance Workshop",
+  "Other",
 ];
 
 interface D2FormData {
@@ -47,23 +47,26 @@ interface D2FormProblemProps {
   updateParent?: (data: D2FormData[]) => void;
 }
 
-export default function D2FormProblem({ eventId, updateParent }: D2FormProblemProps) {
+export default function D2FormProblem({
+  eventId,
+  updateParent,
+}: D2FormProblemProps) {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [recordId, setRecordId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<D2FormData>({
-    eventId: eventId || '',
-    problemStatement: '',
-    what: '',
-    why: '',
-    where: '',
-    otherWhere: '',
-    when: '',
-    who: '',
-    how: '',
-    howMuch: '',
+    eventId: eventId || "",
+    problemStatement: "",
+    what: "",
+    why: "",
+    where: "",
+    otherWhere: "",
+    when: "",
+    who: "",
+    how: "",
+    howMuch: "",
   });
 
   useEffect(() => {
@@ -79,21 +82,21 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
           const d2Data = response.data.content.d2[0];
           setFormData({
             eventId: d2Data.eventId || eventId,
-            problemStatement: d2Data.problemStatement || '',
-            what: d2Data.what || '',
-            why: d2Data.why || '',
-            where: d2Data.where || '',
-            otherWhere: d2Data.otherWhere || '',
-            when: d2Data.when || '',
-            who: d2Data.who || '',
-            how: d2Data.how || '',
-            howMuch: d2Data.howMuch || '',
+            problemStatement: d2Data.problemStatement || "",
+            what: d2Data.what || "",
+            why: d2Data.why || "",
+            where: d2Data.where || "",
+            otherWhere: d2Data.otherWhere || "",
+            when: d2Data.when || "",
+            who: d2Data.who || "",
+            how: d2Data.how || "",
+            howMuch: d2Data.howMuch || "",
           });
           setRecordId(eventId);
         }
       } catch (error) {
-        console.error('Error fetching D2 data:', error);
-        addToast('Error loading D2 data', 'error');
+        console.error("Error fetching D2 data:", error);
+        addToast("Error loading D2 data", "error");
       } finally {
         setLoading(false);
       }
@@ -103,12 +106,12 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
   }, [eventId]);
 
   const handleChange = (field: keyof D2FormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async () => {
     if (!formData.problemStatement.trim()) {
-      addToast('Problem Statement is required', 'error');
+      addToast("Problem Statement is required", "error");
       return;
     }
 
@@ -116,7 +119,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
     try {
       const payload = { d2: [formData] };
       const formDataToSend = new FormData();
-      formDataToSend.append('jsonContent', JSON.stringify(payload));
+      formDataToSend.append("jsonContent", JSON.stringify(payload));
 
       let response;
       if (recordId) {
@@ -128,19 +131,38 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
       if (response?.success) {
         const savedId = response.data?.id;
         if (savedId && !recordId) setRecordId(savedId);
-        addToast('D2 form saved successfully!', 'success');
+        addToast("D2 form saved successfully!", "success");
         if (updateParent) updateParent([formData]);
       }
     } catch (error: any) {
-      console.error('Error saving D2:', error);
-      addToast(error?.message || 'Failed to save D2 form', 'error');
+      console.error("Error saving D2:", error);
+      addToast(error?.message || "Failed to save D2 form", "error");
     } finally {
       setSaving(false);
     }
   };
 
+  const handleAutoFill = () => {
+    const mockData: D2FormData = {
+      eventId: formData.eventId,
+      problemStatement:
+        "Product X shows cracks after 2 hours of operation under normal load.",
+      what: "Cracks in the casing",
+      why: "Material fatigue due to substandard alloy",
+      where: "Assembly Line",
+      otherWhere: "",
+      when: new Date().toISOString(),
+      who: "Quality Control Team",
+      how: "Visual inspection during routine check",
+      howMuch: "Approx. 50 units affected, estimated cost $5000",
+    };
+    setFormData(mockData);
+    if (updateParent) updateParent([mockData]);
+    addToast("D2 form auto-filled!", "success");
+  };
+
   const getWhereDisplay = () => {
-    if (formData.where === 'Other' && formData.otherWhere) {
+    if (formData.where === "Other" && formData.otherWhere) {
       return formData.otherWhere;
     }
     return formData.where;
@@ -163,6 +185,13 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
           <Text style={styles.headerTitle}>D2 – Describe the Problem</Text>
           {eventId && <Text style={styles.headerBadge}>{eventId}</Text>}
         </View>
+        <TouchableOpacity
+          style={styles.autoFillButton}
+          onPress={handleAutoFill}
+        >
+          <Icon name="zap" size={16} color="#FFFFFF" />
+          <Text style={styles.autoFillButtonText}>Auto-fill</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -171,18 +200,20 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
           <TextInput
             style={styles.input}
             value={formData.eventId}
-            onChangeText={(text) => handleChange('eventId', text)}
+            onChangeText={(text) => handleChange("eventId", text)}
             placeholder="Enter Event ID"
             editable={false}
           />
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Briefly Describe the Problem <Text style={styles.required}>*</Text></Text>
+          <Text style={styles.label}>
+            Briefly Describe the Problem <Text style={styles.required}>*</Text>
+          </Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={formData.problemStatement}
-            onChangeText={(text) => handleChange('problemStatement', text)}
+            onChangeText={(text) => handleChange("problemStatement", text)}
             placeholder="e.g. Product X shows cracks after 2 hours of operation..."
             multiline
             numberOfLines={4}
@@ -197,7 +228,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={[styles.input, styles.textAreaSmall]}
                 value={formData.what}
-                onChangeText={(text) => handleChange('what', text)}
+                onChangeText={(text) => handleChange("what", text)}
                 placeholder="What happened?"
                 multiline
                 numberOfLines={2}
@@ -210,7 +241,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={[styles.input, styles.textAreaSmall]}
                 value={formData.why}
-                onChangeText={(text) => handleChange('why', text)}
+                onChangeText={(text) => handleChange("why", text)}
                 placeholder="Why does this matter?"
                 multiline
                 numberOfLines={2}
@@ -226,24 +257,27 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
                     key={area}
                     style={[
                       styles.dropdownOption,
-                      formData.where === area && styles.dropdownOptionActive
+                      formData.where === area && styles.dropdownOptionActive,
                     ]}
-                    onPress={() => handleChange('where', area)}
+                    onPress={() => handleChange("where", area)}
                   >
-                    <Text style={[
-                      styles.dropdownOptionText,
-                      formData.where === area && styles.dropdownOptionTextActive
-                    ]}>
+                    <Text
+                      style={[
+                        styles.dropdownOptionText,
+                        formData.where === area &&
+                          styles.dropdownOptionTextActive,
+                      ]}
+                    >
                       {area}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              {formData.where === 'Other' && (
+              {formData.where === "Other" && (
                 <TextInput
                   style={[styles.input, { marginTop: 8 }]}
                   value={formData.otherWhere}
-                  onChangeText={(text) => handleChange('otherWhere', text)}
+                  onChangeText={(text) => handleChange("otherWhere", text)}
                   placeholder="Enter other location..."
                 />
               )}
@@ -256,7 +290,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={styles.input}
                 value={formData.when}
-                onChangeText={(text) => handleChange('when', text)}
+                onChangeText={(text) => handleChange("when", text)}
                 placeholder="Date and time"
               />
             </View>
@@ -266,7 +300,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={styles.input}
                 value={formData.who}
-                onChangeText={(text) => handleChange('who', text)}
+                onChangeText={(text) => handleChange("who", text)}
                 placeholder="Person or team"
               />
             </View>
@@ -276,7 +310,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={styles.input}
                 value={formData.how}
-                onChangeText={(text) => handleChange('how', text)}
+                onChangeText={(text) => handleChange("how", text)}
                 placeholder="Detection method"
               />
             </View>
@@ -286,7 +320,7 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
               <TextInput
                 style={styles.input}
                 value={formData.howMuch}
-                onChangeText={(text) => handleChange('howMuch', text)}
+                onChangeText={(text) => handleChange("howMuch", text)}
                 placeholder="Estimated cost or quantity"
               />
             </View>
@@ -312,49 +346,49 @@ export default function D2FormProblem({ eventId, updateParent }: D2FormProblemPr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 40,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#6B7280',
+    color: "#6B7280",
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#2242a1',
+    backgroundColor: "#2242a1",
     borderTopWidth: 4,
-    borderTopColor: '#EE161F',
+    borderTopColor: "#EE161F",
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   headerTitle: {
     fontSize: isMobile ? 16 : 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   headerBadge: {
     fontSize: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   content: {
     flex: 1,
@@ -365,32 +399,32 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontWeight: "500",
+    color: "#374151",
     marginBottom: 4,
   },
   required: {
-    color: '#EF4444',
+    color: "#EF4444",
   },
   input: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#1F2937',
+    color: "#1F2937",
   },
   textArea: {
     minHeight: 80,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   textAreaSmall: {
     minHeight: 50,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   gridContainer: {
-    flexDirection: isMobile ? 'column' : 'row',
+    flexDirection: isMobile ? "column" : "row",
     gap: 16,
   },
   gridLeft: {
@@ -400,8 +434,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dropdownContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
     marginTop: 4,
   },
@@ -409,26 +443,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
   },
   dropdownOptionActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
   },
   dropdownOptionText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: "#6B7280",
   },
   dropdownOptionTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   submitButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: "#3B82F6",
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 20,
   },
@@ -437,7 +471,21 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  autoFillButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

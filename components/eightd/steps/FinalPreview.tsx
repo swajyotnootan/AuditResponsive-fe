@@ -1,163 +1,260 @@
-// app/components/eightd/steps/FinalPreview.tsx
-'use client';
-
-import React, { useEffect, useState } from 'react';
+/// <reference types="nativewind/types" />
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Image,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import { eightDAPI } from '../../../services/api';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+  CalendarDays,
+  Camera,
+  CheckCircle,
+  ClipboardCheck,
+  Download,
+  Edit3,
+  Eye,
+  File,
+  FileText,
+  Lightbulb,
+  Mail,
+  Plus,
+  Save,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  Users,
+  X,
+  XCircle,
+} from "lucide-react-native";
+import React, { ReactNode, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-const { width } = Dimensions.get('window');
-const isMobile = width < 768;
+import { API_BASE_URL } from "@/config/apiConfig";
+import { isInitiator } from "@/utils/roleUtils";
+import Generate8DPdf from "../Generate8DPdf";
 
-let FileSystem: any = null;
-let Sharing: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    FileSystem = require('expo-file-system');
-    Sharing = require('expo-sharing');
-  } catch (e) {
-    console.log('Native modules not available on this platform');
-  }
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
+export interface TeamMember {
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  department?: string;
+  isExternal?: boolean;
+  username?: string;
+  [key: string]: any;
 }
 
-const downloadAndShareFile = async (url: string, fileName: string): Promise<void> => {
-  try {
-    if (Platform.OS === 'web') {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-      return;
-    }
+export interface Attachment {
+  name: string;
+  url?: string;
+  size?: number;
+  mimeType?: string;
+  formType?: string;
+  [key: string]: any;
+}
 
-    if (FileSystem && Sharing) {
-      const fileUri = FileSystem.documentDirectory 
-        ? FileSystem.documentDirectory + fileName 
-        : FileSystem.cacheDirectory + fileName;
-      
-      const downloadResumable = FileSystem.createDownloadResumable(url, fileUri, {}, (downloadProgress: any) => {
-        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-        console.log(`Download progress: ${Math.round(progress * 100)}%`);
-      });
+export interface FileData {
+  id: string | number;
+  fileName: string;
+  mimeType: string;
+  fileType: string;
+  formType: string;
+  fileSize?: number;
+  [key: string]: any;
+}
 
-      const result = await downloadResumable.downloadAsync();
-      if (result?.uri) {
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri);
-        }
-      }
-    } else {
-      if (typeof window !== 'undefined') {
-        window.open(url, '_blank');
-      }
-    }
-  } catch (error) {
-    console.error('Error downloading file:', error);
-    throw error;
-  }
+export interface FormData {
+  status?: string;
+  d0?: Record<string, any>[];
+  d1?: Record<string, any>[];
+  d2?: Record<string, any>[];
+  d3?: Record<string, any>[];
+  d4?: Record<string, any>[];
+  d5?: Record<string, any>[];
+  d6?: Record<string, any>[];
+  d7?: Record<string, any>[];
+  d8?: Record<string, any>[];
+  [key: string]: any;
+}
+
+interface TooltipProps {
+  content: string;
+  children: ReactNode;
+}
+
+// ============================================================================
+// CUSTOM TOOLTIP COMPONENT
+// ============================================================================
+const SimpleTooltip = ({ content, children }: TooltipProps) => {
+  const [visible, setVisible] = useState<boolean>(false);
+  return (
+    <View className="relative">
+      <TouchableOpacity
+        onPress={() => setVisible(!visible)}
+        activeOpacity={0.7}
+      >
+        {children}
+      </TouchableOpacity>
+      {visible && (
+        <View className="absolute bottom-full mb-2 left-0 bg-gray-800 px-3 py-2 rounded-lg z-50 min-w-[150px]">
+          <Text className="text-xs text-white">{content}</Text>
+          <View className="absolute bottom-[-6px] left-4 w-3 h-3 bg-gray-800 transform rotate-45" />
+        </View>
+      )}
+    </View>
+  );
 };
 
-const StepIcons: Record<string, string> = {
-  d0: 'file-text', d1: 'users', d2: 'file-text', d3: 'shield',
-  d4: 'lightbulb', d5: 'clipboard', d6: 'calendar', d7: 'lightbulb', d8: 'user-check',
+// ============================================================================
+// MAIN FINAL PREVIEW COMPONENT
+// ============================================================================
+const StepIcons: Record<string, any> = {
+  d0: FileText,
+  d1: Users,
+  d2: FileText,
+  d3: ShieldCheck,
+  d4: Lightbulb,
+  d5: ClipboardCheck,
+  d6: CalendarDays,
+  d7: Lightbulb,
+  d8: UserCheck,
 };
 
 const stepTitles: Record<string, string> = {
-  d0: 'D0 – Plan & Contain', d1: 'D1 – Form the Team', d2: 'D2 – Describe the Problem',
-  d3: 'D3 – Interim Containment Actions', d4: 'D4 – Root Cause Analysis',
-  d5: 'D5 – Permanent Corrective Actions', d6: 'D6 – Implement & Validate PCAs',
-  d7: 'D7 – Prevent Recurrence', d8: 'D8 – Close & Recognize',
+  d0: "D0 – Plan & Contain",
+  d1: "D1 – Form the Team",
+  d2: "D2 – Describe the Problem",
+  d3: "D3 – Interim Containment Actions",
+  d4: "D4 – Root Cause Analysis",
+  d5: "D5 – Permanent Corrective Actions",
+  d6: "D6 – Implement & Validate PCAs",
+  d7: "D7 – Prevent Recurrence",
+  d8: "D8 – Close & Recognize",
 };
 
-const stepFields: Record<string, any[]> = {
+const stepFields: Record<string, { key: string; label: string }[]> = {
   d0: [
-    { key: 'eventNo', label: 'Event ID' }, { key: 'plantLine', label: 'Plant / Line' },
-    { key: 'partName', label: 'Part Name' }, { key: 'lotSerial', label: 'Lot / Serial' },
-    { key: 'defectCode', label: 'Defect Code' }, { key: 'dateDiscovered', label: 'Date Discovered' },
-    { key: 'reportedBy', label: 'Reported By' }, { key: 'personName', label: 'Person Name' },
-    { key: 'department', label: 'Department' }, { key: 'companyName', label: 'Company' },
-    { key: 'contactPerson', label: 'Contact Person' }, { key: 'phone', label: 'Phone' },
-    { key: 'email', label: 'Primary Email' }, { key: 'additionalEmails', label: 'Team Members' },
+    { key: "eventNo", label: "Event ID" },
+    { key: "plantLine", label: "Plant / Line" },
+    { key: "partName", label: "Part Name" },
+    { key: "lotSerial", label: "Lot / Serial" },
+    { key: "defectCode", label: "Defect Code" },
+    { key: "dateDiscovered", label: "Date Discovered" },
+    { key: "reportedBy", label: "Reported By" },
+    { key: "personName", label: "Person Name" },
+    { key: "department", label: "Department" },
+    { key: "companyName", label: "Company" },
+    { key: "contactPerson", label: "Contact Person" },
+    { key: "phone", label: "Phone" },
+    { key: "email", label: "Primary Email" },
+    { key: "additionalEmails", label: "Team Members" },
   ],
   d1: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'teamLeader', label: 'Team Leader' },
-    { key: 'dateFormed', label: 'Date Formed' }, { key: 'responsibilities', label: 'Team Responsibilities' },
-    { key: 'suppliers', label: 'Suppliers' }, { key: 'customers', label: 'Customers' },
+    { key: "eventId", label: "Event ID" },
+    { key: "teamLeader", label: "Team Leader" },
+    { key: "dateFormed", label: "Date Formed" },
+    { key: "responsibilities", label: "Team Responsibilities" },
+    { key: "suppliers", label: "Suppliers" },
+    { key: "customers", label: "Customers" },
   ],
   d2: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'problemStatement', label: 'Problem Statement' },
-    { key: 'what', label: 'WHAT' }, { key: 'why', label: 'WHY' }, { key: 'where', label: 'WHERE' },
-    { key: 'when', label: 'WHEN' }, { key: 'who', label: 'WHO' }, { key: 'how', label: 'HOW' },
-    { key: 'howMuch', label: 'Impact (HOW MUCH)' },
+    { key: "eventId", label: "Event ID" },
+    { key: "problemStatement", label: "Problem Statement" },
+    { key: "what", label: "WHAT" },
+    { key: "why", label: "WHY" },
+    { key: "where", label: "WHERE" },
+    { key: "when", label: "WHEN" },
+    { key: "who", label: "WHO" },
+    { key: "how", label: "HOW" },
+    { key: "howMuch", label: "Impact (HOW MUCH)" },
   ],
   d3: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'problemStatement', label: 'Problem Statement' },
-    { key: 'hasContainment', label: 'Containment Actions?' }, { key: 'actions', label: 'Containment Actions' },
+    { key: "eventId", label: "Event ID" },
+    { key: "problemStatement", label: "Problem Statement" },
+    { key: "hasContainment", label: "Containment Actions?" },
+    { key: "actions", label: "Containment Actions" },
   ],
   d4: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'rootCauseSummary', label: 'Root Cause Summary' },
-    { key: 'businessProcessFlaws', label: 'Business Process Flaws?' }, { key: 'whyNotDetected', label: 'Why Not Detected?' },
+    { key: "eventId", label: "Event ID" },
+    { key: "rootCauseSummary", label: "Root Cause Summary" },
+    { key: "businessProcessFlaws", label: "Business Process Flaws?" },
+    { key: "whyNotDetected", label: "Why Not Detected?" },
   ],
-  d5: [{ key: 'eventId', label: 'Event ID' }, { key: 'actions', label: 'Corrective Actions' }],
+  d5: [
+    { key: "eventId", label: "Event ID" },
+    { key: "actions", label: "Corrective Actions" },
+  ],
   d6: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'implementationDate', label: 'Implementation Date & Time' },
-    { key: 'communicatedToStakeholders', label: 'Communicated to Stakeholders?' }, { key: 'notes', label: 'Notes / Comments' },
+    { key: "eventId", label: "Event ID" },
+    { key: "implementationDate", label: "Implementation Date & Time" },
+    {
+      key: "communicatedToStakeholders",
+      label: "Communicated to Stakeholders?",
+    },
+    { key: "notes", label: "Notes / Comments" },
   ],
   d7: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'additionalMeasuresNeeded', label: 'Additional Measures Needed?' },
-    { key: 'lessonsLearned', label: 'Lessons Learned' }, { key: 'proceduresUpdated', label: 'Procedures Updated?' },
+    { key: "eventId", label: "Event ID" },
+    { key: "additionalMeasuresNeeded", label: "Additional Measures Needed?" },
+    { key: "lessonsLearned", label: "Lessons Learned" },
+    { key: "proceduresUpdated", label: "Procedures Updated?" },
   ],
   d8: [
-    { key: 'eventId', label: 'Event ID' }, { key: 'rewardDescription', label: 'Reward Description' },
-    { key: 'additionalRecommendations', label: 'Additional Recommendations' },
-    { key: 'teamLeaderName', label: 'Team Leader Name' }, { key: 'signatureDate', label: 'Signature Date & Time' },
+    { key: "eventId", label: "Event ID" },
+    { key: "rewardDescription", label: "Reward Description" },
+    { key: "additionalRecommendations", label: "Additional Recommendations" },
+    { key: "teamLeaderName", label: "Team Leader Name" },
+    { key: "signatureDate", label: "Signature Date & Time" },
   ],
 };
 
-const stepsOrder = ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8'];
+const stepsOrder: string[] = [
+  "d0",
+  "d1",
+  "d2",
+  "d3",
+  "d4",
+  "d5",
+  "d6",
+  "d7",
+  "d8",
+];
 
-interface FinalPreviewProps {
-  eventId?: string | null;
+export default function FinalPreview({
+  eventId,
+  isHOD = false,
+  onRefresh,
+}: {
+  eventId: string | number | null;
   isHOD?: boolean;
-}
-
-export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewProps) {
-  const { user } = useAuth();
-  const { addToast } = useToast();
-  
+  onRefresh?: () => void;
+}) {
   const [eventData, setEventData] = useState<any>(null);
-  const [files, setFiles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [previewFile, setPreviewFile] = useState<{ url: string; fileName: string; mimeType: string } | null>(null);
-  
-  const [approving, setApproving] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [approvalComment, setApprovalComment] = useState('');
-  
-  const [isEditingMembers, setIsEditingMembers] = useState(false);
-  const [tempTeamMembers, setTempTeamMembers] = useState<any[]>([]);
-  const [updatingMembers, setUpdatingMembers] = useState(false);
+  const [files, setFiles] = useState<FileData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [previewFile, setPreviewFile] = useState<{
+    mimeType: string;
+    fileName: string;
+  } | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
+  const [approving, setApproving] = useState<boolean>(false);
+  const [rejecting, setRejecting] = useState<boolean>(false);
+  const [isEditingMembers, setIsEditingMembers] = useState<boolean>(false);
+  const [tempTeamMembers, setTempTeamMembers] = useState<TeamMember[]>([]);
+  const [updatingMembers, setUpdatingMembers] = useState<boolean>(false);
+  const [approvalComment, setApprovalComment] = useState<string>("");
   const [memberError, setMemberError] = useState<string | null>(null);
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null);
 
@@ -173,38 +270,42 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!eventId) {
-        setLoading(false);
-        return;
-      }
+      if (!eventId) return;
       try {
         setLoading(true);
-        const eventIdString = String(eventId);
-        const [eventRes, filesRes] = await Promise.all([
-          eightDAPI.getById(eventIdString),
-          eightDAPI.getFiles(eventIdString),
-        ]);
         
-        if (eventRes?.success && eventRes.data) {
-          setEventData(eventRes.data);
-          const d0Data = eventRes.data.content?.d0?.[0] || {};
-          
+        const [eventRes, filesRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/eightd/data/${eventId}`),
+          axios.get(`${API_BASE_URL}/api/eightd/data/${eventId}/files`),
+        ]);
+        if (eventRes.data.success && eventRes.data.data) {
+          setEventData(eventRes.data.data);
+          const d0Data = eventRes.data.data.content?.d0?.[0] || {};
           if (d0Data.teamMembers && Array.isArray(d0Data.teamMembers)) {
             setTempTeamMembers([...d0Data.teamMembers]);
           } else if (Array.isArray(d0Data.additionalEmails)) {
-            setTempTeamMembers(d0Data.additionalEmails.map((email: string) => ({
-              email, firstName: '', lastName: '', department: '', isExternal: true
-            })));
+            setTempTeamMembers(
+              d0Data.additionalEmails.map((email: string) => ({
+                email,
+                firstName: "",
+                lastName: "",
+                department: "",
+                isExternal: true,
+              })),
+            );
           } else {
             setTempTeamMembers([]);
           }
         }
-        if (filesRes?.success && filesRes.data) {
-          setFiles(filesRes.data);
+        if (filesRes.data.success && filesRes.data.data) {
+          setFiles(filesRes.data.data);
         }
-      } catch (error) {
-        console.error('Error fetching final preview:', error);
-        addToast('Failed to load preview data', 'error');
+      } catch (err: any) {
+        console.error("Error fetching final preview ", err);
+        Alert.alert(
+          "Error",
+          "Failed to load event data. Check your network connection.",
+        );
       } finally {
         setLoading(false);
       }
@@ -212,78 +313,39 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
     fetchData();
   }, [eventId]);
 
-  const getEightDFileUrl = (fileId: string) => `http:///api/eightd/files/${fileId}`;
-
-  const handleFileClick = async (fileId: string, mimeType: string, fileName: string) => {
-    try {
-      const blob = await eightDAPI.downloadFile(fileId);
-      const url = URL.createObjectURL(blob);
-      setPreviewFile({ url, fileName, mimeType });
-      setPreviewVisible(true);
-    } catch (error) {
-      console.error('Error fetching file:', error);
-      addToast('Failed to load file', 'error');
-    }
-  };
-
-  const handleDownloadFile = async () => {
-    if (!previewFile) return;
-    try {
-      await downloadAndShareFile(previewFile.url, previewFile.fileName);
-    } catch (error) {
-      console.error('Error downloading file:', error);
-      addToast('Failed to download file', 'error');
-    }
-  };
-
-  const formatValue = (value: any): React.ReactNode => {
-    if (value == null || value === '') return '—';
-    if (typeof value === 'string' && /\d{4}-\d{2}-\d{2}/.test(value)) {
-      try { return new Date(value).toLocaleString(); } catch { return value; }
-    }
-    if (Array.isArray(value)) {
-      if (value.length === 0) return '—';
-      if (value.every((item) => typeof item === 'string' && item.includes('@'))) {
-        return value.map((email, idx) => (
-          <View key={idx} style={styles.emailTag}><Text style={styles.emailTagText}>{email}</Text></View>
-        ));
+  useEffect(() => {
+    const getUserRole = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setUserRole(user?.role || null);
+        }
+      } catch (error) {
+        console.error("Failed to get user role", error);
       }
-      return value.join(', ');
-    }
-    if (typeof value === 'object') return JSON.stringify(value, null, 2);
-    return String(value);
-  };
-
-  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    };
+    getUserRole();
+  }, []);
 
   const startEditingTeamMembers = () => {
     setMemberError(null);
     setMemberSuccess(null);
     const d0Data = eventData.content?.d0?.[0] || {};
-    let currentMembers = [];
+    let currentMembers: TeamMember[] = [];
     if (d0Data.teamMembers && Array.isArray(d0Data.teamMembers)) {
       currentMembers = [...d0Data.teamMembers];
     } else if (Array.isArray(d0Data.additionalEmails)) {
       currentMembers = d0Data.additionalEmails.map((email: string) => ({
-        email, firstName: '', lastName: '', department: '', isExternal: true
+        email,
+        firstName: "",
+        lastName: "",
+        department: "",
+        isExternal: true,
       }));
     }
     setTempTeamMembers(currentMembers);
     setIsEditingMembers(true);
-  };
-
-  const addNewMemberField = () => {
-    setTempTeamMembers(prev => [...prev, { firstName: '', lastName: '', email: '', department: '', isExternal: true, username: '' }]);
-  };
-
-  const removeMemberField = (index: number) => {
-    setTempTeamMembers(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const updateMemberField = (index: number, field: string, value: any) => {
-    const newMembers = [...tempTeamMembers];
-    newMembers[index] = { ...newMembers[index], [field]: value };
-    setTempTeamMembers(newMembers);
   };
 
   const saveTeamMembers = async () => {
@@ -296,26 +358,31 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
         .map((member) => ({
           ...member,
           email: member.email.trim(),
-          firstName: member.firstName?.trim() || '',
-          lastName: member.lastName?.trim() || '',
-          department: member.department?.trim() || '',
+          firstName: member.firstName?.trim() || "",
+          lastName: member.lastName?.trim() || "",
+          department: member.department?.trim() || "",
           isExternal: member.isExternal || true,
         }));
-
-      const invalidEmails = validMembers.filter((member) => !isValidEmail(member.email));
+      const invalidEmails = validMembers.filter(
+        (member) => !isValidEmail(member.email),
+      );
       if (invalidEmails.length > 0) {
-        setMemberError(`Invalid email format: ${invalidEmails.map(m => m.email).join(', ')}`);
+        setMemberError(
+          `Invalid email format: ${invalidEmails.map((m) => m.email).join(", ")}`,
+        );
         return;
       }
-
       const emails = validMembers.map((m) => m.email);
       if ([...new Set(emails)].length !== emails.length) {
-        setMemberError('Duplicate email addresses found. Please remove duplicates.');
+        setMemberError(
+          "Duplicate email addresses found. Please remove duplicates.",
+        );
         return;
       }
-
       if (validMembers.length === 0) {
-        setMemberError('Please add at least one team member with a valid email');
+        setMemberError(
+          "Please add at least one team member with a valid email",
+        );
         return;
       }
 
@@ -324,31 +391,37 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
         teamMembers: validMembers,
         additionalEmails: validMembers.map((member) => member.email),
       };
-
       const formDataToSend = new FormData();
-      const jsonPayload = {
-        content: {
-          ...eventData.content,
-          d0: [updatedD0Data],
+      formDataToSend.append(
+        "jsonContent",
+        JSON.stringify({
+          content: { ...eventData.content, d0: [updatedD0Data] },
+        }),
+      );
+
+      const res = await axios.put(
+        `${API_BASE_URL}/api/eightd/data/${eventId}`,
+        formDataToSend,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
         },
-      };
-      formDataToSend.append('jsonContent', JSON.stringify(jsonPayload));
-
-      const res = await eightDAPI.update(String(eventId), formDataToSend);
-
-      if (res?.success) {
+      );
+      if (res.data.success) {
         setEventData((prev: any) => ({
           ...prev,
           content: { ...prev.content, d0: [updatedD0Data] },
         }));
-        setMemberSuccess('✅ Team members updated successfully!');
+        setMemberSuccess("✅ Team members updated successfully!");
         setIsEditingMembers(false);
       } else {
-        throw new Error(res?.error || 'Failed to update team members');
+        throw new Error(res.data.error || "Failed to update team members");
       }
-    } catch (error: any) {
-      console.error('Failed to update team members:', error);
-      setMemberError(`❌ Failed to update: ${error?.message || 'Unknown error'}`);
+    } catch (err: any) {
+      console.error("Failed to update team members:", err);
+      setMemberError(
+        "❌ Failed to update team members: " +
+          (err.response?.data?.error || err.message),
+      );
     } finally {
       setUpdatingMembers(false);
     }
@@ -358,472 +431,920 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
     setMemberError(null);
     setMemberSuccess(null);
     const d0Data = eventData.content?.d0?.[0] || {};
-    let currentMembers = [];
+    let currentMembers: TeamMember[] = [];
     if (d0Data.teamMembers && Array.isArray(d0Data.teamMembers)) {
       currentMembers = [...d0Data.teamMembers];
     } else if (Array.isArray(d0Data.additionalEmails)) {
       currentMembers = d0Data.additionalEmails.map((email: string) => ({
-        email, firstName: '', lastName: '', department: '', isExternal: true
+        email,
+        firstName: "",
+        lastName: "",
+        department: "",
+        isExternal: true,
       }));
     }
     setTempTeamMembers(currentMembers);
     setIsEditingMembers(false);
   };
 
-  const handleApprove = async () => {
-    if (!isHOD || !approvalComment.trim() || approvalComment.trim().length < 10) return;
-    if (!eventId) { addToast('Event ID is required', 'error'); return; }
+  const addNewMemberField = () =>
+    setTempTeamMembers((prev) => [
+      ...prev,
+      {
+        firstName: "",
+        lastName: "",
+        email: "",
+        department: "",
+        isExternal: true,
+        username: "",
+      },
+    ]);
 
+  const removeMemberField = (index: number) =>
+    setTempTeamMembers((prev) => prev.filter((_, i) => i !== index));
+
+  const updateMemberField = (index: number, field: string, value: any) => {
+    const newMembers = [...tempTeamMembers];
+    newMembers[index] = { ...newMembers[index], [field]: value };
+    setTempTeamMembers(newMembers);
+  };
+
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const getFilesForForm = (formType: string) =>
+    files.filter((file) => file.formType === formType);
+  const getEightDFileUrl = (fileId: string | number) =>
+    `${API_BASE_URL}/api/eightd/files/${fileId}`;
+
+  const handleFileClick = async (
+    fileId: string | number,
+    mimeType: string,
+    fileName: string,
+  ) => {
+    try {
+      const fileUrl = getEightDFileUrl(fileId);
+      if (Platform.OS === "web") {
+        const response = await axios.get(fileUrl, { responseType: "blob" });
+        const blobUrl = URL.createObjectURL(response.data);
+        setPreviewUrl(blobUrl);
+        setPreviewFile({ mimeType, fileName });
+      } else {
+        const fs = FileSystem as any;
+        const directory = fs.cacheDirectory || fs.documentDirectory || "";
+        if (!directory) {
+          Alert.alert(
+            "Error",
+            "File system directory not available on this device.",
+          );
+          return;
+        }
+        const fileUri = `${directory}${fileId}_${fileName}`;
+        await FileSystem.downloadAsync(fileUrl, fileUri);
+        setPreviewUrl(fileUri);
+        setPreviewFile({ mimeType, fileName });
+      }
+    } catch (err: any) {
+      console.error("Error fetching file:", err);
+      Alert.alert("Error", "Failed to load file.");
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewUrl(undefined);
+    setPreviewFile(null);
+  };
+
+  const handleApprove = async () => {
+    if (!isHOD || !approvalComment.trim() || approvalComment.trim().length < 10)
+      return;
     try {
       setApproving(true);
-      const res = await eightDAPI.approve(String(eventId), {
-        userEmail: user?.email || '',
-        comment: approvalComment.trim(),
-      });
-      if (res?.success) {
-        addToast('✅ Document approved successfully!', 'success');
-        setApprovalComment('');
-        const response = await eightDAPI.getById(String(eventId));
-        if (response?.success && response.data) setEventData(response.data);
+      const userStr = await AsyncStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : null;
+      const res = await axios.post(
+        `${API_BASE_URL}/api/eightd/approve/${eventId}`,
+        {
+          userEmail: user?.email,
+          comment: approvalComment.trim(),
+        },
+      );
+      if (res.data.success) {
+        Alert.alert("Success", "✅ Document approved successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              setApprovalComment("");
+              if (onRefresh) onRefresh();
+            },
+          },
+        ]);
       }
-    } catch (error: any) {
-      addToast('Approval failed: ' + (error?.response?.data?.error || error?.message), 'error');
+    } catch (err: any) {
+      Alert.alert(
+        "Error",
+        "Approval failed: " + (err.response?.data?.error || err.message),
+      );
     } finally {
       setApproving(false);
     }
   };
 
   const handleReject = async () => {
-    if (!isHOD || !approvalComment.trim() || approvalComment.trim().length < 10) return;
-    if (!eventId) { addToast('Event ID is required', 'error'); return; }
-
+    if (!isHOD || !approvalComment.trim() || approvalComment.trim().length < 10)
+      return;
     try {
       setRejecting(true);
-      const res = await eightDAPI.reject(String(eventId), {
-        userEmail: user?.email || '',
-        comment: approvalComment.trim(),
-      });
-      if (res?.success) {
-        addToast('❌ Document rejected successfully!', 'error');
-        setApprovalComment('');
-        const response = await eightDAPI.getById(String(eventId));
-        if (response?.success && response.data) setEventData(response.data);
+      const userStr = await AsyncStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : null;
+      const res = await axios.post(
+        `${API_BASE_URL}/api/eightd/reject/${eventId}`,
+        {
+          userEmail: user?.email,
+          comment: approvalComment.trim(),
+        },
+      );
+      if (res.data.success) {
+        Alert.alert("Rejected", "❌ Document rejected successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              setApprovalComment("");
+              if (onRefresh) onRefresh();
+            },
+          },
+        ]);
       }
-    } catch (error: any) {
-      addToast('Rejection failed: ' + (error?.response?.data?.error || error?.message), 'error');
+    } catch (err: any) {
+      Alert.alert(
+        "Error",
+        "Rejection failed: " + (err.response?.data?.error || err.message),
+      );
     } finally {
       setRejecting(false);
     }
   };
 
+  const formatValue = (value: any) => {
+    if (value == null || value === "")
+      return <Text className="text-gray-500">—</Text>;
+    if (typeof value === "string" && /\d{4}-\d{2}-\d{2}/.test(value)) {
+      try {
+        return (
+          <Text className="text-gray-800">
+            {new Date(value).toLocaleString()}
+          </Text>
+        );
+      } catch {
+        return <Text className="text-gray-800">{value}</Text>;
+      }
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <Text className="text-gray-500">—</Text>;
+      if (
+        value[0] &&
+        (typeof value[0] === "string" ||
+          (value[0].action && typeof value[0].action === "string"))
+      ) {
+        return (
+          <View className="pl-5 mt-1">
+            {value.map((item: any, idx: number) => (
+              <View key={idx} className="flex-row mb-1">
+                <Text className="text-gray-700">
+                  • {typeof item === "string" ? item : item.action}
+                </Text>
+              </View>
+            ))}
+          </View>
+        );
+      }
+      if (value[0] && typeof value[0] === "object" && value[0].name) {
+        return (
+          <View className="mt-1">
+            {value.map((member: any, idx: number) => (
+              <View
+                key={idx}
+                className="p-2 mb-2 border border-gray-200 rounded bg-gray-50"
+              >
+                <Text>
+                  <Text className="font-semibold">Name: </Text>
+                  {member.name}
+                </Text>
+                <Text>
+                  <Text className="font-semibold">Role: </Text>
+                  {member.role}
+                </Text>
+                <Text>
+                  <Text className="font-semibold">Dept: </Text>
+                  {member.department}
+                </Text>
+                <Text>
+                  <Text className="font-semibold">Contact: </Text>
+                  {member.contact}
+                </Text>
+              </View>
+            ))}
+          </View>
+        );
+      }
+      return (
+        <View className="flex-row flex-wrap gap-2 mt-1">
+          {value.map((email: string, idx: number) => (
+            <View key={idx} className="px-2 py-1 bg-blue-100 rounded-full">
+              <Text className="text-sm text-blue-800">{email}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    if (typeof value === "object")
+      return (
+        <Text className="text-gray-800">{JSON.stringify(value, null, 2)}</Text>
+      );
+    return <Text className="text-gray-800">{String(value)}</Text>;
+  };
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2242a1" />
-        <Text style={styles.loadingText}>Loading preview...</Text>
+      <View className="items-center justify-center flex-1 h-64 bg-white">
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text className="mt-2 text-lg text-gray-600">
+          Loading final preview...
+        </Text>
       </View>
     );
   }
-
   if (!eventData) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No data available for this event.</Text>
+      <View className="items-center justify-center flex-1 p-6 bg-white">
+        <Text className="text-center text-gray-600">
+          No data available for this event.
+        </Text>
       </View>
     );
   }
 
-  const isApprovalPending = eventData.status?.toLowerCase() === 'approval pending';
+  const isApprovalPending = eventData.status === "approval pending";
+  const checkIsInitiator = userRole
+    ? typeof isInitiator === "function"
+      ? isInitiator(userRole)
+      : Boolean(isInitiator)
+    : false;
+
+  const mappedAttachments = files.map((file) => ({
+    name: file.fileName,
+    url: getEightDFileUrl(file.id),
+    size: file.fileSize || 0,
+    mimeType: file.mimeType,
+    formType: file.formType,
+  }));
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Icon name="award" size={32} color="#2242a1" />
+    <ScrollView className="flex-1 bg-gray-50">
+      <View className="flex-1 p-4 bg-white border border-gray-200 shadow-lg rounded-xl">
+        <View className="flex-row items-center justify-between pb-4 mb-4 border-b border-gray-200">
+          <View className="flex-row items-center">
+            <Image
+              source={require("@/assets/Stratum.png")}
+              className="w-10 h-10 mr-3"
+              style={{ width: 70, height: 70 }}
+              resizeMode="contain"
+            />
+            <View className="pl-3 border-l border-gray-300" />
           </View>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>8D Report - Preview</Text>
-            <Text style={styles.headerSubtitle}>Event ID: <Text style={styles.headerEventId}>{eventId}</Text></Text>
+          <View className="items-center flex-1 mx-4">
+            <Text className="text-xl font-bold text-center text-gray-900">
+              8D Report - Preview
+            </Text>
+            <Text className="mt-1 text-center text-gray-600">
+              Event ID: <Text className="font-semibold">{eventId}</Text>
+            </Text>
           </View>
+          <View className="w-24" />
         </View>
 
+        {eventData.status === "submitted" && (
+          <View className="p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+            <View className="flex-row items-center gap-2">
+              <CheckCircle size={20} color="#16A34A" />
+              <Text className="font-semibold text-green-800">
+                This 8D Report has been submitted and is now read-only.
+              </Text>
+            </View>
+          </View>
+        )}
         {memberError && (
-          <View style={[styles.messageContainer, styles.messageError]}>
-            <Icon name="alert-circle" size={16} color="#DC2626" />
-            <Text style={styles.messageErrorText}>{memberError}</Text>
+          <View className="p-3 mb-4 border border-red-200 rounded-lg bg-red-50">
+            <View className="flex-row items-center gap-2">
+              <XCircle size={16} color="#DC2626" />
+              <Text className="text-sm text-red-800">{memberError}</Text>
+            </View>
           </View>
         )}
         {memberSuccess && (
-          <View style={[styles.messageContainer, styles.messageSuccess]}>
-            <Icon name="check-circle" size={16} color="#059669" />
-            <Text style={styles.messageSuccessText}>{memberSuccess}</Text>
+          <View className="p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+            <View className="flex-row items-center gap-2">
+              <CheckCircle size={16} color="#16A34A" />
+              <Text className="text-sm text-green-800">{memberSuccess}</Text>
+            </View>
           </View>
         )}
 
-        {stepsOrder.map((stepKey) => {
-          const stepData = eventData.content?.[stepKey]?.[0] || {};
-          const stepFiles = files.filter((file) => file.formType === stepKey);
-          const iconName = StepIcons[stepKey] || 'file-text';
-
-          return (
-            <View key={stepKey} style={styles.stepSection}>
-              <View style={styles.stepHeader}>
-                <Icon name={iconName} size={20} color="#4F46E5" />
-                <Text style={styles.stepTitle}>{stepTitles[stepKey]}</Text>
-              </View>
-
-              <View style={styles.stepContent}>
-                {stepFields[stepKey].map((field) => {
-                  const value = stepData[field.key];
-
-                  if (field.key === 'additionalEmails' && stepKey === 'd0') {
-                    const teamMembersData = stepData.teamMembers || [];
-                    const additionalEmailsData = stepData.additionalEmails || [];
-                    const displayMembers = teamMembersData.length > 0 
-                      ? teamMembersData 
-                      : additionalEmailsData.map((email: string) => ({ email, isExternal: true }));
-
-                    return (
-                      <View key={field.key} style={styles.fieldRow}>
-                        <Text style={styles.fieldLabel}>{field.label}:</Text>
-                        <View style={styles.fieldValueContainer}>
+        <View className="space-y-6">
+          {stepsOrder.map((stepKey) => {
+            const stepData = eventData.content?.[stepKey]?.[0] || {};
+            const stepFiles = getFilesForForm(stepKey);
+            const Icon = StepIcons[stepKey];
+            return (
+              <View
+                key={stepKey}
+                className="pb-6 mb-6 border-b border-gray-200 last:border-b-0"
+              >
+                <View className="flex-row items-center gap-2 mb-3">
+                  <Icon size={24} color="#4F46E5" />
+                  <Text className="text-lg font-semibold">
+                    {stepTitles[stepKey]}
+                  </Text>
+                </View>
+                <View className="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50">
+                  {stepFields[stepKey].map((field) => {
+                    const value = stepData[field.key];
+                    if (field.key === "additionalEmails" && stepKey === "d0") {
+                      const teamMembersData = stepData.teamMembers || [];
+                      const additionalEmailsData =
+                        stepData.additionalEmails || [];
+                      const displayMembers =
+                        teamMembersData.length > 0
+                          ? teamMembersData
+                          : additionalEmailsData.map((email: string) => ({
+                              email,
+                              isExternal: true,
+                            }));
+                      return (
+                        <View
+                          key={field.key}
+                          className="py-2 border-b border-gray-200 last:border-b-0"
+                        >
+                          <Text className="mb-2 font-medium text-gray-800">
+                            {field.label}:
+                          </Text>
                           {isEditingMembers ? (
-                            <View style={styles.editMembersContainer}>
-                              {tempTeamMembers.map((member, idx) => (
-                                <View key={idx} style={styles.editMemberRow}>
-                                  <View style={styles.editMemberInputs}>
-                                    <View style={styles.editInputRow}>
-                                      <TextInput style={[styles.editInput, { flex: 1 }]} value={member.firstName} onChangeText={(text) => updateMemberField(idx, 'firstName', text)} placeholder="First Name" placeholderTextColor="#9CA3AF" />
-                                      <TextInput style={[styles.editInput, { flex: 1 }]} value={member.lastName} onChangeText={(text) => updateMemberField(idx, 'lastName', text)} placeholder="Last Name" placeholderTextColor="#9CA3AF" />
-                                    </View>
-                                    <TextInput
-                                      style={[styles.editInput, styles.editInputEmail, member.email && !isValidEmail(member.email) && styles.inputError]}
-                                      value={member.email}
-                                      onChangeText={(text) => updateMemberField(idx, 'email', text)}
-                                      placeholder="Email *"
-                                      placeholderTextColor="#9CA3AF"
-                                      keyboardType="email-address"
-                                      autoCapitalize="none"
-                                    />
-                                    {member.email && !isValidEmail(member.email) && (
-                                      <Text style={styles.errorText}>Invalid email format</Text>
-                                    )}
-                                    <TextInput style={styles.editInput} value={member.department} onChangeText={(text) => updateMemberField(idx, 'department', text)} placeholder="Department" placeholderTextColor="#9CA3AF" />
-                                    
-                                    <TouchableOpacity style={styles.checkboxRow} onPress={() => updateMemberField(idx, 'isExternal', !member.isExternal)}>
-                                      <View style={[styles.checkbox, member.isExternal && styles.checkboxChecked]}>
-                                        {member.isExternal && <Icon name="check" size={12} color="#FFFFFF" />}
+                            <View className="space-y-3">
+                              <View className="p-3 bg-white border border-gray-200 rounded-lg max-h-96">
+                                {tempTeamMembers.map((member, idx) => (
+                                  <View
+                                    key={idx}
+                                    className="flex-row items-start gap-2 p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50"
+                                  >
+                                    <View className="flex-1">
+                                      <View className="mb-2">
+                                        <Text className="mb-1 text-xs text-gray-500">
+                                          First Name
+                                        </Text>
+                                        <TextInput
+                                          value={member.firstName || ""}
+                                          onChangeText={(text) =>
+                                            updateMemberField(
+                                              idx,
+                                              "firstName",
+                                              text,
+                                            )
+                                          }
+                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          placeholder="First name"
+                                        />
                                       </View>
-                                      <Text style={styles.checkboxLabel}>External team member (not in system)</Text>
+                                      <View className="mb-2">
+                                        <Text className="mb-1 text-xs text-gray-500">
+                                          Last Name
+                                        </Text>
+                                        <TextInput
+                                          value={member.lastName || ""}
+                                          onChangeText={(text) =>
+                                            updateMemberField(
+                                              idx,
+                                              "lastName",
+                                              text,
+                                            )
+                                          }
+                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          placeholder="Last name"
+                                        />
+                                      </View>
+                                      <View className="mb-2">
+                                        <Text className="mb-1 text-xs text-gray-500">
+                                          Email *
+                                        </Text>
+                                        <TextInput
+                                          value={member.email || ""}
+                                          onChangeText={(text) =>
+                                            updateMemberField(
+                                              idx,
+                                              "email",
+                                              text,
+                                            )
+                                          }
+                                          className={`w-full px-3 py-2 text-sm bg-white border rounded-lg ${member.email && !isValidEmail(member.email) ? "border-red-300 bg-red-50" : "border-gray-300"}`}
+                                          placeholder="team.member@example.com"
+                                          keyboardType="email-address"
+                                          autoCapitalize="none"
+                                        />
+                                        {member.email &&
+                                          !isValidEmail(member.email) && (
+                                            <Text className="mt-1 text-xs text-red-500">
+                                              Invalid email format
+                                            </Text>
+                                          )}
+                                      </View>
+                                      <View className="mb-2">
+                                        <Text className="mb-1 text-xs text-gray-500">
+                                          Department
+                                        </Text>
+                                        <TextInput
+                                          value={member.department || ""}
+                                          onChangeText={(text) =>
+                                            updateMemberField(
+                                              idx,
+                                              "department",
+                                              text,
+                                            )
+                                          }
+                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          placeholder="Department"
+                                        />
+                                      </View>
+                                      <View className="flex-row items-center gap-2 mt-2">
+                                        <TouchableOpacity
+                                          onPress={() =>
+                                            updateMemberField(
+                                              idx,
+                                              "isExternal",
+                                              !member.isExternal,
+                                            )
+                                          }
+                                          className="items-center justify-center w-5 h-5 bg-white border border-gray-300 rounded"
+                                        >
+                                          {member.isExternal && (
+                                            <View className="w-3 h-3 bg-blue-500 rounded-sm" />
+                                          )}
+                                        </TouchableOpacity>
+                                        <Text className="text-xs text-gray-600">
+                                          External team member
+                                        </Text>
+                                      </View>
+                                    </View>
+                                    <TouchableOpacity
+                                      onPress={() => removeMemberField(idx)}
+                                      className="p-2 bg-red-100 rounded-full"
+                                    >
+                                      <Trash2 size={16} color="#EF4444" />
                                     </TouchableOpacity>
                                   </View>
-                                  <TouchableOpacity style={styles.removeMemberBtn} onPress={() => removeMemberField(idx)}>
-                                    <Icon name="trash-2" size={16} color="#EF4444" />
-                                  </TouchableOpacity>
-                                </View>
-                              ))}
-                              
-                              <View style={styles.editActions}>
-                                <TouchableOpacity style={styles.addMemberBtn} onPress={addNewMemberField}>
-                                  <Icon name="plus" size={16} color="#FFFFFF" />
-                                  <Text style={styles.addMemberBtnText}>Add Member</Text>
+                                ))}
+                                {tempTeamMembers.length === 0 && (
+                                  <View className="items-center py-4">
+                                    <Users size={24} color="#9CA3AF" />
+                                    <Text className="mt-2 text-center text-gray-500">
+                                      No team members added yet.
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <View className="flex-row flex-wrap gap-2">
+                                <TouchableOpacity
+                                  onPress={addNewMemberField}
+                                  className="flex-row items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                                >
+                                  <Plus size={16} color="white" />
+                                  <Text className="text-sm text-white">
+                                    Add Member
+                                  </Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.saveMembersBtn, updatingMembers && styles.disabledBtn]} onPress={saveTeamMembers} disabled={updatingMembers || tempTeamMembers.some(m => !m.email || !isValidEmail(m.email))}>
-                                  {updatingMembers ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveMembersBtnText}>Save Changes</Text>}
+                                <TouchableOpacity
+                                  onPress={saveTeamMembers}
+                                  disabled={
+                                    updatingMembers ||
+                                    tempTeamMembers.some(
+                                      (member) =>
+                                        !member.email ||
+                                        !isValidEmail(member.email),
+                                    )
+                                  }
+                                  className={`flex-row items-center gap-2 px-4 py-2 rounded-lg ${updatingMembers || tempTeamMembers.some((member) => !member.email || !isValidEmail(member.email)) ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
+                                >
+                                  {updatingMembers ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="white"
+                                    />
+                                  ) : (
+                                    <Save size={16} color="white" />
+                                  )}
+                                  <Text className="text-sm text-white">
+                                    {updatingMembers
+                                      ? "Saving..."
+                                      : "Save Changes"}
+                                  </Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.cancelMembersBtn, updatingMembers && styles.disabledBtn]} onPress={cancelEditingMembers} disabled={updatingMembers}>
-                                  <Text style={styles.cancelMembersBtnText}>Cancel</Text>
+                                <TouchableOpacity
+                                  onPress={cancelEditingMembers}
+                                  disabled={updatingMembers}
+                                  className="flex-row items-center gap-2 px-4 py-2 bg-gray-600 rounded-lg active:bg-gray-700"
+                                >
+                                  <X size={16} color="white" />
+                                  <Text className="text-sm text-white">
+                                    Cancel
+                                  </Text>
                                 </TouchableOpacity>
+                              </View>
+                              <View className="p-3 border border-blue-200 rounded-lg bg-blue-50">
+                                <Text className="text-xs text-blue-800">
+                                  <Text className="font-semibold">
+                                    Instructions:
+                                  </Text>
+                                  {"\n"}• Fill in team member details (email is
+                                  required){"\n"}• Mark as "External" if the
+                                  member is not in the system{"\n"}• Click "Add
+                                  Member" to add more team members{"\n"}• These
+                                  details will be saved to the 8D event data
+                                </Text>
                               </View>
                             </View>
                           ) : (
-                            <View style={styles.memberDisplayContainer}>
+                            <View className="flex-col gap-3">
                               {displayMembers.length > 0 ? (
-                                displayMembers.map((member: any, idx: number) => (
-                                  <View key={idx} style={styles.memberCard}>
-                                    <View style={styles.memberCardHeader}>
-                                      <View style={styles.memberAvatar}>
-                                        <Icon name="user" size={14} color="#3B82F6" />
+                                <View className="gap-3">
+                                  {displayMembers.map(
+                                    (member: any, idx: number) => (
+                                      <View
+                                        key={idx}
+                                        className="p-3 bg-white border border-gray-200 rounded-lg"
+                                      >
+                                        <View className="flex-row items-start justify-between">
+                                          <View className="flex-1">
+                                            <View className="flex-row items-center gap-2 mb-2">
+                                              <View className="items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                                                <Users
+                                                  size={14}
+                                                  color="#2563EB"
+                                                />
+                                              </View>
+                                              <View className="flex-1">
+                                                <Text
+                                                  className="font-semibold text-gray-800"
+                                                  numberOfLines={1}
+                                                >
+                                                  {member.firstName ||
+                                                  member.lastName
+                                                    ? `${member.firstName || ""} ${member.lastName || ""}`.trim()
+                                                    : "Unnamed Member"}
+                                                </Text>
+                                                <SimpleTooltip
+                                                  content={member.email}
+                                                >
+                                                  <View className="flex-row items-center gap-1">
+                                                    <Mail
+                                                      size={12}
+                                                      color="#4B5563"
+                                                    />
+                                                    <Text
+                                                      className="text-sm text-gray-600"
+                                                      numberOfLines={1}
+                                                    >
+                                                      {member.email}
+                                                    </Text>
+                                                  </View>
+                                                </SimpleTooltip>
+                                              </View>
+                                            </View>
+                                            <View className="space-y-1">
+                                              {member.department && (
+                                                <SimpleTooltip
+                                                  content={member.department}
+                                                >
+                                                  <Text
+                                                    className="text-xs text-gray-600"
+                                                    numberOfLines={1}
+                                                  >
+                                                    <Text className="font-medium">
+                                                      Department:
+                                                    </Text>{" "}
+                                                    {member.department}
+                                                  </Text>
+                                                </SimpleTooltip>
+                                              )}
+                                              {member.username && (
+                                                <SimpleTooltip
+                                                  content={member.username}
+                                                >
+                                                  <Text
+                                                    className="text-xs text-gray-600"
+                                                    numberOfLines={1}
+                                                  >
+                                                    <Text className="font-medium">
+                                                      Username:
+                                                    </Text>{" "}
+                                                    {member.username}
+                                                  </Text>
+                                                </SimpleTooltip>
+                                              )}
+                                              <View className="flex-row items-center gap-2 mt-1">
+                                                <Text className="text-xs font-medium text-gray-600">
+                                                  Status:
+                                                </Text>
+                                                <View
+                                                  className={`px-2 py-0.5 rounded-full ${member.isExternal ? "bg-orange-100" : "bg-green-100"}`}
+                                                >
+                                                  <Text
+                                                    className={`text-xs ${member.isExternal ? "text-orange-800" : "text-green-800"}`}
+                                                  >
+                                                    {member.isExternal
+                                                      ? "External"
+                                                      : "System User"}
+                                                  </Text>
+                                                </View>
+                                              </View>
+                                            </View>
+                                          </View>
+                                        </View>
                                       </View>
-                                      <View style={{ flex: 1 }}>
-                                        <Text style={styles.memberName}>
-                                          {member.firstName || member.lastName ? `${member.firstName || ''} ${member.lastName || ''}`.trim() : 'Unnamed Member'}
-                                        </Text>
-                                        <Text style={styles.memberEmail}>{member.email}</Text>
-                                      </View>
-                                    </View>
-                                    <View style={styles.memberCardDetails}>
-                                      {member.department && <Text style={styles.memberDetailText}>Dept: {member.department}</Text>}
-                                      <View style={[styles.memberStatusBadge, member.isExternal ? styles.memberExternal : styles.memberInternal]}>
-                                        <Text style={[styles.memberStatusText, member.isExternal ? styles.memberExternalText : styles.memberInternalText]}>
-                                          {member.isExternal ? 'External' : 'System User'}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  </View>
-                                ))
+                                    ),
+                                  )}
+                                </View>
                               ) : (
-                                <View style={styles.noMembersContainer}>
-                                  <Icon name="users" size={32} color="#9CA3AF" />
-                                  <Text style={styles.noMembersText}>No team members added yet</Text>
+                                <View className="items-center py-6 border-2 border-gray-300 border-dashed rounded-lg">
+                                  <Users size={32} color="#9CA3AF" />
+                                  <Text className="mt-2 text-gray-500">
+                                    No team members added yet
+                                  </Text>
                                 </View>
                               )}
-                              
-                              {(isHOD || user?.role === 'INITIATOR' || user?.role === 'MASTER') && !isEditingMembers && (
-                                <TouchableOpacity style={styles.manageMembersBtn} onPress={startEditingTeamMembers}>
-                                  <Icon name="edit-2" size={14} color="#FFFFFF" />
-                                  <Text style={styles.manageMembersBtnText}>Manage Team Members</Text>
-                                </TouchableOpacity>
+                              {(isHOD || checkIsInitiator) && (
+                                <View className="pt-3 border-t border-gray-200">
+                                  <TouchableOpacity
+                                    onPress={startEditingTeamMembers}
+                                    className="flex-row items-center self-start gap-2 px-4 py-2 bg-blue-500 rounded-lg active:bg-blue-600"
+                                  >
+                                    <Edit3 size={16} color="white" />
+                                    <Text className="text-sm text-white">
+                                      Manage Team Members
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
                               )}
                             </View>
                           )}
                         </View>
+                      );
+                    }
+                    return (
+                      <View
+                        key={field.key}
+                        className="flex-row items-start gap-3 py-2 border-b border-gray-200 last:border-b-0"
+                      >
+                        <Text className="w-40 font-medium text-gray-800 sm:w-48">
+                          {field.label}:
+                        </Text>
+                        <View className="flex-1">{formatValue(value)}</View>
                       </View>
                     );
-                  }
-
-                  return (
-                    <View key={field.key} style={styles.fieldRow}>
-                      <Text style={styles.fieldLabel}>{field.label}:</Text>
-                      <Text style={styles.fieldValue}>{formatValue(value)}</Text>
+                  })}
+                </View>
+                {stepFiles.length > 0 && (
+                  <View className="mt-4">
+                    <View className="flex-row items-center gap-1 mb-2">
+                      <Camera size={16} color="#374151" />
+                      <Text className="font-semibold text-gray-800">
+                        Attachments ({stepFiles.length})
+                      </Text>
                     </View>
-                  );
-                })}
-              </View>
-
-              {stepFiles.length > 0 && (
-                <View style={styles.attachmentsContainer}>
-                  <Text style={styles.attachmentsLabel}>
-                    <Icon name="paperclip" size={14} color="#6B7280" /> Attachments ({stepFiles.length})
-                  </Text>
-                  <View style={styles.attachmentsGrid}>
-                    {stepFiles.map((file) => (
-                      <TouchableOpacity key={file.id} style={styles.attachmentItem} onPress={() => handleFileClick(file.id, file.mimeType, file.fileName)}>
-                        {file.fileType === 'IMAGE' ? (
-                          <Image source={{ uri: getEightDFileUrl(file.id) }} style={styles.attachmentImage} />
-                        ) : file.mimeType === 'application/pdf' ? (
-                          <View style={[styles.attachmentIcon, styles.attachmentPdf]}><Icon name="file" size={24} color="#DC2626" /></View>
-                        ) : (
-                          <View style={[styles.attachmentIcon, styles.attachmentDoc]}><Icon name="file" size={24} color="#3B82F6" /></View>
-                        )}
-                        <Text style={styles.attachmentName} numberOfLines={1}>{file.fileName}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    <View className="flex-row flex-wrap gap-2">
+                      {stepFiles.map((file) => (
+                        <TouchableOpacity
+                          key={file.id}
+                          className="w-[48%] sm:w-[32%] md:w-[24%] border border-gray-200 rounded-lg overflow-hidden active:opacity-80 bg-white"
+                          onPress={() =>
+                            handleFileClick(
+                              file.id,
+                              file.mimeType,
+                              file.fileName,
+                            )
+                          }
+                        >
+                          {file.fileType === "IMAGE" ? (
+                            <Image
+                              source={{ uri: getEightDFileUrl(file.id) }}
+                              className="w-full h-20 sm:h-24"
+                              resizeMode="cover"
+                            />
+                          ) : file.mimeType === "application/pdf" ? (
+                            <View className="items-center justify-center h-20 bg-red-100 sm:h-24">
+                              <File size={32} color="#DC2626" />
+                            </View>
+                          ) : (
+                            <View className="items-center justify-center h-20 bg-blue-100 sm:h-24">
+                              <File size={32} color="#2563EB" />
+                            </View>
+                          )}
+                          <View className="p-2 bg-white">
+                            <Text
+                              className="text-[10px] sm:text-xs text-gray-700"
+                              numberOfLines={2}
+                            >
+                              {file.fileName}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        {/* HOD APPROVAL SECTION */}
-        {isHOD && isApprovalPending && (
-          <View style={styles.approvalSection}>
-            <View style={styles.approvalHeader}>
-              <Icon name="eye" size={20} color="#D97706" />
-              <Text style={styles.approvalTitle}>HOD Approval Required</Text>
-            </View>
-            <Text style={styles.approvalSubtext}>
-              Please review D0 data above before approving or rejecting this 8D event.
-              {'\n'}
-              <Text style={styles.approvalNote}>Note: A comment of at least 10 characters is required.</Text>
-            </Text>
-
-            <View style={styles.approvalCommentContainer}>
-              <Text style={styles.approvalCommentLabel}>Approval/Rejection Comment:</Text>
-              <TextInput
-                style={styles.approvalCommentInput}
-                value={approvalComment}
-                onChangeText={setApprovalComment}
-                placeholder="Enter your comment for approval or rejection (min. 10 characters)..."
-                placeholderTextColor="#9CA3AF"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.approvalActions}>
-              <TouchableOpacity
-                style={[styles.approveBtn, (approving || !approvalComment.trim() || approvalComment.trim().length < 10) && styles.disabledBtn]}
-                onPress={handleApprove}
-                disabled={approving || !approvalComment.trim() || approvalComment.trim().length < 10}
-              >
-                {approving ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
-                  <><Icon name="check" size={16} color="#FFFFFF" /><Text style={styles.approveBtnText}>Approve & Move to D1</Text></>
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.rejectBtn, (rejecting || !approvalComment.trim() || approvalComment.trim().length < 10) && styles.disabledBtn]}
-                onPress={handleReject}
-                disabled={rejecting || !approvalComment.trim() || approvalComment.trim().length < 10}
-              >
-                {rejecting ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
-                  <><Icon name="x" size={16} color="#FFFFFF" /><Text style={styles.rejectBtnText}>Reject</Text></>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </ScrollView>
+              </View>
+            );
+          })}
 
-      {/* File Preview Modal */}
-      <Modal visible={previewVisible} transparent={true} animationType="fade" onRequestClose={() => setPreviewVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderText} numberOfLines={1}>{previewFile?.fileName}</Text>
-              <View style={styles.modalHeaderActions}>
-                <TouchableOpacity onPress={handleDownloadFile} style={styles.modalHeaderBtn}>
-                  <Icon name="download" size={20} color="#FFFFFF" />
+          {isHOD && isApprovalPending && (
+            <View className="p-4 mt-8 border border-yellow-200 rounded-lg bg-yellow-50">
+              <View className="flex-row items-center gap-2 mb-3">
+                <Eye size={16} color="#854D0E" />
+                <Text className="font-semibold text-yellow-800">
+                  HOD Approval Required
+                </Text>
+              </View>
+              <Text className="mb-3 text-sm text-yellow-700">
+                Please review D0 data above before approving or rejecting this
+                8D event.{"\n"}
+                <Text className="font-medium">
+                  Note: A comment of at least 10 characters is required.
+                </Text>
+              </Text>
+              <View className="mb-4">
+                <Text className="mb-2 text-sm font-medium text-gray-700">
+                  Approval/Rejection Comment:
+                </Text>
+                <TextInput
+                  value={approvalComment}
+                  onChangeText={setApprovalComment}
+                  placeholder="Enter your comment (min. 10 characters)..."
+                  multiline
+                  numberOfLines={3}
+                  className="w-full p-3 text-sm bg-white border border-gray-300 rounded-lg"
+                  textAlignVertical="top"
+                />
+              </View>
+              <View className="flex-row flex-wrap gap-3">
+                <TouchableOpacity
+                  onPress={handleApprove}
+                  disabled={
+                    approving ||
+                    !approvalComment.trim() ||
+                    approvalComment.trim().length < 10
+                  }
+                  className={`flex-row items-center gap-2 px-4 py-2 rounded ${approving || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
+                >
+                  {approving && (
+                    <ActivityIndicator size="small" color="white" />
+                  )}
+                  <CheckCircle size={16} color="white" />
+                  <Text className="font-medium text-white">
+                    Approve & Move to D1
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setPreviewVisible(false)} style={styles.modalHeaderBtn}>
-                  <Icon name="x" size={20} color="#FFFFFF" />
+                <TouchableOpacity
+                  onPress={handleReject}
+                  disabled={
+                    rejecting ||
+                    !approvalComment.trim() ||
+                    approvalComment.trim().length < 10
+                  }
+                  className={`flex-row items-center gap-2 px-4 py-2 rounded ${rejecting || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-red-600 active:bg-red-700"}`}
+                >
+                  {rejecting && (
+                    <ActivityIndicator size="small" color="white" />
+                  )}
+                  <XCircle size={16} color="white" />
+                  <Text className="font-medium text-white">Reject</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.modalBody}>
-              {previewFile?.mimeType?.startsWith('image/') ? (
-                <Image source={{ uri: previewFile.url }} style={styles.modalImage} resizeMode="contain" />
-              ) : previewFile?.mimeType === 'application/pdf' ? (
-                <View style={styles.pdfContainer}>
-                  <Text style={styles.pdfText}>PDF Preview</Text>
-                  <Text style={styles.pdfSubtext}>Tap download to view PDF</Text>
-                  <TouchableOpacity style={styles.pdfDownloadBtn} onPress={handleDownloadFile}>
-                    <Icon name="download" size={24} color="#3B82F6" />
-                    <Text style={styles.pdfDownloadText}>Download PDF</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.filePreviewContainer}>
-                  <Icon name="file" size={48} color="#9CA3AF" />
-                  <Text style={styles.filePreviewText}>Preview not available</Text>
-                  <TouchableOpacity style={styles.filePreviewDownload} onPress={handleDownloadFile}>
-                    <Text style={styles.filePreviewDownloadText}>Download File</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+          )}
+
+          <View className="flex-row justify-end gap-3 pt-4 mt-6 border-t border-gray-200">
+            <Generate8DPdf
+              title={`8D_Report_${eventId}`}
+              eventId={eventId}
+              formData={eventData?.content || {}}
+              attachments={mappedAttachments}
+            />
           </View>
         </View>
-      </Modal>
-    </View>
+
+        <Modal
+          visible={!!previewUrl && !!previewFile}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closePreview}
+        >
+          <View className="items-center justify-center flex-1 p-4 bg-black/70">
+            <View className="bg-white rounded-lg w-full max-h-[90vh] overflow-hidden">
+              <View className="flex-row items-center justify-between px-4 py-3 bg-gray-800">
+                <Text
+                  className="flex-1 mr-2 text-sm font-semibold text-white truncate"
+                  numberOfLines={1}
+                >
+                  {previewFile?.fileName}
+                </Text>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={async () => {
+                      if (previewUrl && previewFile) {
+                        if (Platform.OS === "web") {
+                          const link = document.createElement("a");
+                          link.href = previewUrl;
+                          link.download = previewFile.fileName;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        } else {
+                          const canShare = await Sharing.isAvailableAsync();
+                          if (canShare) await Sharing.shareAsync(previewUrl);
+                          else
+                            Alert.alert(
+                              "Info",
+                              "File saved to cache. Sharing not available on this platform.",
+                            );
+                        }
+                      }
+                    }}
+                    className="p-1"
+                  >
+                    <Download size={20} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={closePreview} className="p-1">
+                    <X size={24} color="white" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View
+                className="items-center justify-center bg-gray-100"
+                style={{ height: 400 }}
+              >
+                {previewFile?.mimeType?.startsWith("image/") ? (
+                  <Image
+                    source={{ uri: previewUrl }}
+                    className="w-full h-full"
+                    resizeMode="contain"
+                  />
+                ) : previewFile?.mimeType === "application/pdf" ? (
+                  <View className="items-center justify-center p-4">
+                    <File size={48} color="#DC2626" />
+                    <Text className="mt-2 text-center text-gray-600">
+                      PDF Preview requires a native viewer.
+                    </Text>
+                    <TouchableOpacity
+                      className="px-4 py-2 mt-4 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                      onPress={() =>
+                        Alert.alert(
+                          "Info",
+                          "Use expo-print or react-native-pdf to display PDFs natively.",
+                        )
+                      }
+                    >
+                      <Text className="font-medium text-white">
+                        Open PDF Viewer
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View className="items-center p-4">
+                    <File size={48} color="#9CA3AF" />
+                    <Text className="mt-2 text-sm text-center text-gray-600">
+                      This file type cannot be previewed directly.
+                    </Text>
+                    <TouchableOpacity
+                      className="flex-row items-center gap-2 px-6 py-3 mt-4 bg-blue-600 rounded-lg active:bg-blue-700"
+                      onPress={async () => {
+                        const canShare = await Sharing.isAvailableAsync();
+                        if (canShare && previewUrl)
+                          await Sharing.shareAsync(previewUrl);
+                        else
+                          Alert.alert(
+                            "Downloaded",
+                            "File is available in the app cache directory.",
+                          );
+                      }}
+                    >
+                      <Download size={18} color="white" />
+                      <Text className="font-medium text-white">
+                        Download / Share File
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollView: { flex: 1, padding: 16 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#6B7280' },
-  header: { flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', marginBottom: 16, gap: 12 },
-  logoContainer: { padding: 8, backgroundColor: '#EEF2FF', borderRadius: 8 },
-  headerCenter: { alignItems: 'center' },
-  headerTitle: { fontSize: isMobile ? 18 : 24, fontWeight: 'bold', color: '#1F2937' },
-  headerSubtitle: { fontSize: 14, color: '#6B7280' },
-  headerEventId: { fontWeight: '600', color: '#2242a1' },
-  messageContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 8, marginBottom: 12 },
-  messageError: { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5' },
-  messageSuccess: { backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#A7F3D0' },
-  messageErrorText: { flex: 1, fontSize: 13, color: '#991B1B' },
-  messageSuccessText: { flex: 1, fontSize: 13, color: '#065F46' },
-  stepSection: { marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, overflow: 'hidden' },
-  stepHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#F9FAFB', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  stepTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
-  stepContent: { padding: 12 },
-  fieldRow: { flexDirection: isMobile ? 'column' : 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  fieldLabel: { fontSize: 13, fontWeight: '500', color: '#6B7280', minWidth: isMobile ? undefined : 160, marginBottom: isMobile ? 4 : 0 },
-  fieldValue: { flex: 1, fontSize: 13, color: '#1F2937' },
-  fieldValueContainer: { flex: 1 },
-  emailTag: { backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 4, marginBottom: 4, alignSelf: 'flex-start' },
-  emailTagText: { fontSize: 12, color: '#1E40AF' },
-  attachmentsContainer: { padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB' },
-  attachmentsLabel: { fontSize: 13, fontWeight: '500', color: '#6B7280', marginBottom: 8 },
-  attachmentsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  attachmentItem: { width: isMobile ? 100 : 120, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, overflow: 'hidden' },
-  attachmentImage: { width: '100%', height: isMobile ? 80 : 96 },
-  attachmentIcon: { width: '100%', height: isMobile ? 80 : 96, justifyContent: 'center', alignItems: 'center' },
-  attachmentPdf: { backgroundColor: '#FEF2F2' },
-  attachmentDoc: { backgroundColor: '#EFF6FF' },
-  attachmentName: { fontSize: 10, padding: 4, textAlign: 'center', color: '#6B7280' },
-  
-  // Edit Members Styles
-  editMembersContainer: { paddingVertical: 8 },
-  editMemberRow: { flexDirection: 'row', marginBottom: 8, padding: 12, backgroundColor: '#F9FAFB', borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'flex-start' },
-  editMemberInputs: { flex: 1, gap: 8 },
-  editInputRow: { flexDirection: 'row', gap: 8 },
-  editInput: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: '#1F2937', backgroundColor: '#FFFFFF' },
-  editInputEmail: { borderColor: '#3B82F6' },
-  inputError: { borderColor: '#EF4444', backgroundColor: '#FEF2F2' },
-  errorText: { fontSize: 12, color: '#EF4444', marginTop: -4 },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
-  checkboxChecked: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
-  checkboxLabel: { fontSize: 13, color: '#4B5563' },
-  removeMemberBtn: { padding: 4, marginTop: 4 },
-  editActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  addMemberBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#3B82F6', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
-  addMemberBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
-  saveMembersBtn: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
-  saveMembersBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
-  cancelMembersBtn: { backgroundColor: '#6B7280', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
-  cancelMembersBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '500' },
-  disabledBtn: { opacity: 0.6 },
-  
-  // Member Display Styles
-  memberDisplayContainer: { gap: 8 },
-  memberCard: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  memberCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  memberAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-  memberName: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-  memberEmail: { fontSize: 12, color: '#6B7280' },
-  memberCardDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  memberDetailText: { fontSize: 12, color: '#6B7280' },
-  memberStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  memberExternal: { backgroundColor: '#FEF3C7' },
-  memberInternal: { backgroundColor: '#D1FAE5' },
-  memberStatusText: { fontSize: 11, fontWeight: '600' },
-  memberExternalText: { color: '#D97706' },
-  memberInternalText: { color: '#059669' },
-  noMembersContainer: { alignItems: 'center', paddingVertical: 16, borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed', borderRadius: 8 },
-  noMembersText: { fontSize: 13, color: '#9CA3AF', marginTop: 8 },
-  manageMembersBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 10, backgroundColor: '#3B82F6', borderRadius: 8 },
-  manageMembersBtnText: { fontSize: 14, color: '#FFFFFF', fontWeight: '600' },
-  
-  // Approval Styles
-  approvalSection: { marginTop: 16, padding: 16, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FCD34D', borderRadius: 8 },
-  approvalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  approvalTitle: { fontSize: 16, fontWeight: '600', color: '#92400E' },
-  approvalSubtext: { fontSize: 13, color: '#78350F', marginBottom: 12 },
-  approvalNote: { fontWeight: '600' },
-  approvalCommentContainer: { marginBottom: 12 },
-  approvalCommentLabel: { fontSize: 13, fontWeight: '600', color: '#78350F', marginBottom: 6 },
-  approvalCommentInput: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, fontSize: 13, color: '#1F2937', minHeight: 80, textAlignVertical: 'top', backgroundColor: '#FFFFFF' },
-  approvalActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  approveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  approveBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  rejectBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  rejectBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  
-  // Modal Styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 12, width: isMobile ? '95%' : '80%', maxWidth: 800, maxHeight: '90%', overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#1F2937' },
-  modalHeaderText: { flex: 1, fontSize: 14, color: '#FFFFFF', fontWeight: '500' },
-  modalHeaderActions: { flexDirection: 'row', gap: 12 },
-  modalHeaderBtn: { padding: 4 },
-  modalBody: { padding: 16, minHeight: 200, justifyContent: 'center', alignItems: 'center' },
-  modalImage: { width: '100%', height: 400 },
-  pdfContainer: { alignItems: 'center', padding: 20 },
-  pdfText: { fontSize: 18, fontWeight: '600', color: '#1F2937' },
-  pdfSubtext: { fontSize: 14, color: '#6B7280', marginTop: 8 },
-  pdfDownloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#EFF6FF', borderRadius: 8 },
-  pdfDownloadText: { fontSize: 14, color: '#3B82F6', fontWeight: '600' },
-  filePreviewContainer: { alignItems: 'center', padding: 20 },
-  filePreviewText: { fontSize: 14, color: '#6B7280', marginTop: 8 },
-  filePreviewDownload: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#3B82F6', borderRadius: 8 },
-  filePreviewDownloadText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-});

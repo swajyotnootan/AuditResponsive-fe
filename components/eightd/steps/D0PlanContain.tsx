@@ -1,84 +1,90 @@
-// app/components/eightd/steps/D0PlanContain.tsx
-'use client';
-
-import { Picker } from '@react-native-picker/picker';
-import * as DocumentPicker from 'expo-document-picker';
-import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from "@/config/apiConfig";
+import axios from "axios";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  FileText,
+  Hash,
+  Info,
+  Plus,
+  Search,
+  User,
+  Users,
+  Video,
+  X,
+  XCircle,
+} from "lucide-react-native";
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
-  FlatList,
+  Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
+  SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+  View,
+} from "react-native";
 
-import axios from 'axios';
-import { eightDAPI, userAPI } from '../../../services/api';
-import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
+// Import your centralized API service and context
+import { userAPI } from "@/services/api";
+import { useAuth } from "../../context/AuthContext";
 
-const { width } = Dimensions.get('window');
-const isMobile = width < 768;
+// Placeholder for FinalPreview
+import FinalPreview from "./FinalPreview";
 
-// FIX 2: Dynamic Base URL for Expo (Web vs Android Emulator vs Physical Device)
-const getBaseURL = (): string => {
-  if (__DEV__) {
-    return (
-      Platform.select({
-        ios: "http://10.2.0.95:8080/api",
-        android: "http://10.2.0.95:8080/api",
-        default: "http://10.2.0.73:8080/api",
-      }) || "http://10.2.0.73:8080/api"
-    );
-  }
-  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
-};
+// --- Types & Interfaces ---
+interface UserData {
+  email?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  department?: string;
+  role?: string;
+}
 
-const API_BASE_URL = getBaseURL();
+interface Department {
+  id: number;
+  name: string;
+}
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-  timeout: 30000,
-  withCredentials: true,
-});
-
-
-// FIX 3: Safe Image Paths. Use require() for local assets, or full URIs for web.
-const companies = [
-  { name: 'TTK Prestige', logo: 'https://via.placeholder.com/48?text=TTK' }, // Replace with require('../../../assets/logos/ttk.png') if local
-  { name: 'Boeing', logo: 'https://via.placeholder.com/48?text=Boeing' },
-  { name: 'Feather Light Furniture', logo: 'https://via.placeholder.com/48?text=FLF' },
-];
-
-const defaultDepartments = [
-  { id: '1', name: 'Quality' },
-  { id: '2', name: 'Production' },
-  { id: '3', name: 'Engineering' },
-  { id: '4', name: 'Maintenance' },
-  { id: '5', name: 'Supply Chain' },
-  { id: '6', name: 'R&D' },
-  { id: '7', name: 'Other' },
-];
+interface Company {
+  name: string;
+  logo: string;
+}
 
 interface TeamMember {
   firstName: string;
   lastName: string;
-  email: string;
   department: string;
-  isExternal?: boolean;
-  username?: string;
+  email: string;
+  username: string;
 }
 
-interface D0FormData {
+interface FileItem {
+  id: number | string;
+  name: string;
+  type: string;
+  size: number;
+  title: string;
+  description: string;
+  uri: string;
+  isLocalFile?: boolean;
+}
+
+interface FormDataState {
+  id?: string | number;
   eventNo: string;
   plantLine: string;
   partName: string;
@@ -95,9 +101,9 @@ interface D0FormData {
   email: string;
   teamMembers: TeamMember[];
   countryCode: string;
-  pictures: any[];
-  reports: any[];
-  videos: any[];
+  pictures: FileItem[];
+  reports: FileItem[];
+  videos: FileItem[];
   status: string;
   currentStep: string;
   isNcrBased: boolean;
@@ -108,967 +114,1867 @@ interface D0FormData {
 
 interface D0PlanContainProps {
   eventId?: string | null;
+  updateParent?: (data: Partial<FormDataState>[]) => void;
   initialIsNcrBased?: boolean;
-  updateParent?: (data: D0FormData[]) => void;
 }
 
-export default function D0PlanContain({
-  eventId,
-  initialIsNcrBased = false,
-  updateParent
-}: D0PlanContainProps) {
-  const authContext = useAuth();
-  const user = authContext?.user;
-  
-  const toastContext = useToast();
-  const addToast = toastContext?.addToast || ((msg: string, type: string) => console.log(`[Toast ${type}] ${msg}`));
+interface TooltipProps {
+  content: string;
+  children: ReactNode;
+}
 
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'team'>('basic');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [departments, setDepartments] = useState(defaultDepartments);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [userSearchTerm, setUserSearchTerm] = useState('');
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [selectedUserIndex, setSelectedUserIndex] = useState<number | null>(null);
-  const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
+interface CustomSelectProps {
+  label?: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  required?: boolean;
+  error?: string;
+}
 
-  const userRole = user?.role?.toUpperCase() || '';
-  const isInitiator = userRole === 'INITIATOR' || userRole === 'MASTER' || userRole === 'ADMIN';
-  const isHOD = userRole === 'HOD' || userRole === 'MASTER' || userRole === 'ADMIN';
-  const isAdmin = userRole === 'ADMIN' || userRole === 'MASTER';
+interface InputFieldProps {
+  label?: string;
+  name: string;
+  value: string;
+  onChange: (e: { target: { name: string; value: string } }) => void;
+  type?: string;
+  required?: boolean;
+  error?: string;
+  multiline?: boolean;
+  placeholder?: string;
+}
 
-  const getTodayDate = (): string => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+interface UserOption {
+  value: string;
+  label: string;
+  email?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  department?: string;
+}
+
+interface UserDropdownProps {
+  value: string;
+  onChange: (option: UserOption) => void;
+  options?: UserOption[];
+  placeholder?: string;
+  loading?: boolean;
+  required?: boolean;
+}
+
+interface TeamMemberFieldProps {
+  member: TeamMember;
+  index: number;
+  onChange: (index: number, field: keyof TeamMember, value: string) => void;
+  onRemove: (index: number) => void;
+  error?: string;
+  onSearchUser: (searchTerm: string, index: number) => void;
+  loadingSearch: number | null;
+  departments: Department[];
+  userOptions: UserOption[];
+  loadingUsers: boolean;
+}
+
+interface LayoutTabsProps {
+  activeLayout: string;
+  setActiveLayout: (layout: string) => void;
+}
+
+// --- Constants ---
+const companies: Company[] = [
+  { name: "TTK Prestige", logo: "/logos/ttk-prestige.png" },
+  { name: "Boeing", logo: "/logos/boeing.png" },
+  { name: "Feather Light Furniture", logo: "/logos/feather-light.png" },
+];
+
+const defaultDepartments: Department[] = [
+  { id: 1, name: "Quality" },
+  { id: 2, name: "Production" },
+  { id: 3, name: "Engineering" },
+  { id: 4, name: "Maintenance" },
+  { id: 5, name: "Supply Chain" },
+  { id: 6, name: "R&D" },
+  { id: 7, name: "Other" },
+];
+
+// --- Helper Components ---
+
+const Tooltip = ({ content, children }: TooltipProps) => {
+  const [show, setShow] = useState(false);
+  return (
+    <View className="relative">
+      <Pressable onPress={() => setShow(!show)} className="p-1">
+        {children}
+      </Pressable>
+      {show && (
+        <View className="absolute left-0 z-50 w-48 px-3 py-2 mb-2 bg-gray-800 rounded-lg shadow-lg bottom-full">
+          <Text className="text-xs text-white">{content}</Text>
+          <View className="absolute bottom-0 w-3 h-3 transform rotate-45 translate-y-1/2 bg-gray-800 left-4" />
+        </View>
+      )}
+    </View>
+  );
+};
+
+const CustomSelect = ({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required = false,
+  error,
+}: CustomSelectProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selected = options.find((opt) => opt.value === value);
+
+  return (
+    <View className="mb-3">
+      {" "}
+      {/* Reduced mb-4 to mb-3 */}
+      {label && (
+        <View className="flex-row items-center mb-1">
+          <Text className="text-sm font-medium text-gray-600">{label}</Text>
+          {required && <Text className="ml-1 text-red-500">*</Text>}
+        </View>
+      )}
+      <Pressable
+        onPress={() => setIsOpen(true)}
+        className={`w-full flex-row items-center justify-between rounded-lg border px-3 py-2.5 shadow-sm ${
+          /* Reduced py-3 to py-2.5 */
+          error ? "border-red-500 bg-red-50" : "border-gray-300 bg-white"
+        }`}
+      >
+        <Text
+          className={`text-sm ${selected ? "text-gray-900" : "text-gray-400"}`}
+        >
+          {selected?.label || placeholder}
+        </Text>
+        <ChevronDown size={16} color="#6B7280" />
+      </Pressable>
+      {error && <Text className="mt-1 text-xs text-red-600">{error}</Text>}
+      <Modal visible={isOpen} transparent animationType="fade">
+        <Pressable
+          className="items-center justify-center flex-1 p-4 bg-black/30"
+          onPress={() => setIsOpen(false)}
+        >
+          <View className="w-full overflow-hidden bg-white shadow-xl max-h-96 rounded-xl">
+            <View className="flex-row items-center justify-between p-3 border-b border-gray-200">
+              <Text className="text-base font-semibold text-gray-800">
+                {label || "Select"}
+              </Text>
+              <Pressable onPress={() => setIsOpen(false)}>
+                <X size={20} color="#6B7280" />
+              </Pressable>
+            </View>
+            <ScrollView className="max-h-80">
+              {options.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className={`p-4 border-b border-gray-100 ${value === opt.value ? "bg-indigo-50" : "bg-white"}`}
+                >
+                  <Text
+                    className={`text-sm ${value === opt.value ? "text-indigo-700 font-medium" : "text-gray-700"}`}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+};
+
+const InputField = ({
+  label,
+  name,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+  error,
+  multiline = false,
+  placeholder,
+}: InputFieldProps) => (
+  <View className="mb-3">
+    {" "}
+    {/* Reduced mb-4 to mb-3 */}
+    {label && (
+      <View className="flex-row items-center mb-1">
+        <Text className="text-sm font-medium text-gray-600">{label}</Text>
+        {required && <Text className="ml-1 text-red-500">*</Text>}
+      </View>
+    )}
+    <TextInput
+      value={value}
+      onChangeText={(text) => onChange({ target: { name, value: text } })}
+      multiline={multiline}
+      numberOfLines={multiline ? 3 : 1}
+      keyboardType={type === "email" ? "email-address" : "default"}
+      placeholder={placeholder || label}
+      className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm ${
+        /* Reduced py-3 to py-2.5 */
+        error ? "border-red-500 bg-red-50" : "border-gray-300 bg-white"
+      } text-gray-900`}
+    />
+    {error && <Text className="mt-1 text-xs text-red-600">{error}</Text>}
+  </View>
+);
+
+const UserDropdown = ({
+  value,
+  onChange,
+  options = [],
+  placeholder = "Select user...",
+  loading = false,
+  required = false,
+}: UserDropdownProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  const filteredOptions = options.filter(
+    (option) =>
+      option.label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      option.value?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      option.email?.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <View className="relative">
+      <Pressable
+        onPress={() => {
+          setIsOpen(true);
+          setSearchTerm("");
+        }}
+        className={`w-full flex-row items-center justify-between rounded-lg border px-3 py-2.5 shadow-sm ${
+          /* Reduced py-3 to py-2.5 */
+          required && !value
+            ? "border-orange-500 bg-orange-50"
+            : "border-gray-300 bg-white"
+        }`}
+      >
+        <Text
+          className={`text-sm flex-1 ${selectedOption ? "text-gray-900" : "text-gray-400"}`}
+        >
+          {selectedOption?.label || placeholder}
+        </Text>
+        <ChevronDown size={16} color="#6B7280" />
+      </Pressable>
+
+      <Modal visible={isOpen} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="justify-end flex-1 bg-black/30"
+        >
+          <View className="bg-white rounded-t-2xl shadow-2xl max-h-[70%]">
+            <View className="flex-row items-center gap-2 p-4 border-b border-gray-200">
+              <Search size={18} color="#6B7280" />
+              <TextInput
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                placeholder="Search users..."
+                className="flex-1 text-base text-gray-900"
+                autoFocus
+              />
+              <Pressable onPress={() => setIsOpen(false)}>
+                <X size={20} color="#6B7280" />
+              </Pressable>
+            </View>
+            <ScrollView className="max-h-96">
+              {loading ? (
+                <View className="items-center p-6">
+                  <ActivityIndicator size="small" color="#4F46E5" />
+                  <Text className="mt-2 text-sm text-gray-500">
+                    Loading users...
+                  </Text>
+                </View>
+              ) : filteredOptions.length === 0 ? (
+                <View className="items-center p-6">
+                  <Text className="text-sm text-gray-500">No users found</Text>
+                </View>
+              ) : (
+                filteredOptions.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      onChange(option);
+                      setIsOpen(false);
+                    }}
+                    className="p-4 border-b border-gray-100 active:bg-indigo-50"
+                  >
+                    <Text className="text-sm font-medium text-gray-900">
+                      {option.label}
+                    </Text>
+                    <Text className="text-xs text-gray-500">
+                      {option.email}
+                    </Text>
+                    {option.department && (
+                      <Text className="text-xs text-gray-400">
+                        Dept: {option.department}
+                      </Text>
+                    )}
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+};
+
+const TeamMemberField = ({
+  member,
+  index,
+  onChange,
+  onRemove,
+  error,
+  onSearchUser,
+  loadingSearch,
+  departments = [],
+  userOptions = [],
+  loadingUsers = false,
+}: TeamMemberFieldProps) => {
+  const [searchMode, setSearchMode] = useState<"dropdown" | "manual">(
+    "dropdown",
+  );
+
+  const handleUserSelect = (selectedUser: UserOption) => {
+    if (!selectedUser) return;
+    const updates = {
+      email: selectedUser.email || "",
+      firstName: selectedUser.firstName || "",
+      lastName: selectedUser.lastName || "",
+      department: selectedUser.department || "",
+      username: selectedUser.username || "",
+    };
+    Object.entries(updates).forEach(([field, val]) => {
+      onChange(index, field as keyof TeamMember, val);
+    });
   };
 
-  const normalizeDateForInput = (value: any): string => {
+  const handleModeSwitch = (newMode: "dropdown" | "manual") => {
+    if (newMode !== searchMode) {
+      setSearchMode(newMode);
+      if (newMode === "manual") {
+        onChange(index, "firstName", "");
+        onChange(index, "lastName", "");
+        onChange(index, "department", "");
+      }
+    }
+  };
+
+  return (
+    <View className="relative p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50">
+      {" "}
+      {/* Reduced p-4 mb-3 */}
+      <Pressable
+        onPress={() => onRemove(index)}
+        className="absolute p-2 rounded-full top-2 right-2 active:bg-red-100"
+      >
+        <X size={18} color="#EF4444" />
+      </Pressable>
+      <View className="flex-row gap-2 mb-3">
+        {" "}
+        {/* Reduced mb-4 */}
+        <Pressable
+          onPress={() => handleModeSwitch("dropdown")}
+          className={`px-4 py-2 rounded-lg ${searchMode === "dropdown" ? "bg-indigo-600" : "bg-gray-200"}`}
+        >
+          <Text
+            className={`text-xs font-medium ${searchMode === "dropdown" ? "text-white" : "text-gray-700"}`}
+          >
+            Select User
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => handleModeSwitch("manual")}
+          className={`px-4 py-2 rounded-lg ${searchMode === "manual" ? "bg-indigo-600" : "bg-gray-200"}`}
+        >
+          <Text
+            className={`text-xs font-medium ${searchMode === "manual" ? "text-white" : "text-gray-700"}`}
+          >
+            Add Manually
+          </Text>
+        </Pressable>
+      </View>
+      <View className="gap-2">
+        {" "}
+        {/* Reduced gap-3 */}
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Text className="mb-1 text-sm font-medium text-gray-600">
+              First Name
+            </Text>
+            <TextInput
+              value={member.firstName || ""}
+              onChangeText={(text) => onChange(index, "firstName", text)}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm"
+              placeholder="First name"
+            />
+          </View>
+          <View className="flex-1">
+            <Text className="mb-1 text-sm font-medium text-gray-600">
+              Last Name
+            </Text>
+            <TextInput
+              value={member.lastName || ""}
+              onChangeText={(text) => onChange(index, "lastName", text)}
+              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm"
+              placeholder="Last name"
+            />
+          </View>
+        </View>
+        <View>
+          <Text className="mb-1 text-sm font-medium text-gray-600">
+            Department
+          </Text>
+          <CustomSelect
+            value={member.department || ""}
+            onChange={(val) => onChange(index, "department", val)}
+            options={departments.map((d) => ({
+              value: d.name || String(d.id),
+              label: d.name || String(d.id),
+            }))}
+            placeholder="Select Department"
+          />
+        </View>
+        <View>
+          <View className="flex-row items-center mb-1">
+            <Text className="text-sm font-medium text-gray-600">
+              Email / Username
+            </Text>
+            <Text className="ml-1 text-red-500">*</Text>
+          </View>
+
+          {searchMode === "dropdown" ? (
+            <View className="gap-2">
+              <UserDropdown
+                value={member.email}
+                onChange={handleUserSelect}
+                options={userOptions}
+                placeholder="Select user..."
+                loading={loadingUsers}
+                required
+              />
+              {member.email && (
+                <View className="p-2 border border-green-200 rounded-lg bg-green-50">
+                  <Text className="text-xs text-green-700">
+                    <Text className="font-semibold">Selected:</Text>{" "}
+                    {member.firstName} {member.lastName}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View className="gap-2">
+              <View className="flex-row gap-2">
+                <TextInput
+                  value={member.email || ""}
+                  onChangeText={(text) => onChange(index, "email", text)}
+                  className={`flex-1 rounded-lg border px-3 py-2.5 text-sm shadow-sm bg-white ${error ? "border-red-500" : "border-gray-300"}`}
+                  placeholder="Enter email"
+                  keyboardType="email-address"
+                />
+                <Pressable
+                  onPress={() => onSearchUser(member.email, index)}
+                  disabled={loadingSearch === index || !member.email?.trim()}
+                  className={`justify-center px-4 rounded-lg ${
+                    loadingSearch === index || !member.email?.trim()
+                      ? "bg-indigo-300"
+                      : "bg-indigo-600 active:bg-indigo-700"
+                  }`}
+                >
+                  {loadingSearch === index ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Search size={18} color="#FFFFFF" />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          )}
+          {error && <Text className="mt-1 text-xs text-red-600">{error}</Text>}
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const LayoutTabs = ({ activeLayout, setActiveLayout }: LayoutTabsProps) => (
+  <View className="flex-row mt-2 mb-4 border-b border-gray-200">
+    {" "}
+    {/* Reduced mb-6 to mb-4 */}
+    <Pressable
+      onPress={() => setActiveLayout("basic")}
+      className={`flex-1 items-center py-3 border-b-2 ${activeLayout === "basic" ? "border-indigo-600" : "border-transparent"}`}
+    >
+      <Text
+        className={`text-sm font-medium ${activeLayout === "basic" ? "text-indigo-600" : "text-gray-500"}`}
+      >
+        Basic Info
+      </Text>
+    </Pressable>
+    <Pressable
+      onPress={() => setActiveLayout("team")}
+      className={`flex-1 items-center py-3 border-b-2 ${activeLayout === "team" ? "border-indigo-600" : "border-transparent"}`}
+    >
+      <Text
+        className={`text-sm font-medium ${activeLayout === "team" ? "text-indigo-600" : "text-gray-500"}`}
+      >
+        Team & Files
+      </Text>
+    </Pressable>
+  </View>
+);
+
+// --- Main Component ---
+
+export default function D0PlanContain({
+  eventId = null,
+  updateParent,
+  initialIsNcrBased = false,
+}: D0PlanContainProps) {
+  const { user, isInitiator, isHOD, isAdmin } = useAuth();
+
+  const getTodayDate = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  };
+
+  const normalizeDateForInput = (value: string | undefined) => {
     if (!value) return getTodayDate();
     if (typeof value === "string") {
       const match = value.match(/^\d{4}-\d{2}-\d{2}/);
       if (match) return match[0];
     }
     const parsedDate = new Date(value);
-    if (isNaN(parsedDate.getTime())) return getTodayDate();
-    
-    const year = parsedDate.getFullYear();
-    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-    const day = String(parsedDate.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    if (Number.isNaN(parsedDate.getTime())) return getTodayDate();
+    return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`;
   };
 
-  const [formData, setFormData] = useState<D0FormData>({
-    eventNo: eventId || '',
-    plantLine: '',
-    partName: '',
-    lotSerial: '',
-    defectCode: '',
+  const [formData, setFormData] = useState<FormDataState>({
+    eventNo: eventId || "",
+    plantLine: "",
+    partName: "",
+    lotSerial: "",
+    defectCode: "",
     dateDiscovered: getTodayDate(),
-    reportedBy: '',
-    personName: '',
-    department: '',
-    companyName: '',
-    companyLogo: '',
-    contactPerson: '',
-    phone: '',
-    email: '',
+    reportedBy: "",
+    personName: "",
+    department: "",
+    companyName: "",
+    companyLogo: "",
+    contactPerson: "",
+    phone: "",
+    email: "",
     teamMembers: [],
-    countryCode: '+91',
+    countryCode: "+91",
     pictures: [],
     reports: [],
     videos: [],
-    status: 'draft',
-    currentStep: 'd0',
+    status: "draft",
+    currentStep: "d0",
     isNcrBased: initialIsNcrBased,
-    sourceType: initialIsNcrBased ? 'ncr' : 'fresh',
+    sourceType: initialIsNcrBased ? "ncr" : "fresh",
   });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [activeLayout, setActiveLayout] = useState("basic");
+  const [allUsers, setAllUsers] = useState<UserData[]>([]);
+  const [departments, setDepartments] =
+    useState<Department[]>(defaultDepartments);
+  const [loadingSearch, setLoadingSearch] = useState<number | null>(null);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [departmentsLoaded, setDepartmentsLoaded] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const isNcrBased8D = Boolean(
     initialIsNcrBased ||
     formData.isNcrBased ||
-    formData.sourceType === 'ncr' ||
+    formData.sourceType === "ncr" ||
     formData.sourceNcrId ||
     formData.sourceNcrNumber ||
-    String(eventId || formData.eventNo || '').startsWith('8D-')
+    String(eventId || formData.eventNo || "").startsWith("8D-"),
   );
 
-  const effectiveReportedBy = isNcrBased8D ? 'self' : formData.reportedBy;
+  const API_URL_JSON = `${API_BASE_URL}/api/eightd/data`;
+
+  const userOptions = useMemo<UserOption[]>(() => {
+    if (!allUsers || allUsers.length === 0) return [];
+    return allUsers
+      .filter((u): u is UserData => Boolean(u && (u.email || u.username)))
+      .map((u) => ({
+        value: u.email || u.username || "",
+        label:
+          `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+          u.username ||
+          u.email ||
+          "",
+        email: u.email,
+        username: u.username,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        department: u.department,
+      }))
+      .filter((opt) => opt.value && opt.label);
+  }, [allUsers]);
 
   useEffect(() => {
     loadUsersAndDepartments();
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!eventId) return;
-      try {
-        setLoading(true);
-        if (!eightDAPI || typeof eightDAPI.getById !== 'function') {
-          console.warn('eightDAPI is not available. Check your services/api exports.');
-          setLoading(false);
-          return;
-        }
-
-        const response = await eightDAPI.getById(eventId);
-        if (response?.success && response.data?.content?.d0?.[0]) {
-          const d0Data = response.data.content.d0[0];
-          
-          let teamMembers: TeamMember[] = [];
-          if (d0Data.teamMembers && Array.isArray(d0Data.teamMembers) && d0Data.teamMembers.length > 0) {
-            teamMembers = d0Data.teamMembers;
-          } else if (d0Data.additionalEmails && Array.isArray(d0Data.additionalEmails)) {
-            teamMembers = await convertEmailsToTeamMembers(d0Data.additionalEmails);
-          }
-
-          const loadedIsNcrBased = Boolean(
-            d0Data.sourceNcrId || d0Data.sourceNcrNumber || d0Data.isNcrBased ||
-            d0Data.sourceType === 'ncr' || String(eventId || d0Data.eventNo || '').startsWith('8D-')
-          );
-
-          setFormData({
-            ...d0Data,
-            dateDiscovered: normalizeDateForInput(d0Data.dateDiscovered),
-            reportedBy: loadedIsNcrBased ? 'self' : (d0Data.reportedBy || ''),
-            teamMembers,
-            status: response.data.status || 'draft',
-            currentStep: response.data.currentStep || 'd0',
-            pictures: Array.isArray(d0Data.pictures) ? d0Data.pictures : [],
-            reports: Array.isArray(d0Data.reports) ? d0Data.reports : [],
-            videos: Array.isArray(d0Data.videos) ? d0Data.videos : [],
-            isNcrBased: loadedIsNcrBased,
-            sourceType: loadedIsNcrBased ? 'ncr' : (d0Data.sourceType || 'fresh'),
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching D0 data:', error);
-        addToast('Failed to load D0 data', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [eventId]);
-
   const loadUsersAndDepartments = async () => {
     try {
       setLoadingUsers(true);
-      let users: any[] = [];
-      
-      if (userAPI && typeof (userAPI as any).getAllUsers === 'function') {
-        users = await (userAPI as any).getAllUsers();
-      } else {
-        // FIX 2: Using dynamic API_BASE_URL
-        const response = await fetch(`${API_BASE_URL}/api/users/all`, {
-          headers: { 'Authorization': `Bearer ${user?.token}` },
-        });
-        if (response.ok) users = await response.json();
-      }
-      
+      const users = await userAPI.getAllUsers();
       if (users && Array.isArray(users)) {
         setAllUsers(users);
+        setUsersLoaded(true);
         setDepartments(extractDepartmentsFromUsers(users));
+        setDepartmentsLoaded(true);
       } else {
+        setAllUsers([]);
+        setUsersLoaded(true);
         setDepartments(defaultDepartments);
+        setDepartmentsLoaded(true);
       }
-    } catch (error) {
-      console.error('Error loading users:', error);
+    } catch (err) {
+      console.error("Failed to load users", err);
+      setUsersLoaded(true);
+      setDepartmentsLoaded(true);
       setDepartments(defaultDepartments);
     } finally {
       setLoadingUsers(false);
     }
   };
 
-  const extractDepartmentsFromUsers = (users: any[]) => {
-    if (!users || !Array.isArray(users) || users.length === 0) return defaultDepartments;
-    const departmentSet = new Set();
-    const departmentsList: { id: string; name: string }[] = [];
-    
-    users.forEach((u: any) => {
-      if (u.department && u.department.trim() && !departmentSet.has(u.department)) {
+  const extractDepartmentsFromUsers = (users: UserData[]): Department[] => {
+    if (!users || users.length === 0) return defaultDepartments;
+    const departmentSet = new Set<string>();
+    const departmentsList: Department[] = [];
+    users.forEach((u) => {
+      if (
+        u.department &&
+        u.department.trim() &&
+        !departmentSet.has(u.department)
+      ) {
         departmentSet.add(u.department);
-        departmentsList.push({ id: `dept_${departmentsList.length + 1}`, name: u.department });
+        departmentsList.push({
+          id: departmentsList.length + 1,
+          name: u.department,
+        });
       }
     });
-
     if (departmentsList.length === 0) return defaultDepartments;
-    if (!departmentSet.has('Other')) {
-      departmentsList.push({ id: `dept_${departmentsList.length + 1}`, name: 'Other' });
-    }
+    if (!departmentSet.has("Other"))
+      departmentsList.push({ id: departmentsList.length + 1, name: "Other" });
     return departmentsList;
   };
 
-  const convertEmailsToTeamMembers = async (emails: string[]): Promise<TeamMember[]> => {
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!eventId) return;
+      setLoading(true);
+      try {
+        const res = await axios.get(`${API_URL_JSON}/${eventId}`);
+        if (res.data.success && res.data.data) {
+          const backendData = res.data.data.content?.d0?.[0];
+          if (backendData) {
+            if (!usersLoaded || !departmentsLoaded) {
+              await new Promise((resolve) => {
+                const check = () => {
+                  if (usersLoaded && departmentsLoaded) resolve(undefined);
+                  else setTimeout(check, 100);
+                };
+                check();
+              });
+            }
+            let teamMembers: TeamMember[] = [];
+            if (backendData.additionalEmails) {
+              if (Array.isArray(backendData.additionalEmails)) {
+                teamMembers = await convertEmailsToTeamMembers(
+                  backendData.additionalEmails as string[],
+                );
+              } else if (typeof backendData.additionalEmails === "string") {
+                const emails = backendData.additionalEmails
+                  .split(",")
+                  .map((e: string) => e.trim())
+                  .filter(
+                    (e: string) => e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e),
+                  );
+                teamMembers = await convertEmailsToTeamMembers(emails);
+              }
+            } else if (
+              backendData.teamMembers &&
+              Array.isArray(backendData.teamMembers)
+            ) {
+              teamMembers = backendData.teamMembers as TeamMember[];
+            }
+
+            const loadedIsNcrBased = Boolean(
+              backendData.sourceNcrId ||
+              backendData.sourceNcrNumber ||
+              backendData.isNcrBased ||
+              backendData.sourceType === "ncr" ||
+              String(eventId || backendData.eventNo || "").startsWith("8D-"),
+            );
+
+            setFormData((prev) => ({
+              ...prev,
+              ...backendData,
+              dateDiscovered: normalizeDateForInput(backendData.dateDiscovered),
+              reportedBy: loadedIsNcrBased
+                ? "self"
+                : backendData.reportedBy || "",
+              teamMembers,
+              status: res.data.data.status || "draft",
+              currentStep: res.data.data.currentStep || "d0",
+              pictures: backendData.pictures || [],
+              reports: backendData.reports || [],
+              videos: backendData.videos || [],
+              isNcrBased: loadedIsNcrBased,
+              sourceType: loadedIsNcrBased
+                ? "ncr"
+                : backendData.sourceType || "fresh",
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching D0 data:", err);
+        Alert.alert("Error", `Failed to load D0 data.`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [eventId, usersLoaded, departmentsLoaded]);
+
+  const convertEmailsToTeamMembers = async (
+    emails: string[],
+  ): Promise<TeamMember[]> => {
     const teamMembers: TeamMember[] = [];
     for (const email of emails) {
       if (email && email.trim()) {
         const userData = findUserByEmailOrUsername(email.trim());
         teamMembers.push({
-          firstName: userData?.firstName || '',
-          lastName: userData?.lastName || '',
-          department: userData?.department || '',
+          firstName: userData?.firstName || "",
+          lastName: userData?.lastName || "",
+          department: userData?.department || "",
           email: email.trim(),
-          username: userData?.username || '',
-          isExternal: !userData,
+          username: userData?.username || "",
         });
       }
     }
     return teamMembers;
   };
 
-  const findUserByEmailOrUsername = (searchTerm: string): any | null => {
-    if (!searchTerm || !allUsers.length) return null;
-    return allUsers.find((u: any) => {
-      const emailMatch = u.email?.toLowerCase() === searchTerm.toLowerCase();
-      const usernameMatch = u.username?.toLowerCase() === searchTerm.toLowerCase();
-      return emailMatch || usernameMatch;
-    }) || null;
+  const findUserByEmailOrUsername = (
+    searchTerm: string,
+  ): UserData | undefined => {
+    if (!searchTerm || !allUsers.length) return undefined;
+    return allUsers.find(
+      (u) =>
+        u.email?.toLowerCase() === searchTerm.toLowerCase() ||
+        u.username?.toLowerCase() === searchTerm.toLowerCase(),
+    );
   };
 
-  useEffect(() => {
-    if (userSearchTerm.length > 1) {
-      const filtered = allUsers.filter((u: any) => {
-        const searchLower = userSearchTerm.toLowerCase();
-        return u.email?.toLowerCase().includes(searchLower) || 
-               u.username?.toLowerCase().includes(searchLower) || 
-               `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().includes(searchLower);
+  const handleTeamMemberChange = (
+    index: number,
+    field: keyof TeamMember,
+    value: string,
+  ) => {
+    setFormData((prev) => {
+      const newTeamMembers = [...prev.teamMembers];
+      newTeamMembers[index] = { ...newTeamMembers[index], [field]: value };
+      return { ...prev, teamMembers: newTeamMembers };
+    });
+    if (errors[`teamMember_${index}_${field}`]) {
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated[`teamMember_${index}_${field}`];
+        return updated;
       });
-      setFilteredUsers(filtered);
-      setShowUserDropdown(true);
-    } else {
-      setFilteredUsers([]);
-      setShowUserDropdown(false);
-    }
-  }, [userSearchTerm, allUsers]);
-
-  const handleUserSelect = (selectedUser: any, index: number) => {
-    const newMembers = [...formData.teamMembers];
-    newMembers[index] = {
-      ...newMembers[index],
-      firstName: selectedUser.firstName || '',
-      lastName: selectedUser.lastName || '',
-      email: selectedUser.email || '',
-      department: selectedUser.department || '',
-      username: selectedUser.username || '',
-      isExternal: false,
-    };
-    setFormData({ ...formData, teamMembers: newMembers });
-    setUserSearchTerm('');
-    setShowUserDropdown(false);
-    setSelectedUserIndex(null);
-    
-    if (errors[`teamMember_${index}_email`]) {
-      const newErrors = { ...errors };
-      delete newErrors[`teamMember_${index}_email`];
-      setErrors(newErrors);
     }
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    const requiredFields = ['eventNo', 'plantLine', 'partName', 'defectCode'];
+  const addTeamMember = () => {
+    setFormData((prev) => ({
+      ...prev,
+      teamMembers: [
+        ...prev.teamMembers,
+        {
+          firstName: "",
+          lastName: "",
+          department: "",
+          email: "",
+          username: "",
+        },
+      ],
+    }));
+  };
 
-    requiredFields.forEach(field => {
-      if (!formData[field as keyof D0FormData]?.toString().trim()) {
-        newErrors[field] = `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
-      }
+  const removeTeamMember = (index: number) => {
+    const newTeamMembers = formData.teamMembers.filter((_, i) => i !== index);
+    setFormData((prev) => ({ ...prev, teamMembers: newTeamMembers }));
+    setErrors((prev) => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach((key) => {
+        if (key.startsWith(`teamMember_${index}_`)) delete updated[key];
+      });
+      return updated;
     });
+  };
 
-    if (!Array.isArray(formData.pictures) || formData.pictures.length === 0) {
-      newErrors.pictures = 'At least one picture is required.';
+  const searchUserByEmail = async (searchTerm: string, index: number) => {
+    if (!searchTerm || !searchTerm.trim()) {
+      Alert.alert("Error", "Please enter an email.");
+      return;
     }
-
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      newErrors.email = 'Invalid email format';
+    setLoadingSearch(index);
+    try {
+      const foundUser = findUserByEmailOrUsername(searchTerm.trim());
+      if (foundUser) {
+        const newTeamMembers = [...formData.teamMembers];
+        newTeamMembers[index] = {
+          ...newTeamMembers[index],
+          firstName: foundUser.firstName || "",
+          lastName: foundUser.lastName || "",
+          department: foundUser.department || "",
+          email: foundUser.email || searchTerm.trim(),
+          username: foundUser.username || "",
+        };
+        setFormData((prev) => ({ ...prev, teamMembers: newTeamMembers }));
+        setErrors((prev) => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach((key) => {
+            if (key.startsWith(`teamMember_${index}_`)) delete updated[key];
+          });
+          return updated;
+        });
+      } else {
+        Alert.alert("Not Found", `No user found.`);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Error searching for user.");
+    } finally {
+      setLoadingSearch(null);
     }
+  };
 
+  const handleChange = (
+    e:
+      | { target: { name: string; value: string } }
+      | { name: string; value: string },
+  ) => {
+    const target = "target" in e ? e.target : e;
+    const { name, value } = target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "reportedBy" && isNcrBased8D ? "self" : value,
+    }));
+    if (errors[name]) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleFileUpload = async (
+    type: "image" | "pdf" | "video" = "image",
+  ) => {
+    try {
+      let result: any;
+      if (type === "image")
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsMultipleSelection: true,
+          quality: 0.8,
+        });
+      else if (type === "pdf")
+        result = await DocumentPicker.getDocumentAsync({
+          type: "application/pdf",
+          copyToCacheDirectory: true,
+        });
+      else if (type === "video")
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+          allowsMultipleSelection: true,
+          quality: 0.8,
+        });
+
+      if (result.canceled) return;
+      const assets = result.assets || (result.assets ? [result.assets[0]] : []);
+      const newFiles = assets.map((file: any) => ({
+        id: Date.now() + Math.random(),
+        name: file.name || file.fileName || `file_${Date.now()}`,
+        type:
+          file.mimeType ||
+          file.type ||
+          (type === "image"
+            ? "image/jpeg"
+            : type === "pdf"
+              ? "application/pdf"
+              : "video/mp4"),
+        size: file.fileSize || file.size || 0,
+        title: file.name || file.fileName || `File`,
+        description: "",
+        uri: file.uri,
+        isLocalFile: true,
+      }));
+      const key =
+        type === "image" ? "pictures" : type === "pdf" ? "reports" : "videos";
+      setFormData((prev) => ({ ...prev, [key]: [...prev[key], ...newFiles] }));
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick file.");
+    }
+  };
+
+  const removeFile = (
+    index: number,
+    type: "image" | "pdf" | "video" = "image",
+  ) => {
+    const key =
+      type === "image" ? "pictures" : type === "pdf" ? "reports" : "videos";
+    setFormData((prev) => {
+      const updatedFiles = [...prev[key]];
+      updatedFiles.splice(index, 1);
+      return { ...prev, [key]: updatedFiles };
+    });
+  };
+
+  const handleApprove = async () => {
+    if (!eventId) return;
+    try {
+      setLoading(true);
+      const res = await axios.post(
+        `${API_BASE_URL}/api/eightd/approve/${eventId}`,
+        { userEmail: user?.email },
+      );
+      if (res.data.success) {
+        const updatedFormData = {
+          ...formData,
+          status: "in progress",
+          currentStep: "d1",
+        };
+        setFormData(updatedFormData);
+        if (updateParent) updateParent([updatedFormData]);
+        Alert.alert("Success", "✅ Approved!");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", "Approval failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!eventId) return;
+    try {
+      setLoading(true);
+      const res = await axios.post(
+        `${API_BASE_URL}/api/eightd/reject/${eventId}`,
+        { userEmail: user?.email },
+      );
+      if (res.data.success) {
+        const updated = { ...formData, status: "rejected", currentStep: "d0" };
+        setFormData(updated);
+        Alert.alert("Rejected", "❌ Rejected");
+        if (updateParent) updateParent([updated]);
+      }
+    } catch (err: any) {
+      Alert.alert("Error", "Rejection failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validateTeamMembers = () => {
+    const newErrors: Record<string, string> = { ...errors };
+    let isValid = true;
+    Object.keys(newErrors).forEach((key) => {
+      if (key.startsWith("teamMember_")) delete newErrors[key];
+    });
     formData.teamMembers.forEach((member, idx) => {
-      if (!member.email || !member.email.trim()) {
-        newErrors[`teamMember_${idx}_email`] = 'Email is required for team members';
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email.trim())) {
-        newErrors[`teamMember_${idx}_email`] = 'Invalid email format';
-      } else if (!member.firstName?.trim() || !member.lastName?.trim()) {
-        newErrors[`teamMember_${idx}_email`] = 'Please fill in first and last name';
+      const { email, firstName, lastName } = member;
+      if (!email || !email.trim()) {
+        newErrors[`teamMember_${idx}_email`] = "Email is required";
+        isValid = false;
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        newErrors[`teamMember_${idx}_email`] = "Invalid email";
+        isValid = false;
+      }
+      if (email && (!firstName.trim() || !lastName.trim())) {
+        newErrors[`teamMember_${idx}_email`] = "Name required";
+        isValid = false;
       }
     });
+    setErrors(newErrors);
+    return isValid;
+  };
 
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    ["eventNo", "plantLine", "partName", "defectCode"].forEach((field) => {
+      if (!formData[field as keyof FormDataState]?.toString().trim())
+        newErrors[field] = "Required";
+    });
+    if (formData.pictures.length === 0) newErrors.pictures = "Picture required";
+    if (
+      formData.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())
+    )
+      newErrors.email = "Invalid email";
+    if (!validateTeamMembers()) Object.assign(newErrors, errors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (): Promise<void> => {
+  const handleSubmit = async () => {
     if (!isInitiator && !isAdmin) {
-      addToast('Only initiators or admins can submit D0 forms.', 'error');
+      Alert.alert("Unauthorized", "Only initiators can submit.");
       return;
     }
     if (!validateForm()) {
-      addToast('Please fix the errors before submitting.', 'error');
+      Alert.alert("Error", "Fix errors first.");
       return;
     }
-
-    setLoading(true);
     setSubmitted(true);
-
+    setLoading(true);
     try {
+      const formDataToSend = new FormData();
       const teamEmails = formData.teamMembers
-        .map((member) => member.email?.trim())
-        .filter((email) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
-
-      const submittedStatus = formData.status === 'in progress' ? 'in progress' : 'approval pending';
+        .map((m) => m.email?.trim())
+        .filter((e): e is string =>
+          Boolean(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+        );
+      const isUpdating = !!eventId;
+      const submittedStatus =
+        formData.status === "in progress" ? "in progress" : "approval pending";
 
       const jsonPayload = {
         ...formData,
-        reportedBy: isNcrBased8D ? 'self' : formData.reportedBy,
+        reportedBy: isNcrBased8D ? "self" : formData.reportedBy,
         additionalEmails: teamEmails,
         status: submittedStatus,
-        currentStep: 'd0',
+        currentStep: "d0",
         isNcrBased: isNcrBased8D,
-        sourceType: isNcrBased8D ? 'ncr' : 'fresh',
-        submittedBy: user?.email || '',
+        sourceType: isNcrBased8D ? "ncr" : "fresh",
+        submittedBy: user?.email,
         submittedAt: new Date().toISOString(),
-        entry_type: '8D_D0_FORM',
+        entry_type: "8D_D0_FORM",
         content: {
-          d0: [{
-            ...formData,
-            reportedBy: isNcrBased8D ? 'self' : formData.reportedBy,
-            isNcrBased: isNcrBased8D,
-            sourceType: isNcrBased8D ? 'ncr' : 'fresh',
-            teamMembers: formData.teamMembers,
-            additionalEmails: teamEmails
-          }]
-        }
+          d0: [
+            {
+              ...formData,
+              reportedBy: isNcrBased8D ? "self" : formData.reportedBy,
+              isNcrBased: isNcrBased8D,
+              sourceType: isNcrBased8D ? "ncr" : "fresh",
+              teamMembers: formData.teamMembers,
+              additionalEmails: teamEmails,
+            },
+          ],
+        },
       };
 
-      const formDataToSend = new FormData();
-      formDataToSend.append('jsonContent', JSON.stringify(jsonPayload));
-
+      formDataToSend.append("jsonContent", JSON.stringify(jsonPayload));
       const allFiles = [
-        ...(Array.isArray(formData.pictures) ? formData.pictures.filter((pic: any) => pic.file) : []),
-        ...(Array.isArray(formData.reports) ? formData.reports.filter((rep: any) => rep.file) : []),
-        ...(Array.isArray(formData.videos) ? formData.videos.filter((vid: any) => vid.file) : [])
-      ];
-
-      allFiles.forEach((fileObj: any) => {
-        if (fileObj.file) {
-          formDataToSend.append('files', {
+        ...formData.pictures,
+        ...formData.reports,
+        ...formData.videos,
+      ].filter((f) => f.isLocalFile || f.uri);
+      allFiles.forEach((fileObj) => {
+        if (fileObj.uri)
+          formDataToSend.append("files", {
             uri: fileObj.uri,
             name: fileObj.name,
             type: fileObj.type,
           } as any);
-        }
       });
 
       let res;
-      if (!eightDAPI) throw new Error('eightDAPI is not available');
-      
-      if (eventId) {
-        res = await eightDAPI.update(eventId, formDataToSend);
+      if (isUpdating)
+        res = await axios.put(`${API_URL_JSON}/${eventId}`, formDataToSend, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      else
+        res = await axios.post(API_URL_JSON, formDataToSend, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+      if (res?.data?.success) {
+        Alert.alert("Success", "✅ Submitted!");
+        const primaryEmail = formData.email?.trim();
+        const additionalEmails = formData.teamMembers
+          .map((m) => m.email?.trim())
+          .filter((e): e is string =>
+            Boolean(e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+          );
+        const allMembers = [
+          ...new Set([primaryEmail, ...additionalEmails].filter(Boolean)),
+        ];
+
+        if (
+          allMembers.length > 0 &&
+          (user?.role === "MASTER" ||
+            user?.role === "ADMIN" ||
+            user?.role === "INITIATOR")
+        ) {
+          try {
+            await fetch(`${API_BASE_URL}/api/forum/8d/groups`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                groupId: formData.eventNo,
+                groupName: `8D: ${formData.eventNo}`,
+                description: `Defect: ${formData.defectCode}`,
+                createdBy: user?.email,
+                members: allMembers,
+              }),
+            });
+          } catch (e) {}
+        }
+
+        const newStatus = "approval pending";
+        setFormData((prev) => ({
+          ...prev,
+          status: newStatus,
+          currentStep: "d0",
+        }));
+        if (updateParent)
+          updateParent([
+            {
+              ...formData,
+              id: res.data.data?.id || eventId,
+              status: newStatus,
+              currentStep: "d0",
+            },
+          ]);
       } else {
-        res = await eightDAPI.create(formDataToSend);
+        throw new Error(res?.data?.error || "Unexpected response");
       }
-
-      if (res?.success) {
-        addToast('D0 form submitted successfully!', 'success');
-        await createForumGroup(teamEmails);
-
-        const newStatus = 'approval pending';
-        const updatedData = { ...formData, status: newStatus, currentStep: 'd0', id: res.data?.id || eventId };
-        setFormData(updatedData);
-
-        if (updateParent) updateParent([updatedData]);
-      }
-    } catch (error: any) {
-      console.error('D0 Submit Error:', error);
-      addToast(error?.response?.data?.error || 'Failed to save form', 'error');
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.error || "Failed to save");
     } finally {
       setLoading(false);
       setSubmitted(false);
     }
   };
 
-  const createForumGroup = async (teamEmails: string[]) => {
-    try {
-      const primaryEmail = formData.email?.trim();
-      const allMembers = [...new Set([primaryEmail, ...teamEmails].filter(Boolean))];
-      const isAuthorized = userRole === 'MASTER' || userRole === 'ADMIN' || userRole === 'INITIATOR';
-      
-      if (allMembers.length > 0 && user?.email && isAuthorized) {
-        await fetch(`${API_BASE_URL}/api/forum/8d/groups`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user?.token}`,
-          },
-          body: JSON.stringify({
-            groupId: formData.eventNo,
-            groupName: `8D Event: ${formData.eventNo}`,
-            description: `Defect: ${formData.defectCode} | Part: ${formData.partName}`,
-            createdBy: user.email,
-            members: allMembers
-          })
-        });
-      }
-    } catch (error) {
-      console.log('⚠️ Forum group creation note:', error);
-    }
-  };
-
-  const handleApprove = async (): Promise<void> => {
-    if (!eventId || !eightDAPI) return;
-    try {
-      setLoading(true);
-      const res = await eightDAPI.approve(eventId, { userEmail: user?.email || '' });
-      if (res?.success) {
-        const updatedFormData = { ...formData, status: 'in progress', currentStep: 'd1' };
-        setFormData(updatedFormData);
-        if (updateParent) updateParent([updatedFormData]);
-        addToast('Document approved! Proceeding to D1.', 'success');
-      }
-    } catch (error: any) {
-      addToast('Approval failed: ' + (error?.response?.data?.error || error?.message), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReject = async (): Promise<void> => {
-    if (!eventId || !eightDAPI) return;
-    try {
-      setLoading(true);
-      const res = await eightDAPI.reject(eventId, { userEmail: user?.email || '' });
-      if (res?.success) {
-        const updatedFormData = { ...formData, status: 'rejected', currentStep: 'd0' };
-        setFormData(updatedFormData);
-        if (updateParent) updateParent([updatedFormData]);
-        addToast('Document rejected.', 'error');
-      }
-    } catch (error: any) {
-      addToast('Rejection failed: ' + (error?.response?.data?.error || error?.message), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addTeamMember = (): void => {
-    setFormData(prev => ({
-      ...prev,
-      teamMembers: [...prev.teamMembers, { firstName: '', lastName: '', email: '', department: '', isExternal: true }]
-    }));
-  };
-
-  const updateTeamMember = (index: number, field: keyof TeamMember, value: string | boolean): void => {
-    const newMembers = [...formData.teamMembers];
-    newMembers[index] = { ...newMembers[index], [field]: value };
-    setFormData({ ...formData, teamMembers: newMembers });
-    
-    if (errors[`teamMember_${index}_${field}`]) {
-      const newErrors = { ...errors };
-      delete newErrors[`teamMember_${index}_${field}`];
-      setErrors(newErrors);
-    }
-  };
-
-  const removeTeamMember = (index: number): void => {
-    const newMembers = formData.teamMembers.filter((_, i) => i !== index);
-    setFormData({ ...formData, teamMembers: newMembers });
-    
-    const newErrors = { ...errors };
-    Object.keys(newErrors).forEach(key => {
-      if (key.startsWith(`teamMember_${index}_`)) delete newErrors[key];
-    });
-    setErrors(newErrors);
-  };
-
-  // FIX 4: Use expo-document-picker API
-   const handleFileUpload = async (type: 'image' | 'pdf' | 'video'): Promise<void> => {
-    try {
-      let mimeType = '*/*';
-      if (type === 'image') mimeType = 'image/*';
-      if (type === 'pdf') mimeType = 'application/pdf';
-      if (type === 'video') mimeType = 'video/*';
-
-      const result = await DocumentPicker.getDocumentAsync({
-        type: mimeType,
-        multiple: true,
-      });
-
-      if (result.canceled) return;
-
-      const newFiles = result.assets.map((asset: any) => ({
-        id: null,
-        name: asset.name || 'Untitled',
-        type: asset.mimeType || 'application/octet-stream',
-        size: asset.size || 0,
-        title: asset.name || 'Untitled',
-        description: '',
-        file: asset,
-        uri: asset.uri,
-      }));
-
-      const key = type === 'image' ? 'pictures' : type === 'pdf' ? 'reports' : 'videos';
-      
-      setFormData(prev => {
-        // 1. Safely extract the current array
-        const currentFiles = prev[key as keyof D0FormData];
-        const safeFiles = Array.isArray(currentFiles) ? currentFiles : [];
-        
-        // 2. Return the updated state cleanly
-        return {
-          ...prev,
-          [key]: [...safeFiles, ...newFiles],
-        } as D0FormData; // Satisfies TypeScript's strict state updater requirements
-      });
-
-    } catch (err: any) {
-      console.error('File picker error:', err);
-      addToast('Failed to pick file.', 'error');
-    }
-  };
-  const removeFile = (index: number, type: 'image' | 'pdf' | 'video'): void => {
-    const key = type === 'image' ? 'pictures' : type === 'pdf' ? 'reports' : 'videos';
-    setFormData(prev => {
-      const arr = Array.isArray(prev[key as keyof D0FormData]) ? prev[key as keyof D0FormData] : [];
-      const updatedFiles = [...(arr as any[])];
-      updatedFiles.splice(index, 1);
-      return { ...prev, [key]: updatedFiles };
-    });
-  };
-
-  const renderTeamMember = (member: TeamMember, index: number) => {
-    const isSearching = selectedUserIndex === index;
-    return (
-      <View key={index} style={styles.memberCard}>
-        <View style={styles.memberHeader}>
-          <Text style={styles.memberHeaderText}>Team Member {index + 1}</Text>
-          <TouchableOpacity onPress={() => removeTeamMember(index)}>
-            <Icon name="trash-2" size={16} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.memberRow}>
-          <View style={styles.memberField}>
-            <Text style={styles.memberLabel}>First Name</Text>
-            <TextInput style={styles.memberInput} value={member.firstName} onChangeText={(text) => updateTeamMember(index, 'firstName', text)} placeholder="First name" />
-          </View>
-          <View style={styles.memberField}>
-            <Text style={styles.memberLabel}>Last Name</Text>
-            <TextInput style={styles.memberInput} value={member.lastName} onChangeText={(text) => updateTeamMember(index, 'lastName', text)} placeholder="Last name" />
-          </View>
-        </View>
-        <View style={styles.memberRow}>
-          <View style={[styles.memberField, { flex: 2 }]}>
-            <Text style={styles.memberLabel}>Email / Username <Text style={styles.required}>*</Text></Text>
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={[styles.memberInput, styles.searchInput, errors[`teamMember_${index}_email`] && styles.inputError]}
-                value={member.email}
-                onChangeText={(text) => { updateTeamMember(index, 'email', text); setUserSearchTerm(text); setSelectedUserIndex(index); }}
-                onFocus={() => { setSelectedUserIndex(index); if (member.email && member.email.length > 1) setUserSearchTerm(member.email); }}
-                placeholder="Search or enter email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              {isSearching && showUserDropdown && filteredUsers.length > 0 && (
-                <View style={styles.dropdownContainer}>
-                  <FlatList
-                    data={filteredUsers}
-                    keyExtractor={(item) => item.id || item.email}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={styles.dropdownItem} onPress={() => handleUserSelect(item, index)}>
-                        <Text style={styles.dropdownName}>{item.firstName} {item.lastName}</Text>
-                        <Text style={styles.dropdownEmail}>{item.email}</Text>
-                        <Text style={styles.dropdownDept}>{item.department}</Text>
-                      </TouchableOpacity>
-                    )}
-                    style={styles.dropdownList}
-                  />
-                </View>
-              )}
-            </View>
-            {errors[`teamMember_${index}_email`] && <Text style={styles.errorText}>{errors[`teamMember_${index}_email`]}</Text>}
-          </View>
-        </View>
-        <View style={styles.memberRow}>
-          <View style={[styles.memberField, { flex: 2 }]}>
-            <Text style={styles.memberLabel}>Department</Text>
-            <View style={[styles.pickerWrapper, styles.memberInput]}>
-              <Picker selectedValue={member.department} onValueChange={(value) => updateTeamMember(index, 'department', value)} style={styles.picker}>
-                <Picker.Item label="Select Department" value="" />
-                {departments.map((dept) => <Picker.Item key={dept.id} label={dept.name} value={dept.name} />)}
-              </Picker>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   if (loading && !submitted) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2242a1" />
-        <Text style={styles.loadingText}>Loading D0 data...</Text>
+      <View className="items-center justify-center flex-1 bg-white">
+        <ActivityIndicator size="large" color="#4F46E5" />
+        <Text className="mt-4 text-gray-600">Loading...</Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Icon name="users" size={20} color="#FFFFFF" />
-          <Text style={styles.headerTitle}>D0 – Plan & Contain</Text>
-          {eventId && <View style={styles.headerBadge}><Text style={styles.headerBadgeText}>{eventId}</Text></View>}
-        </View>
-        {formData.status !== 'draft' && (
-          <View style={[styles.statusBadge, formData.status === 'approval pending' && styles.statusPending, formData.status === 'in progress' && styles.statusProgress, formData.status === 'rejected' && styles.statusRejected]}>
-            <Text style={styles.statusBadgeText}>{formData.status}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity style={[styles.tab, activeTab === 'basic' && styles.tabActive]} onPress={() => setActiveTab('basic')}>
-          <Text style={[styles.tabText, activeTab === 'basic' && styles.tabTextActive]}>Basic Information</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, activeTab === 'team' && styles.tabActive]} onPress={() => setActiveTab('team')}>
-          <Text style={[styles.tabText, activeTab === 'team' && styles.tabTextActive]}>Team Members & Files</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.formContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {activeTab === 'basic' ? (
-          <View style={styles.basicInfo}>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Event No. <Text style={styles.required}>*</Text></Text>
-              <TextInput style={[styles.input, errors.eventNo && styles.inputError]} value={formData.eventNo} onChangeText={(text) => setFormData({...formData, eventNo: text})} placeholder="Enter Event No" />
-              {errors.eventNo && <Text style={styles.errorText}>{errors.eventNo}</Text>}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Plant / Line <Text style={styles.required}>*</Text></Text>
-              <View style={[styles.pickerWrapper, errors.plantLine && styles.inputError]}>
-                <Picker selectedValue={formData.plantLine} onValueChange={(value) => setFormData({...formData, plantLine: value})} style={styles.picker}>
-                  <Picker.Item label="Select Plant Line" value="" />
-                  <Picker.Item label="Pune Plant – Threading Line 1" value="Pune Plant – Threading Line 1" />
-                  <Picker.Item label="Pune Plant – Threading Line 2" value="Pune Plant – Threading Line 2" />
-                </Picker>
-              </View>
-              {errors.plantLine && <Text style={styles.errorText}>{errors.plantLine}</Text>}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Part No. / Name <Text style={styles.required}>*</Text></Text>
-              <TextInput style={[styles.input, errors.partName && styles.inputError]} value={formData.partName} onChangeText={(text) => setFormData({...formData, partName: text})} placeholder="Enter Part Name" />
-              {errors.partName && <Text style={styles.errorText}>{errors.partName}</Text>}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Lot / Serial(s)</Text>
-              <TextInput style={[styles.input, styles.textArea]} value={formData.lotSerial} onChangeText={(text) => setFormData({...formData, lotSerial: text})} placeholder="Enter Lot / Serial numbers" multiline numberOfLines={2} textAlignVertical="top" />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Defect Code / Type <Text style={styles.required}>*</Text></Text>
-              <TextInput style={[styles.input, errors.defectCode && styles.inputError]} value={formData.defectCode} onChangeText={(text) => setFormData({...formData, defectCode: text})} placeholder="Enter Defect Code" />
-              {errors.defectCode && <Text style={styles.errorText}>{errors.defectCode}</Text>}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Date Discovered</Text>
-              <TextInput style={styles.input} value={formData.dateDiscovered} onChangeText={(text) => setFormData({...formData, dateDiscovered: text})} placeholder="YYYY-MM-DD" />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Reported By <Text style={styles.required}>*</Text></Text>
-              <View style={styles.radioGroup}>
-                {['customer', 'self'].map((option) => (
-                  <TouchableOpacity key={option} style={[styles.radioOption, formData.reportedBy === option && styles.radioOptionActive]} onPress={() => setFormData({...formData, reportedBy: option})} disabled={isNcrBased8D}>
-                    <View style={[styles.radioCircle, formData.reportedBy === option && styles.radioCircleActive]}>
-                      {formData.reportedBy === option && <View style={styles.radioInner} />}
-                    </View>
-                    <Text style={styles.radioText}>{option.charAt(0).toUpperCase() + option.slice(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {effectiveReportedBy === 'self' && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Person Name</Text>
-                  <TextInput style={styles.input} value={formData.personName} onChangeText={(text) => setFormData({...formData, personName: text})} placeholder="Enter Person Name" />
+    <SafeAreaView className="flex-1 bg-gray-50">
+      {/* FIX 1: Changed Android behavior to undefined to prevent layout calculation bugs */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        {/* FIX 2: Added contentContainerStyle for proper scroll bounds and keyboardShouldPersistTaps for better input tapping */}
+        <ScrollView
+          className="flex-1 px-3 py-2" /* Reduced from px-4 py-6 */
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 50 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View className="bg-[#2242a1]/90 p-3 rounded-t-xl border-t-[8px] border-[#ee161f] shadow-md">
+            {" "}
+            {/* Reduced p-4 to p-3 */}
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1">
+                <View className="flex-row items-center gap-2 mb-1">
+                  <Users size={20} color="#FFFFFF" />
+                  <Text className="text-lg font-semibold text-white">
+                    D0 – Plan & Contain
+                  </Text>
                 </View>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Department</Text>
-                  <View style={styles.pickerWrapper}>
-                    <Picker selectedValue={formData.department} onValueChange={(value) => setFormData({...formData, department: value})} style={styles.picker}>
-                      <Picker.Item label="Select Department" value="" />
-                      {departments.map((dept) => <Picker.Item key={dept.id} label={dept.name} value={dept.name} />)}
-                    </Picker>
+                {eventId && (
+                  <View className="self-start px-2 py-0.5 rounded-full bg-white/20 mt-1">
+                    <Text className="text-xs text-white">{eventId}</Text>
                   </View>
-                </View>
-              </>
-            )}
-
-            {effectiveReportedBy === 'customer' && !isNcrBased8D && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Company</Text>
-                  <View style={styles.pickerWrapper}>
-                    <Picker selectedValue={formData.companyName} onValueChange={(value) => { const selected = companies.find(c => c.name === value); setFormData({ ...formData, companyName: value, companyLogo: selected?.logo || "" }); }} style={styles.picker}>
-                      <Picker.Item label="Select a Company" value="" />
-                      {companies.map((c) => <Picker.Item key={c.name} label={c.name} value={c.name} />)}
-                    </Picker>
-                  </View>
-                </View>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Contact Person</Text>
-                  <TextInput style={styles.input} value={formData.contactPerson} onChangeText={(text) => setFormData({...formData, contactPerson: text})} placeholder="Enter Contact Person" />
-                </View>
-              </>
-            )}
-
-            {(effectiveReportedBy === 'self' || effectiveReportedBy === 'customer') && (
-              <>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Phone Number</Text>
-                  <TextInput style={styles.input} value={formData.phone} onChangeText={(text) => setFormData({...formData, phone: text})} placeholder="Enter Phone Number" keyboardType="phone-pad" />
-                </View>
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.label}>Primary Email</Text>
-                  <TextInput style={[styles.input, errors.email && styles.inputError]} value={formData.email} onChangeText={(text) => setFormData({...formData, email: text})} placeholder="Enter Primary Email" keyboardType="email-address" autoCapitalize="none" />
-                  {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-                </View>
-              </>
-            )}
-
-            <TouchableOpacity style={styles.continueButton} onPress={() => setActiveTab('team')}>
-              <Text style={styles.continueButtonText}>Continue to Team & Files</Text>
-              <Icon name="arrow-right" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.teamInfo}>
-            <View style={styles.fieldGroup}>
-              <View style={styles.teamHeader}>
-                <Text style={styles.label}>Team Members</Text>
-                <TouchableOpacity style={styles.addMemberButton} onPress={addTeamMember}>
-                  <Icon name="user-plus" size={16} color="#3B82F6" />
-                  <Text style={styles.addMemberText}>Add Member</Text>
-                </TouchableOpacity>
-              </View>
-
-              {loadingUsers ? (
-                <View style={styles.loadingUsersContainer}>
-                  <ActivityIndicator size="small" color="#2242a1" />
-                  <Text style={styles.loadingUsersText}>Loading users...</Text>
-                </View>
-              ) : (
-                formData.teamMembers.map((member, index) => renderTeamMember(member, index))
-              )}
-
-              {formData.teamMembers.length === 0 && !loadingUsers && (
-                <View style={styles.emptyMembers}>
-                  <Icon name="users" size={32} color="#9CA3AF" />
-                  <Text style={styles.emptyMembersText}>No team members added yet</Text>
-                  <TouchableOpacity onPress={addTeamMember}><Text style={styles.emptyMembersLink}>Add first team member</Text></TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Pictures <Text style={styles.required}>*</Text></Text>
-              <TouchableOpacity style={styles.uploadButton} onPress={() => handleFileUpload('image')}>
-                <Icon name="camera" size={20} color="#6B7280" />
-                <Text style={styles.uploadText}>Upload Pictures</Text>
-              </TouchableOpacity>
-              {errors.pictures && <Text style={styles.errorText}>{errors.pictures}</Text>}
-              {Array.isArray(formData.pictures) && formData.pictures.length > 0 && (
-                <View style={styles.filePreviewContainer}>
-                  {formData.pictures.map((pic: any, idx) => (
-                    <View key={idx} style={styles.filePreview}>
-                      {/* FIX 3: Safe Image Source */}
-                      {pic.uri ? (
-                        <Image source={{ uri: pic.uri }} style={styles.filePreviewImage} />
-                      ) : (
-                        <Icon name="image" size={16} color="#6B7280" style={{ marginRight: 8 }} />
-                      )}
-                      <Text style={styles.filePreviewText} numberOfLines={1}>{pic.title || pic.name || `Image ${idx + 1}`}</Text>
-                      <TouchableOpacity onPress={() => removeFile(idx, 'image')}><Icon name="x" size={16} color="#EF4444" /></TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Reports (PDFs)</Text>
-              <TouchableOpacity style={styles.uploadButton} onPress={() => handleFileUpload('pdf')}>
-                <Icon name="file" size={20} color="#6B7280" />
-                <Text style={styles.uploadText}>Upload Reports</Text>
-              </TouchableOpacity>
-              {Array.isArray(formData.reports) && formData.reports.length > 0 && (
-                <View style={styles.filePreviewContainer}>
-                  {formData.reports.map((rep: any, idx) => (
-                    <View key={idx} style={styles.filePreview}>
-                      <Icon name="file-text" size={16} color="#6B7280" style={{ marginRight: 8 }} />
-                      <Text style={styles.filePreviewText} numberOfLines={1}>{rep.title || rep.name || `Report ${idx + 1}`}</Text>
-                      <TouchableOpacity onPress={() => removeFile(idx, 'pdf')}><Icon name="x" size={16} color="#EF4444" /></TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Videos</Text>
-              <TouchableOpacity style={styles.uploadButton} onPress={() => handleFileUpload('video')}>
-                <Icon name="video" size={20} color="#6B7280" />
-                <Text style={styles.uploadText}>Upload Videos</Text>
-              </TouchableOpacity>
-              {Array.isArray(formData.videos) && formData.videos.length > 0 && (
-                <View style={styles.filePreviewContainer}>
-                  {formData.videos.map((vid: any, idx) => (
-                    <View key={idx} style={styles.filePreview}>
-                      <Icon name="film" size={16} color="#6B7280" style={{ marginRight: 8 }} />
-                      <Text style={styles.filePreviewText} numberOfLines={1}>{vid.title || vid.name || `Video ${idx + 1}`}</Text>
-                      <TouchableOpacity onPress={() => removeFile(idx, 'video')}><Icon name="x" size={16} color="#EF4444" /></TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {formData.status === 'draft' && (isInitiator || isAdmin) && (
-              <TouchableOpacity style={[styles.submitButton, loading && styles.submitDisabled]} onPress={handleSubmit} disabled={loading}>
-                {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
-                  <><Icon name="check-circle" size={16} color="#FFFFFF" /><Text style={styles.submitButtonText}>Submit for Approval</Text></>
                 )}
-              </TouchableOpacity>
-            )}
-
-            {formData.status === 'approval pending' && (isHOD || isAdmin) && (
-              <View style={styles.approvalContainer}>
-                <TouchableOpacity style={[styles.approvalButton, styles.approveButton]} onPress={handleApprove} disabled={loading}>
-                  <Icon name="check" size={16} color="#FFFFFF" /><Text style={styles.approvalButtonText}>Approve & Move to D1</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.approvalButton, styles.rejectButton]} onPress={handleReject} disabled={loading}>
-                  <Icon name="x" size={16} color="#FFFFFF" /><Text style={styles.approvalButtonText}>Reject</Text>
-                </TouchableOpacity>
+                {formData.status !== "draft" && (
+                  <View
+                    className={`self-start px-2 py-0.5 rounded-full mt-2 ${
+                      formData.status === "approval pending"
+                        ? "bg-yellow-200"
+                        : formData.status === "in progress"
+                          ? "bg-green-200"
+                          : "bg-red-200"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-medium ${
+                        formData.status === "approval pending"
+                          ? "text-yellow-800"
+                          : formData.status === "in progress"
+                            ? "text-green-800"
+                            : "text-red-800"
+                      }`}
+                    >
+                      {formData.status}
+                    </Text>
+                  </View>
+                )}
               </View>
-            )}
-
-            {formData.status === 'in progress' && (
-              <View style={styles.statusMessage}>
-                <Icon name="check-circle" size={20} color="#10B981" />
-                <Text style={styles.statusMessageText}>✓ D0 Approved & Locked - You can proceed to next steps</Text>
-              </View>
-            )}
-
-            {formData.status === 'rejected' && (
-              <View style={[styles.statusMessage, styles.statusMessageError]}>
-                <Icon name="x-circle" size={20} color="#EF4444" />
-                <Text style={[styles.statusMessageText, styles.statusMessageTextError]}>✗ D0 Rejected - Cannot proceed</Text>
-              </View>
-            )}
-            
-            {formData.status === 'approval pending' && !isHOD && !isAdmin && (
-              <View style={[styles.statusMessage, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                <ActivityIndicator size="small" color="#D97706" />
-                <Text style={[styles.statusMessageText, { color: '#92400E' }]}>⏳ Awaiting HOD Approval</Text>
-              </View>
-            )}
+              <Pressable
+                onPress={() => setIsPreviewOpen(true)}
+                className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 active:bg-white/20"
+              >
+                <Eye size={14} color="#FFFFFF" />
+                <Text className="text-xs font-medium text-white">Preview</Text>
+              </Pressable>
+            </View>
           </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <LayoutTabs
+            activeLayout={activeLayout}
+            setActiveLayout={setActiveLayout}
+          />
+
+          {/* Form Content */}
+          <View className="p-3 mb-4 bg-white border border-gray-100 shadow-lg rounded-b-xl">
+            {" "}
+            {/* Reduced p-4 mb-6 */}
+            {activeLayout === "basic" ? (
+              <View className="gap-1">
+                {/* Event No */}
+                <View>
+                  <View className="flex-row items-center gap-1 mb-1">
+                    <Hash size={16} color="#4F46E5" />
+                    <Text className="text-sm font-semibold text-gray-800">
+                      Event No.
+                    </Text>
+                    <Tooltip content="Unique identifier">
+                      <Info size={12} color="#9CA3AF" />
+                    </Tooltip>
+                    <Text className="text-red-500">*</Text>
+                  </View>
+                  <TextInput
+                    value={formData.eventNo}
+                    onChangeText={(text) =>
+                      handleChange({ target: { name: "eventNo", value: text } })
+                    }
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm bg-white ${errors.eventNo ? "border-red-500" : "border-gray-300"}`}
+                    placeholder="Enter Event No"
+                  />
+                  {errors.eventNo && (
+                    <Text className="mt-1 text-xs text-red-600">
+                      {errors.eventNo}
+                    </Text>
+                  )}
+                </View>
+
+                <CustomSelect
+                  label="Plant / Line"
+                  value={formData.plantLine}
+                  onChange={(val) =>
+                    handleChange({ target: { name: "plantLine", value: val } })
+                  }
+                  options={[
+                    {
+                      value: "Pune Plant – Threading Line 1",
+                      label: "Pune Plant – Threading Line 1",
+                    },
+                    {
+                      value: "Pune Plant – Threading Line 2",
+                      label: "Pune Plant – Threading Line 2",
+                    },
+                  ]}
+                  placeholder="Select Plant Line"
+                  required
+                  error={errors.plantLine}
+                />
+
+                <InputField
+                  label="Part No. / Name"
+                  name="partName"
+                  value={formData.partName}
+                  onChange={handleChange}
+                  required
+                  error={errors.partName}
+                />
+                <InputField
+                  label="Lot / Serial(s)"
+                  name="lotSerial"
+                  value={formData.lotSerial}
+                  onChange={handleChange}
+                  multiline
+                />
+
+                <View>
+                  <View className="flex-row items-center gap-1 mb-1">
+                    <AlertCircle size={16} color="#EF4444" />
+                    <Text className="text-sm font-semibold text-gray-800">
+                      Defect Code
+                    </Text>
+                    <Text className="text-red-500">*</Text>
+                  </View>
+                  <TextInput
+                    value={formData.defectCode}
+                    onChangeText={(text) =>
+                      handleChange({
+                        target: { name: "defectCode", value: text },
+                      })
+                    }
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm bg-white ${errors.defectCode ? "border-red-500" : "border-gray-300"}`}
+                    placeholder="Enter Defect Code"
+                  />
+                  {errors.defectCode && (
+                    <Text className="mt-1 text-xs text-red-600">
+                      {errors.defectCode}
+                    </Text>
+                  )}
+                </View>
+
+                <View>
+                  <View className="flex-row items-center gap-1 mb-1">
+                    <CalendarDays size={16} color="#4F46E5" />
+                    <Text className="text-sm font-semibold text-gray-800">
+                      Date Discovered
+                    </Text>
+                  </View>
+                  <TextInput
+                    value={formData.dateDiscovered}
+                    onChangeText={(text) =>
+                      handleChange({
+                        target: { name: "dateDiscovered", value: text },
+                      })
+                    }
+                    className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm"
+                    placeholder="YYYY-MM-DD"
+                  />
+                </View>
+
+                {/* Reported By Section */}
+                <View className="p-3 mt-2 border border-slate-200 rounded-xl bg-slate-50">
+                  <View className="flex-row items-center gap-1 mb-2">
+                    <User size={16} color="#4F46E5" />
+                    <Text className="text-sm font-semibold text-gray-800">
+                      Reported By
+                    </Text>
+                    <Text className="text-red-500">*</Text>
+                  </View>
+
+                  <CustomSelect
+                    value={isNcrBased8D ? "self" : formData.reportedBy}
+                    onChange={(val) =>
+                      handleChange({
+                        target: { name: "reportedBy", value: val },
+                      })
+                    }
+                    options={
+                      isNcrBased8D
+                        ? [{ value: "self", label: "Self Inspection" }]
+                        : [
+                            { value: "", label: "-- Select Source --" },
+                            { value: "customer", label: "Customer Complaint" },
+                            { value: "self", label: "Self Inspection" },
+                          ]
+                    }
+                    placeholder="Select Source"
+                    required
+                  />
+
+                  {(isNcrBased8D ? "self" : formData.reportedBy) === "self" && (
+                    <View className="gap-1 mt-2">
+                      <InputField
+                        label="Person Name"
+                        name="personName"
+                        value={formData.personName}
+                        onChange={handleChange}
+                      />
+                      <CustomSelect
+                        label="Department"
+                        value={formData.department}
+                        onChange={(val) =>
+                          handleChange({
+                            target: { name: "department", value: val },
+                          })
+                        }
+                        options={departments.map((d) => ({
+                          value: d.name || String(d.id),
+                          label: d.name || String(d.id),
+                        }))}
+                        placeholder="Select Department"
+                      />
+                    </View>
+                  )}
+
+                  {(isNcrBased8D ? "self" : formData.reportedBy) ===
+                    "customer" &&
+                    !isNcrBased8D && (
+                      <View className="gap-1 mt-2">
+                        <Text className="mb-1 text-sm font-medium text-gray-600">
+                          Company
+                        </Text>
+                        <View className="flex-row items-center gap-2 p-2 bg-white border border-gray-300 rounded-lg shadow-sm">
+                          {formData.companyLogo && (
+                            <Image
+                              source={{ uri: formData.companyLogo }}
+                              className="w-10 h-10 border border-gray-200 rounded"
+                              resizeMode="contain"
+                            />
+                          )}
+                          <View className="flex-1">
+                            <CustomSelect
+                              value={formData.companyName}
+                              onChange={(val) => {
+                                const selected = companies.find(
+                                  (c) => c.name === val,
+                                );
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  companyName: val,
+                                  companyLogo: selected?.logo || "",
+                                }));
+                              }}
+                              options={companies.map((c) => ({
+                                value: c.name,
+                                label: c.name,
+                              }))}
+                              placeholder="Select Company"
+                            />
+                          </View>
+                        </View>
+                        <InputField
+                          label="Contact Person"
+                          name="contactPerson"
+                          value={formData.contactPerson}
+                          onChange={handleChange}
+                        />
+                      </View>
+                    )}
+
+                  {((isNcrBased8D ? "self" : formData.reportedBy) === "self" ||
+                    (isNcrBased8D ? "self" : formData.reportedBy) ===
+                      "customer") && (
+                    <View className="gap-1 pt-2 mt-2 border-t border-slate-300">
+                      <Text className="mb-1 text-sm font-medium text-gray-600">
+                        Phone Number
+                      </Text>
+                      <View className="flex-row items-center overflow-hidden bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <View className="px-3 py-2.5 bg-gray-100 border-r border-gray-300">
+                          <Text className="text-sm text-gray-700">
+                            {formData.countryCode}
+                          </Text>
+                        </View>
+                        <TextInput
+                          value={formData.phone}
+                          onChangeText={(text) =>
+                            setFormData((prev) => ({ ...prev, phone: text }))
+                          }
+                          className="flex-1 px-3 py-2.5 text-sm"
+                          placeholder="Phone number"
+                          keyboardType="phone-pad"
+                        />
+                      </View>
+                      <InputField
+                        label="Primary Email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        type="email"
+                        error={errors.email}
+                      />
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View className="gap-4">
+                {/* Team Members Section */}
+                <View className="p-3 border border-slate-200 rounded-xl bg-slate-50">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <View className="flex-row items-center gap-2">
+                      <Users size={16} color="#4B5563" />
+                      <Text className="text-sm font-medium text-gray-600">
+                        Team Members
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={addTeamMember}
+                      className="flex-row items-center gap-1 px-3 py-1.5 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                    >
+                      <Plus size={12} color="#FFFFFF" />
+                      <Text className="text-xs font-medium text-white">
+                        Add
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {loadingUsers ? (
+                    <View className="items-center py-6">
+                      <ActivityIndicator size="large" color="#4F46E5" />
+                    </View>
+                  ) : (
+                    <View className="gap-2">
+                      {formData.teamMembers.map((member, index) => (
+                        <TeamMemberField
+                          key={index}
+                          member={member}
+                          index={index}
+                          onChange={handleTeamMemberChange}
+                          onRemove={removeTeamMember}
+                          error={errors[`teamMember_${index}_email`]}
+                          onSearchUser={searchUserByEmail}
+                          loadingSearch={loadingSearch}
+                          departments={departments}
+                          userOptions={userOptions}
+                          loadingUsers={loadingUsers}
+                        />
+                      ))}
+                      {formData.teamMembers.length === 0 && (
+                        <Pressable
+                          onPress={addTeamMember}
+                          className="items-center py-6 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                        >
+                          <Users size={24} color="#9CA3AF" />
+                          <Text className="mt-2 text-xs text-gray-500">
+                            No team members added yet
+                          </Text>
+                          <Text className="mt-1 text-xs font-medium text-indigo-600">
+                            Tap to add
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                {/* Pictures */}
+                <View>
+                  <View className="flex-row items-center mb-2">
+                    <Text className="text-sm font-medium text-gray-600">
+                      Pictures
+                    </Text>
+                    <Text className="ml-1 text-red-500">*</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => handleFileUpload("image")}
+                    className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                  >
+                    <Plus size={16} color="#4B5563" />
+                    <Text className="text-sm text-gray-600">Add Pictures</Text>
+                  </Pressable>
+                  {errors.pictures && (
+                    <Text className="mt-1 text-xs text-red-600">
+                      {errors.pictures}
+                    </Text>
+                  )}
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mt-2"
+                  >
+                    {formData.pictures.map((pic, idx) => (
+                      <View
+                        key={`pic-${pic.id || idx}`}
+                        className="w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                      >
+                        <Image
+                          source={{
+                            uri:
+                              pic.uri ||
+                              "https://via.placeholder.com/112?text=Img",
+                          }}
+                          className="w-full h-24 mb-2 rounded"
+                          resizeMode="cover"
+                        />
+                        <TextInput
+                          placeholder="Title"
+                          value={pic.title}
+                          onChangeText={(text) => {
+                            const newPics = [...formData.pictures];
+                            newPics[idx].title = text;
+                            setFormData((prev) => ({
+                              ...prev,
+                              pictures: newPics,
+                            }));
+                          }}
+                          className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                        />
+                        <Pressable
+                          onPress={() => removeFile(idx, "image")}
+                          className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                        >
+                          <X size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Reports */}
+                <View>
+                  <Text className="mb-2 text-sm font-medium text-gray-600">
+                    Reports (PDFs)
+                  </Text>
+                  <Pressable
+                    onPress={() => handleFileUpload("pdf")}
+                    className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                  >
+                    <Plus size={16} color="#4B5563" />
+                    <Text className="text-sm text-gray-600">Add PDFs</Text>
+                  </Pressable>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mt-2"
+                  >
+                    {formData.reports.map((rep, idx) => (
+                      <View
+                        key={`rep-${rep.id || idx}`}
+                        className="items-center w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                      >
+                        <View className="items-center justify-center w-full h-24 mb-2 bg-indigo-100 border border-indigo-300 rounded">
+                          <FileText size={24} color="#3730A3" />
+                          <Text
+                            className="w-full px-1 mt-1 text-xs text-center text-indigo-800"
+                            numberOfLines={2}
+                          >
+                            {rep.title || `Report ${idx + 1}`}
+                          </Text>
+                        </View>
+                        <TextInput
+                          placeholder="Title"
+                          value={rep.title}
+                          onChangeText={(text) => {
+                            const newReports = [...formData.reports];
+                            newReports[idx].title = text;
+                            setFormData((prev) => ({
+                              ...prev,
+                              reports: newReports,
+                            }));
+                          }}
+                          className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                        />
+                        <Pressable
+                          onPress={() => removeFile(idx, "pdf")}
+                          className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                        >
+                          <X size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Videos */}
+                <View>
+                  <Text className="mb-2 text-sm font-medium text-gray-600">
+                    Videos
+                  </Text>
+                  <Pressable
+                    onPress={() => handleFileUpload("video")}
+                    className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                  >
+                    <Plus size={16} color="#4B5563" />
+                    <Text className="text-sm text-gray-600">Add Videos</Text>
+                  </Pressable>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    className="mt-2"
+                  >
+                    {formData.videos.map((vid, idx) => (
+                      <View
+                        key={`vid-${vid.id || idx}`}
+                        className="items-center w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                      >
+                        <View className="items-center justify-center w-full h-24 mb-2 bg-green-100 border border-green-300 rounded">
+                          <Video size={24} color="#166534" />
+                          <Text
+                            className="w-full px-1 mt-1 text-xs text-center text-green-800"
+                            numberOfLines={2}
+                          >
+                            {vid.title || `Video ${idx + 1}`}
+                          </Text>
+                        </View>
+                        <TextInput
+                          placeholder="Title"
+                          value={vid.title}
+                          onChangeText={(text) => {
+                            const newVideos = [...formData.videos];
+                            newVideos[idx].title = text;
+                            setFormData((prev) => ({
+                              ...prev,
+                              videos: newVideos,
+                            }));
+                          }}
+                          className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                        />
+                        <Pressable
+                          onPress={() => removeFile(idx, "video")}
+                          className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                        >
+                          <X size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+            )}
+            {/* Action Buttons */}
+            <View className="flex-row items-center justify-between pt-4 mt-4 border-t border-gray-200">
+              <View>
+                {activeLayout === "team" && (
+                  <Pressable
+                    onPress={() => setActiveLayout("basic")}
+                    className="flex-row items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg active:bg-gray-50"
+                  >
+                    <ChevronLeft size={16} color="#4B5563" />
+                    <Text className="text-sm font-medium text-gray-600">
+                      Back
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <View className="flex-row gap-2">
+                {activeLayout === "basic" && (
+                  <Pressable
+                    onPress={() => setActiveLayout("team")}
+                    className="flex-row items-center gap-1 px-4 py-2 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                  >
+                    <Text className="text-sm font-medium text-white">Next</Text>
+                    <ChevronRight size={16} color="#FFFFFF" />
+                  </Pressable>
+                )}
+
+                {(activeLayout === "team" ||
+                  formData.teamMembers.length === 0) && (
+                  <>
+                    {formData.status === "draft" && (isInitiator || isAdmin) ? (
+                      <Pressable
+                        onPress={handleSubmit}
+                        disabled={submitted || loading}
+                        className={`px-4 py-2 rounded-lg ${submitted || loading ? "bg-green-600" : "bg-cyan-600 active:bg-cyan-700"}`}
+                      >
+                        <View className="flex-row items-center gap-2">
+                          {loading && (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          )}
+                          <Text className="text-sm font-medium text-white">
+                            {loading
+                              ? "Submitting..."
+                              : submitted
+                                ? "Submitted ✅"
+                                : "Submit"}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ) : formData.status === "approval pending" &&
+                      (isHOD || isAdmin) ? (
+                      <View className="flex-row gap-2">
+                        <Pressable
+                          onPress={handleApprove}
+                          disabled={loading}
+                          className="flex-row items-center gap-1 px-3 py-2 bg-green-600 rounded-lg active:bg-green-700 disabled:opacity-70"
+                        >
+                          <CheckCircle size={16} color="#FFFFFF" />
+                          <Text className="text-sm font-medium text-white">
+                            Approve
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={handleReject}
+                          disabled={loading}
+                          className="flex-row items-center gap-1 px-3 py-2 bg-red-600 rounded-lg active:bg-red-700 disabled:opacity-70"
+                        >
+                          <XCircle size={16} color="#FFFFFF" />
+                          <Text className="text-sm font-medium text-white">
+                            Reject
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : formData.status === "in progress" ? (
+                      <View className="flex-row items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+                        <CheckCircle size={16} color="#166534" />
+                        <Text className="text-xs font-medium text-green-800">
+                          ✓ Approved & Locked
+                        </Text>
+                      </View>
+                    ) : formData.status === "rejected" ? (
+                      <View className="flex-row items-center gap-2 px-3 py-2 bg-red-100 border border-red-300 rounded-lg">
+                        <XCircle size={16} color="#991B1B" />
+                        <Text className="text-xs font-medium text-red-800">
+                          ✗ Rejected
+                        </Text>
+                      </View>
+                    ) : formData.status === "approval pending" &&
+                      !isHOD &&
+                      !isAdmin ? (
+                      <View className="flex-row items-center gap-2 px-3 py-2 bg-yellow-100 border border-yellow-300 rounded-lg">
+                        <ActivityIndicator size="small" color="#854D0E" />
+                        <Text className="text-xs font-medium text-yellow-800">
+                          ⏳ Awaiting Approval
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text className="text-xs italic text-gray-500">
+                        {formData.status === "draft" && !isInitiator && !isAdmin
+                          ? "Initiators only"
+                          : `Status: ${formData.status}`}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={isPreviewOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <SafeAreaView className="flex-1 bg-white">
+          <View className="flex-row items-center justify-between p-3 border-b border-gray-200">
+            <Text className="text-base font-semibold text-gray-800">
+              Preview
+            </Text>
+            <Pressable
+              onPress={() => setIsPreviewOpen(false)}
+              className="p-2 rounded-full active:bg-gray-100"
+            >
+              <X size={20} color="#4B5563" />
+            </Pressable>
+          </View>
+          <View className="flex-1">
+            <FinalPreview eventId={eventId || formData.eventNo} />
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#2242a1', borderTopWidth: 4, borderTopColor: '#EE161F' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: isMobile ? 16 : 20, fontWeight: '600', color: '#FFFFFF' },
-  headerBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  headerBadgeText: { fontSize: 12, color: '#FFFFFF' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusPending: { backgroundColor: '#FEF3C7' },
-  statusProgress: { backgroundColor: '#D1FAE5' },
-  statusRejected: { backgroundColor: '#FEE2E2' },
-  statusBadgeText: { fontSize: 12, fontWeight: '500', color: '#1F2937' },
-  tabContainer: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: '#3B82F6' },
-  tabText: { fontSize: 14, fontWeight: '500', color: '#6B7280' },
-  tabTextActive: { color: '#3B82F6' },
-  formContent: { flex: 1, padding: 16 },
-  basicInfo: { gap: 16 },
-  teamInfo: { gap: 16 },
-  fieldGroup: { marginBottom: 8 },
-  label: { fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: 4 },
-  required: { color: '#EF4444' },
-  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1F2937', backgroundColor: '#FFFFFF' },
-  inputError: { borderColor: '#EF4444' },
-  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4 },
-  textArea: { minHeight: 60, textAlignVertical: 'top' },
-  radioGroup: { flexDirection: 'row', gap: 16, marginTop: 4 },
-  radioOption: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  radioOptionActive: { opacity: 1 },
-  radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center' },
-  radioCircleActive: { borderColor: '#3B82F6' },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3B82F6' },
-  radioText: { fontSize: 14, color: '#1F2937' },
-  continueButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#3B82F6', paddingVertical: 12, borderRadius: 8, marginTop: 8 },
-  continueButtonText: { fontSize: 14, fontWeight: '500', color: '#FFFFFF' },
-  teamHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  addMemberButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
-  addMemberText: { fontSize: 14, color: '#3B82F6', fontWeight: '500' },
-  memberCard: { backgroundColor: '#F9FAFB', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  memberHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  memberHeaderText: { fontSize: 14, fontWeight: '500', color: '#374151' },
-  memberRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  memberField: { flex: 1 },
-  memberLabel: { fontSize: 12, color: '#6B7280', marginBottom: 2 },
-  memberInput: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, color: '#1F2937', backgroundColor: '#FFFFFF' },
-  searchContainer: { position: 'relative', zIndex: 10 },
-  searchInput: {},
-  dropdownContainer: { position: 'absolute', top: 40, left: 0, right: 0, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, maxHeight: 200, zIndex: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  dropdownList: { maxHeight: 200 },
-  dropdownItem: { padding: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  dropdownName: { fontSize: 14, fontWeight: '500', color: '#1F2937' },
-  dropdownEmail: { fontSize: 12, color: '#6B7280' },
-  dropdownDept: { fontSize: 11, color: '#9CA3AF' },
-  pickerWrapper: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, backgroundColor: '#FFFFFF', overflow: 'hidden' },
-  picker: { height: 40, width: '100%' },
-  loadingUsersContainer: { padding: 20, alignItems: 'center' },
-  loadingUsersText: { marginTop: 8, fontSize: 14, color: '#6B7280' },
-  emptyMembers: { padding: 24, alignItems: 'center', borderWidth: 2, borderColor: '#D1D5DB', borderStyle: 'dashed', borderRadius: 8 },
-  emptyMembersText: { marginTop: 8, fontSize: 14, color: '#6B7280' },
-  emptyMembersLink: { marginTop: 8, fontSize: 14, color: '#3B82F6', fontWeight: '500' },
-  uploadButton: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 2, borderColor: '#D1D5DB', borderStyle: 'dashed', borderRadius: 8, paddingVertical: 16, justifyContent: 'center' },
-  uploadText: { fontSize: 14, color: '#6B7280' },
-  filePreviewContainer: { marginTop: 8, gap: 4 },
-  filePreview: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F3F4F6', borderRadius: 6 },
-  filePreviewImage: { width: 24, height: 24, borderRadius: 4, marginRight: 8 },
-  filePreviewText: { fontSize: 13, color: '#1F2937', flex: 1 },
-  submitButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#06B6D4', paddingVertical: 12, borderRadius: 8, marginTop: 8 },
-  submitDisabled: { opacity: 0.6 },
-  submitButtonText: { fontSize: 14, fontWeight: '500', color: '#FFFFFF' },
-  approvalContainer: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  approvalButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 8 },
-  approveButton: { backgroundColor: '#10B981' },
-  rejectButton: { backgroundColor: '#EF4444' },
-  approvalButtonText: { fontSize: 14, fontWeight: '500', color: '#FFFFFF' },
-  statusMessage: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#D1FAE5', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#A7F3D0' },
-  statusMessageError: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-  statusMessageText: { fontSize: 13, color: '#065F46', flex: 1 },
-  statusMessageTextError: { color: '#991B1B' },
-});

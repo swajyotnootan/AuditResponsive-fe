@@ -1,362 +1,385 @@
-// app/components/eightd/EightDStepper.tsx
-'use client';
-
-import React, { useEffect, useRef, useState } from 'react';
+import { Check, Grid, Layout } from "lucide-react-native";
+import React, { ReactNode, useEffect, useRef, useState } from "react";
 import {
-    Dimensions,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 
-const { width } = Dimensions.get('window');
-const isMobile = width < 768;
+// --- Types ---
+type StepData = Record<string, any> | null | undefined;
+type StepStatus = "current" | "completed" | "pending";
+type Orientation = "horizontal" | "vertical";
 
 interface EightDStepperProps {
-  steps: string[];
+  steps: any[];
   currentStep: number;
   onStepClick: (index: number) => void;
-  stepData: Record<string, any[]>;
-  children: React.ReactNode;
+  stepData?: StepData;
+  children?: ReactNode;
 }
 
+interface StepNodeProps {
+  index: number;
+  status: StepStatus;
+  label: string;
+  onPress: () => void;
+  isVertical?: boolean;
+}
+
+// --- Helpers ---
+const isStepCompleted = (index: number, stepData?: StepData): boolean => {
+  if (!stepData) return false;
+  const content = stepData[`d${index}`];
+  return Array.isArray(content) ? content.length > 0 : false;
+};
+
+const getStepStatus = (
+  index: number,
+  currentStep: number,
+  stepData?: StepData,
+): StepStatus => {
+  if (index === currentStep) return "current";
+  if (isStepCompleted(index, stepData)) return "completed";
+  return "pending";
+};
+
+const defaultStepNames = [
+  "Plan & Contain",
+  "Form Team",
+  "Problem",
+  "Interim Contain",
+  "Root Cause",
+  "Corrective Action",
+  "Implement",
+  "Prevent",
+  "Close & Recognize",
+  "Preview",
+];
+
+// --- Animated Pulse Component ---
+function Pulse({ colorClass }: { colorClass: string }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.4);
+
+  useEffect(() => {
+    const duration = 1000;
+    scale.value = withRepeat(
+      withSequence(withTiming(1.5, { duration }), withTiming(1, { duration })),
+      -1,
+      false,
+    );
+    opacity.value = withRepeat(
+      withSequence(withTiming(0, { duration }), withTiming(0.4, { duration })),
+      -1,
+      false,
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      className={`absolute inset-0 rounded-full ${colorClass}`}
+      style={animatedStyle}
+    />
+  );
+}
+
+// --- Reusable Step Node ---
+function StepNode({
+  index,
+  status,
+  label,
+  onPress,
+  isVertical = false,
+}: StepNodeProps) {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSpring(status === "current" ? 1.1 : 1, {
+      damping: 20,
+      stiffness: 300,
+    });
+  }, [status]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const isCompleted = status === "completed";
+  const isCurrent = status === "current";
+
+  const bgClass = isCompleted
+    ? "bg-green-500"
+    : isCurrent
+      ? "bg-blue-500"
+      : "bg-gray-100";
+  const borderClass = isCurrent
+    ? "border-2 border-blue-500"
+    : isCompleted
+      ? "border-2 border-transparent"
+      : "border-2 border-gray-300";
+  const textClass = isCompleted || isCurrent ? "text-white" : "text-gray-500";
+  const labelClass = isCurrent
+    ? "text-blue-600 font-bold"
+    : isCompleted
+      ? "text-green-600 font-semibold"
+      : "text-gray-500";
+
+  const size = isVertical ? "w-8 h-8" : "w-9 h-9";
+  const textSize = isVertical ? "text-[10px]" : "text-xs";
+
+  return (
+    <View className={`items-center ${isVertical ? "flex-row" : ""}`}>
+      <Pressable
+        onPressIn={() =>
+          (scale.value = withSpring(0.9, { damping: 20, stiffness: 300 }))
+        }
+        onPressOut={() =>
+          (scale.value = withSpring(status === "current" ? 1.1 : 1, {
+            damping: 20,
+            stiffness: 300,
+          }))
+        }
+        onPress={onPress}
+      >
+        <Animated.View
+          style={animatedStyle}
+          className={`${size} rounded-full ${bgClass} ${borderClass} items-center justify-center shadow-sm relative`}
+        >
+          {isCurrent && <Pulse colorClass="bg-blue-400/40" />}
+          {isCompleted ? (
+            <Check size={isVertical ? 14 : 16} color="white" strokeWidth={3} />
+          ) : (
+            <Text
+              className={`${textSize} font-bold ${textClass}`}
+            >{`D${index}`}</Text>
+          )}
+        </Animated.View>
+      </Pressable>
+
+      {!isVertical && (
+        <Text
+          numberOfLines={2}
+          className={`text-[10px] text-center leading-tight mt-1.5 w-16 ${labelClass}`}
+        >
+          {label}
+        </Text>
+      )}
+      {isVertical && (
+        <Text
+          numberOfLines={2}
+          className={`flex-1 ml-3 text-sm leading-tight ${labelClass}`}
+        >
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// --- Main Component ---
 export default function EightDStepper({
   steps,
   currentStep,
   onStepClick,
   stepData,
-  children
+  children,
 }: EightDStepperProps) {
-  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
-  const scrollViewRef = useRef<ScrollView>(null);
+  const [orientation, setOrientation] = useState<Orientation>("horizontal");
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const prevStep = useRef<number>(currentStep);
 
-  const stepNames = [
-    'Plan & Contain',
-    'Form Team',
-    'Problem',
-    'Interim Contain',
-    'Root Cause',
-    'Corrective Action',
-    'Implement',
-    'Prevent',
-    'Close & Recognize',
-    'Preview'
-  ];
-
-  const isStepCompleted = (index: number) => {
-    const stepKey = `d${index}`;
-    const stepContent = stepData[stepKey];
-    return Array.isArray(stepContent) && stepContent.length > 0;
+  const handleStepClick = (index: number) => {
+    prevStep.current = currentStep;
+    onStepClick(index);
   };
-
-  const getStepStatus = (index: number) => {
-    if (index === currentStep) return 'current';
-    if (isStepCompleted(index)) return 'completed';
-    return 'pending';
-  };
-
-  const getStepColors = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return { bg: '#10B981', text: '#FFFFFF', border: '#10B981' };
-      case 'current':
-        return { bg: '#3B82F6', text: '#FFFFFF', border: '#3B82F6' };
-      default:
-        return { bg: '#E5E7EB', text: '#6B7280', border: '#D1D5DB' };
-    }
-  };
-
-  useEffect(() => {
-    if (orientation === 'horizontal' && scrollViewRef.current) {
-      const stepWidth = 80;
-      const scrollPosition = currentStep * stepWidth - width / 2 + stepWidth / 2;
-      scrollViewRef.current.scrollTo({ x: Math.max(0, scrollPosition), animated: true });
-    }
-  }, [currentStep, orientation]);
 
   return (
-    <View style={styles.container}>
-      {/* Toggle Button */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, orientation === 'horizontal' && styles.toggleActive]}
-          onPress={() => setOrientation('horizontal')}
-        >
-          <Icon name="grid" size={18} color={orientation === 'horizontal' ? '#FFFFFF' : '#6B7280'} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, orientation === 'vertical' && styles.toggleActive]}
-          onPress={() => setOrientation('vertical')}
-        >
-          <Icon name="list" size={18} color={orientation === 'vertical' ? '#FFFFFF' : '#6B7280'} />
-        </TouchableOpacity>
+    <View className="flex-1 w-full bg-gray-50">
+      {/* Toggle Buttons */}
+      <View className="w-full px-3 pt-2 pb-2">
+        <View className="flex-row p-1 bg-gray-200 rounded-xl">
+          <Pressable
+            onPress={() => setOrientation("horizontal")}
+            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-lg ${
+              orientation === "horizontal"
+                ? "bg-white shadow-sm"
+                : "bg-transparent"
+            }`}
+          >
+            <Layout
+              size={18}
+              color={orientation === "horizontal" ? "#3B82F6" : "#6B7280"}
+            />
+            <Text
+              className={`ml-2 text-sm font-bold ${orientation === "horizontal" ? "text-blue-600" : "text-gray-500"}`}
+            >
+              Horizontal
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setOrientation("vertical")}
+            className={`flex-1 flex-row items-center justify-center py-2.5 rounded-lg ${
+              orientation === "vertical"
+                ? "bg-white shadow-sm"
+                : "bg-transparent"
+            }`}
+          >
+            <Grid
+              size={18}
+              color={orientation === "vertical" ? "#3B82F6" : "#6B7280"}
+            />
+            <Text
+              className={`ml-2 text-sm font-bold ${orientation === "vertical" ? "text-blue-600" : "text-gray-500"}`}
+            >
+              Vertical
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
-      <View style={[styles.contentContainer, orientation === 'vertical' && styles.verticalContainer]}>
-        {/* Stepper */}
-        {orientation === 'horizontal' ? (
-          <View style={styles.horizontalStepper}>
-            <ScrollView
-              ref={scrollViewRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalScrollContent}
-            >
-              {steps.map((_, index) => {
-                const status = getStepStatus(index);
-                const colors = getStepColors(status);
-                const stepName = stepNames[index] || `D${index}`;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.horizontalStep}
-                    onPress={() => onStepClick(index)}
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.stepCircle,
-                        { backgroundColor: colors.bg, borderColor: colors.border },
-                        status === 'current' && styles.stepCircleCurrent,
-                      ]}
-                    >
-                      {status === 'completed' ? (
-                        <Icon name="check" size={14} color="#FFFFFF" />
-                      ) : (
-                        <Text style={[styles.stepCircleText, { color: colors.text }]}>
-                          {index < 10 ? `D${index}` : index}
-                        </Text>
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.stepName,
-                        status === 'current' && styles.stepNameCurrent,
-                        status === 'completed' && styles.stepNameCompleted,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {stepName}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : (
-          <View style={styles.verticalStepper}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.verticalScrollContent}>
-              {steps.map((_, index) => {
-                const status = getStepStatus(index);
-                const colors = getStepColors(status);
-                const stepName = stepNames[index] || `D${index}`;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.verticalStep}
-                    onPress={() => onStepClick(index)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.verticalStepContent}>
-                      <View
-                        style={[
-                          styles.stepCircle,
-                          styles.stepCircleSmall,
-                          { backgroundColor: colors.bg, borderColor: colors.border },
-                        ]}
-                      >
-                        {status === 'completed' ? (
-                          <Icon name="check" size={12} color="#FFFFFF" />
-                        ) : (
-                          <Text style={[styles.stepCircleText, { color: colors.text, fontSize: 10 }]}>
-                            {index < 10 ? `D${index}` : index}
-                          </Text>
+      {/* Main Content Layout */}
+      <View
+        className={`flex-1 ${orientation === "vertical" && isDesktop ? "flex-row" : "flex-col"}`}
+      >
+        {/* Stepper Section */}
+        {orientation === "horizontal" ? (
+          <View className="w-full px-3 mb-3">
+            <View className="p-3 bg-white border border-gray-200 shadow-sm rounded-2xl">
+              {isDesktop ? (
+                <View className="flex-row items-center justify-between w-full">
+                  {steps.map((_, index: number) => {
+                    const status = getStepStatus(index, currentStep, stepData);
+                    const isCompleted =
+                      status === "completed" || index < currentStep;
+                    return (
+                      <React.Fragment key={index}>
+                        <View className="z-10 items-center flex-1">
+                          <StepNode
+                            index={index}
+                            status={status}
+                            label={defaultStepNames[index] || `D${index}`}
+                            onPress={() => handleStepClick(index)}
+                          />
+                        </View>
+                        {index < steps.length - 1 && (
+                          <View className="z-0 flex-1 h-1 mx-1 overflow-hidden bg-gray-200 rounded-full">
+                            {isCompleted && (
+                              <View className="w-full h-full bg-green-500" />
+                            )}
+                          </View>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </View>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerClassName="items-center px-1"
+                >
+                  {steps.map((_, index: number) => {
+                    const status = getStepStatus(index, currentStep, stepData);
+                    const isCompleted =
+                      status === "completed" || index < currentStep;
+                    return (
+                      <View key={index} className="flex-row items-center">
+                        <StepNode
+                          index={index}
+                          status={status}
+                          label={defaultStepNames[index] || `D${index}`}
+                          onPress={() => handleStepClick(index)}
+                        />
+                        {index < steps.length - 1 && (
+                          <View className="w-6 h-1 mx-1 overflow-hidden bg-gray-200 rounded-full">
+                            {isCompleted && (
+                              <View className="w-full h-full bg-green-500" />
+                            )}
+                          </View>
                         )}
                       </View>
-                      <Text
-                        style={[
-                          styles.verticalStepName,
-                          status === 'current' && styles.stepNameCurrent,
-                          status === 'completed' && styles.stepNameCompleted,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {stepName}
-                      </Text>
-                      {status === 'completed' && (
-                        <Icon name="check-circle" size={14} color="#10B981" style={styles.checkIcon} />
-                      )}
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        ) : (
+          // Vertical Layout
+          <View
+            className={
+              isDesktop
+                ? "w-[280px] flex-shrink-0 pl-3 pb-3"
+                : "w-full px-3 mb-3"
+            }
+          >
+            {/* ✅ FIX: Removed 'h-full' from mobile view. React Native cannot calculate 100% height 
+                inside an unbounded flex column. This was causing NativeWind CSS interop to crash 
+                and falsely report a Navigation Context error. */}
+            <View className="p-4 bg-white border border-gray-200 shadow-sm rounded-2xl">
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {steps.map((_, index: number) => {
+                  const status = getStepStatus(index, currentStep, stepData);
+                  const isCompleted =
+                    status === "completed" || index < currentStep;
+                  return (
+                    <View key={index} className="flex-row mb-1">
+                      <View className="items-center mr-3">
+                        <StepNode
+                          index={index}
+                          status={status}
+                          label=""
+                          onPress={() => handleStepClick(index)}
+                          isVertical
+                        />
+                        {index < steps.length - 1 && (
+                          <View className="w-0.5 flex-1 my-1 rounded-full bg-gray-200 overflow-hidden">
+                            {isCompleted && (
+                              <View className="w-full h-full bg-green-500" />
+                            )}
+                          </View>
+                        )}
+                      </View>
+                      <View className="justify-center flex-1 pb-4">
+                        <Text
+                          className={`text-sm font-semibold ${status === "current" ? "text-blue-600" : status === "completed" ? "text-green-600" : "text-gray-700"}`}
+                        >
+                          {defaultStepNames[index] || `D${index}`}
+                        </Text>
+                      </View>
                     </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
         )}
 
-        {/* Content */}
-        <View style={[styles.content, orientation === 'vertical' && styles.contentVertical]}>
+        {/* Form Content Section */}
+        <View
+          className={`flex-1 ${orientation === "vertical" && isDesktop ? "pr-3 pb-3" : "px-3 pb-3"}`}
+        >
           {children}
         </View>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  } as const,
-  toggleContainer: {
-    flexDirection: 'row',
-    position: 'absolute',
-    top: 8,
-    right: 16,
-    zIndex: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 2,
-    ...(Platform.select({
-      web: {
-        position: 'fixed',
-        top: 80,
-        right: 20,
-      },
-    }) as any),
-  } as const,
-  toggleButton: {
-    padding: 6,
-    borderRadius: 6,
-  } as const,
-  toggleActive: {
-    backgroundColor: '#3B82F6',
-  } as const,
-  contentContainer: {
-    flex: 1,
-    paddingTop: 56,
-  } as const,
-  verticalContainer: {
-    flexDirection: 'row',
-  } as const,
-  horizontalStepper: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-    ...(Platform.select({
-      web: {
-        position: 'fixed',
-        top: 70,
-        left: 0,
-        right: 0,
-        zIndex: 30,
-        marginHorizontal: 0,
-        borderRadius: 0,
-        paddingVertical: 8,
-      },
-    }) as any),
-  } as const,
-  horizontalScrollContent: {
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  } as const,
-  horizontalStep: {
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    minWidth: 60,
-  } as const,
-  verticalStepper: {
-    width: 180,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingVertical: 8,
-    marginRight: 16,
-    maxHeight: 500,
-    ...(Platform.select({
-      web: {
-        position: 'sticky',
-        top: 80,
-        maxHeight: 'calc(100vh - 120px)',
-      },
-    }) as any),
-  } as const,
-  verticalScrollContent: {
-    paddingVertical: 4,
-  } as const,
-  verticalStep: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  } as const,
-  verticalStepContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  } as const,
-  verticalStepName: {
-    fontSize: 12,
-    color: '#6B7280',
-    flex: 1,
-  } as const,
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    marginBottom: 4,
-  } as const,
-  stepCircleSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    marginBottom: 0,
-  } as const,
-  stepCircleCurrent: {
-    borderWidth: 3,
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  } as const,
-  stepCircleText: {
-    fontSize: 11,
-    fontWeight: '600',
-  } as const,
-  stepName: {
-    fontSize: 9,
-    color: '#6B7280',
-    textAlign: 'center',
-    maxWidth: 60,
-  } as const,
-  stepNameCurrent: {
-    color: '#3B82F6',
-    fontWeight: '600',
-  } as const,
-  stepNameCompleted: {
-    color: '#10B981',
-  } as const,
-  checkIcon: {
-    marginLeft: 4,
-  } as const,
-  content: {
-    flex: 1,
-  } as const,
-  contentVertical: {
-    flex: 1,
-  } as const,
-});
