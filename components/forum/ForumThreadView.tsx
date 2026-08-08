@@ -64,12 +64,20 @@ import ThreadComposer from "./ThreadComposer";
 // For Expo: require('../assets/sounds/message-send.mp3')
 
 // ✅ Determine sound path based on platform
+// ✅ Determine sound path based on platform
 const getSoundPath = (soundName: string) => {
   if (Platform.OS === 'web') {
     return `/sounds/${soundName}.mp3`;
   }
-  // For React Native / Expo
-  return require(`../assets/sounds/${soundName}.mp3`);
+  // For React Native / Expo - use static require
+  if (soundName === 'message-send') {
+    return require('../assets/sounds/message-send.mp3');
+  }
+  if (soundName === 'message-receive') {
+    return require('../assets/sounds/message-receive.mp3');
+  }
+  // Fallback
+  return require('../assets/sounds/message-send.mp3');
 };
 
 // ============================================================================
