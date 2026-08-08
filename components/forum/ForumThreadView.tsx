@@ -73,13 +73,9 @@ interface ForumThreadViewProps {
 // ============================================================================
 
 // Get the correct sound file path based on platform
-const getSoundPath = (): string => {
-  if (Platform.OS === 'web') {
-    return '/sounds/message-send.mp3';
-  }
-  // For React Native / Expo
-  return require('../../assets/sounds/message-send.mp3');
-};
+// ============================================================================
+// SOUND EFFECTS - Using Single MP3 File
+// ============================================================================
 
 // Global Audio object for caching
 let soundAudio: HTMLAudioElement | null = null;
@@ -92,33 +88,69 @@ const playNotificationSound = (type: 'send' | 'receive') => {
       return;
     }
 
-    // Get or create audio element (single instance)
-    if (!soundAudio) {
-      soundAudio = new Audio('/sounds/message-send.mp3');
-      soundAudio.preload = 'auto';
+    // ✅ METHOD 1: Try Web Audio API (Always works, no files needed)
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = type === 'send' ? 880 : 660;
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(type === 'send' ? 0.15 : 0.12, audioContext.currentTime);
+      
+      oscillator.start(audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+      oscillator.stop(audioContext.currentTime + 0.2);
+      
+      setTimeout(() => {
+        audioContext.close();
+      }, 250);
+      
+      console.log(`🔊 Sound played (Web Audio): ${type}`);
+      return;
+    } catch (webAudioError) {
+      console.log('Web Audio failed, trying MP3...');
     }
 
-    // Set different volume for send/receive
-    if (type === 'send') {
-      soundAudio.volume = 0.5; // Louder for sent messages
-    } else {
-      soundAudio.volume = 0.3; // Softer for received messages
+    // ✅ METHOD 2: Try MP3 with multiple paths
+    const audioPaths = [
+      '/sounds/message-send.mp3',                          // From public folder
+      '../../assets/sounds/message-send.mp3',              // Relative to current file
+      '../assets/sounds/message-send.mp3',                 // Alternative relative
+      'assets/sounds/message-send.mp3',                    // From root
+      '/assets/sounds/message-send.mp3',                   // From public folder
+    ];
+
+    // Try each path until one works
+    for (const path of audioPaths) {
+      try {
+        const audio = new Audio(path);
+        audio.volume = type === 'send' ? 0.5 : 0.3;
+        audio.currentTime = 0;
+        
+        audio.play().then(() => {
+          console.log(`🔊 Sound played (MP3): ${type} from ${path}`);
+        }).catch(() => {
+          // Try next path
+        });
+        return;
+      } catch (e) {
+        // Continue to next path
+      }
     }
 
-    // Reset to beginning and play
-    soundAudio.currentTime = 0;
-    soundAudio.play().catch((err) => {
-      console.log('Sound play failed:', err);
-      // Fallback to Web Audio if MP3 fails
-      playFallbackSound(type);
-    });
-
-    console.log(`🔊 Sound played: ${type}`);
+    console.log(`⚠️ All sound methods failed for: ${type}`);
     
   } catch (err) {
     console.log('Sound error:', err);
-    // Fallback to Web Audio
-    playFallbackSound(type);
   }
 };
 
