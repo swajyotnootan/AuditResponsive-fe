@@ -1,8 +1,13 @@
 // src/screens/LandingPage.tsx
 import { Picker } from "@react-native-picker/picker";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
 import axios from "axios";
 import { format } from "date-fns";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -36,9 +41,8 @@ import {
   Target,
   Trash2,
   Users,
-  Users2,
   X,
-  Zap,
+  Zap
 } from "lucide-react-native";
 
 // Components
@@ -47,28 +51,20 @@ import FinalPreview from "../eightd/steps/FinalPreview";
 import ForumThreadView from "../forum/ForumThreadView";
 
 // ✅ DYNAMIC URL HELPER
-const getBaseURL = (): string => {
-  if (__DEV__) {
-    return (
-      Platform.select({
-        ios: "http://10.2.0.95:8080/api",
-        android: "http://10.2.0.95:8080/api",
-        default: "http://10.2.0.73:8080/api",
-      }) || "http://10.2.0.73:8080/api"
-    );
+const getBaseUrl = () => {
+  if (Platform.OS === "web") {
+    return "http://localhost:8080";
   }
-  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
+  if (Platform.OS === "android") {
+    return "http://10.2.0.74:8080";
+  }
+  if (Platform.OS === "ios") {
+    return "http://10.2.0.74:8080";
+  }
+  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
 };
 
-const API_BASE_URL = getBaseURL();
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: { "Content-Type": "application/json" },
-  timeout: 30000,
-  withCredentials: true,
-});
-
+const API_BASE_URL = getBaseUrl();
 console.log("🚀 LandingPage API Base URL being used:", API_BASE_URL);
 
 const steps = ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"];
@@ -156,7 +152,7 @@ const getTeamMembersForEvent = async (eventId: string): Promise<string[]> => {
   if (!eventId) return [];
   try {
     const response = await axios.get<{ success: boolean; data: any }>(
-      `${API_BASE_URL}/eightd/data/${eventId}`,
+      `${API_BASE_URL}/api/eightd/data/${eventId}`,
     );
     if (response.data?.success && response.data.data) {
       const d0Data = response.data.data.content?.d0?.[0] || {};
@@ -368,19 +364,22 @@ export default function LandingPage() {
         : "Showing all 8D forms";
 
   const createNew8D = () => {
-  console.log("🚀 Creating new 8D event with type:", dashboardType);
-  (navigation.navigate as any)("EightDFlow", {
-    eventId: null,
-    step: "D0",
-    type: dashboardType,
-    isNcrBased: dashboardType === "ncr",
-    isHOD: isHOD,
-  });
-};
+    router.push({
+      pathname: "/eightdflow", // ✅ FIXED: Changed to lowercase
+      params: {
+        eventId: "null",
+        step: "D0",
+        type: dashboardType,
+        isNcrBased: String(dashboardType === "ncr"),
+        isHOD: String(isHOD),
+      },
+    });
+  };
+
   const fetchFullRecordData = async (eventNo: string) => {
     try {
       const response = await axios.get<{ success: boolean; data: any }>(
-        `${API_BASE_URL}/eightd/data/${eventNo}`,
+        `${API_BASE_URL}/api/eightd/data/${eventNo}`,
       );
       return response.data?.success ? response.data.data || {} : null;
     } catch (err) {
@@ -390,6 +389,12 @@ export default function LandingPage() {
   };
 
   const continueForm = async (ev: ParsedEvent) => {
+    // ✅ NEW: Log the exact event being clicked
+    console.log(
+      "🚀 [LandingPage] User clicked to continue form for Event ID:",
+      ev.eventNo,
+    );
+
     if (ev.status === "Rejected") {
       Alert.alert(
         "Error",
@@ -418,11 +423,20 @@ export default function LandingPage() {
     const shouldStartFromD0 = ev.isNcrBased && isDraftLikeStatus(ev.status);
     const nextStep = shouldStartFromD0 ? "D0" : getNextStep(ev);
 
-    (navigation.navigate as any)("EightDFlow", {
+    console.log("🚀 [LandingPage] Routing to /eightdflow with params:", {
       eventId: ev.eventNo,
       step: nextStep,
-      isNcrBased: ev.isNcrBased,
-      type: ev.isNcrBased ? "ncr" : "fresh",
+    });
+
+    router.push({
+      pathname: "/eightdflow",
+      params: {
+        eventId: ev.eventNo, // This is correctly using ev.eventNo
+        step: nextStep,
+        isNcrBased: String(ev.isNcrBased),
+        type: ev.isNcrBased ? "ncr" : "fresh",
+        isHOD: String(isHOD),
+      },
     });
   };
 
@@ -430,7 +444,7 @@ export default function LandingPage() {
     setLoading(true);
     try {
       const res = await axios.get<{ success: boolean; data: RawEventData[] }>(
-        `${API_BASE_URL}/eightd/data?t=` + Date.now(),
+        `${API_BASE_URL}/api/eightd/data?t=` + Date.now(),
       );
       if (res.data?.success && Array.isArray(res.data.data)) {
         const parsed: ParsedEvent[] = res.data.data.map((item) => {
@@ -548,6 +562,16 @@ export default function LandingPage() {
     setShowPreview(true);
   };
 
+  useEffect(() => {
+    fetchEvents();
+  }, [route.params?.refreshToken]); // Triggers when EightDFlow sends the new token
+
+  // Optional: Also refresh when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchEvents();
+    }, []),
+  );
   const showRejectionDetails = async (ev: ParsedEvent) => {
     if (!ev.rejectionReason) {
       try {
@@ -577,7 +601,7 @@ export default function LandingPage() {
     if (!eventToDelete) return;
     try {
       await axios.delete(
-        `${API_BASE_URL}/eightd/data/${eventToDelete.eventNo}`,
+        `${API_BASE_URL}/api/eightd/data/${eventToDelete.eventNo}`,
       );
       fetchEvents();
       setShowDeleteConfirm(false);
@@ -590,11 +614,25 @@ export default function LandingPage() {
   };
 
   const scopedEvents = useMemo(() => {
-    if (dashboardType === "fresh") return events.filter((e) => !e.isNcrBased);
-    if (dashboardType === "ncr") return events.filter((e) => e.isNcrBased);
-    return events;
-  }, [dashboardType, events]);
+    let result = events;
 
+    // 1. Filter by dashboard type (fresh vs ncr)
+    if (dashboardType === "fresh") {
+      result = result.filter((e) => !e.isNcrBased);
+    } else if (dashboardType === "ncr") {
+      result = result.filter((e) => e.isNcrBased);
+    }
+
+    // 2. ✅ HOD FILTER: Hide unsubmitted (Draft/Open/Initiated) events from HOD view
+    // HODs should only see events that have been submitted for their attention or are already in progress
+    if (isHOD) {
+      result = result.filter(
+        (e) => !["Draft", "Open", "Initiated"].includes(e.status),
+      );
+    }
+
+    return result;
+  }, [dashboardType, events, isHOD]); // ✅ Added isHOD to dependencies
   const filtered = useMemo(() => {
     let list = [...scopedEvents];
     if (statusFilter !== "All")
@@ -613,6 +651,7 @@ export default function LandingPage() {
     } else if (steps.includes(stepSort)) {
       list = list.filter((e) => e.currentStep === stepSort);
     }
+
     return list;
   }, [scopedEvents, search, statusFilter, stepSort]);
 
@@ -663,11 +702,12 @@ export default function LandingPage() {
 
     return (
       <View
-        className={`bg-white rounded-2xl shadow-md border overflow-hidden mb-4 ${
+        className={`bg-white rounded-xl shadow-md border overflow-hidden ${
           isApprovalPending ? "border-2 border-amber-400" : "border-slate-100"
-        }`}
+        } ${isDesktop ? "flex-1" : ""}`}
         style={{
           backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
+          marginBottom: isDesktop ? 12 : 16, // ✅ Smaller bottom margin on desktop
         }}
       >
         {isApprovalPending && (
@@ -678,7 +718,7 @@ export default function LandingPage() {
           </View>
         )}
 
-        <View className="p-4">
+        <View className={isDesktop ? "p-3" : "p-4"}>
           <View className="flex-row items-start justify-between mb-3">
             <View className="px-3 py-1.5 rounded-full bg-slate-100">
               <Text
@@ -703,32 +743,41 @@ export default function LandingPage() {
           </View>
 
           <Text
-            className="mb-3 text-lg font-bold text-slate-800"
+            className={`mb-2 font-bold text-slate-800 ${
+              isDesktop ? "text-base" : "text-lg"
+            }`}
             numberOfLines={1}
           >
             {ev.title}
           </Text>
 
-          <View className="flex-row items-center gap-2 mb-2">
-            <Users2 size={14} color="#64748b" />
-            <Text
-              className="text-xs font-medium text-slate-600"
-              numberOfLines={1}
-            >
-              Owner: {ev.owner}
-            </Text>
-          </View>
+          <Text
+            className={`font-medium text-slate-600 ${
+              isDesktop ? "text-[10px]" : "text-xs"
+            }`}
+            numberOfLines={1}
+          >
+            Owner: {ev.owner}
+          </Text>
 
           <View className="flex-row items-center gap-2 mb-4">
-            <Clock size={14} color="#64748b" />
+            <Clock size={isDesktop ? 12 : 14} color="#64748b" />
             <Text className="text-xs font-medium text-slate-600">
               Created: {ev.created}
             </Text>
           </View>
 
           <View className="flex-row items-center justify-between mb-2">
-            <View className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-lg">
-              <Text className="text-xs font-bold text-indigo-700">
+            <View
+              className={`bg-indigo-50 border border-indigo-100 rounded-lg ${
+                isDesktop ? "px-2 py-1" : "px-3 py-1.5"
+              }`}
+            >
+              <Text
+                className={`font-bold text-indigo-700 ${
+                  isDesktop ? "text-[10px]" : "text-xs"
+                }`}
+              >
                 Current Step: {ev.currentStep}
               </Text>
             </View>
@@ -737,50 +786,192 @@ export default function LandingPage() {
             </Text>
           </View>
 
-          <View className="w-full h-2.5 overflow-hidden rounded-full bg-slate-100 mb-5">
+          <View
+            className={`w-full overflow-hidden rounded-full bg-slate-100 ${
+              isDesktop ? "h-2 mb-3" : "h-2.5 mb-5"
+            }`}
+          >
             <View
               className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"
               style={{ width: `${(ev.completedSteps / ev.totalSteps) * 100}%` }}
             />
           </View>
 
-          <View className="flex-row flex-wrap gap-3">
-            <TouchableOpacity
-              onPress={() => showPreviewWithLatestData(ev)}
-              className="flex-1 min-w-[45%] px-3 py-3 bg-slate-50 rounded-xl border border-slate-200 items-center justify-center active:bg-slate-100"
-            >
-              <Text className="text-xs font-bold text-slate-700">
-                View Details
-              </Text>
-            </TouchableOpacity>
-
-            {isApprovalPending && isHOD ? (
+          {/* ✅ STRICT SINGLE ROW: flex-row (no wrap), flex-1 for equal sharing */}
+          <View className="flex-row gap-2 mt-2">
+            {/* 1. View Details Button (Conditionally shown) */}
+            {(ev.status !== "Approval Pending" || isHOD) && (
               <TouchableOpacity
-                onPress={() => continueForm(ev)}
-                className="flex-1 min-w-[45%] px-3 py-3 bg-blue-600 rounded-xl items-center justify-center active:bg-blue-700"
+                onPress={() => showPreviewWithLatestData(ev)}
+                className={`items-center justify-center flex-1 border rounded-lg bg-slate-50 border-slate-200 active:bg-slate-100 ${
+                  isDesktop ? "px-1 py-1.5" : "px-1 py-2"
+                }`}
               >
-                <Text className="text-xs font-bold text-white">Review</Text>
-              </TouchableOpacity>
-            ) : ev.status === "Rejected" ? (
-              <TouchableOpacity
-                onPress={() => showRejectionDetails(ev)}
-                className="flex-1 min-w-[45%] px-3 py-3 bg-red-600 rounded-xl items-center justify-center active:bg-red-700"
-              >
-                <Text className="text-xs font-bold text-white">
-                  View Reason
+                <Text
+                  className={`font-semibold text-slate-700 ${
+                    isDesktop ? "text-[10px]" : "text-[11px]"
+                  }`}
+                  numberOfLines={1}
+                >
+                  Details
                 </Text>
               </TouchableOpacity>
-            ) : null}
+            )}
 
+            {/* 2. Dynamic Action Button based on Status and Role */}
+            {ev.status === "Rejected" ? (
+              <TouchableOpacity
+                onPress={() => showRejectionDetails(ev)}
+                className="flex-row items-center justify-center flex-1 gap-1 px-1 py-2 border border-red-200 rounded-lg bg-red-50 active:bg-red-100"
+              >
+                <AlertCircle size={12} color="#dc2626" />
+                <Text
+                  className="text-[11px] font-semibold text-red-700"
+                  numberOfLines={1}
+                >
+                  Reason
+                </Text>
+              </TouchableOpacity>
+            ) : ev.status === "Approval Pending" ? (
+              isHOD ? (
+                <TouchableOpacity
+                  onPress={() => continueForm(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    Review
+                  </Text>
+                </TouchableOpacity>
+              ) : isInitiator || isAdmin ? (
+                <View className="items-center justify-center flex-1 px-1 py-2 border border-yellow-200 rounded-lg bg-yellow-50">
+                  <Text
+                    className="text-[11px] font-semibold text-yellow-700"
+                    numberOfLines={1}
+                  >
+                    Pending
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => showPreviewWithLatestData(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    View
+                  </Text>
+                </TouchableOpacity>
+              )
+            ) : ev.status === "Submitted" || ev.status === "Closed" ? (
+              <TouchableOpacity
+                onPress={() => showPreviewWithLatestData(ev)}
+                className="items-center justify-center flex-1 px-1 py-2 bg-purple-600 rounded-lg active:bg-purple-700"
+              >
+                <Text
+                  className="text-[11px] font-semibold text-white"
+                  numberOfLines={1}
+                >
+                  View Details
+                </Text>
+              </TouchableOpacity>
+            ) : ev.status === "D0 Approved" ? (
+              isInitiator || isAdmin ? (
+                <TouchableOpacity
+                  onPress={() => continueForm(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-green-600 rounded-lg active:bg-green-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    Continue
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => showPreviewWithLatestData(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    View
+                  </Text>
+                </TouchableOpacity>
+              )
+            ) : ev.isNcrBased && isDraftLikeStatus(ev.status) ? (
+              isInitiator || isAdmin ? (
+                <TouchableOpacity
+                  onPress={() => continueForm(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-green-600 rounded-lg active:bg-green-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    Start
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => showPreviewWithLatestData(ev)}
+                  className="items-center justify-center flex-1 px-1 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                >
+                  <Text
+                    className="text-[11px] font-semibold text-white"
+                    numberOfLines={1}
+                  >
+                    View
+                  </Text>
+                </TouchableOpacity>
+              )
+            ) : isInitiator || isAdmin ? (
+              <TouchableOpacity
+                onPress={() => continueForm(ev)}
+                className="items-center justify-center flex-1 px-1 py-2 bg-green-600 rounded-lg active:bg-green-700"
+              >
+                <Text
+                  className="text-[11px] font-semibold text-white"
+                  numberOfLines={1}
+                >
+                  Continue
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => showPreviewWithLatestData(ev)}
+                className="items-center justify-center flex-1 px-1 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+              >
+                <Text
+                  className="text-[11px] font-semibold text-white"
+                  numberOfLines={1}
+                >
+                  View
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 3. Forum Button */}
             <TouchableOpacity
               onPress={() => {
                 setSelectedGroupId(ev.eventNo);
                 setForumDrawerOpen(true);
               }}
-              className="flex-1 min-w-[45%] px-3 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex-row items-center justify-center gap-2 active:opacity-90"
+              className="flex-row items-center justify-center flex-1 gap-1 px-1 py-2 bg-indigo-600 rounded-lg active:bg-indigo-700"
             >
-              <Users size={14} color="#ffffff" />
-              <Text className="text-xs font-bold text-white">Forum</Text>
+              <Users size={12} color="#ffffff" />
+              <Text
+                className="text-[11px] font-semibold text-white"
+                numberOfLines={1}
+              >
+                Forum
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1303,9 +1494,9 @@ export default function LandingPage() {
                 data={limitedFiltered}
                 renderItem={({ item }) => renderEventCard(item)}
                 keyExtractor={(item) => item.eventNo}
-                key={isDesktop ? "desktop-2-col" : "mobile-1-col"}
-                numColumns={isDesktop ? 2 : 1}
-                columnWrapperStyle={isDesktop ? { gap: 16 } : undefined}
+                key={isDesktop ? "desktop-4-col" : "mobile-1-col"}
+                numColumns={isDesktop ? 4 : 1} // ✅ CHANGED: 4 columns on desktop
+                columnWrapperStyle={isDesktop ? { gap: 12 } : undefined} // ✅ Reduced gap for 4 cards
                 contentContainerStyle={{ paddingBottom: 20 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
