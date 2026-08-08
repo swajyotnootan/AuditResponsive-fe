@@ -600,26 +600,7 @@ const AuditCheckSheetNCRForumModal: React.FC<AuditCheckSheetNCRForumModalProps> 
                   <TouchableOpacity onPress={onClose} style={styles.backButton}>
                     <Icon name="arrow-left" size={20} color="#6B7280" />
                   </TouchableOpacity>
-                  <View>
-                    <View style={styles.headerTitleRow}>
-                      <Icon name="message-circle" size={16} color="#3B82F6" />
-                      <Text style={styles.headerTitle}>Audit Discussion</Text>
-                    </View>
-                    <View style={styles.headerSubRow}>
-                      <Text style={styles.headerAuditNumber}>{auditNumber}</Text>
-                      {auditStatus && (
-                        <View style={[
-                          styles.statusBadge,
-                          auditStatus === 'APPROVED' ? styles.statusApproved :
-                          auditStatus === 'REJECTED' ? styles.statusRejected :
-                          auditStatus === 'IN_PROGRESS' ? styles.statusInProgress :
-                          styles.statusPending
-                        ]}>
-                          <Text style={styles.statusText}>{auditStatus}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
+                  
                 </View>
 
                 <View style={styles.headerRight}>

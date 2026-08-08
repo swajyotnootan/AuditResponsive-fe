@@ -836,7 +836,7 @@ const AuditListItem = ({
 // ============================================================================
 // NCR PENDING LIST
 // ============================================================================
-const NcrPendingList = ({ pendingNcrAudits, onViewNcr }: any) => {
+const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum }: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
       <View className="flex-col items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
@@ -901,12 +901,23 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr }: any) => {
                 )}
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => onViewNcr(item.id)}
-              className="p-2 rounded-lg bg-slate-50"
-            >
-              <Eye size={18} color="#475569" />
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-2">
+              {/* ✅ ADD FORUM BUTTON */}
+              {onOpenForum && (
+                <TouchableOpacity
+                  onPress={() => onOpenForum(item)}
+                  className="p-2 rounded-lg bg-purple-50"
+                >
+                  <MessageCircle size={18} color="#9333ea" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => onViewNcr(item.id)}
+                className="p-2 rounded-lg bg-slate-50"
+              >
+                <Eye size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       />
@@ -970,12 +981,14 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum }: any) => {
               </View>
               <NcrStatusBadge status={item.status} />
               <View className="flex-row gap-2">
-                <TouchableOpacity
-                  onPress={() => onOpenForum(item)}
-                  className="p-2 rounded-lg bg-slate-50"
-                >
-                  <MessageCircle size={18} color="#475569" />
-                </TouchableOpacity>
+                {onOpenForum && (
+                  <TouchableOpacity
+                    onPress={() => onOpenForum(item)}
+                    className="p-2 rounded-lg bg-purple-50"
+                  >
+                    <MessageCircle size={18} color="#9333ea" />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   onPress={() => onViewNcr(item.id)}
                   className="p-2 rounded-lg bg-slate-50"
@@ -1659,18 +1672,19 @@ const handleOpenForum = (audit: any, form: any = null) => {
             {/* NCR Tabs */}
             {/* NCR Tabs */}
             {activeTab === "ncr-pending" && (
-              <NcrPendingList
-                pendingNcrAudits={pendingNcrReviews}
-                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })} // ✅ ADDED
-              />
-            )}
+  <NcrPendingList
+    pendingNcrAudits={pendingNcrReviews}
+    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+    onOpenForum={handleOpenForum}  // ✅ ADD THIS
+  />
+)}
             {activeTab === "my-ncrs" && (
-              <NcrListTab
-                assignedNCRs={assignedNCRs}
-                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })} // ✅ ADDED
-                onOpenForum={() => addToast("NCR Forum opened", "success")}
-              />
-            )}
+  <NcrListTab
+    assignedNCRs={assignedNCRs}
+    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+    onOpenForum={handleOpenForum}  // ✅ UPDATE THIS
+  />
+)}
           </View>
         </ScrollView>
       )}

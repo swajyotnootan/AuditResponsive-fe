@@ -1115,7 +1115,7 @@ const AuditCard = ({
   );
 };
 
-const NcrPendingList = ({ pendingNcrAudits, onRaise }: any) => {
+const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
       <View className="flex-col items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
@@ -1134,7 +1134,7 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise }: any) => {
 
   return (
     <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
-      {/* ✅ HEADER WITH COUNT BADGE */}
+      {/* HEADER WITH COUNT BADGE */}
       <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
         <View className="flex-row items-center gap-2">
           <AlertCircle size={20} color="#e11d48" />
@@ -1142,7 +1142,6 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise }: any) => {
             Audits with NCR Findings
           </Text>
         </View>
-        {/* ✅ THIS IS THE COUNT BADGE */}
         <View className="px-3 py-1.5 bg-rose-50 rounded-lg border border-rose-200">
           <Text className="text-xs font-bold text-rose-700">
             {pendingNcrAudits.length} pending
@@ -1185,22 +1184,32 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise }: any) => {
                 ))}
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => onRaise(item)}
-              className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
-            >
-              <AlertCircle size={16} color="#ffffff" />
-              <Text className="text-xs font-semibold text-white">
-                Raise NCR
-              </Text>
-            </TouchableOpacity>
+            <View className="flex-row gap-2">
+              {/* ✅ ADD FORUM BUTTON */}
+              {onOpenForum && (
+                <TouchableOpacity
+                  onPress={() => onOpenForum(item)}
+                  className="p-2 rounded-lg bg-purple-50"
+                >
+                  <MessageCircle size={18} color="#9333ea" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => onRaise(item)}
+                className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
+              >
+                <AlertCircle size={16} color="#ffffff" />
+                <Text className="text-xs font-semibold text-white">
+                  Raise NCR
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       />
     </View>
   );
 };
-
 const NcrListTab = ({
   raisedNCRs,
   ncrLoading,
@@ -1835,12 +1844,18 @@ useEffect(() => {
   };
 
     // Add this function in both dashboards
+// Add this function in AuditorDashboard (already added, but ensure it's complete)
 const handleOpenForum = (audit: any, form: any = null) => {
   console.log("🔍 Opening forum for audit:", audit);
+  
+  // Check if it's an NCR item (has id and ncrNumber or isNcr flag)
+  const isNcrItem = audit?.ncrNumber || audit?.isNcr || audit?.status?.includes('NCR');
+  
   if (!audit) {
-    addToast("No audit data available for forum", "error");
+    addToast("No data available for forum", "error");
     return;
   }
+  
   setSelectedAuditForForum(audit);
   setForumModalVisible(true);
 };
@@ -2270,44 +2285,43 @@ const handleOpenForum = (audit: any, form: any = null) => {
             )}
             {/* NCR Tabs */}
             {activeTab === "ncr-pending" && (
-              <NcrPendingList
-                pendingNcrAudits={pendingNcrAudits}
-                onRaise={(item: any) => {
-                  const routeParams = {
-                    auditId: String(item.responseId),
-                    auditReportNumber: item.auditReportNumber || "",
-                    department: item.department || "",
-                    shift: item.shift || "Day",
-                    auditeeId: item.auditeeId ? String(item.auditeeId) : "",
-                    auditeeName: item.auditeeName || "",
-                    clause: item.findings.map((f: any) => f.clause).join("\n"),
-                    evidence: item.findings
-                      .map(
-                        (f: any) =>
-                          `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
-                      )
-                      .join("\n"),
-                    statement: item.findings
-                      .map(
-                        (f: any) =>
-                          `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
-                      )
-                      .join("\n"),
-                  };
-
-                  // ✅ CHANGE THIS: Set state to render inline instead of router.push
-                  setActiveNcrConfig(routeParams);
-                }}
-              />
-            )}
+  <NcrPendingList
+    pendingNcrAudits={pendingNcrAudits}
+    onRaise={(item: any) => {
+      const routeParams = {
+        auditId: String(item.responseId),
+        auditReportNumber: item.auditReportNumber || "",
+        department: item.department || "",
+        shift: item.shift || "Day",
+        auditeeId: item.auditeeId ? String(item.auditeeId) : "",
+        auditeeName: item.auditeeName || "",
+        clause: item.findings.map((f: any) => f.clause).join("\n"),
+        evidence: item.findings
+          .map(
+            (f: any) =>
+              `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
+          )
+          .join("\n"),
+        statement: item.findings
+          .map(
+            (f: any) =>
+              `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
+          )
+          .join("\n"),
+      };
+      setActiveNcrConfig(routeParams);
+    }}
+    onOpenForum={handleOpenForum}  // ✅ ADD THIS
+  />
+)}
             {activeTab === "ncr-list" && (
-              <NcrListTab
-                raisedNCRs={raisedNCRs}
-                ncrLoading={ncrLoading}
-                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })} // ✅ Triggers inline view
-                onOpenForum={() => addToast("NCR Forum opened", "success")}
-              />
-            )}
+  <NcrListTab
+    raisedNCRs={raisedNCRs}
+    ncrLoading={ncrLoading}
+    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+    onOpenForum={(ncr: any) => handleOpenForum(ncr, null)}
+  />
+)}
           </View>
         </ScrollView>
       )}
