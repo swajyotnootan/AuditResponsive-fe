@@ -1,25 +1,25 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import { ncrService } from "@/services/ncrService";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 
 import Form8DetailView from "../auditee/Form8DetailView";
 
 // Note: If testing on a physical mobile device, replace 'localhost' with your computer's local IP address
-const API_BASE_URL = "http://localhost:8080/api";
 
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
@@ -1079,7 +1079,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
 
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users`, {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
         method: "GET",
         credentials: "include",
         headers: {

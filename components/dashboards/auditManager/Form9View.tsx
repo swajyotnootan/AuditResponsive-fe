@@ -1,29 +1,30 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker, {
-    DateTimePickerEvent,
+  DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { NavigationProp, useNavigation } from "@react-navigation/native";
 import React, {
-    ReactNode,
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 // ═════ MNC STANDARD PALETTE ═════
@@ -732,7 +733,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
     setError(null);
     try {
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch("http://localhost:8080/api/ncr/all", {
+      const response = await fetch(`${API_BASE_URL}/api/ncr/all`, {
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
           "Content-Type": "application/json",
@@ -858,7 +859,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
     setError(null);
     try {
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch("http://localhost:8080/api/ncr/form9/pdf", {
+      const response = await fetch(`${API_BASE_URL}/api/ncr/form9/pdf`, {
         method: "GET",
         headers: { Authorization: token ? `Bearer ${token}` : "" },
       });

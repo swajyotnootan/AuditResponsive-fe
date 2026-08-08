@@ -366,7 +366,7 @@ const NCRDashboard = ({
     try {
       const eightDEventId = `8D-${ncr.ncrNumber}`;
       const response = await fetch(
-        `http://localhost:8080/api/eightd/data/${eightDEventId}`,
+        `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
       );
       if (!response.ok) throw new Error("Network response was not ok");
 

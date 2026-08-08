@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -432,8 +433,8 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     try {
       const token = await AsyncStorage.getItem("token");
       const endpoint = isNCR2Mode
-        ? `http://localhost:8080/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
-        : `http://localhost:8080/api/ncr/${ncr.id}/form8-pdf`;
+        ? `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
+        : `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf`;
 
       // FIX: Cast FileSystem to 'any' to bypass strict TS documentDirectory errors
       const fileSystem = FileSystem as any;
@@ -506,7 +507,7 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     for (const candidate of directCandidates) {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/eightd/data/${encodeURIComponent(candidate as string)}`,
+          `${API_BASE_URL}/api/eightd/data/${encodeURIComponent(candidate as string)}`,
         );
         const data = (await response.json()) as any;
         if (response.ok && data?.success && data?.data) return candidate;
@@ -516,7 +517,7 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     }
 
     const response = await fetch(
-      `http://localhost:8080/api/eightd/data?t=${Date.now()}`,
+      `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
     );
     const data = (await response.json()) as any;
     const events = Array.isArray(data?.data) ? data.data : [];

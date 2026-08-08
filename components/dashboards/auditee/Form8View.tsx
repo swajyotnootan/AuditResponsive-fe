@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -592,7 +593,7 @@ export default function Form8View({ initialParams, onClose }: any) {
       // (e.g., import AsyncStorage from '@react-native-async-storage/async-storage')
       const token = "YOUR_TOKEN_HERE";
 
-      const url = `http://localhost:8080/api/ncr/${ncrId}/form8-pdf`;
+      const url = `${API_BASE_URL}/api/ncr/${ncrId}/form8-pdf`;
       const downloadUrl = token ? `${url}?token=${token}` : url;
 
       const supported = await Linking.canOpenURL(downloadUrl);

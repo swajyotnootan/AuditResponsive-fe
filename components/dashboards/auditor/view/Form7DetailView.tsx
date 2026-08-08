@@ -894,7 +894,7 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
     for (const candidate of directCandidates) {
       try {
         const response = await fetch(
-          `http://localhost:8080/api/eightd/data/${encodeURIComponent(candidate as string)}`,
+          `${API_BASE_URL}/api/eightd/data/${encodeURIComponent(candidate as string)}`,
         );
         const data = await response.json();
         if (response.ok && data?.success && data?.data) return candidate;
@@ -904,7 +904,7 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
     }
 
     const response = await fetch(
-      `http://localhost:8080/api/eightd/data?t=${Date.now()}`,
+      `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
     );
     const data = await response.json();
     const events = Array.isArray(data?.data) ? data.data : [];

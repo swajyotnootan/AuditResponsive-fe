@@ -212,7 +212,7 @@ export default function FinalPreview({ eventId, isHOD = false }: FinalPreviewPro
     fetchData();
   }, [eventId]);
 
-  const getEightDFileUrl = (fileId: string) => `http://localhost:8080/api/eightd/files/${fileId}`;
+  const getEightDFileUrl = (fileId: string) => `http:///api/eightd/files/${fileId}`;
 
   const handleFileClick = async (fileId: string, mimeType: string, fileName: string) => {
     try {

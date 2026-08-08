@@ -1,10 +1,10 @@
+import { API_BASE_URL } from '@/config/apiConfig';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useAuth } from '../../context/AuthContext';
 
-const API_BASE_URL = 'http://localhost:8080/api';
 const months = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const departments = ["HR", "R&D", "Purchase", "Production", "QA/QC", "Maintenance"];
 
@@ -20,7 +20,7 @@ export default function Form4View() {
   const fetchPlanData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/department-plan/${selectedYear}`, { withCredentials: true });
+      const res = await axios.get(`${API_BASE_URL}/api/department-plan/${selectedYear}`, { withCredentials: true });
       setPlanData(res.data?.planItems || []);
       setPlanStatus(res.data?.approvalStatus || 'DRAFT');
     } catch (e) { console.error(e); } 

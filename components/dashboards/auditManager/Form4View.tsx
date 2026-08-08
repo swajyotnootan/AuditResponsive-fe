@@ -39,7 +39,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // Adjust path if needed
 
-const API_BASE_URL = "http://localhost:8080/api";
 
 // ══════ MNC STANDARD PALETTE ══════
 const COLORS = {

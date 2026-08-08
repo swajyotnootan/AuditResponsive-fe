@@ -528,7 +528,7 @@ export default function Form7View({ initialParams, onClose }: any) {
         window.URL.revokeObjectURL(url);
       } else {
         // Mobile fallback: Open in browser or use expo-file-system + expo-sharing
-        const pdfUrl = `http://localhost:8080/api/ncr/${id}/form7-pdf`;
+        const pdfUrl = `${API_BASE_URL}/api/ncr/${id}/form7-pdf`;
         await Linking.openURL(pdfUrl);
       }
     } catch (pdfError: any) {

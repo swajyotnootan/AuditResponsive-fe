@@ -2,38 +2,37 @@ import YearFilter from "@/components/common/YearFilter";
 import { apiClient } from "@/services/api"; // Adjust path if needed
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    AlertCircle,
-    ArrowLeft,
-    Calendar,
-    Check,
-    CheckCircle,
-    Clock,
-    Download,
-    FileText,
-    MessageSquare,
-    RefreshCw,
-    Save,
-    Send,
-    Star,
-    X,
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  Check,
+  CheckCircle,
+  Clock,
+  Download,
+  FileText,
+  MessageSquare,
+  RefreshCw,
+  Save,
+  Send,
+  Star,
+  X,
 } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // ✅ Toast Context Imported
 
-const API_BASE_URL = "http://localhost:8080/api"; // Adjust if your apiClient handles base URL
 
 // ══════ MNC STANDARD PALETTE ══════
 const COLORS = {
