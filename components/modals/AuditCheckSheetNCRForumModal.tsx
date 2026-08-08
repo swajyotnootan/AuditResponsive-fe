@@ -8,10 +8,8 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -105,209 +103,8 @@ const RoleBadge = ({ role }: { role: string }) => {
   );
 };
 
-const MemberList = ({
-  members,
-  onAddMember,
-  onRemoveMember,
-  canAdd,
-  canRemove,
-  currentUser,
-}: {
-  members: any[];
-  onAddMember: () => void;
-  onRemoveMember: (member: any) => void;
-  canAdd: boolean;
-  canRemove: boolean;
-  currentUser: any;
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  const displayMembers = expanded ? members : members.slice(0, 5);
 
-  if (members.length === 0) return null;
 
-  return (
-    <View style={styles.memberListContainer}>
-      <TouchableOpacity
-        onPress={() => setExpanded(!expanded)}
-        style={styles.memberListHeader}
-      >
-        <View style={styles.memberListHeaderLeft}>
-          <Icon name="users" size={14} color="#6B7280" />
-          <Text style={styles.memberListHeaderText}>
-            Participants ({members.length})
-          </Text>
-        </View>
-        {expanded ? (
-          <Icon name="chevron-up" size={14} color="#6B7280" />
-        ) : (
-          <Icon name="chevron-down" size={14} color="#6B7280" />
-        )}
-      </TouchableOpacity>
-
-      {expanded && (
-        <ScrollView style={styles.memberListScroll} showsVerticalScrollIndicator>
-          {displayMembers.map((member, idx) => (
-            <View key={idx} style={styles.memberItem}>
-              <View style={styles.memberItemLeft}>
-                <View style={styles.memberAvatar}>
-                  <Text style={styles.memberAvatarText}>
-                    {member.name?.charAt(0) || member.email?.charAt(0) || '?'}
-                  </Text>
-                </View>
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName} numberOfLines={1}>
-                    {member.name || member.email}
-                  </Text>
-                  <Text style={styles.memberEmail} numberOfLines={1}>
-                    {member.email}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.memberItemRight}>
-                <RoleBadge role={member.role} />
-                {canRemove && member.role !== 'MASTER' && member.email !== currentUser?.email && (
-                  <TouchableOpacity
-                    onPress={() => onRemoveMember(member)}
-                    style={styles.removeMemberButton}
-                  >
-                    <Icon name="x" size={14} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      {canAdd && (
-        <TouchableOpacity onPress={onAddMember} style={styles.addMemberButton}>
-          <Icon name="user-plus" size={14} color="#2563EB" />
-          <Text style={styles.addMemberButtonText}>Add Participant</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
-
-const AddMemberModal = ({
-  isOpen,
-  onClose,
-  onAdd,
-  existingMembers,
-  allUsers,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onAdd: (users: string[]) => void;
-  existingMembers: any[];
-  allUsers: any[];
-}) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const availableUsers = allUsers.filter(
-    (user) =>
-      !existingMembers.some((m) => m.email === user.email) &&
-      (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase())),
-  );
-
-  const handleAdd = async () => {
-    if (selectedUsers.length === 0) return;
-    setLoading(true);
-    try {
-      await onAdd(selectedUsers.map((u) => u.email));
-      onClose();
-      setSelectedUsers([]);
-      setSearchTerm('');
-    } catch (error) {
-      console.error('Error adding members:', error);
-      Alert.alert('Error', 'Failed to add members. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.addMemberModalOverlay}>
-        <View style={styles.addMemberModalContent}>
-          <View style={styles.addMemberModalHeader}>
-            <Text style={styles.addMemberModalTitle}>Add Participants</Text>
-            <TouchableOpacity onPress={onClose} style={styles.addMemberModalClose}>
-              <Icon name="x" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.addMemberModalBody}>
-            <View style={styles.searchContainer}>
-              <Icon name="search" size={16} color="#9CA3AF" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search users..."
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <ScrollView style={styles.userList} showsVerticalScrollIndicator>
-              {availableUsers.length === 0 ? (
-                <Text style={styles.noUsersText}>No users available to add</Text>
-              ) : (
-                availableUsers.map((user) => {
-                  const isSelected = selectedUsers.some((u) => u.email === user.email);
-                  return (
-                    <TouchableOpacity
-                      key={user.id || user.email}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedUsers(selectedUsers.filter((u) => u.email !== user.email));
-                        } else {
-                          setSelectedUsers([...selectedUsers, user]);
-                        }
-                      }}
-                      style={styles.userItem}
-                    >
-                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                      <View style={styles.userItemInfo}>
-                        <Text style={styles.userItemName}>{user.name || user.email}</Text>
-                        <Text style={styles.userItemEmail}>{user.email}</Text>
-                      </View>
-                      {user.role && <RoleBadge role={user.role} />}
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </View>
-
-          <View style={styles.addMemberModalFooter}>
-            <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleAdd}
-              disabled={selectedUsers.length === 0 || loading}
-              style={[styles.addButton, (selectedUsers.length === 0 || loading) && styles.addButtonDisabled]}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.addButtonText}>Add ({selectedUsers.length})</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
 // ============================================================
 // Main Component
@@ -597,15 +394,7 @@ const AuditCheckSheetNCRForumModal: React.FC<AuditCheckSheetNCRForumModalProps> 
               {/* Header */}
               
 
-              {/* Participants List */}
-              <MemberList
-                members={participantsList}
-                onAddMember={() => setShowAddMembers(true)}
-                onRemoveMember={handleRemoveMember}
-                canAdd={permissions.canAddMembers}
-                canRemove={permissions.canRemoveMembers}
-                currentUser={user}
-              />
+              
 
               {loading && (
                 <View style={styles.centerContent}>
@@ -645,14 +434,7 @@ const AuditCheckSheetNCRForumModal: React.FC<AuditCheckSheetNCRForumModalProps> 
         </View>
       </Modal>
 
-      {/* Add Member Modal */}
-      <AddMemberModal
-        isOpen={showAddMembers}
-        onClose={() => setShowAddMembers(false)}
-        onAdd={handleAddMembers}
-        existingMembers={participantsList}
-        allUsers={allUsers}
-      />
+      
     </>
   );
 };

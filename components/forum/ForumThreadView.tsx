@@ -1,7 +1,7 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers & Email Modal
+// COMPLETE FIXED VERSION - Includes Sound Effects & Fixed Settings Modal
 
-import EmailNotificationModal from '@/components/comform/EmailNotificationModal'; // ✅ ADDED
+import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -42,6 +42,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+// ✅ SOUND IMPORT - If using use-sound library
+import useSound from 'use-sound';
+
+// Import components
 import { useSFU } from "../../hooks/useSFU";
 import {
   createForumPost,
@@ -50,6 +55,22 @@ import {
 } from "./Api/forumapi";
 import ThreadCard from "./ThreadCard";
 import ThreadComposer from "./ThreadComposer";
+
+// ============================================================================
+// SOUND FILE PATHS - ✅ FIXED
+// ============================================================================
+// For Web: public/sounds/message-send.mp3
+// For React Native: assets/sounds/message-send.mp3
+// For Expo: require('../assets/sounds/message-send.mp3')
+
+// ✅ Determine sound path based on platform
+const getSoundPath = (soundName: string) => {
+  if (Platform.OS === 'web') {
+    return `/sounds/${soundName}.mp3`;
+  }
+  // For React Native / Expo
+  return require(`../assets/sounds/${soundName}.mp3`);
+};
 
 // ============================================================================
 // TYPES
@@ -88,6 +109,42 @@ export default function ForumThreadView({
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isChatConnected, setIsChatConnected] = useState(false);
+
+  // ---- Sound Effects ----
+  // ✅ Option 1: Using use-sound library (Recommended for quality)
+  const [playSendSound] = useSound(
+    getSoundPath('message-send'),
+    { volume: 0.5 }
+  );
+  const [playReceiveSound] = useSound(
+    getSoundPath('message-receive'),
+    { volume: 0.3 }
+  );
+
+  // ✅ Option 2: Fallback using Web Audio API (if use-sound fails)
+  const playSoundFallback = (soundType: 'send' | 'receive') => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Different frequencies for send/receive
+      oscillator.frequency.value = soundType === 'send' ? 800 : 600;
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.1;
+      
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioContext.close();
+      }, 150);
+    } catch (err) {
+      // Silently fail if audio not supported
+    }
+  };
 
   // ---- Call State ----
   const [callState, setCallState] = useState<
@@ -138,7 +195,7 @@ export default function ForumThreadView({
   // ---- Email & Settings ----
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [inspectionId, setInspectionId] = useState<string | null>(null); // ✅ ADDED
+  const [inspectionId, setInspectionId] = useState<string | null>(null);
   const [selectedMic, setSelectedMic] = useState("");
   const [selectedCamera, setSelectedCamera] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState("");
@@ -376,7 +433,7 @@ export default function ForumThreadView({
     setGroupMembers(members);
   }, [memberEmails, allUsers]);
 
-  // ========== DATA FETCHING ==========
+  // ========== DATA FETCHING WITH SOUND ==========
   const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
@@ -391,6 +448,11 @@ export default function ForumThreadView({
       if (!Array.isArray(postsData)) {
         postsData = [];
       }
+
+      // ✅ CHECK FOR NEW MESSAGES
+      const oldPostIds = new Set(posts.map(p => p.id));
+      const newPosts = postsData.filter(p => !oldPostIds.has(p.id));
+      const hasNewMessages = newPosts.length > 0;
 
       const safeAllUsers = Array.isArray(allUsers) ? allUsers : [];
 
@@ -421,6 +483,22 @@ export default function ForumThreadView({
         setError(null);
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
+
+        // ✅ PLAY SOUND ON RECEIVE (if new messages and not by current user)
+        if (hasNewMessages) {
+          // Check if the latest message was sent by someone else
+          const latestPost = newPosts[newPosts.length - 1];
+          if (latestPost?.createdBy !== currentUserEmail) {
+            // Play receive sound
+            try {
+              playReceiveSound();
+            } catch (err) {
+              // Fallback if use-sound fails
+              playSoundFallback('receive');
+            }
+            console.log("🔊 Played receive sound");
+          }
+        }
       }
     } catch (err) {
       console.error("❌ Load posts error:", err);
@@ -428,7 +506,7 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers]);
+  }, [groupId, allUsers, posts, currentUserEmail, playReceiveSound]);
 
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
@@ -449,7 +527,7 @@ export default function ForumThreadView({
     }
   }, []);
 
-  // ========== MESSAGE HANDLING ==========
+  // ========== MESSAGE HANDLING WITH SOUND ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
@@ -493,6 +571,15 @@ export default function ForumThreadView({
           },
         ]);
       }
+
+      // ✅ PLAY SOUND ON SEND
+      try {
+        playSendSound();
+      } catch (err) {
+        // Fallback if use-sound fails
+        playSoundFallback('send');
+      }
+      console.log("🔊 Played send sound");
 
       console.log("✅ Message sent via HTTP");
     } catch (httpErr) {
@@ -943,26 +1030,198 @@ export default function ForumThreadView({
   const handleProceedAfterEmail = async() => {
     console.log('✅ [FORUM] Email sent successfully, proceeding...');
     setShowEmailModal(false);
-    // Add any post-email logic here
+  };
+
+  // ================================================================
+  // ⚙️ MEDIA SETTINGS MODAL (FIXED - NO LOOP)
+  // ================================================================
+  const MediaSettingsModal = () => {
+    const [audioDevices, setAudioDevices] = useState<any[]>([]);
+    const [videoDevices, setVideoDevices] = useState<any[]>([]);
+    const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
+    const [loadingDevices, setLoadingDevices] = useState(false);
+    
+    // ✅ FIX: Use ref to prevent multiple calls
+    const loadDevicesCalled = useRef(false);
+
+    // Load device list when modal opens (ONLY ONCE)
+    useEffect(() => {
+      if (showSettingsModal && !loadDevicesCalled.current) {
+        loadDevicesCalled.current = true;
+        loadDevices();
+      }
+      if (!showSettingsModal) {
+        loadDevicesCalled.current = false;
+      }
+    }, [showSettingsModal]);
+
+    const loadDevices = async () => {
+      setLoadingDevices(true);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        
+        setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+        setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
+        
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn("Could not enumerate devices:", err);
+      } finally {
+        setLoadingDevices(false);
+      }
+    };
+
+    // Save selection
+    const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
+      try {
+        await AsyncStorage.setItem(`selected${type}`, deviceId);
+        if (type === 'mic') setSelectedMic(deviceId);
+        if (type === 'camera') setSelectedCamera(deviceId);
+        if (type === 'speaker') setSelectedSpeaker(deviceId);
+      } catch (err) {
+        console.error("Failed to save device selection:", err);
+      }
+    };
+
+    if (!showSettingsModal) return null;
+
+    return (
+      <Modal visible={showSettingsModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
+            
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingDevices ? (
+              <ActivityIndicator size="large" color="#00529B" />
+            ) : (
+              <View style={{ gap: 16 }}>
+                
+                {/* Microphone Select */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
+                  {audioDevices.length === 0 ? (
+                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
+                  ) : (
+                    audioDevices.map(device => (
+                      <TouchableOpacity
+                        key={device.deviceId}
+                        onPress={() => saveSelection('mic', device.deviceId)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 10,
+                          borderRadius: 8,
+                          backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
+                          borderWidth: 1,
+                          borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
+                        {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+
+                {/* Camera Select */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
+                  {videoDevices.length === 0 ? (
+                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
+                  ) : (
+                    videoDevices.map(device => (
+                      <TouchableOpacity
+                        key={device.deviceId}
+                        onPress={() => saveSelection('camera', device.deviceId)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 10,
+                          borderRadius: 8,
+                          backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
+                          borderWidth: 1,
+                          borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
+                        {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+
+                {/* Speaker Select */}
+                <View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
+                  {audioOutputDevices.length === 0 ? (
+                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
+                  ) : (
+                    audioOutputDevices.map(device => (
+                      <TouchableOpacity
+                        key={device.deviceId}
+                        onPress={() => saveSelection('speaker', device.deviceId)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 10,
+                          borderRadius: 8,
+                          backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
+                          borderWidth: 1,
+                          borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
+                        {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={() => setShowSettingsModal(false)}
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    backgroundColor: '#00529B',
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
+                </TouchableOpacity>
+
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
-  // ✅ ADD THIS HELPER FOR DATE HEADERS
   const getDateLabel = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
 
-    // If same day, don't show label
     if (date.toDateString() === today.toDateString()) return null;
-
-    // If yesterday
     if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-
-    // Show actual date
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric', 
@@ -1107,185 +1366,6 @@ export default function ForumThreadView({
     );
   };
 
-    // ================================================================
-  // ⚙️ NEW: MEDIA SETTINGS MODAL
-  // ================================================================
-   // ================================================================
-  // ⚙️ NEW: MEDIA SETTINGS MODAL (LOOP FIXED)
-  // ================================================================
-  const MediaSettingsModal = () => {
-    const [audioDevices, setAudioDevices] = useState<any[]>([]);
-    const [videoDevices, setVideoDevices] = useState<any[]>([]);
-    const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
-    const [loadingDevices, setLoadingDevices] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false); // ✅ FLAG TO PREVENT LOOP
-
-    // Load device list when modal opens (BUT ONLY ONCE)
-    useEffect(() => {
-      if (showSettingsModal && !hasLoaded) {
-        loadDevices();
-      }
-    }, [showSettingsModal, hasLoaded]);
-
-    const loadDevices = async () => {
-      setLoadingDevices(true);
-      try {
-        // Request permission to get device labels
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        
-        setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
-        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
-        setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
-        
-        stream.getTracks().forEach(track => track.stop());
-        
-        setHasLoaded(true); // ✅ MARK AS LOADED
-      } catch (err) {
-        console.warn("Could not enumerate devices:", err);
-      } finally {
-        setLoadingDevices(false);
-      }
-    };
-
-    // Save selection to AsyncStorage and update state
-    const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
-      try {
-        await AsyncStorage.setItem(`selected${type}`, deviceId);
-        if (type === 'mic') setSelectedMic(deviceId);
-        if (type === 'camera') setSelectedCamera(deviceId);
-        if (type === 'speaker') setSelectedSpeaker(deviceId);
-      } catch (err) {
-        console.error("Failed to save device selection:", err);
-      }
-    };
-
-    if (!showSettingsModal) return null;
-
-    return (
-      <Modal visible={showSettingsModal} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
-          <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
-            
-            {/* Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
-              <TouchableOpacity onPress={() => { setShowSettingsModal(false); setHasLoaded(false); }}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-
-            {loadingDevices ? (
-              <ActivityIndicator size="large" color="#00529B" />
-            ) : (
-              <View style={{ gap: 16 }}>
-                
-                {/* Microphone Select */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
-                  {audioDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
-                  ) : (
-                    audioDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('mic', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                {/* Camera Select */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
-                  {videoDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
-                  ) : (
-                    videoDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('camera', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                {/* Speaker Select */}
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
-                  {audioOutputDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
-                  ) : (
-                    audioOutputDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('speaker', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                {/* Close Button */}
-                <TouchableOpacity
-                  onPress={() => { setShowSettingsModal(false); setHasLoaded(false); }}
-                  style={{
-                    marginTop: 16,
-                    padding: 12,
-                    backgroundColor: '#00529B',
-                    borderRadius: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
-                </TouchableOpacity>
-
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-    );
-  };
-
   // ========== MAIN RENDER ==========
   return (
     <View className="flex-1 bg-white">
@@ -1410,7 +1490,6 @@ export default function ForumThreadView({
               data={displayPosts}
               keyExtractor={(item, index) => item?.id || String(index)}
               renderItem={({ item, index }) => {
-                // ✅ CHECK IF WE NEED TO SHOW A DATE HEADER
                 let dateLabel = null;
                 if (index === 0) {
                   dateLabel = getDateLabel(item.createdAt);
@@ -1440,7 +1519,7 @@ export default function ForumThreadView({
                       thread={item}
                       currentUser={currentUser}
                       currentUsername={currentUserEmail}
-                      allUsers={allUsers} // ✅ ADD THIS LINE!
+                      allUsers={allUsers}
                       onRetry={handleRetry}
                     />
                   </>
@@ -1487,8 +1566,7 @@ export default function ForumThreadView({
       <IncomingCallModal />
       <MediaSettingsModal />
 
-
-      {/* 📧 NEW: Email Notification Modal */}
+      {/* Email Notification Modal */}
       {showEmailModal && (
         <EmailNotificationModal
           isOpen={true}
