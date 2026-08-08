@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - Includes Working Sound Effects & Fixed Settings Modal
+// COMPLETE FIXED VERSION - With MP3 Sound File (Single file for both)
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
@@ -69,10 +69,21 @@ interface ForumThreadViewProps {
 }
 
 // ============================================================================
-// SOUND EFFECTS - Pure Web Audio API (No external library needed)
+// SOUND EFFECTS - Using Single MP3 File
 // ============================================================================
 
-// Simple sound generator - Works in all modern browsers
+// Get the correct sound file path based on platform
+const getSoundPath = (): string => {
+  if (Platform.OS === 'web') {
+    return '/sounds/message-send.mp3';
+  }
+  // For React Native / Expo
+  return require('../../assets/sounds/message-send.mp3');
+};
+
+// Global Audio object for caching
+let soundAudio: HTMLAudioElement | null = null;
+
 const playNotificationSound = (type: 'send' | 'receive') => {
   try {
     // Only works on Web
@@ -81,47 +92,65 @@ const playNotificationSound = (type: 'send' | 'receive') => {
       return;
     }
 
-    // Create audio context
+    // Get or create audio element (single instance)
+    if (!soundAudio) {
+      soundAudio = new Audio('/sounds/message-send.mp3');
+      soundAudio.preload = 'auto';
+    }
+
+    // Set different volume for send/receive
+    if (type === 'send') {
+      soundAudio.volume = 0.5; // Louder for sent messages
+    } else {
+      soundAudio.volume = 0.3; // Softer for received messages
+    }
+
+    // Reset to beginning and play
+    soundAudio.currentTime = 0;
+    soundAudio.play().catch((err) => {
+      console.log('Sound play failed:', err);
+      // Fallback to Web Audio if MP3 fails
+      playFallbackSound(type);
+    });
+
+    console.log(`🔊 Sound played: ${type}`);
+    
+  } catch (err) {
+    console.log('Sound error:', err);
+    // Fallback to Web Audio
+    playFallbackSound(type);
+  }
+};
+
+// Fallback sound using Web Audio API (if MP3 fails)
+const playFallbackSound = (type: 'send' | 'receive') => {
+  try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     
-    // Resume context if suspended (required for Chrome autoplay policy)
     if (audioContext.state === 'suspended') {
       audioContext.resume();
     }
     
-    // Create oscillator and gain nodes
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    // Different frequencies for send/receive
-    if (type === 'send') {
-      oscillator.frequency.value = 880; // Higher pitch - A5
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-    } else {
-      oscillator.frequency.value = 660; // Lower pitch - E5
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
-    }
+    oscillator.frequency.value = type === 'send' ? 880 : 660;
+    oscillator.type = 'sine';
+    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
     
-    // Start oscillator
     oscillator.start(audioContext.currentTime);
-    
-    // Fade out and stop
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
     oscillator.stop(audioContext.currentTime + 0.2);
     
-    // Auto-close context after sound ends
     setTimeout(() => {
       audioContext.close();
     }, 250);
     
   } catch (err) {
-    // Silently fail - sound is not critical
-    console.log('Sound play failed:', err);
+    // Silently fail
   }
 };
 
@@ -1043,7 +1072,7 @@ export default function ForumThreadView({
       if (!showSettingsModal) {
         loadDevicesCalled.current = false;
       }
-    }, []);
+    }, [showSettingsModal]);
 
     const loadDevices = async () => {
       setLoadingDevices(true);
