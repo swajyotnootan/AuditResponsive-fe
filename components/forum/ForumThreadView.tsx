@@ -71,13 +71,13 @@ const getSoundPath = (soundName: string) => {
   }
   // For React Native / Expo - use static require
   if (soundName === 'message-send') {
-    return require('../assets/sounds/message-send.mp3');
+    return require('../../assets/sounds/message-send.mp3');
   }
   if (soundName === 'message-receive') {
-    return require('../assets/sounds/message-receive.mp3');
+    return require('../../assets/sounds/message-receive.mp3');
   }
   // Fallback
-  return require('../assets/sounds/message-send.mp3');
+  return require('../../assets/sounds/message-send.mp3');
 };
 
 // ============================================================================
