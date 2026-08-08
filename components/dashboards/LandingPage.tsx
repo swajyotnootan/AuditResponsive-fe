@@ -156,7 +156,7 @@ const getTeamMembersForEvent = async (eventId: string): Promise<string[]> => {
   if (!eventId) return [];
   try {
     const response = await axios.get<{ success: boolean; data: any }>(
-      `${API_BASE_URL}/api/eightd/data/${eventId}`,
+      `${API_BASE_URL}/eightd/data/${eventId}`,
     );
     if (response.data?.success && response.data.data) {
       const d0Data = response.data.data.content?.d0?.[0] || {};
@@ -380,7 +380,7 @@ export default function LandingPage() {
   const fetchFullRecordData = async (eventNo: string) => {
     try {
       const response = await axios.get<{ success: boolean; data: any }>(
-        `${API_BASE_URL}/api/eightd/data/${eventNo}`,
+        `${API_BASE_URL}/eightd/data/${eventNo}`,
       );
       return response.data?.success ? response.data.data || {} : null;
     } catch (err) {
@@ -430,7 +430,7 @@ export default function LandingPage() {
     setLoading(true);
     try {
       const res = await axios.get<{ success: boolean; data: RawEventData[] }>(
-        `${API_BASE_URL}/api/eightd/data?t=` + Date.now(),
+        `${API_BASE_URL}/eightd/data?t=` + Date.now(),
       );
       if (res.data?.success && Array.isArray(res.data.data)) {
         const parsed: ParsedEvent[] = res.data.data.map((item) => {
@@ -577,7 +577,7 @@ export default function LandingPage() {
     if (!eventToDelete) return;
     try {
       await axios.delete(
-        `${API_BASE_URL}/api/eightd/data/${eventToDelete.eventNo}`,
+        `${API_BASE_URL}/eightd/data/${eventToDelete.eventNo}`,
       );
       fetchEvents();
       setShowDeleteConfirm(false);
