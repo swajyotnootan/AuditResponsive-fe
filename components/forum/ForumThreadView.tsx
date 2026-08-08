@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - Includes Sound Effects & Fixed Settings Modal
+// COMPLETE FIXED VERSION - Includes Working Sound Effects & Fixed Settings Modal
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
@@ -43,9 +43,6 @@ import {
   View,
 } from "react-native";
 
-// ✅ SOUND IMPORT - If using use-sound library
-import useSound from 'use-sound';
-
 // Import components
 import { useSFU } from "../../hooks/useSFU";
 import {
@@ -55,27 +52,6 @@ import {
 } from "./Api/forumapi";
 import ThreadCard from "./ThreadCard";
 import ThreadComposer from "./ThreadComposer";
-
-// ============================================================================
-// SOUND FILE PATHS - ✅ FIXED
-// ============================================================================
-// For Web: public/sounds/message-send.mp3
-// For React Native: assets/sounds/message-send.mp3
-// For Expo: require('../assets/sounds/message-send.mp3')
-
-// ✅ Determine sound path based on platform
-// ✅ Determine sound path based on platform
-const getSoundPath = (soundName: string) => {
-  if (Platform.OS === 'web') {
-    return `/sounds/${soundName}.mp3`;
-  }
-  // For React Native / Expo - use static require
-  if (soundName === 'message-send') {
-    return require('../../assets/sounds/message-send.mp3');
-  }
-  
-  return require('../../assets/sounds/message-send.mp3');
-};
 
 // ============================================================================
 // TYPES
@@ -91,6 +67,63 @@ interface ForumThreadViewProps {
   onBack?: () => void;
   memberEmails?: any[];
 }
+
+// ============================================================================
+// SOUND EFFECTS - Pure Web Audio API (No external library needed)
+// ============================================================================
+
+// Simple sound generator - Works in all modern browsers
+const playNotificationSound = (type: 'send' | 'receive') => {
+  try {
+    // Only works on Web
+    if (Platform.OS !== 'web') {
+      console.log(`🔊 Sound (${type}) - Native platform, skipping`);
+      return;
+    }
+
+    // Create audio context
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // Resume context if suspended (required for Chrome autoplay policy)
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+    
+    // Create oscillator and gain nodes
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Different frequencies for send/receive
+    if (type === 'send') {
+      oscillator.frequency.value = 880; // Higher pitch - A5
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+    } else {
+      oscillator.frequency.value = 660; // Lower pitch - E5
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
+    }
+    
+    // Start oscillator
+    oscillator.start(audioContext.currentTime);
+    
+    // Fade out and stop
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+    oscillator.stop(audioContext.currentTime + 0.2);
+    
+    // Auto-close context after sound ends
+    setTimeout(() => {
+      audioContext.close();
+    }, 250);
+    
+  } catch (err) {
+    // Silently fail - sound is not critical
+    console.log('Sound play failed:', err);
+  }
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -114,42 +147,6 @@ export default function ForumThreadView({
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isChatConnected, setIsChatConnected] = useState(false);
-
-  // ---- Sound Effects ----
-  // ✅ Option 1: Using use-sound library (Recommended for quality)
-  const [playSendSound] = useSound(
-    getSoundPath('message-send'),
-    { volume: 0.5 }
-  );
-  const [playReceiveSound] = useSound(
-    getSoundPath('message-receive'),
-    { volume: 0.3 }
-  );
-
-  // ✅ Option 2: Fallback using Web Audio API (if use-sound fails)
-  const playSoundFallback = (soundType: 'send' | 'receive') => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      // Different frequencies for send/receive
-      oscillator.frequency.value = soundType === 'send' ? 800 : 600;
-      oscillator.type = 'sine';
-      gainNode.gain.value = 0.1;
-      
-      oscillator.start();
-      setTimeout(() => {
-        oscillator.stop();
-        audioContext.close();
-      }, 150);
-    } catch (err) {
-      // Silently fail if audio not supported
-    }
-  };
 
   // ---- Call State ----
   const [callState, setCallState] = useState<
@@ -489,18 +486,11 @@ export default function ForumThreadView({
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
 
-        // ✅ PLAY SOUND ON RECEIVE (if new messages and not by current user)
+        // ✅ PLAY SOUND ON RECEIVE
         if (hasNewMessages) {
-          // Check if the latest message was sent by someone else
           const latestPost = newPosts[newPosts.length - 1];
           if (latestPost?.createdBy !== currentUserEmail) {
-            // Play receive sound
-            try {
-              playReceiveSound();
-            } catch (err) {
-              // Fallback if use-sound fails
-              playSoundFallback('receive');
-            }
+            playNotificationSound('receive');
             console.log("🔊 Played receive sound");
           }
         }
@@ -511,7 +501,7 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers, posts, currentUserEmail, playReceiveSound]);
+  }, [groupId, allUsers, posts, currentUserEmail]);
 
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
@@ -578,12 +568,7 @@ export default function ForumThreadView({
       }
 
       // ✅ PLAY SOUND ON SEND
-      try {
-        playSendSound();
-      } catch (err) {
-        // Fallback if use-sound fails
-        playSoundFallback('send');
-      }
+      playNotificationSound('send');
       console.log("🔊 Played send sound");
 
       console.log("✅ Message sent via HTTP");
@@ -1058,7 +1043,7 @@ export default function ForumThreadView({
       if (!showSettingsModal) {
         loadDevicesCalled.current = false;
       }
-    }, [showSettingsModal]);
+    }, []);
 
     const loadDevices = async () => {
       setLoadingDevices(true);
