@@ -36,6 +36,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 
 // ⚠️ Adjust these paths to match your actual project structure
 import { useAuth } from "../context/AuthContext";
@@ -1031,6 +1032,19 @@ export default function AuditeeDashboard() {
       setActiveTab("my-audits"); // Default fallback
     }
   }, [params?.tab]);
+
+  // Fetch all users for forum member selection
+useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      const users = await apiFetch("/users");
+      setAllUsers(users || []);
+    } catch (error) {
+      console.error("Failed to fetch users for forum:", error);
+    }
+  };
+  fetchUsers();
+}, []);
   const [isFetching, setIsFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
@@ -1058,6 +1072,10 @@ export default function AuditeeDashboard() {
   const [reviewingNcr, setReviewingNcr] = useState<any | null>(null);
   const [reviewApproved, setReviewApproved] = useState(false);
   const [reviewComment, setReviewComment] = useState("");
+  // Add these state variables
+const [forumModalVisible, setForumModalVisible] = useState(false);
+const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
+const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const [stats, setStats] = useState({
     pendingReview: 0,
@@ -1236,6 +1254,7 @@ export default function AuditeeDashboard() {
     }
   }, [user?.id, selectedYear]);
 
+ 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchAuditeeData(selectedYear);
@@ -1243,16 +1262,24 @@ export default function AuditeeDashboard() {
   };
 
   const handleViewReport = (audit: any, responseId: any, form: any = null) => {
-    if (!responseId) {
-      addToast("No audit report data available", "error");
-      return;
-    }
-    setActiveReportConfig({
-      id: String(responseId),
-      audit,
-      form,
-    });
-  };
+  if (!responseId) {
+    addToast("No audit report data available", "error");
+    return;
+  }
+  setActiveReportConfig({
+    id: String(responseId),
+    audit: {
+      ...audit,
+      // Ensure these are passed for forum
+      auditorId: audit.auditorId,
+      auditorName: audit.auditorName,
+      hodEmail: audit.hodEmail,
+      hodName: audit.hodName,
+      memberEmails: audit.memberEmails || [],
+    },
+    form,
+  });
+};
 
   const renderActiveReport = () => {
     if (!activeReportConfig) return null;
@@ -1379,6 +1406,17 @@ export default function AuditeeDashboard() {
     setReviewComment("");
     setShowNcrReviewModal(true);
   };
+
+  // Add this function in both dashboards
+const handleOpenForum = (audit: any, form: any = null) => {
+  console.log("🔍 Opening forum for audit:", audit);
+  if (!audit) {
+    addToast("No audit data available for forum", "error");
+    return;
+  }
+  setSelectedAuditForForum(audit);
+  setForumModalVisible(true);
+};
 
   const submitNcrReview = async () => {
     if (!reviewApproved && !reviewComment.trim()) {
@@ -1578,7 +1616,7 @@ export default function AuditeeDashboard() {
                         formDetails={audit.formDetails}
                         totalForms={audit.totalForms}
                         completedForms={audit.completedForms}
-                        onOpenForum={() => addToast("Forum opened", "success")}
+                        onOpenForum={handleOpenForum}  // ✅ Change this
                       />
                     </View>
                   ))}
@@ -1595,7 +1633,7 @@ export default function AuditeeDashboard() {
                       formDetails={audit.formDetails}
                       totalForms={audit.totalForms}
                       completedForms={audit.completedForms}
-                      onOpenForum={() => addToast("Forum opened", "success")}
+                      onOpenForum={handleOpenForum}  // ✅ Change this
                     />
                   ))}
                 </View>
@@ -1717,6 +1755,37 @@ export default function AuditeeDashboard() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* Forum Modal */}
+{selectedAuditForForum && (
+  <AuditCheckSheetNCRForumModal
+    auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
+    auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
+    auditTitle={selectedAuditForForum.auditType || "Audit"}
+    auditStatus={selectedAuditForForum.status || "ACTIVE"}
+    auditType={selectedAuditForForum.auditType || ""}
+    department={selectedAuditForForum.department || ""}
+    auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
+    auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
+    auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
+    auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
+    hodEmail={selectedAuditForForum.hodEmail || null}
+    hodName={selectedAuditForForum.hodName || null}
+    memberEmails={selectedAuditForForum.memberEmails || []}
+    isOpen={forumModalVisible}
+    onClose={() => {
+      setForumModalVisible(false);
+      setSelectedAuditForForum(null);
+    }}
+    currentUser={user}
+    allUsers={allUsers}
+    onNCRCreated={() => {
+      handleRefresh();
+    }}
+    onNCRUpdated={() => {
+      handleRefresh();
+    }}
+  />
+)}
     </SafeAreaView>
   );
 }

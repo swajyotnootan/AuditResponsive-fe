@@ -38,6 +38,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import FiveSAuditForm from "./auditor/FiveSAuditForm";
 import ManufacturingProcessAuditForm from "./auditor/ManufacturingProcessAuditForm";
 // ============================================================================
@@ -700,6 +701,7 @@ const AuditCard = ({
   onOpenForum,
 }: any) => {
   const [expanded, setExpanded] = useState(false);
+  
   const isExpired = timeStatus === "EXPIRED" || isAuditExpired(audit);
   const isMultiForm = totalForms > 1;
   const allFormsCompleted = completedForms === totalForms && totalForms > 0;
@@ -1315,7 +1317,12 @@ export default function AuditorDashboard() {
 
   // ✅ FIXED: Single source of truth for tab routing (matches Audit Manager & Top Management)
   const [activeTab, setActiveTab] = useState("my-audits");
+  // Add these state variables
+const [forumModalVisible, setForumModalVisible] = useState(false);
+const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
+const [allUsers, setAllUsers] = useState<any[]>([]);
 
+  
   // ✅ FIXED: Listen for param changes and update activeTab
   useEffect(() => {
     if (params?.tab) {
@@ -1716,6 +1723,19 @@ export default function AuditorDashboard() {
     }
   }, [user?.id, selectedYear]);
 
+  // Fetch all users for forum member selection
+useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      const users = await apiFetch("/users");
+      setAllUsers(users || []);
+    } catch (error) {
+      console.error("Failed to fetch users for forum:", error);
+    }
+  };
+  fetchUsers();
+}, []);
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchSchedulesWithStatus(selectedYear);
@@ -1724,18 +1744,23 @@ export default function AuditorDashboard() {
   };
 
   const handleViewForm = (audit: any, form: any) => {
-    // ✅ Set the config to show the form
-    setActiveFormConfig({
-      scheduleId: audit.id,
-      department: audit.department,
-      auditeeId: audit.auditeeId,
-      auditeeName: audit.auditeeName,
-      location: audit.location,
-      auditType: audit.auditType, // ✅ CRITICAL: Pass this to determine which form to load
-      formId: form?.id,
-      processName: form?.processName || form?.name,
-    });
-  };
+  setActiveFormConfig({
+    scheduleId: audit.id,
+    department: audit.department,
+    auditeeId: audit.auditeeId,
+    auditeeName: audit.auditeeName,
+    location: audit.location,
+    auditType: audit.auditType,
+    formId: form?.id,
+    processName: form?.processName || form?.name,
+    // Pass these for forum
+    auditorId: user?.id,
+    auditorName: user?.name,
+    hodEmail: audit.hodEmail,
+    hodName: audit.hodName,
+    memberEmails: audit.memberEmails || [],
+  });
+};
 
   const handleViewReport = (responseId: any, audit: any, form: any) => {
     console.log("🔍 [DEBUG] handleViewReport called with:", {
@@ -1808,6 +1833,19 @@ export default function AuditorDashboard() {
       throw error;
     }
   };
+
+    // Add this function in both dashboards
+const handleOpenForum = (audit: any, form: any = null) => {
+  console.log("🔍 Opening forum for audit:", audit);
+  if (!audit) {
+    addToast("No audit data available for forum", "error");
+    return;
+  }
+  setSelectedAuditForForum(audit);
+  setForumModalVisible(true);
+};
+
+  
 
   const renderActiveReport = () => {
     if (!activeReportConfig) return null;
@@ -2172,7 +2210,7 @@ export default function AuditorDashboard() {
                         }}
                         onViewForm={handleViewForm}
                         onViewReport={handleViewReport}
-                        onOpenForum={() => addToast("Forum opened", "success")}
+                        onOpenForum={handleOpenForum}  // ✅ Change this
                       />
                     </View>
                   ))}
@@ -2297,6 +2335,37 @@ export default function AuditorDashboard() {
         }}
         onSubmit={handleRequestExtension}
       />
+      {/* Forum Modal */}
+{selectedAuditForForum && (
+  <AuditCheckSheetNCRForumModal
+    auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
+    auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
+    auditTitle={selectedAuditForForum.auditType || "Audit"}
+    auditStatus={selectedAuditForForum.status || "ACTIVE"}
+    auditType={selectedAuditForForum.auditType || ""}
+    department={selectedAuditForForum.department || ""}
+    auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
+    auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
+    auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
+    auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
+    hodEmail={selectedAuditForForum.hodEmail || null}
+    hodName={selectedAuditForForum.hodName || null}
+    memberEmails={selectedAuditForForum.memberEmails || []}
+    isOpen={forumModalVisible}
+    onClose={() => {
+      setForumModalVisible(false);
+      setSelectedAuditForForum(null);
+    }}
+    currentUser={user}
+    allUsers={allUsers}
+    onNCRCreated={() => {
+      handleRefresh();
+    }}
+    onNCRUpdated={() => {
+      handleRefresh();
+    }}
+  />
+)}
     </SafeAreaView>
   );
 }
@@ -2613,6 +2682,7 @@ const ExtensionRequestModal = ({
   const [newEndTime, setNewEndTime] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  
   const { addToast } = useToast();
   const validEndTimes = newStartTime
     ? TIME_OPTIONS.filter(
@@ -2631,6 +2701,8 @@ const ExtensionRequestModal = ({
       setReason("");
     }
   }, [audit, isOpen]);
+
+  
 
   const handleSubmit = async () => {
     if (
@@ -2653,6 +2725,8 @@ const ExtensionRequestModal = ({
       setSubmitting(false);
     }
   };
+
+
 
   if (!isOpen) return null;
   return (
