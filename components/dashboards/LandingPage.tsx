@@ -368,14 +368,15 @@ export default function LandingPage() {
         : "Showing all 8D forms";
 
   const createNew8D = () => {
-    (navigation.navigate as any)("EightDFlow", {
-      eventId: null,
-      step: "D0",
-      type: dashboardType,
-      isNcrBased: dashboardType === "ncr",
-    });
-  };
-
+  console.log("🚀 Creating new 8D event with type:", dashboardType);
+  (navigation.navigate as any)("EightDFlow", {
+    eventId: null,
+    step: "D0",
+    type: dashboardType,
+    isNcrBased: dashboardType === "ncr",
+    isHOD: isHOD,
+  });
+};
   const fetchFullRecordData = async (eventNo: string) => {
     try {
       const response = await axios.get<{ success: boolean; data: any }>(
