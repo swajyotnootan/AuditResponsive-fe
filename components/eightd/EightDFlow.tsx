@@ -219,7 +219,7 @@ export default function EightDFlow() {
       formDataToSend.append("jsonContent", JSON.stringify(payload));
 
       let response;
-      const baseURL = "http://10.2.0.74:8080/api/eightd/data";
+      const baseURL = "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api/eightd/data";
 
       if (eventNo) {
         response = await axios.put(`${baseURL}/${eventNo}`, formDataToSend, {
@@ -355,7 +355,7 @@ export default function EightDFlow() {
 
       try {
         const response = await axios.get(
-          `http://10.2.0.74:8080/api/eightd/data/${eventNo}`,
+          `https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api/eightd/data/${eventNo}`,
         );
         if (response.data?.success && response.data.data?.content) {
           const content = response.data.data.content;
