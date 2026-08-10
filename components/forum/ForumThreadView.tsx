@@ -407,7 +407,7 @@ export default function ForumThreadView({
       .filter(Boolean);
 
     setGroupMembers(members);
-  }, [memberEmails, allUsers]);
+  }, []);
 
   // ========== DATA FETCHING ==========
   const loadPosts = useCallback(async () => {
@@ -471,7 +471,7 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers, posts, currentUserEmail]);
+  }, []);
 
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
