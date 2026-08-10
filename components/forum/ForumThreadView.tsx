@@ -1,10 +1,11 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - No Infinite Rerenders, Dynamic Sound
+// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers, Email Modal, and Cross-Platform Sound
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Audio as ExpoAudio } from "expo-av";
 import {
   AlertCircle,
   ArrowLeft,
@@ -69,151 +70,46 @@ interface ForumThreadViewProps {
 }
 
 // ============================================================================
-// SOUND EFFECTS - DYNAMIC WITH PROPER VOLUME
+// SOUND EFFECTS - MP3 SUPPORT (WEB & MOBILE)
 // ============================================================================
+// ============================================================================
+// SOUND EFFECTS - MP3 SUPPORT (WEB & MOBILE)
+// ============================================================================
+let webSendAudio: HTMLAudioElement | null = null;
+let webReceiveAudio: HTMLAudioElement | null = null;
 
-let soundAudio: HTMLAudioElement | null = null;
-let soundTimeout: ReturnType<typeof setTimeout> | null = null;
-let isSoundPlaying = false;
-
-const playNotificationSound = (type: 'send' | 'receive') => {
+const playNotificationSound = async (type: "send" | "receive") => {
   try {
-    if (Platform.OS !== 'web') {
+    // ✅ WEB: use the browser's native Audio (window.Audio), NOT expo-av
+    if (Platform.OS === "web") {
+      const volume = type === "send" ? 0.5 : 0.3;
+
+      // ✅ 'window.Audio' guarantees we use the HTML5 constructor (no collision)
+      const sound = new window.Audio("/sounds/message-send.mp3");
+      sound.preload = "auto";
+      sound.volume = volume;
+      sound.currentTime = 0;
+
+      sound.play().catch((err) => {
+        console.log("🔇 Autoplay blocked (needs user interaction):", err?.message);
+      });
       return;
     }
 
-    // ✅ Prevent multiple sounds playing at once
-    if (isSoundPlaying) {
-      return;
-    }
+    // ✅ MOBILE: use expo-av via the renamed 'ExpoAudio'
+    const { sound } = await ExpoAudio.Sound.createAsync(
+      require("../../assets/sounds/message-send.mp3"),
+      { shouldPlay: true, volume: type === "send" ? 0.5 : 0.3 }
+    );
 
-    isSoundPlaying = true;
-
-    // ✅ Clear any pending timeout
-    if (soundTimeout) {
-      clearTimeout(soundTimeout);
-      soundTimeout = null;
-    }
-
-    // ✅ Reset after sound finishes
-    soundTimeout = setTimeout(() => {
-      isSoundPlaying = false;
-      soundTimeout = null;
-    }, 400);
-
-    // ✅ METHOD 1: Web Audio API with proper gain
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Resume context if suspended (Chrome autoplay policy)
-      if (audioContext.state === 'suspended') {
-        audioContext.resume();
+    // Unload after it finishes so we don't leak memory
+    sound.setOnPlaybackStatusUpdate((status: any) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
       }
-      
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      // ✅ Higher frequencies for better audibility
-      oscillator.frequency.value = type === 'send' ? 1200 : 880;
-      oscillator.type = 'sine';
-      
-      // ✅ Higher gain for better volume
-      const volume = type === 'send' ? 0.3 : 0.2;
-      const now = audioContext.currentTime;
-      
-      // ✅ Smooth attack and release
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(volume, now + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-      
-      oscillator.start(now);
-      oscillator.stop(now + 0.2);
-      
-      // ✅ Keep context alive until sound finishes
-      setTimeout(() => {
-        audioContext.close();
-        isSoundPlaying = false;
-      }, 300);
-      
-      console.log(`🔊 Sound played (Web Audio): ${type}`);
-      return;
-    } catch (webAudioError) {
-      console.log('Web Audio failed:', webAudioError);
-    }
-
-    // ✅ METHOD 2: MP3 with proper volume
-    try {
-      // Create new audio element if not exists
-      if (!soundAudio) {
-        soundAudio = new Audio('/sounds/message-send.mp3');
-        soundAudio.preload = 'auto';
-        soundAudio.volume = 0.5;
-      }
-      
-      // ✅ Set volume based on type
-      soundAudio.volume = type === 'send' ? 0.6 : 0.4;
-      soundAudio.currentTime = 0;
-      
-      const playPromise = soundAudio.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log(`🔊 Sound played (MP3): ${type}`);
-        }).catch((err) => {
-          console.log('MP3 play failed:', err);
-          isSoundPlaying = false;
-        });
-      }
-      
-      // ✅ Reset sound playing flag after duration
-      setTimeout(() => {
-        isSoundPlaying = false;
-      }, 300);
-      
-      return;
-    } catch (mp3Error) {
-      console.log('MP3 failed:', mp3Error);
-    }
-
-    // ✅ METHOD 3: Oscillator with fallback
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      if (audioContext.state === 'suspended') {
-        audioContext.resume();
-      }
-      
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = 1000;
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.2);
-      
-      setTimeout(() => {
-        audioContext.close();
-        isSoundPlaying = false;
-      }, 300);
-      
-      console.log(`🔊 Sound played (Fallback): ${type}`);
-    } catch (fallbackError) {
-      console.log('All sound methods failed');
-      isSoundPlaying = false;
-    }
-    
+    });
   } catch (err) {
-    console.log('Sound error:', err);
-    isSoundPlaying = false;
+    console.log("🔇 Sound error:", err);
   }
 };
 
@@ -511,7 +407,7 @@ export default function ForumThreadView({
       .filter(Boolean);
 
     setGroupMembers(members);
-  }, []);
+  }, [memberEmails, allUsers]);
 
   // ========== DATA FETCHING ==========
   const loadPosts = useCallback(async () => {
@@ -1379,7 +1275,7 @@ const MediaSettingsModal = React.memo(({
   const loadDevicesCalled = useRef(false);
 
   useEffect(() => {
-    if (visible && !loadDevicesCalled.current) {
+    if (visible && !loadDevicesCalled.current && Platform.OS === 'web') {
       loadDevicesCalled.current = true;
       loadDevices();
     }
@@ -1433,7 +1329,7 @@ const MediaSettingsModal = React.memo(({
           ) : (
             <View style={{ gap: 16 }}>
               <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#3730a3', marginBottom: 4 }}>Microphone</Text>
                 {audioDevices.length === 0 ? (
                   <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
                 ) : (
@@ -1460,7 +1356,7 @@ const MediaSettingsModal = React.memo(({
               </View>
 
               <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#3730a3', marginBottom: 4 }}>Camera</Text>
                 {videoDevices.length === 0 ? (
                   <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
                 ) : (
@@ -1487,7 +1383,7 @@ const MediaSettingsModal = React.memo(({
               </View>
 
               <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#3730a3', marginBottom: 4 }}>Speaker</Text>
                 {audioOutputDevices.length === 0 ? (
                   <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
                 ) : (
