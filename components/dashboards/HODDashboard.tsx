@@ -42,12 +42,12 @@ const NAVBAR_COLORS = {
 const getBaseUrl = () => {
   // ✅ 1. WEB BROWSER ONLY (Expo Web)
   if (Platform.OS === "web") {
-    return "http://localhost:8080";
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
   }
 
   // ✅ 2. PHYSICAL ANDROID PHONE (Your current setup)
   if (Platform.OS === "android") {
-    return "http://10.2.0.74:8080";
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
   }
 
   // ✅ 3. ANDROID STUDIO EMULATOR (If you are using the emulator instead of a physical phone, use this instead of #2)
@@ -57,7 +57,7 @@ const getBaseUrl = () => {
 
   // ✅ 4. iOS (Simulator or Physical)
   if (Platform.OS === "ios") {
-    return "http://10.2.0.74:8080"; // Physical iPhone needs the IP. Simulator can use localhost.
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443"; // Physical iPhone needs the IP. Simulator can use localhost.
   }
 
   // ✅ 5. FALLBACK

@@ -53,13 +53,13 @@ import ForumThreadView from "../forum/ForumThreadView";
 // ✅ DYNAMIC URL HELPER
 const getBaseUrl = () => {
   if (Platform.OS === "web") {
-    return "http://localhost:8080";
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
   }
   if (Platform.OS === "android") {
-    return "http://10.2.0.74:8080";
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
   }
   if (Platform.OS === "ios") {
-    return "http://10.2.0.74:8080";
+    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
   }
   return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
 };
