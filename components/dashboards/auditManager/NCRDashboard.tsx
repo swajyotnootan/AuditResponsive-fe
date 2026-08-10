@@ -1239,33 +1239,31 @@ const NCRDashboard = ({
 
         {/* NCR Forum Modal */}
        {/* NCR Forum Modal */}
-<Modal visible={showForumModal} transparent animationType="slide">
-  {selectedNCRForForum && (
-    <AuditCheckSheetNCRForumModal
-      auditId={selectedNCRForForum.id}
-      auditNumber={selectedNCRForForum.ncrNumber}
-      auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
-      auditStatus={selectedNCRForForum.status}
-      auditType="NCR Resolution"
-      department={selectedNCRForForum.department}
-      auditorId={selectedNCRForForum.auditorId}
-      auditorName={selectedNCRForForum.auditorName}
-      auditeeId={selectedNCRForForum.auditeeId}
-      auditeeName={selectedNCRForForum.auditeeName}
-      // ✅ ADD THESE - required by the modal
-      hodEmail={null}
-      hodName={null}
-      memberEmails={selectedNCRForForum.memberEmails || []}
-      isOpen={showForumModal}
-      onClose={() => {
-        setShowForumModal(false);
-        setSelectedNCRForForum(null);
-      }}
-      currentUser={user}
-      allUsers={allUsersList}
-    />
-  )}
-</Modal>
+        {/* NCR Forum Modal */}
+        {selectedNCRForForum && (
+          <AuditCheckSheetNCRForumModal
+            auditId={selectedNCRForForum.id}
+            auditNumber={selectedNCRForForum.ncrNumber}
+            auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
+            auditStatus={selectedNCRForForum.status}
+            auditType="NCR Resolution"
+            department={selectedNCRForForum.department}
+            auditorId={selectedNCRForForum.auditorId}
+            auditorName={selectedNCRForForum.auditorName}
+            auditeeId={selectedNCRForForum.auditeeId}
+            auditeeName={selectedNCRForForum.auditeeName}
+            hodEmail={null}
+            hodName={null}
+            memberEmails={selectedNCRForForum.memberEmails || []}
+            isOpen={showForumModal}
+            onClose={() => {
+              setShowForumModal(false);
+              setSelectedNCRForForum(null);
+            }}
+            currentUser={user}
+            allUsers={allUsersList}
+          />
+        )}
         {/* 8D Forum Drawer */}
         <Modal visible={show8DForumDrawer} transparent animationType="slide">
           <View className="flex-1 bg-black/30">
