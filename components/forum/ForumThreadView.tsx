@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - With MP3 Sound File (Single file for both)
+// COMPLETE FIXED VERSION - No Infinite Rerenders
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
@@ -69,26 +69,16 @@ interface ForumThreadViewProps {
 }
 
 // ============================================================================
-// SOUND EFFECTS - Using Single MP3 File
+// SOUND EFFECTS
 // ============================================================================
-
-// Get the correct sound file path based on platform
-// ============================================================================
-// SOUND EFFECTS - Using Single MP3 File
-// ============================================================================
-
-// Global Audio object for caching
-let soundAudio: HTMLAudioElement | null = null;
 
 const playNotificationSound = (type: 'send' | 'receive') => {
   try {
-    // Only works on Web
     if (Platform.OS !== 'web') {
-      console.log(`🔊 Sound (${type}) - Native platform, skipping`);
       return;
     }
 
-    // ✅ METHOD 1: Try Web Audio API (Always works, no files needed)
+    // Web Audio API
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       
@@ -114,73 +104,10 @@ const playNotificationSound = (type: 'send' | 'receive') => {
         audioContext.close();
       }, 250);
       
-      console.log(`🔊 Sound played (Web Audio): ${type}`);
       return;
     } catch (webAudioError) {
-      console.log('Web Audio failed, trying MP3...');
+      // Silently fail
     }
-
-    // ✅ METHOD 2: Try MP3 with multiple paths
-    const audioPaths = [
-      '/sounds/message-send.mp3',                          // From public folder
-      '../../assets/sounds/message-send.mp3',              // Relative to current file
-      '../assets/sounds/message-send.mp3',                 // Alternative relative
-      'assets/sounds/message-send.mp3',                    // From root
-      '/assets/sounds/message-send.mp3',                   // From public folder
-    ];
-
-    // Try each path until one works
-    for (const path of audioPaths) {
-      try {
-        const audio = new Audio(path);
-        audio.volume = type === 'send' ? 0.5 : 0.3;
-        audio.currentTime = 0;
-        
-        audio.play().then(() => {
-          console.log(`🔊 Sound played (MP3): ${type} from ${path}`);
-        }).catch(() => {
-          // Try next path
-        });
-        return;
-      } catch (e) {
-        // Continue to next path
-      }
-    }
-
-    console.log(`⚠️ All sound methods failed for: ${type}`);
-    
-  } catch (err) {
-    console.log('Sound error:', err);
-  }
-};
-
-// Fallback sound using Web Audio API (if MP3 fails)
-const playFallbackSound = (type: 'send' | 'receive') => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    if (audioContext.state === 'suspended') {
-      audioContext.resume();
-    }
-    
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = type === 'send' ? 880 : 660;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-    
-    oscillator.start(audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
-    oscillator.stop(audioContext.currentTime + 0.2);
-    
-    setTimeout(() => {
-      audioContext.close();
-    }, 250);
-    
   } catch (err) {
     // Silently fail
   }
@@ -273,6 +200,7 @@ export default function ForumThreadView({
   const lastPostCountRef = useRef(0);
   const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9));
   const initializationRef = useRef(false);
+  const isCallEventSetRef = useRef(false);
 
   // ---- SFU (WebRTC) ----
   const isAuditForum = useMemo(() => {
@@ -289,19 +217,12 @@ export default function ForumThreadView({
     cameraError: null,
     participants: [] as string[],
     connectionAttempts: 0,
-    joinCall: async (
-      _asAdmin: boolean = false,
-      _callType: "video" | "audio" = "video",
-    ) => console.log("📞 Audio/Video disabled for audit forum"),
-    endCall: () => console.log("📞 Audio/Video disabled for audit forum"),
-    sendMediasoupMessage: (_type: string, _payload?: any) =>
-      console.log("📞 Audio/Video disabled for audit forum"),
-    manuallyConnect: () =>
-      console.log("🔗 Audio/Video disabled for audit forum"),
-    manuallyDisconnect: () =>
-      console.log("🔗 Audio/Video disabled for audit forum"),
-    setOnCallEvent: (_callback: ((data: any) => void) | null) =>
-      console.log("📞 Audio/Video disabled for audit forum"),
+    joinCall: async () => console.log("📞 Audio/Video disabled"),
+    endCall: () => console.log("📞 Audio/Video disabled"),
+    sendMediasoupMessage: () => console.log("📞 Audio/Video disabled"),
+    manuallyConnect: () => console.log("🔗 Audio/Video disabled"),
+    manuallyDisconnect: () => console.log("🔗 Audio/Video disabled"),
+    setOnCallEvent: (_callback: ((data: any) => void) | null) => {},
     callType: "video" as "video" | "audio",
     connectionHealth: { instabilityCount: 0 },
   };
@@ -410,12 +331,10 @@ export default function ForumThreadView({
       const idStr = String(groupId);
 
       if (idStr.startsWith("AUDIT-") || idStr.includes("_AUDIT_")) {
-        console.log("✅ Audit forum - skipping group creation");
         return groupId;
       }
 
       if (!isNaN(Number(idStr))) {
-        console.log("✅ Numeric group ID - skipping");
         return groupId;
       }
 
@@ -433,8 +352,6 @@ export default function ForumThreadView({
         members: memberEmailList,
       };
 
-      console.log("📦 Creating/verifying 8D group:", requestBody);
-
       const response = await fetch(
         `${API_BASE_URL}/api/forum/8d/groups`,
         {
@@ -445,15 +362,11 @@ export default function ForumThreadView({
       );
 
       if (!response.ok) {
-        console.log("⚠️ 8D group creation failed, continuing anyway");
         return groupId;
       }
 
-      const result = await response.json();
-      console.log("✅ 8D group ready:", result);
       return groupId;
     } catch (error) {
-      console.log("⚠️ Group creation failed, continuing anyway:", error);
       return groupId;
     }
   };
@@ -496,11 +409,10 @@ export default function ForumThreadView({
     setGroupMembers(members);
   }, [memberEmails, allUsers]);
 
-  // ========== DATA FETCHING WITH SOUND ==========
+  // ========== DATA FETCHING ==========
   const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
-      console.log("📥 Loading posts for group:", groupId);
       const response = await fetchGroupThreads(String(groupId));
       let postsData = [];
       if (response && typeof response === "object") {
@@ -512,7 +424,6 @@ export default function ForumThreadView({
         postsData = [];
       }
 
-      // ✅ CHECK FOR NEW MESSAGES
       const oldPostIds = new Set(posts.map(p => p.id));
       const newPosts = postsData.filter(p => !oldPostIds.has(p.id));
       const hasNewMessages = newPosts.length > 0;
@@ -547,12 +458,10 @@ export default function ForumThreadView({
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
 
-        // ✅ PLAY SOUND ON RECEIVE
         if (hasNewMessages) {
           const latestPost = newPosts[newPosts.length - 1];
           if (latestPost?.createdBy !== currentUserEmail) {
             playNotificationSound('receive');
-            console.log("🔊 Played receive sound");
           }
         }
       }
@@ -576,25 +485,17 @@ export default function ForumThreadView({
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
-      console.log("🛑 Polling stopped");
     }
     if (mountedRef.current) {
       setIsChatConnected(false);
     }
   }, []);
 
-  // ========== MESSAGE HANDLING WITH SOUND ==========
+  // ========== MESSAGE HANDLING ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
     const userEmail = currentUser?.email || username || "";
-
-    console.log("🔍 handleNewPost debug:", {
-      userEmail,
-      groupId,
-      content: newPostData.content,
-      attachmentsCount: newPostData.attachments?.length || 0,
-    });
 
     try {
       const res = await createForumPost(String(groupId), {
@@ -628,11 +529,7 @@ export default function ForumThreadView({
         ]);
       }
 
-      // ✅ PLAY SOUND ON SEND
       playNotificationSound('send');
-      console.log("🔊 Played send sound");
-
-      console.log("✅ Message sent via HTTP");
     } catch (httpErr) {
       console.error("❌ HTTP send failed:", httpErr);
       if ((httpErr as any)?.response?.status >= 500) {
@@ -684,7 +581,6 @@ export default function ForumThreadView({
           );
           let match;
           let matchCount = 0;
-          let highlightedContent = content;
           while ((match = regex.exec(content)) !== null) {
             matches.push({
               postId: post.id,
@@ -741,13 +637,6 @@ export default function ForumThreadView({
   ) => {
     if (!mountedRef.current) return;
     try {
-      console.log(
-        "📞 Starting individual call to:",
-        targetUser?.username,
-        "Type:",
-        callType,
-      );
-
       const callId = `${groupId}-${username}-${targetUser?.username}-${Date.now()}`;
 
       setIndividualCallState({
@@ -778,8 +667,6 @@ export default function ForumThreadView({
         callerName:
           currentUser?.firstName + " " + currentUser?.lastName || username,
       });
-
-      console.log("✅ Individual call notification sent");
     } catch (error) {
       console.error("❌ Failed to start individual call:", error);
       Alert.alert(
@@ -805,10 +692,7 @@ export default function ForumThreadView({
   ) => {
     if (!mountedRef.current) return;
     try {
-      console.log("🎥 Starting call...", { asAdmin, callType });
-
       if (!mediasoupConnected) {
-        console.log("🔄 Connecting to Mediasoup first...");
         manuallyConnect();
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
@@ -826,7 +710,6 @@ export default function ForumThreadView({
       });
 
       await joinCall(asAdmin, callType);
-      console.log("✅ Call started successfully:", callType);
     } catch (error) {
       console.error("❌ Failed to start call:", error);
       if (mountedRef.current) {
@@ -843,16 +726,9 @@ export default function ForumThreadView({
   const handleAcceptCall = async () => {
     if (!mountedRef.current) return;
     try {
-      console.log(
-        "🎥 Accepting call from:",
-        callerName,
-        "Type:",
-        currentCallType,
-      );
       setIncomingCall(null);
       setCallState("connecting");
       await joinCall(false, currentCallType);
-      console.log("✅ Joined call successfully:", currentCallType);
     } catch (error) {
       console.error("❌ Failed to join call:", error);
       let errorMessage = "Failed to join call";
@@ -869,12 +745,10 @@ export default function ForumThreadView({
   };
 
   const handleDeclineCall = () => {
-    console.log("📞 Declining call from:", callerName);
     handleCallEnded();
   };
 
   const handleEndCall = () => {
-    console.log("📞 Ending call...");
     sendMediasoupMessage("CALL_ENDED");
     endCall();
     handleCallEnded();
@@ -892,13 +766,11 @@ export default function ForumThreadView({
   const handleJoinCall = async () => {
     if (!mountedRef.current) return;
     try {
-      console.log("🎥 Joining existing call...");
       setCallState("connecting");
       sendMediasoupMessage("USER_JOINED_CALL", {
         callType: currentCallType,
       });
       await joinCall(false, currentCallType);
-      console.log("✅ Joined existing call successfully");
     } catch (error) {
       console.error("❌ Failed to join call:", error);
       Alert.alert(
@@ -910,7 +782,6 @@ export default function ForumThreadView({
   };
 
   const handleManualReconnect = () => {
-    console.log("🔄 Manual reconnect triggered");
     manuallyConnect();
     if (!isChatConnected) {
       startPolling();
@@ -922,10 +793,7 @@ export default function ForumThreadView({
     mountedRef.current = true;
     const instanceId = instanceIdRef.current;
 
-    console.log("🔍 Component mounted:", { instanceId, groupId, username });
-
     if (initializationRef.current) {
-      console.log("⏸️ Skipping duplicate initialization");
       return;
     }
     initializationRef.current = true;
@@ -941,7 +809,6 @@ export default function ForumThreadView({
     initialize();
 
     return () => {
-      console.log("🔍 Component unmounted:", instanceId);
       mountedRef.current = false;
       initializationRef.current = false;
       stopPolling();
@@ -956,16 +823,14 @@ export default function ForumThreadView({
     };
   }, [groupId]);
 
-  // ========== CALL EVENT CALLBACK ==========
+  // ========== CALL EVENT CALLBACK - FIXED ==========
   useEffect(() => {
     if (!setOnCallEvent || !mountedRef.current) return;
-
-    console.log("✅ Setting up enhanced call event callback");
+    if (isCallEventSetRef.current) return;
+    isCallEventSetRef.current = true;
 
     const handleCallEvent = (data: any) => {
       if (!mountedRef.current) return;
-      console.log("🎯 Call event received:", data.type, "from:", data.sender);
-
       const { type, sender, payload } = data;
 
       switch (type) {
@@ -1050,27 +915,17 @@ export default function ForumThreadView({
           break;
 
         default:
-          console.log("📞 Unknown event:", type);
+          break;
       }
     };
 
     setOnCallEvent(handleCallEvent);
 
+    // ✅ FIXED: No cleanup that triggers re-renders
     return () => {
-      if (mountedRef.current && setOnCallEvent) {
-        console.log("🧹 Cleaning up call callback");
-        setOnCallEvent(() => {});
-      }
+      isCallEventSetRef.current = false;
     };
-  }, [
-    setOnCallEvent,
-    groupId,
-    callState,
-    isInCall,
-    individualCallState,
-    username,
-    handleCallEnded,
-  ]);
+  }, [setOnCallEvent, groupId, username]);
 
   // ========== EMAIL MODAL HANDLERS ==========
   const handleOpenEmailModal = () => {
@@ -1079,23 +934,19 @@ export default function ForumThreadView({
   };
 
   const handleProceedAfterEmail = async() => {
-    console.log('✅ [FORUM] Email sent successfully, proceeding...');
     setShowEmailModal(false);
   };
 
   // ================================================================
-  // ⚙️ MEDIA SETTINGS MODAL (FIXED - NO LOOP)
+  // ⚙️ MEDIA SETTINGS MODAL
   // ================================================================
   const MediaSettingsModal = () => {
     const [audioDevices, setAudioDevices] = useState<any[]>([]);
     const [videoDevices, setVideoDevices] = useState<any[]>([]);
     const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
     const [loadingDevices, setLoadingDevices] = useState(false);
-    
-    // ✅ FIX: Use ref to prevent multiple calls
     const loadDevicesCalled = useRef(false);
 
-    // Load device list when modal opens (ONLY ONCE)
     useEffect(() => {
       if (showSettingsModal && !loadDevicesCalled.current) {
         loadDevicesCalled.current = true;
@@ -1111,11 +962,9 @@ export default function ForumThreadView({
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
-        
         setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
         setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
         setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
-        
         stream.getTracks().forEach(track => track.stop());
       } catch (err) {
         console.warn("Could not enumerate devices:", err);
@@ -1124,7 +973,6 @@ export default function ForumThreadView({
       }
     };
 
-    // Save selection
     const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
       try {
         await AsyncStorage.setItem(`selected${type}`, deviceId);
@@ -1142,8 +990,6 @@ export default function ForumThreadView({
       <Modal visible={showSettingsModal} transparent animationType="slide">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
           <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
-            
-            {/* Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
               <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
@@ -1155,8 +1001,6 @@ export default function ForumThreadView({
               <ActivityIndicator size="large" color="#00529B" />
             ) : (
               <View style={{ gap: 16 }}>
-                
-                {/* Microphone Select */}
                 <View>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
                   {audioDevices.length === 0 ? (
@@ -1184,7 +1028,6 @@ export default function ForumThreadView({
                   )}
                 </View>
 
-                {/* Camera Select */}
                 <View>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
                   {videoDevices.length === 0 ? (
@@ -1212,7 +1055,6 @@ export default function ForumThreadView({
                   )}
                 </View>
 
-                {/* Speaker Select */}
                 <View>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
                   {audioOutputDevices.length === 0 ? (
@@ -1240,7 +1082,6 @@ export default function ForumThreadView({
                   )}
                 </View>
 
-                {/* Close Button */}
                 <TouchableOpacity
                   onPress={() => setShowSettingsModal(false)}
                   style={{
@@ -1253,7 +1094,6 @@ export default function ForumThreadView({
                 >
                   <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
                 </TouchableOpacity>
-
               </View>
             )}
           </View>
@@ -1300,20 +1140,14 @@ export default function ForumThreadView({
         disabled={searchResultsCount === 0}
         className="p-1"
       >
-        <ChevronUp
-          size={16}
-          color={searchResultsCount === 0 ? "#d1d5db" : "#6b7280"}
-        />
+        <ChevronUp size={16} color={searchResultsCount === 0 ? "#d1d5db" : "#6b7280"} />
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => navigateSearch("next")}
         disabled={searchResultsCount === 0}
         className="p-1"
       >
-        <ChevronDown
-          size={16}
-          color={searchResultsCount === 0 ? "#d1d5db" : "#6b7280"}
-        />
+        <ChevronDown size={16} color={searchResultsCount === 0 ? "#d1d5db" : "#6b7280"} />
       </TouchableOpacity>
       <TouchableOpacity onPress={clearSearch} className="p-1">
         <X size={16} color="#6b7280" />
@@ -1333,41 +1167,27 @@ export default function ForumThreadView({
               {safeGroupMembers.length} members
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => setShowMembersSidebar(false)}
-            className="p-1"
-          >
+          <TouchableOpacity onPress={() => setShowMembersSidebar(false)} className="p-1">
             <X size={16} color="#6b7280" />
           </TouchableOpacity>
         </View>
         <ScrollView className="flex-1">
           {safeGroupMembers.map((m, i) => (
-            <View
-              key={m.email || i}
-              className="flex-row items-center justify-between p-3 border-b border-gray-100"
-            >
+            <View key={m.email || i} className="flex-row items-center justify-between p-3 border-b border-gray-100">
               <View className="flex-row items-center flex-1">
                 <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center mr-3">
                   <User size={16} color="#00529B" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium text-gray-900">
-                    {m.firstName} {m.lastName}
-                  </Text>
+                  <Text className="text-sm font-medium text-gray-900">{m.firstName} {m.lastName}</Text>
                   <Text className="text-xs text-gray-500">{m.email}</Text>
                 </View>
               </View>
               <View className="flex-row gap-1">
-                <TouchableOpacity
-                  onPress={() => handleIndividualCall(m, "audio")}
-                  className="p-2"
-                >
+                <TouchableOpacity onPress={() => handleIndividualCall(m, "audio")} className="p-2">
                   <Phone size={16} color="#16a34a" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleIndividualCall(m, "video")}
-                  className="p-2"
-                >
+                <TouchableOpacity onPress={() => handleIndividualCall(m, "video")} className="p-2">
                   <VideoIcon size={16} color="#00529B" />
                 </TouchableOpacity>
               </View>
@@ -1387,27 +1207,13 @@ export default function ForumThreadView({
             <View className="w-20 h-20 rounded-full bg-blue-100 items-center justify-center mb-4">
               <User size={32} color="#00529B" />
             </View>
-            <Text className="text-lg font-bold text-gray-900">
-              {callerName} is calling...
-            </Text>
-            <Text className="text-sm text-gray-500 mt-1">
-              {currentCallType === "video" ? "Video" : "Audio"} call
-            </Text>
+            <Text className="text-lg font-bold text-gray-900">{callerName} is calling...</Text>
+            <Text className="text-sm text-gray-500 mt-1">{currentCallType === "video" ? "Video" : "Audio"} call</Text>
             <View className="flex-row gap-6 mt-8">
-              <TouchableOpacity
-                onPress={handleDeclineCall}
-                className="w-16 h-16 rounded-full bg-red-500 items-center justify-center"
-              >
-                <Phone
-                  size={28}
-                  color="white"
-                  style={{ transform: [{ rotate: "135deg" }] }}
-                />
+              <TouchableOpacity onPress={handleDeclineCall} className="w-16 h-16 rounded-full bg-red-500 items-center justify-center">
+                <Phone size={28} color="white" style={{ transform: [{ rotate: "135deg" }] }} />
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAcceptCall}
-                className="w-16 h-16 rounded-full bg-green-500 items-center justify-center"
-              >
+              <TouchableOpacity onPress={handleAcceptCall} className="w-16 h-16 rounded-full bg-green-500 items-center justify-center">
                 <Phone size={28} color="white" />
               </TouchableOpacity>
             </View>
@@ -1428,54 +1234,30 @@ export default function ForumThreadView({
               <ArrowLeft size={20} color="white" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            onPress={() => setShowMembersSidebar(!showMembersSidebar)}
-            className="flex-1"
-          >
-            <Text className="text-white font-semibold text-base">
-              {displayGroupName}
-            </Text>
+          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} className="flex-1">
+            <Text className="text-white font-semibold text-base">{displayGroupName}</Text>
             <Text className="text-blue-200 text-xs">
-              {Array.isArray(groupMembers) ? groupMembers.length : 0} members •{" "}
-              {Array.isArray(posts) ? posts.length : 0} messages
+              {Array.isArray(groupMembers) ? groupMembers.length : 0} members • {Array.isArray(posts) ? posts.length : 0} messages
             </Text>
           </TouchableOpacity>
         </View>
         <View className="flex-row items-center gap-1">
-          <TouchableOpacity
-            onPress={() => setShowEmailModal(true)}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => setShowEmailModal(true)} className="p-2">
             <Mail size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowMembersSidebar(!showMembersSidebar)}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} className="p-2">
             <Users size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setIsSearching(!isSearching)}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => setIsSearching(!isSearching)} className="p-2">
             <Search size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowSettingsModal(true)}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => setShowSettingsModal(true)} className="p-2">
             <Settings size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleStartCall(true, "audio")}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => handleStartCall(true, "audio")} className="p-2">
             <Phone size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleStartCall(true, "video")}
-            className="p-2"
-          >
+          <TouchableOpacity onPress={() => handleStartCall(true, "video")} className="p-2">
             <VideoIcon size={18} color="white" />
           </TouchableOpacity>
         </View>
@@ -1491,12 +1273,8 @@ export default function ForumThreadView({
             <View className="w-5 h-5 rounded-full bg-gray-200 items-center justify-center">
               <User size={10} color="#6b7280" />
             </View>
-            <Text className="text-xs font-medium text-gray-600">
-              {displayName}
-            </Text>
-            {isTyping && (
-              <Text className="text-xs text-blue-600">typing...</Text>
-            )}
+            <Text className="text-xs font-medium text-gray-600">{displayName}</Text>
+            {isTyping && <Text className="text-xs text-blue-600">typing...</Text>}
             {unreadCount > 0 && (
               <View className="bg-red-500 rounded-full px-2 py-0.5">
                 <Text className="text-white text-xs">{unreadCount} new</Text>
@@ -1504,11 +1282,7 @@ export default function ForumThreadView({
             )}
           </View>
           <View className="flex-row items-center gap-2">
-            {activeUsers.length > 0 && (
-              <Text className="text-green-600 text-xs">
-                {activeUsers.length} in call
-              </Text>
-            )}
+            {activeUsers.length > 0 && <Text className="text-green-600 text-xs">{activeUsers.length} in call</Text>}
             <TouchableOpacity onPress={loadPosts}>
               <RefreshCw size={14} color="#6b7280" />
             </TouchableOpacity>
@@ -1528,10 +1302,7 @@ export default function ForumThreadView({
             <View className="flex-1 items-center justify-center p-4">
               <AlertCircle size={32} color="#ef4444" />
               <Text className="text-red-500 mt-2 text-center">{error}</Text>
-              <TouchableOpacity
-                onPress={loadPosts}
-                className="mt-3 bg-blue-900 px-4 py-2 rounded-lg"
-              >
+              <TouchableOpacity onPress={loadPosts} className="mt-3 bg-blue-900 px-4 py-2 rounded-lg">
                 <Text className="text-white text-sm">Retry</Text>
               </TouchableOpacity>
             </View>
@@ -1560,9 +1331,7 @@ export default function ForumThreadView({
                     {dateLabel && (
                       <View style={{ alignItems: 'center', marginVertical: 12 }}>
                         <View style={{ backgroundColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>
-                            {dateLabel}
-                          </Text>
+                          <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>{dateLabel}</Text>
                         </View>
                       </View>
                     )}
@@ -1594,9 +1363,7 @@ export default function ForumThreadView({
           )}
 
           {/* Composer */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-          >
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
             <View className="border-t border-gray-200 bg-white">
               <ThreadComposer
                 groupId={groupId}
