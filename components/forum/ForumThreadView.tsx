@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - No Infinite Rerenders
+// COMPLETE FIXED VERSION - No Infinite Rerenders, Dynamic Sound
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
@@ -69,8 +69,12 @@ interface ForumThreadViewProps {
 }
 
 // ============================================================================
-// SOUND EFFECTS
+// SOUND EFFECTS - DYNAMIC WITH PROPER VOLUME
 // ============================================================================
+
+let soundAudio: HTMLAudioElement | null = null;
+let soundTimeout: ReturnType<typeof setTimeout> | null = null;
+let isSoundPlaying = false;
 
 const playNotificationSound = (type: 'send' | 'receive') => {
   try {
@@ -78,7 +82,103 @@ const playNotificationSound = (type: 'send' | 'receive') => {
       return;
     }
 
-    // Web Audio API
+    // ✅ Prevent multiple sounds playing at once
+    if (isSoundPlaying) {
+      return;
+    }
+
+    isSoundPlaying = true;
+
+    // ✅ Clear any pending timeout
+    if (soundTimeout) {
+      clearTimeout(soundTimeout);
+      soundTimeout = null;
+    }
+
+    // ✅ Reset after sound finishes
+    soundTimeout = setTimeout(() => {
+      isSoundPlaying = false;
+      soundTimeout = null;
+    }, 400);
+
+    // ✅ METHOD 1: Web Audio API with proper gain
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Resume context if suspended (Chrome autoplay policy)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // ✅ Higher frequencies for better audibility
+      oscillator.frequency.value = type === 'send' ? 1200 : 880;
+      oscillator.type = 'sine';
+      
+      // ✅ Higher gain for better volume
+      const volume = type === 'send' ? 0.3 : 0.2;
+      const now = audioContext.currentTime;
+      
+      // ✅ Smooth attack and release
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(volume, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.2);
+      
+      // ✅ Keep context alive until sound finishes
+      setTimeout(() => {
+        audioContext.close();
+        isSoundPlaying = false;
+      }, 300);
+      
+      console.log(`🔊 Sound played (Web Audio): ${type}`);
+      return;
+    } catch (webAudioError) {
+      console.log('Web Audio failed:', webAudioError);
+    }
+
+    // ✅ METHOD 2: MP3 with proper volume
+    try {
+      // Create new audio element if not exists
+      if (!soundAudio) {
+        soundAudio = new Audio('/sounds/message-send.mp3');
+        soundAudio.preload = 'auto';
+        soundAudio.volume = 0.5;
+      }
+      
+      // ✅ Set volume based on type
+      soundAudio.volume = type === 'send' ? 0.6 : 0.4;
+      soundAudio.currentTime = 0;
+      
+      const playPromise = soundAudio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          console.log(`🔊 Sound played (MP3): ${type}`);
+        }).catch((err) => {
+          console.log('MP3 play failed:', err);
+          isSoundPlaying = false;
+        });
+      }
+      
+      // ✅ Reset sound playing flag after duration
+      setTimeout(() => {
+        isSoundPlaying = false;
+      }, 300);
+      
+      return;
+    } catch (mp3Error) {
+      console.log('MP3 failed:', mp3Error);
+    }
+
+    // ✅ METHOD 3: Oscillator with fallback
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       
@@ -92,24 +192,28 @@ const playNotificationSound = (type: 'send' | 'receive') => {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
       
-      oscillator.frequency.value = type === 'send' ? 880 : 660;
+      oscillator.frequency.value = 1000;
       oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(type === 'send' ? 0.15 : 0.12, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
       
       oscillator.start(audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
       oscillator.stop(audioContext.currentTime + 0.2);
       
       setTimeout(() => {
         audioContext.close();
-      }, 250);
+        isSoundPlaying = false;
+      }, 300);
       
-      return;
-    } catch (webAudioError) {
-      // Silently fail
+      console.log(`🔊 Sound played (Fallback): ${type}`);
+    } catch (fallbackError) {
+      console.log('All sound methods failed');
+      isSoundPlaying = false;
     }
+    
   } catch (err) {
-    // Silently fail
+    console.log('Sound error:', err);
+    isSoundPlaying = false;
   }
 };
 
@@ -458,6 +562,7 @@ export default function ForumThreadView({
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
 
+        // ✅ Play sound only for the FIRST new message from others
         if (hasNewMessages) {
           const latestPost = newPosts[newPosts.length - 1];
           if (latestPost?.createdBy !== currentUserEmail) {
@@ -471,7 +576,7 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [groupId, allUsers, posts, currentUserEmail]);
 
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
@@ -491,7 +596,7 @@ export default function ForumThreadView({
     }
   }, []);
 
-  // ========== MESSAGE HANDLING ==========
+  // ========== MESSAGE HANDLING WITH DYNAMIC SOUND ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
@@ -529,7 +634,12 @@ export default function ForumThreadView({
         ]);
       }
 
-      playNotificationSound('send');
+      // ✅ Play sound AFTER message is successfully sent
+      setTimeout(() => {
+        playNotificationSound('send');
+      }, 100);
+
+      console.log("✅ Message sent via HTTP");
     } catch (httpErr) {
       console.error("❌ HTTP send failed:", httpErr);
       if ((httpErr as any)?.response?.status >= 500) {
@@ -921,7 +1031,6 @@ export default function ForumThreadView({
 
     setOnCallEvent(handleCallEvent);
 
-    // ✅ FIXED: No cleanup that triggers re-renders
     return () => {
       isCallEventSetRef.current = false;
     };
@@ -936,168 +1045,6 @@ export default function ForumThreadView({
   const handleProceedAfterEmail = async() => {
     setShowEmailModal(false);
   };
-
-  // ================================================================
-  // ⚙️ MEDIA SETTINGS MODAL
-  // ================================================================
- const MediaSettingsModal = () => {
-  const [audioDevices, setAudioDevices] = useState<any[]>([]);
-  const [videoDevices, setVideoDevices] = useState<any[]>([]);
-  const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  const loadDevicesCalled = useRef(false);
-
-  useEffect(() => {
-    if (showSettingsModal && !loadDevicesCalled.current) {
-      loadDevicesCalled.current = true;
-      loadDevices();
-    }
-    if (!showSettingsModal) {
-      loadDevicesCalled.current = false;
-      setAudioDevices([]);
-      setVideoDevices([]);
-      setAudioOutputDevices([]);
-    }
-  }, [showSettingsModal]);
-
-  const loadDevices = async () => {
-    setLoadingDevices(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
-      setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
-      setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
-      stream.getTracks().forEach(track => track.stop());
-    } catch (err) {
-      console.warn("Could not enumerate devices:", err);
-    } finally {
-      setLoadingDevices(false);
-    }
-  };
-
-  const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
-    try {
-      await AsyncStorage.setItem(`selected${type}`, deviceId);
-      if (type === 'mic') setSelectedMic(deviceId);
-      if (type === 'camera') setSelectedCamera(deviceId);
-      if (type === 'speaker') setSelectedSpeaker(deviceId);
-    } catch (err) {
-      console.error("Failed to save device selection:", err);
-    }
-  };
-
-  if (!showSettingsModal) return null;
-
-  return (
-    <Modal visible={showSettingsModal} transparent animationType="slide">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
-        <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
-            <TouchableOpacity onPress={() => { setShowSettingsModal(false); loadDevicesCalled.current = false; }}>
-              <X size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-
-          {loadingDevices ? (
-            <ActivityIndicator size="large" color="#00529B" />
-          ) : (
-            <View style={{ gap: 16 }}>
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
-                {audioDevices.length === 0 ? (
-                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
-                ) : (
-                  audioDevices.map(device => (
-                    <TouchableOpacity
-                      key={device.deviceId}
-                      onPress={() => saveSelection('mic', device.deviceId)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: 10,
-                        borderRadius: 8,
-                        backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
-                        borderWidth: 1,
-                        borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
-                      {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
-                {videoDevices.length === 0 ? (
-                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
-                ) : (
-                  videoDevices.map(device => (
-                    <TouchableOpacity
-                      key={device.deviceId}
-                      onPress={() => saveSelection('camera', device.deviceId)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: 10,
-                        borderRadius: 8,
-                        backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
-                        borderWidth: 1,
-                        borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
-                      {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-
-              <View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
-                {audioOutputDevices.length === 0 ? (
-                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
-                ) : (
-                  audioOutputDevices.map(device => (
-                    <TouchableOpacity
-                      key={device.deviceId}
-                      onPress={() => saveSelection('speaker', device.deviceId)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        padding: 10,
-                        borderRadius: 8,
-                        backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
-                        borderWidth: 1,
-                        borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
-                      {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-
-              <TouchableOpacity
-                onPress={() => { setShowSettingsModal(false); loadDevicesCalled.current = false; }}
-                style={{ marginTop: 16, padding: 12, backgroundColor: '#00529B', borderRadius: 8, alignItems: 'center' }}
-              >
-                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-};
 
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
@@ -1379,7 +1326,16 @@ export default function ForumThreadView({
 
       {/* Modals */}
       <IncomingCallModal />
-      <MediaSettingsModal />
+      <MediaSettingsModal
+        visible={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        selectedMic={selectedMic}
+        selectedCamera={selectedCamera}
+        selectedSpeaker={selectedSpeaker}
+        setSelectedMic={setSelectedMic}
+        setSelectedCamera={setSelectedCamera}
+        setSelectedSpeaker={setSelectedSpeaker}
+      />
 
       {/* Email Notification Modal */}
       {showEmailModal && (
@@ -1393,3 +1349,182 @@ export default function ForumThreadView({
     </View>
   );
 }
+
+// ================================================================
+// ⚙️ MEDIA SETTINGS MODAL - EXTRACTED OUTSIDE
+// ================================================================
+const MediaSettingsModal = React.memo(({ 
+  visible, 
+  onClose, 
+  selectedMic, 
+  selectedCamera, 
+  selectedSpeaker,
+  setSelectedMic,
+  setSelectedCamera,
+  setSelectedSpeaker
+}: {
+  visible: boolean;
+  onClose: () => void;
+  selectedMic: string;
+  selectedCamera: string;
+  selectedSpeaker: string;
+  setSelectedMic: (value: string) => void;
+  setSelectedCamera: (value: string) => void;
+  setSelectedSpeaker: (value: string) => void;
+}) => {
+  const [audioDevices, setAudioDevices] = useState<any[]>([]);
+  const [videoDevices, setVideoDevices] = useState<any[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const loadDevicesCalled = useRef(false);
+
+  useEffect(() => {
+    if (visible && !loadDevicesCalled.current) {
+      loadDevicesCalled.current = true;
+      loadDevices();
+    }
+    if (!visible) {
+      loadDevicesCalled.current = false;
+    }
+  }, [visible]);
+
+  const loadDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+      setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+      setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      console.warn("Could not enumerate devices:", err);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
+    try {
+      await AsyncStorage.setItem(`selected${type}`, deviceId);
+      if (type === 'mic') setSelectedMic(deviceId);
+      if (type === 'camera') setSelectedCamera(deviceId);
+      if (type === 'speaker') setSelectedSpeaker(deviceId);
+    } catch (err) {
+      console.error("Failed to save device selection:", err);
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+        <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
+            <TouchableOpacity onPress={onClose}>
+              <X size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {loadingDevices ? (
+            <ActivityIndicator size="large" color="#00529B" />
+          ) : (
+            <View style={{ gap: 16 }}>
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
+                {audioDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
+                ) : (
+                  audioDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('mic', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
+                {videoDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
+                ) : (
+                  videoDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('camera', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
+                {audioOutputDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
+                ) : (
+                  audioOutputDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('speaker', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={{ marginTop: 16, padding: 12, backgroundColor: '#00529B', borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+});
+
+MediaSettingsModal.displayName = 'MediaSettingsModal';
