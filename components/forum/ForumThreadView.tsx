@@ -940,167 +940,164 @@ export default function ForumThreadView({
   // ================================================================
   // ⚙️ MEDIA SETTINGS MODAL
   // ================================================================
-  const MediaSettingsModal = () => {
-    const [audioDevices, setAudioDevices] = useState<any[]>([]);
-    const [videoDevices, setVideoDevices] = useState<any[]>([]);
-    const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
-    const [loadingDevices, setLoadingDevices] = useState(false);
-    const loadDevicesCalled = useRef(false);
+ const MediaSettingsModal = () => {
+  const [audioDevices, setAudioDevices] = useState<any[]>([]);
+  const [videoDevices, setVideoDevices] = useState<any[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<any[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const loadDevicesCalled = useRef(false);
 
-    useEffect(() => {
-      if (showSettingsModal && !loadDevicesCalled.current) {
-        loadDevicesCalled.current = true;
-        loadDevices();
-      }
-      if (!showSettingsModal) {
-        loadDevicesCalled.current = false;
-      }
-    }, []);
+  useEffect(() => {
+    if (showSettingsModal && !loadDevicesCalled.current) {
+      loadDevicesCalled.current = true;
+      loadDevices();
+    }
+    if (!showSettingsModal) {
+      loadDevicesCalled.current = false;
+      setAudioDevices([]);
+      setVideoDevices([]);
+      setAudioOutputDevices([]);
+    }
+  }, [showSettingsModal]);
 
-    const loadDevices = async () => {
-      setLoadingDevices(true);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
-        setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
-        setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
-        stream.getTracks().forEach(track => track.stop());
-      } catch (err) {
-        console.warn("Could not enumerate devices:", err);
-      } finally {
-        setLoadingDevices(false);
-      }
-    };
+  const loadDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioDevices(devices.filter(d => d.kind === 'audioinput'));
+      setVideoDevices(devices.filter(d => d.kind === 'videoinput'));
+      setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      console.warn("Could not enumerate devices:", err);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
 
-    const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
-      try {
-        await AsyncStorage.setItem(`selected${type}`, deviceId);
-        if (type === 'mic') setSelectedMic(deviceId);
-        if (type === 'camera') setSelectedCamera(deviceId);
-        if (type === 'speaker') setSelectedSpeaker(deviceId);
-      } catch (err) {
-        console.error("Failed to save device selection:", err);
-      }
-    };
+  const saveSelection = async (type: 'mic' | 'camera' | 'speaker', deviceId: string) => {
+    try {
+      await AsyncStorage.setItem(`selected${type}`, deviceId);
+      if (type === 'mic') setSelectedMic(deviceId);
+      if (type === 'camera') setSelectedCamera(deviceId);
+      if (type === 'speaker') setSelectedSpeaker(deviceId);
+    } catch (err) {
+      console.error("Failed to save device selection:", err);
+    }
+  };
 
-    if (!showSettingsModal) return null;
+  if (!showSettingsModal) return null;
 
-    return (
-      <Modal visible={showSettingsModal} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
-          <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
-              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
-                <X size={24} color="#6b7280" />
+  return (
+    <Modal visible={showSettingsModal} transparent animationType="slide">
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+        <View style={{ width: '100%', maxWidth: 500, backgroundColor: 'white', borderRadius: 16, padding: 20, elevation: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1f2937' }}>Media Settings</Text>
+            <TouchableOpacity onPress={() => { setShowSettingsModal(false); loadDevicesCalled.current = false; }}>
+              <X size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          {loadingDevices ? (
+            <ActivityIndicator size="large" color="#00529B" />
+          ) : (
+            <View style={{ gap: 16 }}>
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
+                {audioDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
+                ) : (
+                  audioDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('mic', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
+                {videoDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
+                ) : (
+                  videoDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('camera', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <View>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
+                {audioOutputDevices.length === 0 ? (
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
+                ) : (
+                  audioOutputDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.deviceId}
+                      onPress={() => saveSelection('speaker', device.deviceId)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
+                      {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => { setShowSettingsModal(false); loadDevicesCalled.current = false; }}
+                style={{ marginTop: 16, padding: 12, backgroundColor: '#00529B', borderRadius: 8, alignItems: 'center' }}
+              >
+                <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
               </TouchableOpacity>
             </View>
-
-            {loadingDevices ? (
-              <ActivityIndicator size="large" color="#00529B" />
-            ) : (
-              <View style={{ gap: 16 }}>
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Microphone</Text>
-                  {audioDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No microphone found</Text>
-                  ) : (
-                    audioDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('mic', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedMic === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedMic === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Mic ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedMic === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Camera</Text>
-                  {videoDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No camera found</Text>
-                  ) : (
-                    videoDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('camera', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedCamera === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedCamera === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Camera ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedCamera === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                <View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Speaker</Text>
-                  {audioOutputDevices.length === 0 ? (
-                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>No speaker found</Text>
-                  ) : (
-                    audioOutputDevices.map(device => (
-                      <TouchableOpacity
-                        key={device.deviceId}
-                        onPress={() => saveSelection('speaker', device.deviceId)}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 10,
-                          borderRadius: 8,
-                          backgroundColor: selectedSpeaker === device.deviceId ? '#eff6ff' : 'transparent',
-                          borderWidth: 1,
-                          borderColor: selectedSpeaker === device.deviceId ? '#00529B' : '#e5e7eb',
-                          marginBottom: 4,
-                        }}
-                      >
-                        <Text style={{ flex: 1, fontSize: 14, color: '#1f2937' }}>{device.label || `Speaker ${device.deviceId.slice(-4)}`}</Text>
-                        {selectedSpeaker === device.deviceId && <Check size={16} color="#00529B" />}
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-
-                <TouchableOpacity
-                  onPress={() => setShowSettingsModal(false)}
-                  style={{
-                    marginTop: 16,
-                    padding: 12,
-                    backgroundColor: '#00529B',
-                    borderRadius: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Save & Close</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          )}
         </View>
-      </Modal>
-    );
-  };
+      </View>
+    </Modal>
+  );
+};
 
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
