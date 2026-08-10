@@ -201,6 +201,7 @@ export default function ForumThreadView({
   const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9));
   const initializationRef = useRef(false);
   const isCallEventSetRef = useRef(false);
+    const lastKnownPostIdsRef = useRef<Set<string>>(new Set());
 
   // ---- SFU (WebRTC) ----
   const isAuditForum = useMemo(() => {
@@ -410,6 +411,7 @@ export default function ForumThreadView({
   }, [memberEmails, allUsers]);
 
   // ========== DATA FETCHING ==========
+    // ========== DATA FETCHING ==========
   const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
@@ -424,9 +426,12 @@ export default function ForumThreadView({
         postsData = [];
       }
 
-      const oldPostIds = new Set(posts.map(p => p.id));
-      const newPosts = postsData.filter(p => !oldPostIds.has(p.id));
-      const hasNewMessages = newPosts.length > 0;
+      // ✅ FIX 1: Use the Ref instead of the stale `posts` state array
+      const newPosts = postsData.filter((p: any) => !lastKnownPostIdsRef.current.has(p.id));
+      
+      // ✅ FIX 2: Prevent sound from playing on the very first load when opening the chat
+      const isFirstLoad = lastKnownPostIdsRef.current.size === 0;
+      const hasNewMessages = newPosts.length > 0 && !isFirstLoad;
 
       const safeAllUsers = Array.isArray(allUsers) ? allUsers : [];
 
@@ -447,6 +452,9 @@ export default function ForumThreadView({
       });
 
       if (mountedRef.current) {
+        // ✅ FIX 3: Update the Ref with current IDs BEFORE setting state
+        lastKnownPostIdsRef.current = new Set(postsData.map((p: any) => p.id));
+
         setPosts(
           enriched.sort(
             (a: any, b: any) =>
@@ -458,7 +466,7 @@ export default function ForumThreadView({
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
 
-        // ✅ Play sound only for the FIRST new message from others
+        // ✅ Play sound only for genuinely new messages from others
         if (hasNewMessages) {
           const latestPost = newPosts[newPosts.length - 1];
           if (latestPost?.createdBy !== currentUserEmail) {
@@ -472,8 +480,7 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers, posts, currentUserEmail]);
-
+  }, [groupId, allUsers, currentUserEmail]); // ✅ CRITICAL: Removed `posts` from dependencies!
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
     if (pollingRef.current) clearInterval(pollingRef.current);
