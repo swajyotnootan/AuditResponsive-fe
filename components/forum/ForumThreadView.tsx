@@ -821,7 +821,7 @@ export default function ForumThreadView({
         typingTimeoutRef.current = null;
       }
     };
-  }, [groupId]);
+  }, []);
 
   // ========== CALL EVENT CALLBACK - FIXED ==========
   useEffect(() => {
@@ -925,7 +925,7 @@ export default function ForumThreadView({
     return () => {
       isCallEventSetRef.current = false;
     };
-  }, [setOnCallEvent, groupId, username]);
+  }, []);
 
   // ========== EMAIL MODAL HANDLERS ==========
   const handleOpenEmailModal = () => {
@@ -955,7 +955,7 @@ export default function ForumThreadView({
       if (!showSettingsModal) {
         loadDevicesCalled.current = false;
       }
-    }, [showSettingsModal]);
+    }, []);
 
     const loadDevices = async () => {
       setLoadingDevices(true);
