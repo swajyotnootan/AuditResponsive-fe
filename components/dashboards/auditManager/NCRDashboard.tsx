@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
-  Platform,
-  Pressable,
+  Platform, // ✅ CHANGED from Pressable to TouchableOpacity
   SafeAreaView,
   ScrollView,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
@@ -326,7 +326,6 @@ const NCRDashboard = ({
     fetchAllUsers();
   }, []);
 
-  // ✅ FIXED: openNCRForum with proper group ID format
   const openNCRForum = (ncr: any) => {
     const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
     const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
@@ -354,7 +353,6 @@ const NCRDashboard = ({
     setShowForumModal(true);
   };
 
-  // ✅ FIXED: open8DForum with proper member extraction
   const open8DForum = async (ncr: any) => {
     setSelected8DNCR(ncr);
     setEightDTeamMembers([]);
@@ -365,7 +363,6 @@ const NCRDashboard = ({
       const eightDEventId = `8D-${ncr.ncrNumber}`;
       const membersSet = new Set<string>();
 
-      // 1. Fetch existing 8D team members
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
@@ -386,31 +383,25 @@ const NCRDashboard = ({
         console.log('Could not fetch existing 8D members:', err);
       }
 
-      // 2. Add Initiator (current user)
       if (user?.email) membersSet.add(user.email);
 
-      // 3. Add Audit Manager
       const auditManager = allUsersList.find(
         (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
       );
       if (auditManager?.email) membersSet.add(auditManager.email);
 
-      // 4. Add HOD
       if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
 
-      // 5. Add Auditor
       if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
       if (ncr.auditorName?.includes('@')) {
         membersSet.add(ncr.auditorName);
       }
 
-      // 6. Add Auditee
       if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
       if (ncr.auditeeName?.includes('@')) {
         membersSet.add(ncr.auditeeName);
       }
 
-      // 7. Add 8D Team members
       const eightDTeam = allUsersList.filter(
         (u: any) => 
           u.role === "8D_TEAM" || 
@@ -421,7 +412,6 @@ const NCRDashboard = ({
         if (member.email) membersSet.add(member.email);
       });
 
-      // 8. Add NCR related team members
       if (ncr.auditeeId) {
         const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
         if (auditee?.email) membersSet.add(auditee.email);
@@ -437,8 +427,6 @@ const NCRDashboard = ({
 
     } catch (error) {
       console.error('❌ Failed to fetch 8D team members:', error);
-      
-      // Fallback: Add essential members
       const fallbackMembers = [
         user?.email,
         ncr.hodEmail,
@@ -574,18 +562,12 @@ const NCRDashboard = ({
             <Card className="p-6 mb-6">
               <View className="flex-row flex-wrap items-center justify-between gap-4">
                 <View className="flex-row items-center gap-4">
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => onBack?.()}
                     className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
                   >
-                    {({ pressed }) => (
-                      <Feather
-                        name="arrow-left"
-                        size={18}
-                        color={pressed ? T.accent : T.textMuted}
-                      />
-                    )}
-                  </Pressable>
+                    <Feather name="arrow-left" size={18} color={T.textMuted} />
+                  </TouchableOpacity>
                   <View className="w-12 h-12 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] items-center justify-center">
                     <Feather name="file-text" size={24} color={T.accent} />
                   </View>
@@ -598,18 +580,12 @@ const NCRDashboard = ({
                     </Text>
                   </View>
                 </View>
-                <Pressable
+                <TouchableOpacity
                   onPress={loadData}
                   className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
                 >
-                  {({ pressed }) => (
-                    <Feather
-                      name="refresh-cw"
-                      size={18}
-                      color={pressed ? T.accent : T.textMuted}
-                    />
-                  )}
-                </Pressable>
+                  <Feather name="refresh-cw" size={18} color={T.textMuted} />
+                </TouchableOpacity>
               </View>
             </Card>
 
@@ -763,7 +739,7 @@ const NCRDashboard = ({
                   </Text>
                 </View>
                 <View className="flex-row flex-wrap gap-2">
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => setActiveFilter(FILTER_TYPES.ALL)}
                     className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
                     style={{
@@ -773,180 +749,121 @@ const NCRDashboard = ({
                         activeFilter === FILTER_TYPES.ALL ? T.text : T.card,
                     }}
                   >
-                    {({ pressed }) => (
-                      <>
-                        <Feather
-                          name="layers"
-                          size={14}
-                          color={
-                            pressed
-                              ? "#FFF"
-                              : activeFilter === FILTER_TYPES.ALL
-                                ? "#FFF"
-                                : T.textValue
-                          }
-                        />
-                        <Text
-                          className="text-sm font-semibold"
-                          style={{
-                            color:
-                              activeFilter === FILTER_TYPES.ALL
-                                ? "#FFF"
-                                : T.textValue,
-                          }}
-                        >
-                          All NCRs
-                        </Text>
-                        <View
-                          className="px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor:
-                              activeFilter === FILTER_TYPES.ALL
-                                ? "rgba(255,255,255,0.2)"
-                                : "#F1F5F9",
-                          }}
-                        >
-                          <Text
-                            className="text-[11px] font-bold"
-                            style={{
-                              color:
-                                activeFilter === FILTER_TYPES.ALL
-                                  ? "#FFF"
-                                  : T.textMuted,
-                            }}
-                          >
-                            {stats.total}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-                  </Pressable>
+                    <Feather
+                      name="layers"
+                      size={14}
+                      color={activeFilter === FILTER_TYPES.ALL ? "#FFF" : T.textValue}
+                    />
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{
+                        color: activeFilter === FILTER_TYPES.ALL ? "#FFF" : T.textValue,
+                      }}
+                    >
+                      All NCRs
+                    </Text>
+                    <View
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: activeFilter === FILTER_TYPES.ALL
+                          ? "rgba(255,255,255,0.2)"
+                          : "#F1F5F9",
+                      }}
+                    >
+                      <Text
+                        className="text-[11px] font-bold"
+                        style={{
+                          color: activeFilter === FILTER_TYPES.ALL ? "#FFF" : T.textMuted,
+                        }}
+                      >
+                        {stats.total}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => setActiveFilter(FILTER_TYPES.REGULAR)}
                     className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
                     style={{
                       borderColor:
-                        activeFilter === FILTER_TYPES.REGULAR
-                          ? T.accent
-                          : T.border,
+                        activeFilter === FILTER_TYPES.REGULAR ? T.accent : T.border,
                       backgroundColor:
-                        activeFilter === FILTER_TYPES.REGULAR
-                          ? T.accent
-                          : T.card,
+                        activeFilter === FILTER_TYPES.REGULAR ? T.accent : T.card,
                     }}
                   >
-                    {({ pressed }) => (
-                      <>
-                        <Feather
-                          name="file-text"
-                          size={14}
-                          color={
-                            pressed
-                              ? "#FFF"
-                              : activeFilter === FILTER_TYPES.REGULAR
-                                ? "#FFF"
-                                : T.textValue
-                          }
-                        />
-                        <Text
-                          className="text-sm font-semibold"
-                          style={{
-                            color:
-                              activeFilter === FILTER_TYPES.REGULAR
-                                ? "#FFF"
-                                : T.textValue,
-                          }}
-                        >
-                          Regular NCRs
-                        </Text>
-                        <View
-                          className="px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor:
-                              activeFilter === FILTER_TYPES.REGULAR
-                                ? "rgba(255,255,255,0.2)"
-                                : T.accentLight,
-                          }}
-                        >
-                          <Text
-                            className="text-[11px] font-bold"
-                            style={{
-                              color:
-                                activeFilter === FILTER_TYPES.REGULAR
-                                  ? "#FFF"
-                                  : "#1E40AF",
-                            }}
-                          >
-                            {stats.regularCount}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-                  </Pressable>
+                    <Feather
+                      name="file-text"
+                      size={14}
+                      color={activeFilter === FILTER_TYPES.REGULAR ? "#FFF" : T.textValue}
+                    />
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{
+                        color: activeFilter === FILTER_TYPES.REGULAR ? "#FFF" : T.textValue,
+                      }}
+                    >
+                      Regular NCRs
+                    </Text>
+                    <View
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: activeFilter === FILTER_TYPES.REGULAR
+                          ? "rgba(255,255,255,0.2)"
+                          : T.accentLight,
+                      }}
+                    >
+                      <Text
+                        className="text-[11px] font-bold"
+                        style={{
+                          color: activeFilter === FILTER_TYPES.REGULAR ? "#FFF" : "#1E40AF",
+                        }}
+                      >
+                        {stats.regularCount}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={() => setActiveFilter(FILTER_TYPES.EIGHT_D)}
                     className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
                     style={{
                       borderColor:
-                        activeFilter === FILTER_TYPES.EIGHT_D
-                          ? T.purple
-                          : T.border,
+                        activeFilter === FILTER_TYPES.EIGHT_D ? T.purple : T.border,
                       backgroundColor:
-                        activeFilter === FILTER_TYPES.EIGHT_D
-                          ? T.purple
-                          : T.card,
+                        activeFilter === FILTER_TYPES.EIGHT_D ? T.purple : T.card,
                     }}
                   >
-                    {({ pressed }) => (
-                      <>
-                        <Feather
-                          name="alert-triangle"
-                          size={14}
-                          color={
-                            pressed
-                              ? "#FFF"
-                              : activeFilter === FILTER_TYPES.EIGHT_D
-                                ? "#FFF"
-                                : T.textValue
-                          }
-                        />
-                        <Text
-                          className="text-sm font-semibold"
-                          style={{
-                            color:
-                              activeFilter === FILTER_TYPES.EIGHT_D
-                                ? "#FFF"
-                                : T.textValue,
-                          }}
-                        >
-                          8D Process
-                        </Text>
-                        <View
-                          className="px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor:
-                              activeFilter === FILTER_TYPES.EIGHT_D
-                                ? "rgba(255,255,255,0.2)"
-                                : T.purpleLight,
-                          }}
-                        >
-                          <Text
-                            className="text-[11px] font-bold"
-                            style={{
-                              color:
-                                activeFilter === FILTER_TYPES.EIGHT_D
-                                  ? "#FFF"
-                                  : "#5B21B6",
-                            }}
-                          >
-                            {stats.eightDCount}
-                          </Text>
-                        </View>
-                      </>
-                    )}
-                  </Pressable>
+                    <Feather
+                      name="alert-triangle"
+                      size={14}
+                      color={activeFilter === FILTER_TYPES.EIGHT_D ? "#FFF" : T.textValue}
+                    />
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{
+                        color: activeFilter === FILTER_TYPES.EIGHT_D ? "#FFF" : T.textValue,
+                      }}
+                    >
+                      8D Process
+                    </Text>
+                    <View
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: activeFilter === FILTER_TYPES.EIGHT_D
+                          ? "rgba(255,255,255,0.2)"
+                          : T.purpleLight,
+                      }}
+                    >
+                      <Text
+                        className="text-[11px] font-bold"
+                        style={{
+                          color: activeFilter === FILTER_TYPES.EIGHT_D ? "#FFF" : "#5B21B6",
+                        }}
+                      >
+                        {stats.eightDCount}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
               {activeFilter !== FILTER_TYPES.ALL && (
@@ -1023,7 +940,6 @@ const NCRDashboard = ({
                         key={ncr.id}
                         className="flex-row border-b border-[#E2E8F0] px-6 py-4 items-center"
                       >
-                        {/* NCR No. */}
                         <View className="w-[150px] px-2">
                           <Text
                             className="text-sm font-semibold text-[#1F2937]"
@@ -1033,7 +949,6 @@ const NCRDashboard = ({
                           </Text>
                         </View>
 
-                        {/* Department */}
                         <View className="w-[165px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1043,7 +958,6 @@ const NCRDashboard = ({
                           </Text>
                         </View>
 
-                        {/* Auditor */}
                         <View className="w-[190px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1053,7 +967,6 @@ const NCRDashboard = ({
                           </Text>
                         </View>
 
-                        {/* Auditee */}
                         <View className="w-[190px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1063,7 +976,6 @@ const NCRDashboard = ({
                           </Text>
                         </View>
 
-                        {/* Status */}
                         <View className="w-[190px] px-2">
                           <View className="flex-row flex-wrap items-center gap-1.5">
                             <StatusBadge status={ncr.status} />
@@ -1086,7 +998,6 @@ const NCRDashboard = ({
                           </View>
                         </View>
 
-                        {/* Audit Score */}
                         <View className="w-[190px] px-2">
                           {ncr.auditScore != null ? (
                             <Text
@@ -1103,93 +1014,47 @@ const NCRDashboard = ({
                           )}
                         </View>
 
-                        {/* Action */}
                         <View className="w-[220px] px-2 flex-row items-center gap-2">
-                          <Pressable
+                          <TouchableOpacity
                             onPress={() => setViewingNcrId(ncr.id)}
                             className="w-8 h-8 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] items-center justify-center"
                           >
-                            {({ pressed }) => (
-                              <Feather
-                                name="eye"
-                                size={14}
-                                color={pressed ? "#FFF" : T.accent}
-                              />
-                            )}
-                          </Pressable>
-                          <Pressable
+                            <Feather name="eye" size={14} color={T.accent} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             onPress={() => openNCRForum(ncr)}
                             className="h-8 px-3 rounded-md border border-[#DDD6FE] bg-[#F5F3FF] flex-row items-center gap-1.5"
                           >
-                            {({ pressed }) => (
-                              <>
-                                <Feather
-                                  name="message-square"
-                                  size={12}
-                                  color={pressed ? "#FFF" : "#5B21B6"}
-                                />
-                                <Text
-                                  className="text-xs font-semibold"
-                                  style={{
-                                    color: pressed ? "#FFF" : "#5B21B6",
-                                  }}
-                                >
-                                  Forum
-                                </Text>
-                              </>
-                            )}
-                          </Pressable>
+                            <Feather name="message-square" size={12} color="#5B21B6" />
+                            <Text className="text-xs font-semibold" style={{ color: "#5B21B6" }}>
+                              Forum
+                            </Text>
+                          </TouchableOpacity>
                           {is8DRelated(ncr) && (
-                            <Pressable
+                            <TouchableOpacity
                               onPress={() => open8DForum(ncr)}
                               className="h-8 px-3 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] flex-row items-center gap-1.5"
                             >
-                              {({ pressed }) => (
-                                <>
-                                  <Feather
-                                    name="message-square"
-                                    size={12}
-                                    color={pressed ? "#FFF" : "#1E40AF"}
-                                  />
-                                  <Text
-                                    className="text-xs font-semibold"
-                                    style={{
-                                      color: pressed ? "#FFF" : "#1E40AF",
-                                    }}
-                                  >
-                                    8D Forum
-                                  </Text>
-                                </>
-                              )}
-                            </Pressable>
+                              <Feather name="message-square" size={12} color="#1E40AF" />
+                              <Text className="text-xs font-semibold" style={{ color: "#1E40AF" }}>
+                                8D Forum
+                              </Text>
+                            </TouchableOpacity>
                           )}
                           {isAuditManager &&
                             ncr.status === "APPROVED" &&
                             ncr.auditScore < 70 &&
                             !ncr.requires8D &&
                             !is8DRelated(ncr) && (
-                              <Pressable
+                              <TouchableOpacity
                                 onPress={() => handleSendTo8D(ncr)}
                                 className="h-8 px-3 rounded-md border border-[#FECACA] bg-[#FEF2F2] flex-row items-center gap-1.5"
                               >
-                                {({ pressed }) => (
-                                  <>
-                                    <Feather
-                                      name="send"
-                                      size={12}
-                                      color={pressed ? "#FFF" : "#991B1B"}
-                                    />
-                                    <Text
-                                      className="text-xs font-semibold"
-                                      style={{
-                                        color: pressed ? "#FFF" : "#991B1B",
-                                      }}
-                                    >
-                                      Send to 8D
-                                    </Text>
-                                  </>
-                                )}
-                              </Pressable>
+                                <Feather name="send" size={12} color="#991B1B" />
+                                <Text className="text-xs font-semibold" style={{ color: "#991B1B" }}>
+                                  Send to 8D
+                                </Text>
+                              </TouchableOpacity>
                             )}
                         </View>
                       </View>
@@ -1213,16 +1078,16 @@ const NCRDashboard = ({
 
         {/* Send to 8D Confirmation Modal */}
         <Modal visible={showSendTo8DModal} transparent animationType="fade">
-          <Pressable
+          <TouchableOpacity
             className="items-center justify-center flex-1 p-5 bg-black/30"
+            activeOpacity={1}
             onPress={() => {
               setShowSendTo8DModal(false);
               setSelectedNCR(null);
             }}
           >
-            <Pressable
+            <View
               className="bg-[#FFFFFF] rounded-2xl w-full max-w-[480px] shadow-lg border border-[#E2E8F0] overflow-hidden"
-              onPress={(e) => e.stopPropagation()}
             >
               <View className="p-6 border-b border-[#E2E8F0] flex-row items-center gap-4">
                 <View className="w-11 h-11 rounded-xl bg-[#F5F3FF] border border-[#DDD6FE] items-center justify-center">
@@ -1273,7 +1138,7 @@ const NCRDashboard = ({
               </View>
 
               <View className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex-row justify-end gap-3">
-                <Pressable
+                <TouchableOpacity
                   onPress={() => {
                     setShowSendTo8DModal(false);
                     setSelectedNCR(null);
@@ -1283,8 +1148,8 @@ const NCRDashboard = ({
                   <Text className="text-sm font-semibold text-[#1F2937]">
                     Cancel
                   </Text>
-                </Pressable>
-                <Pressable
+                </TouchableOpacity>
+                <TouchableOpacity
                   onPress={confirmSendTo8D}
                   disabled={processingAction}
                   className="h-10 px-5 rounded-lg bg-[#8B5CF6] flex-row items-center gap-2 justify-center"
@@ -1295,13 +1160,13 @@ const NCRDashboard = ({
                   <Text className="text-sm font-semibold text-[#FFFFFF]">
                     Send to 8D
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
-            </Pressable>
-          </Pressable>
+            </View>
+          </TouchableOpacity>
         </Modal>
 
-        {/* NCR Forum Modal - FIXED */}
+        {/* NCR Forum Modal */}
         <Modal visible={showForumModal} transparent animationType="slide">
           {selectedNCRForForum && (
             <AuditCheckSheetNCRForumModal
@@ -1329,11 +1194,12 @@ const NCRDashboard = ({
           )}
         </Modal>
 
-        {/* 8D Forum Drawer - FIXED */}
+        {/* 8D Forum Drawer */}
         <Modal visible={show8DForumDrawer} transparent animationType="slide">
           <View className="flex-1 bg-black/30">
-            <Pressable
+            <TouchableOpacity
               className="flex-1"
+              activeOpacity={1}
               onPress={() => {
                 setShow8DForumDrawer(false);
                 setSelected8DNCR(null);
@@ -1345,8 +1211,8 @@ const NCRDashboard = ({
                 <View className="flex-1">
                   {loadingTeamMembers ? (
                     <View className="items-center justify-center flex-1">
-                      <Spinner size={24} color={T.accent} />
-                      <Text className="ml-3 text-sm text-[#6B7280]">
+                      <ActivityIndicator size="large" color={T.accent} />
+                      <Text className="mt-3 text-sm text-[#6B7280]">
                         Loading team members...
                       </Text>
                     </View>
@@ -1360,7 +1226,11 @@ const NCRDashboard = ({
                       currentUser={user}
                       allUsers={allUsersList}
                       memberEmails={eightDTeamMembers}
-                      onBack={() => setShow8DForumDrawer(false)}
+                      onBack={() => {
+                        setShow8DForumDrawer(false);
+                        setSelected8DNCR(null);
+                        setEightDTeamMembers([]);
+                      }}
                     />
                   )}
                 </View>
