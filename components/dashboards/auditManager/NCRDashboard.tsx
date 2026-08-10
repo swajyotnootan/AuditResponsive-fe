@@ -1,5 +1,4 @@
 import { ncrService } from "@/services/ncrService";
-// ✅ CORRECT: Import the icon family, NOT individual icon names
 import { Feather } from "@expo/vector-icons";
 
 import ForumThreadView from "@/components/forum/ForumThreadView";
@@ -21,7 +20,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import Form7DetailView from "../auditor/view/Form7DetailView";
-
 
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
@@ -117,7 +115,6 @@ const Spinner = ({
   color?: string;
 }) => <ActivityIndicator size={size as any} color={color} />;
 
-// ✅ UPDATED: Accepts iconName as a string and uses the Feather component
 const StatCard = ({
   title,
   value,
@@ -265,7 +262,6 @@ const NCRDashboard = ({
   onViewNcr?: (id: string) => void;
 }) => {
   const [viewingNcrId, setViewingNcrId] = useState<string | null>(null);
-  // ... rest of your code
   const { user } = useAuth();
   const { addToast } = useToast();
 
@@ -330,6 +326,7 @@ const NCRDashboard = ({
     fetchAllUsers();
   }, []);
 
+  // ✅ FIXED: openNCRForum with proper group ID format
   const openNCRForum = (ncr: any) => {
     const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
     const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
@@ -338,7 +335,7 @@ const NCRDashboard = ({
     );
 
     setSelectedNCRForForum({
-      id: ncr.id,
+      id: `NCR-${ncr.id}`,
       ncrNumber: ncr.ncrNumber,
       department: ncr.department,
       severity: ncr.severity,
@@ -357,6 +354,7 @@ const NCRDashboard = ({
     setShowForumModal(true);
   };
 
+  // ✅ FIXED: open8DForum with proper member extraction
   const open8DForum = async (ncr: any) => {
     setSelected8DNCR(ncr);
     setEightDTeamMembers([]);
@@ -365,22 +363,90 @@ const NCRDashboard = ({
 
     try {
       const eightDEventId = `8D-${ncr.ncrNumber}`;
-      const response = await fetch(
-        `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
-      );
-      if (!response.ok) throw new Error("Network response was not ok");
+      const membersSet = new Set<string>();
 
-      const responseData = await response.json();
-      if (responseData?.success && responseData.data) {
-        const d0Data = responseData.data.content?.d0?.[0] || {};
-        const emails = Array.isArray(d0Data.additionalEmails)
-          ? d0Data.additionalEmails
-          : [];
-        setEightDTeamMembers(emails);
+      // 1. Fetch existing 8D team members
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
+          { credentials: "include" }
+        );
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          if (responseData?.success && responseData.data) {
+            const d0Data = responseData.data.content?.d0?.[0] || {};
+            const emails = Array.isArray(d0Data.additionalEmails)
+              ? d0Data.additionalEmails
+              : [];
+            emails.forEach((email: string) => membersSet.add(email));
+          }
+        }
+      } catch (err) {
+        console.log('Could not fetch existing 8D members:', err);
       }
-    } catch (err) {
-      console.error("Failed to fetch 8D team members:", err);
-      setEightDTeamMembers([]);
+
+      // 2. Add Initiator (current user)
+      if (user?.email) membersSet.add(user.email);
+
+      // 3. Add Audit Manager
+      const auditManager = allUsersList.find(
+        (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
+      );
+      if (auditManager?.email) membersSet.add(auditManager.email);
+
+      // 4. Add HOD
+      if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
+
+      // 5. Add Auditor
+      if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
+      if (ncr.auditorName?.includes('@')) {
+        membersSet.add(ncr.auditorName);
+      }
+
+      // 6. Add Auditee
+      if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
+      if (ncr.auditeeName?.includes('@')) {
+        membersSet.add(ncr.auditeeName);
+      }
+
+      // 7. Add 8D Team members
+      const eightDTeam = allUsersList.filter(
+        (u: any) => 
+          u.role === "8D_TEAM" || 
+          u.role === "EIGHT_D_TEAM" ||
+          u.role === "INITIATOR"
+      );
+      eightDTeam.forEach((member: any) => {
+        if (member.email) membersSet.add(member.email);
+      });
+
+      // 8. Add NCR related team members
+      if (ncr.auditeeId) {
+        const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
+        if (auditee?.email) membersSet.add(auditee.email);
+      }
+      if (ncr.auditorId) {
+        const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
+        if (auditor?.email) membersSet.add(auditor.email);
+      }
+
+      const finalMembers = [...membersSet];
+      console.log('✅ [8D FORUM] Members:', finalMembers);
+      setEightDTeamMembers(finalMembers);
+
+    } catch (error) {
+      console.error('❌ Failed to fetch 8D team members:', error);
+      
+      // Fallback: Add essential members
+      const fallbackMembers = [
+        user?.email,
+        ncr.hodEmail,
+        ncr.auditorEmail,
+        ncr.auditeeEmail,
+        allUsersList.find((u: any) => u.role === "AUDIT_MANAGER")?.email,
+      ].filter(Boolean);
+      setEightDTeamMembers([...new Set(fallbackMembers)]);
     } finally {
       setLoadingTeamMembers(false);
     }
@@ -485,7 +551,7 @@ const NCRDashboard = ({
     return (
       <Form7DetailView
         initialParams={{ id: viewingNcrId }}
-        onClose={() => setViewingNcrId(null)} // Clears state to return to dashboard
+        onClose={() => setViewingNcrId(null)}
       />
     );
   }
@@ -499,9 +565,9 @@ const NCRDashboard = ({
       >
         <ScrollView
           className="flex-1"
-          style={{ flex: 1 }} // Explicit flex for web
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={true}
-          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }} // Forces content to fill space
+          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         >
           <View className="p-6 max-w-[1400px] self-center w-full">
             {/* Header */}
@@ -509,7 +575,6 @@ const NCRDashboard = ({
               <View className="flex-row flex-wrap items-center justify-between gap-4">
                 <View className="flex-row items-center gap-4">
                   <Pressable
-                    // ✅ NEW: Safely calls onBack if provided, does nothing otherwise
                     onPress={() => onBack?.()}
                     className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
                   >
@@ -573,7 +638,7 @@ const NCRDashboard = ({
               className="mb-6"
               style={{
                 overflowX: "auto",
-                overflowY: "hidden", // Prevents it from hijacking vertical scroll on web
+                overflowY: "hidden",
               }}
             >
               <View className="flex-row gap-4 px-1">
@@ -1041,7 +1106,6 @@ const NCRDashboard = ({
                         {/* Action */}
                         <View className="w-[220px] px-2 flex-row items-center gap-2">
                           <Pressable
-                            // ✅ UPDATED: Set the state to trigger the detail view
                             onPress={() => setViewingNcrId(ncr.id)}
                             className="w-8 h-8 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] items-center justify-center"
                           >
@@ -1237,36 +1301,35 @@ const NCRDashboard = ({
           </Pressable>
         </Modal>
 
-        {/* NCR Forum Modal */}
-       {/* NCR Forum Modal */}
-<Modal visible={showForumModal} transparent animationType="slide">
-  {selectedNCRForForum && (
-    <AuditCheckSheetNCRForumModal
-      auditId={selectedNCRForForum.id}
-      auditNumber={selectedNCRForForum.ncrNumber}
-      auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
-      auditStatus={selectedNCRForForum.status}
-      auditType="NCR Resolution"
-      department={selectedNCRForForum.department}
-      auditorId={selectedNCRForForum.auditorId}
-      auditorName={selectedNCRForForum.auditorName}
-      auditeeId={selectedNCRForForum.auditeeId}
-      auditeeName={selectedNCRForForum.auditeeName}
-      // ✅ ADD THESE - required by the modal
-      hodEmail={null}
-      hodName={null}
-      memberEmails={selectedNCRForForum.memberEmails || []}
-      isOpen={showForumModal}
-      onClose={() => {
-        setShowForumModal(false);
-        setSelectedNCRForForum(null);
-      }}
-      currentUser={user}
-      allUsers={allUsersList}
-    />
-  )}
-</Modal>
-        {/* 8D Forum Drawer */}
+        {/* NCR Forum Modal - FIXED */}
+        <Modal visible={showForumModal} transparent animationType="slide">
+          {selectedNCRForForum && (
+            <AuditCheckSheetNCRForumModal
+              auditId={`NCR-${selectedNCRForForum.id}`}
+              auditNumber={selectedNCRForForum.ncrNumber}
+              auditTitle={`NCR #${selectedNCRForForum.ncrNumber} Discussion`}
+              auditStatus={selectedNCRForForum.status}
+              auditType="NCR Resolution"
+              department={selectedNCRForForum.department}
+              auditorId={selectedNCRForForum.auditorId}
+              auditorName={selectedNCRForForum.auditorName}
+              auditeeId={selectedNCRForForum.auditeeId}
+              auditeeName={selectedNCRForForum.auditeeName}
+              hodEmail={null}
+              hodName={null}
+              memberEmails={selectedNCRForForum.memberEmails || []}
+              isOpen={showForumModal}
+              onClose={() => {
+                setShowForumModal(false);
+                setSelectedNCRForForum(null);
+              }}
+              currentUser={user}
+              allUsers={allUsersList}
+            />
+          )}
+        </Modal>
+
+        {/* 8D Forum Drawer - FIXED */}
         <Modal visible={show8DForumDrawer} transparent animationType="slide">
           <View className="flex-1 bg-black/30">
             <Pressable
