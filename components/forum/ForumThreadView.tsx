@@ -1,5 +1,5 @@
 ﻿// components/forum/ForumThreadView.tsx
-// COMPLETE FIXED VERSION - Includes WhatsApp-style Date Headers, Email Modal, and Cross-Platform Sound
+// COMPLETE FIXED VERSION - WhatsApp-style Date Headers, Cross-Platform Sound, Reactions, Edit & Delete
 
 import EmailNotificationModal from '@/components/comform/EmailNotificationModal';
 import { useAuth } from "@/components/context/AuthContext";
@@ -44,7 +44,6 @@ import {
   View,
 } from "react-native";
 
-// Import components
 import { useSFU } from "../../hooks/useSFU";
 import {
   createForumPost,
@@ -72,37 +71,24 @@ interface ForumThreadViewProps {
 // ============================================================================
 // SOUND EFFECTS - MP3 SUPPORT (WEB & MOBILE)
 // ============================================================================
-// ============================================================================
-// SOUND EFFECTS - MP3 SUPPORT (WEB & MOBILE)
-// ============================================================================
-let webSendAudio: HTMLAudioElement | null = null;
-let webReceiveAudio: HTMLAudioElement | null = null;
-
 const playNotificationSound = async (type: "send" | "receive") => {
   try {
-    // ✅ WEB: use the browser's native Audio (window.Audio), NOT expo-av
     if (Platform.OS === "web") {
       const volume = type === "send" ? 0.5 : 0.3;
-
-      // ✅ 'window.Audio' guarantees we use the HTML5 constructor (no collision)
       const sound = new window.Audio("/sounds/message-send.mp3");
       sound.preload = "auto";
       sound.volume = volume;
       sound.currentTime = 0;
-
       sound.play().catch((err) => {
         console.log("🔇 Autoplay blocked (needs user interaction):", err?.message);
       });
       return;
     }
 
-    // ✅ MOBILE: use expo-av via the renamed 'ExpoAudio'
     const { sound } = await ExpoAudio.Sound.createAsync(
       require("../../assets/sounds/message-send.mp3"),
       { shouldPlay: true, volume: type === "send" ? 0.5 : 0.3 }
     );
-
-    // Unload after it finishes so we don't leak memory
     sound.setOnPlaybackStatusUpdate((status: any) => {
       if (status.isLoaded && status.didJustFinish) {
         sound.unloadAsync();
@@ -135,6 +121,9 @@ export default function ForumThreadView({
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isChatConnected, setIsChatConnected] = useState(false);
+  
+  // ✅ NEW: Edit Mode State
+  const [editingPost, setEditingPost] = useState<any>(null);
 
   // ---- Call State ----
   const [callState, setCallState] = useState<
@@ -143,9 +132,7 @@ export default function ForumThreadView({
   const [callerName, setCallerName] = useState("");
   const [callerId, setCallerId] = useState("");
   const [incomingCall, setIncomingCall] = useState<any>(null);
-  const [currentCallType, setCurrentCallType] = useState<"video" | "audio">(
-    "video",
-  );
+  const [currentCallType, setCurrentCallType] = useState<"video" | "audio">("video");
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
   const [individualCallState, setIndividualCallState] = useState<{
     isIncoming: boolean;
@@ -201,7 +188,9 @@ export default function ForumThreadView({
   const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9));
   const initializationRef = useRef(false);
   const isCallEventSetRef = useRef(false);
-    const lastKnownPostIdsRef = useRef<Set<string>>(new Set());
+  
+  // ✅ FIX: Prevent infinite sound loop on polling
+  const lastKnownPostIdsRef = useRef<Set<string>>(new Set());
 
   // ---- SFU (WebRTC) ----
   const isAuditForum = useMemo(() => {
@@ -410,8 +399,7 @@ export default function ForumThreadView({
     setGroupMembers(members);
   }, [memberEmails, allUsers]);
 
-  // ========== DATA FETCHING ==========
-    // ========== DATA FETCHING ==========
+  // ========== DATA FETCHING (FIXED SOUND LOOP) ==========
   const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
@@ -480,7 +468,8 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers, currentUserEmail]); // ✅ CRITICAL: Removed `posts` from dependencies!
+  }, [groupId, allUsers, currentUserEmail]); 
+
   // ========== POLLING ==========
   const startPolling = useCallback(() => {
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -499,7 +488,7 @@ export default function ForumThreadView({
     }
   }, []);
 
-  // ========== MESSAGE HANDLING WITH DYNAMIC SOUND ==========
+  // ========== MESSAGE HANDLING ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
@@ -548,6 +537,84 @@ export default function ForumThreadView({
       if ((httpErr as any)?.response?.status >= 500) {
         Alert.alert("Error", "Failed to send message. Please try again.");
       }
+    }
+  };
+
+  // ✅ REACTIONS
+  const handleReactToPost = async (postId: string, emoji: string) => {
+    if (!mountedRef.current || !groupId) return;
+    const userEmail = currentUser?.email || username || "";
+    
+    const tempId = `temp-react-${Date.now()}-${Math.random()}`;
+    const optimisticReaction = {
+      id: tempId,
+      content: emoji,
+      messageType: "REACTION",
+      parentId: postId, 
+      createdBy: userEmail,
+      createdByName: displayName,
+      createdAt: new Date().toISOString(),
+    };
+    
+    setPosts(prev => [...prev, optimisticReaction]);
+
+    try {
+      await createForumPost(String(groupId), {
+        content: emoji,
+        createdBy: userEmail,
+        messageType: "REACTION",
+        parentId: postId, 
+        attachments: [],
+      });
+      playNotificationSound('send');
+    } catch (err) {
+      console.error("Failed to send reaction", err);
+      setPosts(prev => prev.filter(p => p.id !== tempId));
+    }
+  };
+
+  const getReactionsForThread = useCallback((threadId: string) => {
+    if (!threadId) return [];
+    return posts.filter(p => 
+      p.messageType === 'REACTION' && 
+      (p.parentId === threadId || p.replyTo === threadId)
+    );
+  }, [posts]);
+
+  // ✅ EDIT & DELETE
+  const handleUpdatePost = async (postData: any) => {
+    try {
+      setPosts(prev => prev.map(p => p.id === postData.id ? { ...p, content: postData.content, isEdited: true } : p));
+      
+      await fetch(`${API_BASE_URL}/api/forum/groups/${groupId}/posts/${postData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content: postData.content })
+      });
+    } catch (err) {
+      console.error("Update failed", err);
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      setPosts(prev => prev.filter(p => p.id !== postId));
+      
+      await fetch(`${API_BASE_URL}/api/forum/groups/${groupId}/posts/${postId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+    } catch (err) {
+      console.error("Delete failed", err);
+    }
+  };
+
+  const handleComposerSubmit = (data: any) => {
+    if (data.isEdit) {
+      handleUpdatePost(data);
+    } else {
+      handleNewPost(data);
     }
   };
 
@@ -1156,7 +1223,7 @@ export default function ForumThreadView({
           ) : (
             <FlatList
               ref={flatListRef}
-              data={displayPosts}
+              data={displayPosts.filter(p => p.messageType !== 'REACTION')} // Filter out reactions from main list
               keyExtractor={(item, index) => item?.id || String(index)}
               renderItem={({ item, index }) => {
                 let dateLabel = null;
@@ -1187,6 +1254,10 @@ export default function ForumThreadView({
                       currentUser={currentUser}
                       currentUsername={currentUserEmail}
                       allUsers={allUsers}
+                      reactions={getReactionsForThread(item.id)}
+                      onReact={handleReactToPost}
+                      onEdit={setEditingPost}
+                      onDelete={handleDeletePost}
                       onRetry={handleRetry}
                     />
                   </>
@@ -1214,10 +1285,12 @@ export default function ForumThreadView({
             <View className="border-t border-gray-200 bg-white">
               <ThreadComposer
                 groupId={groupId}
-                onThreadCreated={handleNewPost}
+                onThreadCreated={handleComposerSubmit}
                 onInputStart={handleTypingStart}
                 onInputEnd={handleTypingEnd}
                 username={currentUserEmail}
+                editingPost={editingPost}
+                onCancelEdit={() => setEditingPost(null)}
               />
             </View>
           </KeyboardAvoidingView>

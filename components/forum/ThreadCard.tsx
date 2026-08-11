@@ -1,22 +1,26 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Profile Modal API Added
+// FINAL VERSION - Profile Modal, Reactions, Edit & Delete Added
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
 import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
-  Building2, // ✅ ADDED
+  Building2,
   Calendar,
   Check,
   Download,
+  Edit, // ✅ ADDED
   Eye,
   FileText,
-  Mail, // ✅ ADDED
+  Mail,
   MapPin,
+  MoreVertical, // ✅ ADDED
   Pause,
   Play,
   RefreshCw,
+  Smile, // ✅ ADDED
+  Trash2, // ✅ ADDED
   User,
   X,
 } from "lucide-react-native";
@@ -30,7 +34,7 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView, // ✅ ADDED
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -64,6 +68,7 @@ interface Thread {
   messageType?: string;
   failed?: boolean;
   attachments?: Attachment[];
+  isEdited?: boolean; // ✅ ADDED
 }
 
 interface ThreadCardProps {
@@ -74,11 +79,14 @@ interface ThreadCardProps {
     email?: string;
     profileImage?: string;
   };
-    allUsers?: any[]; // ✅ ADD THIS
+  allUsers?: any[];
   onRetry?: (thread: Thread) => void;
+  reactions?: any[]; // ✅ ADDED
+  onReact?: (threadId: string, emoji: string) => void; // ✅ ADDED
+  onEdit?: (thread: Thread) => void; // ✅ ADDED
+  onDelete?: (threadId: string) => void; // ✅ ADDED
 }
 
-// ✅ ADDED: Profile Data Type
 interface UserProfile {
   id?: string | number;
   name?: string;
@@ -93,7 +101,6 @@ interface UserProfile {
 // Helpers
 // =====================================================
 
-// ✅ Fetches profile photo exactly like Navbar.tsx
 const getProfileImageUrl = (userId?: string | number | null, existingImage?: string) => {
   if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) {
     return existingImage;
@@ -104,39 +111,20 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
   return null;
 };
 
-// ✅ FIXED: Correct Date & Time formatter (Fixes Timezone & Adds Date)
 const formatDateAndTime = (dateString?: string) => {
   try {
     if (!dateString) return "";
-
     let dateToParse = dateString;
-    
-    // Appends 'Z' if missing to force UTC parsing
     if (!dateString.includes('Z') && !dateString.match(/([+-]\d{2}:\d{2})$/)) {
       dateToParse = dateString + 'Z';
     }
-
     const date = new Date(dateToParse);
-    
     if (isNaN(date.getTime())) {
       const fallbackDate = new Date(dateString);
       if (isNaN(fallbackDate.getTime())) return "";
-      return fallbackDate.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
+      return fallbackDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
     }
-
-    return date.toLocaleString('en-US', {
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true, 
-    });
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   } catch (error) {
     return "";
   }
@@ -158,13 +146,7 @@ const base64ToUri = (base64: string, mime: string) => {
 // =====================================================
 // WEB VIDEO PLAYER
 // =====================================================
-const WebVideoPlayer = ({
-  url,
-  onClose,
-}: {
-  url: string;
-  onClose: () => void;
-}) => {
+const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -202,33 +184,17 @@ const WebVideoPlayer = ({
   return (
     <View style={styles.videoModalContainer}>
       <View style={styles.videoModalHeader}>
-        <TouchableOpacity onPress={onClose} style={styles.videoModalClose}>
-          <X size={28} color="white" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={onClose} style={styles.videoModalClose}><X size={28} color="white" /></TouchableOpacity>
         <Text style={styles.videoModalTitle}>Video</Text>
         <View style={{ width: 40 }} />
       </View>
       <View style={styles.videoPlayerContainer}>
-        {isLoading && (
-          <View style={styles.videoLoadingOverlay}>
-            <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.videoLoadingText}>Loading video...</Text>
-          </View>
-        )}
-        {error && (
-          <View style={styles.videoErrorOverlay}>
-            <Text style={styles.videoErrorText}>⚠️ {error}</Text>
-            <TouchableOpacity onPress={() => { setError(null); setIsLoading(true); if (videoRef.current) videoRef.current.load(); }} style={styles.videoRetryBtn}>
-              <Text style={styles.videoRetryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {isLoading && (<View style={styles.videoLoadingOverlay}><ActivityIndicator size="large" color="#fff" /><Text style={styles.videoLoadingText}>Loading video...</Text></View>)}
+        {error && (<View style={styles.videoErrorOverlay}><Text style={styles.videoErrorText}>⚠️ {error}</Text><TouchableOpacity onPress={() => { setError(null); setIsLoading(true); if (videoRef.current) videoRef.current.load(); }} style={styles.videoRetryBtn}><Text style={styles.videoRetryText}>Retry</Text></TouchableOpacity></View>)}
         <video ref={videoRef} src={url} controls playsInline style={{ width: "100%", height: "100%", backgroundColor: "#000", objectFit: "contain", display: error ? "none" : "block" }} />
       </View>
       <View style={styles.videoModalControls}>
-        <TouchableOpacity onPress={togglePlay} style={styles.videoModalPlayBtn}>
-          {isPlaying ? <Pause size={24} color="white" /> : <Play size={24} color="white" />}
-        </TouchableOpacity>
+        <TouchableOpacity onPress={togglePlay} style={styles.videoModalPlayBtn}>{isPlaying ? <Pause size={24} color="white" /> : <Play size={24} color="white" />}</TouchableOpacity>
         <Text style={styles.videoModalStatus}>{isPlaying ? "Playing" : "Paused"}</Text>
       </View>
     </View>
@@ -311,9 +277,7 @@ const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }
   return (
     <View style={styles.audioContainer}>
       <View style={styles.audioRow}>
-        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error}>
-          <Play size={20} color="#fff" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error}><Play size={20} color="#fff" /></TouchableOpacity>
         <View style={styles.audioInfo}>
           <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
           <Text style={styles.audioTime}>{isPlaying ? "Playing..." : "Tap to play"}</Text>
@@ -325,9 +289,6 @@ const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }
   );
 };
 
-// =====================================================
-// AUDIO PLAYER
-// =====================================================
 const AudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
   if (!uri) return ( <View style={styles.audioContainer}><Text style={styles.audioFileName}>{fileName || "Audio"}</Text><Text style={styles.audioError}>No audio data</Text></View> );
   if (Platform.OS === "web") return <WebAudioPlayer uri={uri} fileName={fileName} />;
@@ -342,9 +303,7 @@ const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () =
     <View style={{ flex: 1, backgroundColor: "white" }}>
       <View style={styles.pdfHeader}>
         <Text style={styles.pdfTitle}>{fileName || "PDF Document"}</Text>
-        <TouchableOpacity onPress={onClose} style={styles.pdfCloseButton}>
-          <X size={24} color="#000" />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={onClose} style={styles.pdfCloseButton}><X size={24} color="#000" /></TouchableOpacity>
       </View>
       {Platform.OS === "web" ? (
         <iframe src={url} style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }} title="PDF Viewer" />
@@ -363,7 +322,18 @@ const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () =
 // =====================================================
 // COMPONENT
 // =====================================================
-export default function ThreadCard({ thread, currentUsername, currentUser, allUsers, onRetry }: ThreadCardProps) {  if (!thread) return null;
+export default function ThreadCard({ 
+  thread, 
+  currentUsername, 
+  currentUser, 
+  allUsers, 
+  onRetry,
+  reactions = [],
+  onReact,
+  onEdit,
+  onDelete
+}: ThreadCardProps) {  
+  if (!thread) return null;
 
   const [imageModal, setImageModal] = useState({ open: false, url: "" });
   const [videoModal, setVideoModal] = useState({ open: false, url: "" });
@@ -375,14 +345,37 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [imageFetchAttempts, setImageFetchAttempts] = useState<Record<string, number>>({});
 
-  // ✅ ADDED: Profile Modal State
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [fetchedProfile, setFetchedProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
+  // ✅ NEW: Reactions & Menu State
+  const [showReactionBar, setShowReactionBar] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
+
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
+
+  // ✅ NEW: Group reactions by emoji
+  const groupedReactions = useMemo(() => {
+    const groups: Record<string, { count: number; users: string[]; hasReacted: boolean }> = {};
+    reactions?.forEach((r: any) => {
+      if (!groups[r.content]) groups[r.content] = { count: 0, users: [], hasReacted: false };
+      groups[r.content].count++;
+      groups[r.content].users.push(r.createdByName || r.createdBy);
+      if (r.createdBy === currentUsername || r.createdBy === currentUser?.email) {
+        groups[r.content].hasReacted = true;
+      }
+    });
+    return groups;
+  }, [reactions, currentUsername, currentUser]);
+
+  const handleReactionSelect = (emoji: string) => {
+    onReact?.(thread.id!, emoji);
+    setShowReactionBar(false);
+  };
 
   // Process attachments
   const processedAttachments = useMemo(() => {
@@ -395,8 +388,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
           isValidData = true;
           const mimeType = attachment.fileType || (attachment.attachmentType === "IMAGE" ? "image/jpeg" : attachment.attachmentType === "VIDEO" ? "video/mp4" : attachment.attachmentType === "AUDIO" ? "audio/mpeg" : "application/octet-stream");
           uri = base64ToUri(attachment.fileData, mimeType);
-        } else {
-          console.warn(`⚠️ Corrupted data for ${attachment.fileName}: ${attachment.fileData.length} bytes`);
         }
       }
       if (!uri && attachment.attachmentType === "IMAGE" && attachment.id && imageDataCache[attachment.id]) {
@@ -409,7 +400,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
     });
   }, [thread.attachments, imageDataCache]);
 
-  // Load image data from server
   const loadImageData = async (attachment: Attachment & { hasValidFileData?: boolean }) => {
     if (!attachment.id || attachment.attachmentType !== "IMAGE" || loadingImages[attachment.id] || imageDataCache[attachment.id] || imageErrors[attachment.id]) return;
     if (attachment.hasValidFileData) return;
@@ -419,7 +409,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
     setImageFetchAttempts(prev => ({ ...prev, [attachment.id!]: attempts + 1 }));
     try {
       const url = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      console.log("📥 Fetching image from server:", url);
       const response = await fetch(url);
       if (!response.ok) { setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); setLoadingImages(prev => ({ ...prev, [attachment.id!]: false })); return; }
       const contentType = response.headers.get("content-type") || "image/jpeg";
@@ -440,18 +429,12 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
   const closeImagePreview = () => setImageModal({ open: false, url: "" });
 
   const openVideoPreview = (url: string) => {
-    console.log("🎬 Opening video inside app:", url);
-    if (Platform.OS === "web") {
-      setVideoModal({ open: true, url });
-    } else {
-      Linking.openURL(url);
-    }
+    if (Platform.OS === "web") setVideoModal({ open: true, url });
+    else Linking.openURL(url);
   };
   const closeVideoPreview = () => setVideoModal({ open: false, url: "" });
 
-  const openPdfPreview = (url: string, fileName: string) => {
-    setPdfModal({ open: true, url, fileName });
-  };
+  const openPdfPreview = (url: string, fileName: string) => setPdfModal({ open: true, url, fileName });
   const closePdfPreview = () => setPdfModal({ open: false, url: "", fileName: "" });
 
   const downloadFile = async (attachment: Attachment) => {
@@ -471,42 +454,34 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
         return;
       }
 
-      // Mobile: Save to storage
       const localUri = documentDirectory + fileName;
       const downloadResumable = FileSystem.createDownloadResumable(url, localUri, {});
       const result = await downloadResumable.downloadAsync();
 
       if (result && result.uri) {
-        await Sharing.shareAsync(result.uri, { 
-          mimeType: attachment.fileType || 'application/octet-stream', 
-          dialogTitle: `Downloaded: ${fileName}` 
-        });
+        await Sharing.shareAsync(result.uri, { mimeType: attachment.fileType || 'application/octet-stream', dialogTitle: `Downloaded: ${fileName}` });
       } else {
         Alert.alert("Error", "Download failed.");
       }
     } catch (error) {
-      console.log("download error", error);
       Alert.alert("Download failed");
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ ADDED: Fetches Profile Data
-   const handleProfileClick = async (userIdentifier?: string | number | null) => {
+  const handleProfileClick = async (userIdentifier?: string | number | null) => {
     if (!userIdentifier) return;
     setProfileModalOpen(true);
     setProfileLoading(true);
     setProfileError(null);
     setFetchedProfile(null);
 
-    // ✅ 1. INSTANT LOCAL LOOKUP (Fixes the 404 error when ID is actually an email)
     if (allUsers && allUsers.length > 0) {
       const localUser = allUsers.find((u: any) => 
         String(u.id) === String(userIdentifier) || 
         String(u.email).toLowerCase() === String(userIdentifier).toLowerCase()
       );
-      
       if (localUser) {
         setFetchedProfile({
           id: localUser.id,
@@ -518,19 +493,16 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
           profilePhoto: localUser.profilePhoto || localUser.profileImage,
         });
         setProfileLoading(false);
-        return; // Stop here, no API call needed!
+        return;
       }
     }
 
-    // 2. Fallback to API if not found in allUsers
     try {
       let url = `${API_BASE_URL}/api/users/${userIdentifier}`;
       let response = await fetch(url);
-      
       if (!response.ok && typeof userIdentifier === 'string' && userIdentifier.includes('@')) {
         response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userIdentifier)}`);
       }
-      
       if (response.ok) {
         const data = await response.json();
         setFetchedProfile(data);
@@ -542,11 +514,7 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
         });
       }
     } catch (error) {
-      console.error("Profile fetch error:", error);
-      setFetchedProfile({
-        id: userIdentifier,
-        name: thread.createdByName || "User",
-      });
+      setFetchedProfile({ id: userIdentifier, name: thread.createdByName || "User" });
     } finally {
       setProfileLoading(false);
     }
@@ -555,7 +523,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
 
-    // 1. IMAGE
     if (attachment.attachmentType === "IMAGE") {
       let imageUri = attachment.uri || "";
       if (attachment.hasValidFileData && attachment.fileData) {
@@ -575,7 +542,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
       return (<View key={index} style={styles.attachmentContainer}><Pressable onPress={() => openImagePreview(imageUri)}><Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} /></Pressable><View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text><Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable></View></View>);
     }
 
-    // 2. VIDEO
     if (attachment.attachmentType === "VIDEO") {
       let videoUri = attachment.uri || "";
       if (attachment.fileData && attachment.fileData.length > 100) {
@@ -587,7 +553,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
       return (<View key={index} style={styles.attachmentContainer}><Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`); }}><View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View><Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>{attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}</Pressable></View>);
     }
 
-    // 3. AUDIO
     if (attachment.attachmentType === "AUDIO") {
       let audioUri = attachment.uri || "";
       if (attachment.fileData && attachment.fileData.length > 100) {
@@ -599,21 +564,18 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
       return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
     }
 
-    // 4. LOCATION
     if (attachment.attachmentType === "LOCATION") {
       let location: any = {};
-      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); location = JSON.parse(decoded); } } catch (error) { console.log("Location parse error", error); }
+      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); location = JSON.parse(decoded); } } catch (error) {}
       return (<Pressable key={index} style={styles.locationContainer} onPress={() => { const map = location.url || location.mapUrl; if (map) Linking.openURL(map); }}><MapPin size={20} color="red" /><Text style={{ fontSize: 14 }}>Open shared location</Text></Pressable>);
     }
 
-    // 5. EVENT
     if (attachment.attachmentType === "EVENT") {
       let event: any = {};
-      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); event = JSON.parse(decoded); } } catch (error) { console.log("Event parse error", error); }
+      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); event = JSON.parse(decoded); } } catch (error) {}
       return (<View key={index} style={styles.eventContainer}><Calendar size={22} color="purple" /><View><Text style={styles.eventTitle}>{event.title || "Event"}</Text><Text style={{ fontSize: 12, color: "#555" }}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text></View></View>);
     }
 
-    // 6. PDF
     const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     if (isPDF) {
@@ -626,7 +588,6 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
       return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#dc2626" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => { if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf"); else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf"); }} style={{ padding: 8 }}><Eye size={20} color="#2563eb" /></TouchableOpacity><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
     }
 
-    // 7. Generic File
     return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#555" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
   };
 
@@ -635,119 +596,66 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
     return { icon: <Check size={13} color="blue" />, text: "Sent" };
   };
 
-    const status = getStatus();
-  
-  // ✅ BULLETPROOF FIX: Translates Email -> Numeric ID, prevents 400 Bad Request API calls
+  const status = getStatus();
+
   const getAvatarUserId = () => {
     if (isOwnMessage) return currentUser?.id;
-    
     const senderIdentifier = thread.createdBy;
     if (!senderIdentifier) return null;
-
-    // 1. If it's already a valid number, return it
     if (typeof senderIdentifier === 'number') return senderIdentifier;
-    if (typeof senderIdentifier === 'string' && !isNaN(Number(senderIdentifier)) && !senderIdentifier.includes('@')) {
-      return Number(senderIdentifier);
-    }
-
-    // 2. If it's an email, search allUsers to find the numeric ID
+    if (typeof senderIdentifier === 'string' && !isNaN(Number(senderIdentifier)) && !senderIdentifier.includes('@')) return Number(senderIdentifier);
     if (allUsers && allUsers.length > 0 && typeof senderIdentifier === 'string' && senderIdentifier.includes('@')) {
       const matchedUser = allUsers.find((u: any) => 
         String(u.email || "").toLowerCase() === senderIdentifier.toLowerCase() ||
         String(u.username || "").toLowerCase() === senderIdentifier.toLowerCase()
       );
-      if (matchedUser) {
-        console.log(`✅ Found numeric ID ${matchedUser.id} for avatar: ${senderIdentifier}`);
-        return matchedUser.id; // Return the actual database ID
-      }
+      if (matchedUser) return matchedUser.id;
     }
-    
-    // ❌ CRITICAL: If we couldn't find a numeric ID, return null. 
-    // This prevents the app from calling /api/users/email@domain.com/profile-photo
     return null; 
   };
 
   const avatarUserId = getAvatarUserId();
-
-  // Apply the profile image URL logic using the safe numeric ID
   const avatar = isOwnMessage 
     ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) 
     : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
+
   return (
     <>
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
 
-      {/* Modals */}
       <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}>
         <View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View>
       </Modal>
       {Platform.OS === "web" && (<Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide"><WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} /></Modal>)}
       <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
 
-      {/* ✅ ADDED: Profile Modal */}
-      <Modal
-        visible={profileModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setProfileModalOpen(false)}
-      >
+      <Modal visible={profileModalOpen} transparent animationType="fade" onRequestClose={() => setProfileModalOpen(false)}>
         <Pressable style={styles.profileModalBackdrop} onPress={() => setProfileModalOpen(false)}>
           <Pressable style={styles.profileModalContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.profileModalHeader}>
               <Text style={styles.profileModalHeaderText}>User Profile</Text>
-              <TouchableOpacity onPress={() => setProfileModalOpen(false)} style={styles.profileModalClose}>
-                <X size={20} color="#666" />
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setProfileModalOpen(false)} style={styles.profileModalClose}><X size={20} color="#666" /></TouchableOpacity>
             </View>
-            
             <ScrollView style={styles.profileModalBody}>
               {profileLoading ? (
-                <View style={styles.profileLoadingContainer}>
-                  <ActivityIndicator size="large" color="#00529B" />
-                  <Text style={{ marginTop: 10, color: "#666" }}>Loading profile...</Text>
-                </View>
+                <View style={styles.profileLoadingContainer}><ActivityIndicator size="large" color="#00529B" /><Text style={{ marginTop: 10, color: "#666" }}>Loading profile...</Text></View>
               ) : (
                 <>
                   <View style={styles.profileAvatarContainer}>
                     <View style={styles.profileAvatarWrapper}>
                       {getProfileImageUrl(fetchedProfile?.id, fetchedProfile?.profilePhoto) ? (
-                        <Image 
-                          source={{ uri: getProfileImageUrl(fetchedProfile?.id, fetchedProfile?.profilePhoto)! }} 
-                          style={styles.profileAvatarImage} 
-                        />
+                        <Image source={{ uri: getProfileImageUrl(fetchedProfile?.id, fetchedProfile?.profilePhoto)! }} style={styles.profileAvatarImage} />
                       ) : (
-                        <Text style={styles.profileAvatarInitials}>
-                          {fetchedProfile?.name ? fetchedProfile.name.charAt(0).toUpperCase() : "?"}
-                        </Text>
+                        <Text style={styles.profileAvatarInitials}>{fetchedProfile?.name ? fetchedProfile.name.charAt(0).toUpperCase() : "?"}</Text>
                       )}
                     </View>
                     <Text style={styles.profileModalName}>{fetchedProfile?.name || fetchedProfile?.username || "User"}</Text>
                     {fetchedProfile?.role && <Text style={styles.profileModalRole}>{fetchedProfile.role}</Text>}
-                    {profileError && <Text style={styles.profileErrorText}>{profileError}</Text>}
                   </View>
-
                   <View style={styles.profileDetailsContainer}>
-                    {fetchedProfile?.email && (
-                      <View style={styles.profileDetailRow}>
-                        <Mail size={18} color="#00529B" />
-                        <Text style={styles.profileDetailLabel}>Email:</Text>
-                        <Text style={styles.profileDetailValue}>{fetchedProfile.email}</Text>
-                      </View>
-                    )}
-                    {fetchedProfile?.username && (
-                      <View style={styles.profileDetailRow}>
-                        <User size={18} color="#00529B" />
-                        <Text style={styles.profileDetailLabel}>Username:</Text>
-                        <Text style={styles.profileDetailValue}>{fetchedProfile.username}</Text>
-                      </View>
-                    )}
-                    {fetchedProfile?.department && (
-                      <View style={styles.profileDetailRow}>
-                        <Building2 size={18} color="#00529B" />
-                        <Text style={styles.profileDetailLabel}>Department:</Text>
-                        <Text style={styles.profileDetailValue}>{fetchedProfile.department}</Text>
-                      </View>
-                    )}
+                    {fetchedProfile?.email && (<View style={styles.profileDetailRow}><Mail size={18} color="#00529B" /><Text style={styles.profileDetailLabel}>Email:</Text><Text style={styles.profileDetailValue}>{fetchedProfile.email}</Text></View>)}
+                    {fetchedProfile?.username && (<View style={styles.profileDetailRow}><User size={18} color="#00529B" /><Text style={styles.profileDetailLabel}>Username:</Text><Text style={styles.profileDetailValue}>{fetchedProfile.username}</Text></View>)}
+                    {fetchedProfile?.department && (<View style={styles.profileDetailRow}><Building2 size={18} color="#00529B" /><Text style={styles.profileDetailLabel}>Department:</Text><Text style={styles.profileDetailValue}>{fetchedProfile.department}</Text></View>)}
                   </View>
                 </>
               )}
@@ -758,31 +666,91 @@ export default function ThreadCard({ thread, currentUsername, currentUser, allUs
 
       {/* Message Bubble */}
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
+        
+        {/* ✅ REACTION BAR POPUP */}
+        {showReactionBar && (
+          <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
+            <View style={styles.reactionBar}>
+              {QUICK_REACTIONS.map((emoji) => (
+                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}>
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}>
+                <X size={16} color="#666" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.avatarContainer}>
-          {/* ✅ Clickable Avatar */}
           <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
             {avatar && !avatarError ? (
               <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
             ) : (
-              <View style={styles.defaultAvatar}>
-                <User size={16} color="#666" />
-              </View>
+              <View style={styles.defaultAvatar}><User size={16} color="#666" /></View>
             )}
           </Pressable>
         </View>
+        
         <View style={[styles.messageBubble, isOwnMessage ? styles.myMessage : styles.otherMessage]}>
           {!isOwnMessage && (
-            // ✅ Clickable Sender Name
             <Pressable onPress={() => handleProfileClick(thread.createdBy)}>
               <Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>
             </Pressable>
           )}
+          
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
           {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
+          
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
+            {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
             {isOwnMessage && (<View style={styles.statusIcon}>{status.icon}</View>)}
+            
+            {/* ✅ Reaction Trigger */}
+            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
+              <Smile size={14} color="#9ca3af" />
+            </TouchableOpacity>
+
+            {/* ✅ 3-Dot Menu for Edit/Delete */}
+            {isOwnMessage && (
+              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
+                <MoreVertical size={14} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* ✅ Edit/Delete Menu Popup */}
+          {showMenu && isOwnMessage && (
+            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
+              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+                <Edit size={14} color="#374151" />
+                <Text style={styles.menuText}>Edit Message</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={() => { 
+                Alert.alert("Delete Message", "Are you sure you want to delete this?", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Delete", style: "destructive", onPress: () => { onDelete?.(thread.id!); setShowMenu(false); } }
+                ]);
+              }}>
+                <Trash2 size={14} color="#ef4444" />
+                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <View style={[styles.reactionsDisplayContainer, isOwnMessage ? styles.reactionsDisplayRight : styles.reactionsDisplayLeft]}>
+              {Object.entries(groupedReactions).map(([emoji, data]) => (
+                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}>
+                  <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                  <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>{data.count}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       </View>
     </>
@@ -802,7 +770,7 @@ const styles = StyleSheet.create({
   myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
   otherMessage: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#eeeeee" },
   messageText: { fontSize: 15, color: "#222", lineHeight: 21 },
-  senderName: { fontSize: 12, fontWeight: "600", color: "#00529B", marginBottom: 4, textDecorationLine: 'underline' }, // ✅ Styled as clickable
+  senderName: { fontSize: 12, fontWeight: "600", color: "#00529B", marginBottom: 4, textDecorationLine: 'underline' },
   timeRow: { flexDirection: "row", alignItems: "center", marginTop: 5 },
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
@@ -855,8 +823,6 @@ const styles = StyleSheet.create({
   pdfHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#f5f5f5" },
   pdfTitle: { fontSize: 18, fontWeight: "600", color: "#000" },
   pdfCloseButton: { padding: 8 },
-
-  // ✅ ADDED: Profile Modal Styles
   profileModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   profileModalContent: { width: "85%", maxWidth: 400, backgroundColor: "white", borderRadius: 16, overflow: "hidden", elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 },
   profileModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#eee" },
@@ -875,4 +841,23 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
+  
+  // ✅ NEW: Reaction & Menu Styles
+  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
+  reactionBarLeft: { left: 0 },
+  reactionBarRight: { right: 0 },
+  reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
+  reactionBarItem: { paddingHorizontal: 8, paddingVertical: 4 },
+  reactionsDisplayContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 4 },
+  reactionsDisplayLeft: { justifyContent: 'flex-start' },
+  reactionsDisplayRight: { justifyContent: 'flex-end' },
+  reactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#e5e7eb' },
+  reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
+  reactionCountActive: { color: '#2563eb' },
+  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
+  menuPopupRight: { right: 10 },
+  menuPopupLeft: { left: 10 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  menuText: { fontSize: 14, fontWeight: '500', color: '#374151' },
 });

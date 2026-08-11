@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadComposer.tsx
-// FINAL FIXED: Android video recording and document handling
+// FINAL FIXED: Android video recording, document handling, Emoji Picker, and Edit Mode
 
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, ResizeMode, Video } from 'expo-av';
@@ -47,6 +47,8 @@ interface ThreadComposerProps {
   onInputStart?: () => void;
   onInputEnd?: () => void;
   username?: string;
+  editingPost?: any; // ✅ NEW: For Edit Mode
+  onCancelEdit?: () => void; // ✅ NEW: Cancel Edit
 }
 
 // ========== HELPER FUNCTIONS ==========
@@ -88,6 +90,8 @@ export default function ThreadComposer({
   onInputStart,
   onInputEnd,
   username,
+  editingPost,
+  onCancelEdit
 }: ThreadComposerProps) {
   // ---- State ----
   const [content, setContent] = useState('');
@@ -97,6 +101,7 @@ export default function ThreadComposer({
   const [micError, setMicError] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // ✅ NEW: Emoji State
   
   // Camera states
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -123,6 +128,18 @@ export default function ThreadComposer({
   
   const isMounted = useRef(true);
 
+  // ✅ NEW: Inbuilt Custom Emoji Grid (No external libraries needed!)
+  const COMMON_EMOJIS = [
+    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+    '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+    '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸',
+    '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️',
+    '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡',
+    '👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪',
+    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
+    '🔥', '✨', '🎉', '🎊', '🏆', '🥇', '🥈', '🥉', '⚽', '🏀',
+  ];
+
   // ========== LIFECYCLE ==========
   useEffect(() => {
     isMounted.current = true;
@@ -138,6 +155,13 @@ export default function ThreadComposer({
       }
     };
   }, []);
+
+  // ✅ NEW: Auto-fill text when Edit is clicked
+  useEffect(() => {
+    if (editingPost) {
+      setContent(editingPost.content || "");
+    }
+  }, [editingPost]);
 
   // ========== READ FILE AS BASE64 ==========
   const readFileAsBase64 = async (uri: string): Promise<string> => {
@@ -199,7 +223,6 @@ export default function ThreadComposer({
 
   // ========== OPEN CAMERA ==========
   const openCamera = async () => {
-    // Request camera permission
     if (!cameraPermission?.granted) {
       const result = await requestCameraPermission();
       if (!result.granted) {
@@ -208,7 +231,6 @@ export default function ThreadComposer({
       }
     }
     
-    // Also request audio permission for video recording
     const { status: audioStatus } = await Audio.requestPermissionsAsync();
     if (audioStatus !== 'granted') {
       console.warn('Microphone permission not granted');
@@ -296,15 +318,12 @@ export default function ThreadComposer({
   const startVideoRecording = async () => {
     if (!cameraRef.current) return;
 
-    // Switch to video mode first with proper delay
     if (cameraMode !== "video") {
       setCameraMode("video");
-      // Longer delay for Android
       await new Promise(resolve => setTimeout(resolve, Platform.OS === 'android' ? 1000 : 500));
     }
 
     try {
-      // Web recording
       if (Platform.OS === "web") {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -383,7 +402,6 @@ export default function ThreadComposer({
         }
       }
 
-      // ✅ ANDROID/IOS FIXED RECORDING
       console.log('Starting video recording on', Platform.OS);
       
       setIsRecordingVideo(true);
@@ -391,7 +409,6 @@ export default function ThreadComposer({
 
       const startTime = Date.now();
       
-      // Start recording timer
       recordingTimerRef.current = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         setRecordingTime(elapsed);
@@ -402,11 +419,10 @@ export default function ThreadComposer({
         }
       }, 1000);
 
-      // ✅ Start recording with Android-specific options
       const recordOptions = Platform.OS === 'android' 
         ? {
             maxDuration: 30,
-            quality: '480p', // Lower quality for better performance on Android
+            quality: '480p',
             mute: false,
           }
         : {
@@ -421,7 +437,6 @@ export default function ThreadComposer({
 
       console.log('Recording completed:', video);
 
-      // Clear timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
@@ -434,7 +449,6 @@ export default function ThreadComposer({
         return;
       }
 
-      // Verify file exists
       const fileInfo = await FileSystem.getInfoAsync(video.uri);
       console.log('Video file info:', fileInfo);
 
@@ -445,7 +459,6 @@ export default function ThreadComposer({
         return;
       }
 
-      // Read video as base64
       let base64 = "";
       try {
         base64 = await readFileAsBase64(video.uri);
@@ -458,7 +471,6 @@ export default function ThreadComposer({
         Alert.alert('Warning', 'Video was recorded but could not be processed. It will be attached as a file.');
       }
 
-      // Set proper file info based on platform
       const fileExtension = Platform.OS === 'android' ? 'mp4' : 'mov';
       const mimeType = Platform.OS === 'android' ? 'video/mp4' : 'video/quicktime';
 
@@ -481,7 +493,6 @@ export default function ThreadComposer({
     } catch (err) {
       console.error('Video recording error details:', err);
       
-      // Clear timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
@@ -489,7 +500,6 @@ export default function ThreadComposer({
       
       setIsRecordingVideo(false);
       
-      // Platform-specific error messages
       const errorMessage = Platform.OS === 'android' 
         ? 'Failed to record video. Please ensure camera and microphone permissions are granted.'
         : 'Failed to record video. Please try again.';
@@ -521,12 +531,10 @@ export default function ThreadComposer({
     setIsRecordingVideo(false);
   };
 
-  // ========== TOGGLE CAMERA ==========
   const toggleCamera = () => {
     setCameraType(cameraType === 'front' ? 'back' : 'front');
   };
 
-  // ========== FILE PICKER (FIXED) ==========
   const handleFileUpload = async (type?: string) => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -559,7 +567,6 @@ export default function ThreadComposer({
           const fileName = file.name || 'file';
           const fileExtension = getFileExtension(fileName);
           
-          // Determine attachment type
           if (mimeType.startsWith('image/')) {
             attachmentType = 'IMAGE';
           } else if (mimeType.startsWith('video/')) {
@@ -568,13 +575,11 @@ export default function ThreadComposer({
             attachmentType = 'AUDIO';
           }
 
-          // Fix MIME type if needed
           let correctMimeType = mimeType;
           if (!mimeType || mimeType === 'application/octet-stream') {
             correctMimeType = getMimeTypeFromExtension(fileExtension);
           }
 
-          // Read file data
           let fileData = '';
           try {
             fileData = await readFileAsBase64(file.uri);
@@ -604,7 +609,6 @@ export default function ThreadComposer({
     }
   };
 
-  // ========== DOCUMENT PREVIEW (FIXED) ==========
   const previewAttachment = async (attachment: Attachment) => {
     if (!attachment.uri) {
       Alert.alert('Error', 'No preview available');
@@ -613,7 +617,6 @@ export default function ThreadComposer({
 
     const { fileType, uri, attachmentType, fileName } = attachment;
 
-    // For media files (image, video, audio)
     if (['IMAGE', 'VIDEO', 'AUDIO'].includes(attachmentType) || 
         fileType.startsWith('image/') || 
         fileType.startsWith('video/') || 
@@ -629,18 +632,15 @@ export default function ThreadComposer({
       return;
     }
 
-    // For PDF files
     if (fileType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
       try {
         if (Platform.OS === 'web') {
           window.open(uri, '_blank');
         } else {
-          // Try to open with system viewer
           const supported = await Linking.canOpenURL(uri);
           if (supported) {
             await Linking.openURL(uri);
           } else {
-            // Try sharing as alternative
             if (await Sharing.isAvailableAsync()) {
               await Sharing.shareAsync(uri, {
                 mimeType: 'application/pdf',
@@ -663,7 +663,6 @@ export default function ThreadComposer({
       return;
     }
 
-    // For text files
     if (fileType.includes('text/') || fileType === 'application/json' || 
         fileName.endsWith('.txt') || fileName.endsWith('.csv') || fileName.endsWith('.json')) {
       try {
@@ -681,7 +680,6 @@ export default function ThreadComposer({
       }
     }
 
-    // For other documents - try to open with system
     try {
       if (Platform.OS === 'web') {
         window.open(uri, '_blank');
@@ -706,7 +704,6 @@ export default function ThreadComposer({
     }
   };
 
-  // ========== LOCATION ==========
   const handleLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -736,7 +733,6 @@ export default function ThreadComposer({
     }
   };
 
-  // ========== VOICE RECORDING ==========
   const startVoiceRecording = async () => {
     try {
       if (isRecordingVoice) {
@@ -862,7 +858,6 @@ export default function ThreadComposer({
     }
   };
 
-  // ========== REMOVE ATTACHMENT ==========
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
@@ -870,7 +865,7 @@ export default function ThreadComposer({
   // ========== SUBMIT ==========
   const handleSubmit = async () => {
     if (isSubmitting) return;
-    if (!content.trim() && attachments.length === 0) return;
+    if (!content.trim() && attachments.length === 0 && !editingPost) return;
 
     setIsSubmitting(true);
 
@@ -933,18 +928,30 @@ export default function ThreadComposer({
       );
 
       const userEmail = username || 'anonymous@jws.com';
-      const payload = {
+      const payload: any = {
         content: content.trim() || ' ',
         createdBy: userEmail,
         messageType,
         attachments: resolvedAttachments,
       };
 
+      // ✅ NEW: Handle Edit Mode Payload
+      if (editingPost) {
+        payload.id = editingPost.id;
+        payload.isEdit = true;
+      }
+
       onThreadCreated(payload);
+      
       setContent('');
       setAttachments([]);
       setError('');
       setShowAttachmentMenu(false);
+      setShowEmojiPicker(false);
+      
+      if (editingPost) {
+        onCancelEdit?.();
+      }
     } catch (err) {
       console.error('Submit error:', err);
       setError('Failed to send message');
@@ -1014,6 +1021,48 @@ export default function ThreadComposer({
           </TouchableOpacity>
         </View>
       ) : null}
+
+      {/* ✅ NEW: Edit Mode Banner */}
+      {editingPost && (
+        <View style={styles.editBanner}>
+          <View style={styles.editBannerIndicator} />
+          <View style={styles.editBannerContent}>
+            <Text style={styles.editBannerTitle}>Editing Message</Text>
+            <Text style={styles.editBannerText} numberOfLines={1}>{editingPost.content}</Text>
+          </View>
+          <TouchableOpacity onPress={() => { onCancelEdit?.(); setContent(''); }} style={styles.editBannerClose}>
+            <Ionicons name="close-circle" size={24} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ✅ NEW: Emoji Picker */}
+      {showEmojiPicker && (
+        <View style={styles.emojiPickerContainer}>
+          <View style={styles.emojiPickerHeader}>
+            <Text style={styles.emojiPickerTitle}>Emojis</Text>
+            <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+              <Ionicons name="close" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.emojiPickerScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.emojiGrid}>
+              {COMMON_EMOJIS.map((emoji, idx) => (
+                <TouchableOpacity 
+                  key={idx} 
+                  onPress={() => {
+                    setContent(prev => prev + emoji);
+                    onInputStart?.();
+                  }} 
+                  style={styles.emojiItem}
+                >
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      )}
 
       {/* Preview Media Modal */}
       <Modal visible={!!previewMedia} transparent animationType="fade">
@@ -1258,6 +1307,11 @@ export default function ThreadComposer({
           <Ionicons name="attach" size={22} color="#6b7280" />
         </TouchableOpacity>
 
+        {/* ✅ NEW: Emoji Button */}
+        <TouchableOpacity onPress={() => setShowEmojiPicker(!showEmojiPicker)} style={styles.iconBtn}>
+          <Ionicons name="happy-outline" size={22} color={showEmojiPicker ? "#3b82f6" : "#6b7280"} />
+        </TouchableOpacity>
+
         <TextInput
           style={styles.input}
           value={content}
@@ -1270,10 +1324,10 @@ export default function ThreadComposer({
 
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={(!content.trim() && attachments.length === 0) || isSubmitting}
+          disabled={(!content.trim() && attachments.length === 0 && !editingPost) || isSubmitting}
           style={[
             styles.sendBtn,
-            (content.trim() || attachments.length > 0) && !isSubmitting
+            (content.trim() || attachments.length > 0 || editingPost) && !isSubmitting
               ? styles.sendBtnActive
               : styles.sendBtnDisabled,
           ]}
@@ -1281,7 +1335,7 @@ export default function ThreadComposer({
           {isSubmitting ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <Ionicons name="send" size={18} color="white" />
+            <Ionicons name={editingPost ? "checkmark-done" : "send"} size={18} color="white" />
           )}
         </TouchableOpacity>
       </View>
@@ -1291,7 +1345,6 @@ export default function ThreadComposer({
 
 // ========== STYLES ==========
 const styles = StyleSheet.create({
-  // ... (keep all existing styles from the previous version)
   container: {
     width: '100%',
     backgroundColor: 'white',
@@ -1388,6 +1441,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  
+  // ✅ NEW: Edit Banner Styles
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#bfdbfe',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    padding: 10,
+    marginBottom: 0,
+  },
+  editBannerIndicator: {
+    width: 4,
+    height: 30,
+    backgroundColor: '#2563eb',
+    borderRadius: 2,
+    marginRight: 10,
+  },
+  editBannerContent: {
+    flex: 1,
+  },
+  editBannerTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  editBannerText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginTop: 2,
+  },
+  editBannerClose: {
+    padding: 4,
+  },
+
+  // ✅ NEW: Emoji Picker Styles
+  emojiPickerContainer: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderColor: '#e5e7eb',
+    maxHeight: 250,
+  },
+  emojiPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  emojiPickerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  emojiPickerScroll: {
+    maxHeight: 200,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 8,
+    gap: 8,
+  },
+  emojiItem: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
