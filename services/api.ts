@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 
 
 // ─── API CLIENT ──────────────────────────────────────────────────────────────
+// ─── API CLIENT ──────────────────────────────────────────────────────────────
 export const apiClient = {
   get: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
     const token = await AsyncStorage.getItem('authToken');
@@ -22,7 +23,8 @@ export const apiClient = {
       },
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
   },
 
   post: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
@@ -40,7 +42,8 @@ export const apiClient = {
       body: data ? JSON.stringify(data) : undefined,
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
   },
 
   postFormData: async <T = any>(endpoint: string, formData: any): Promise<T> => {
@@ -53,7 +56,8 @@ export const apiClient = {
       body: formData,
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
   },
 
   put: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
@@ -71,7 +75,8 @@ export const apiClient = {
       body: data ? JSON.stringify(data) : undefined,
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T); // ✅ FIX: Safely handle empty responses
   },
 
   delete: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
@@ -88,7 +93,8 @@ export const apiClient = {
       },
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
   },
 
   downloadBlob: async (endpoint: string, params?: Record<string, any>): Promise<Blob> => {
