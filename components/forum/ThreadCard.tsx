@@ -424,10 +424,19 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  const handleReactionSelect = (emoji: string) => {
-    onReact?.(thread.id!, emoji);
-    setShowReactionBar(false);
-  };
+  // components/forum/ThreadCard.tsx
+// Replace ONLY the handleReactToPost function and related reaction logic
+
+// ========== REACTION HANDLER (FIXED) ==========
+const handleReactionSelect = (emoji: string) => {
+  // ✅ Pass the emoji directly to parent handler
+  if (onReact && thread.id) {
+    // Ensure thread.id is properly converted to string
+    const threadId = String(thread.id);
+    onReact(threadId, emoji);
+  }
+  setShowReactionBar(false);
+};
 
   // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
@@ -716,30 +725,50 @@ export default function ThreadCard({
           )}
 
           {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
-          {Object.keys(groupedReactions).length > 0 && (
-            <View style={{ marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-              {Object.entries(groupedReactions).map(([emoji, data]) => (
-                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-                  <TouchableOpacity
-                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-                    style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}
-                  >
-                    <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                    <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>{data.count}</Text>
-                  </TouchableOpacity>
 
-                  {showReactionDetail === emoji && (
-                    <View style={styles.reactionDetailPopup}>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Reacted by:</Text>
-                      {data.users.map((userName: string, idx: number) => (
-                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>• {userName}</Text>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
+{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+{Object.keys(groupedReactions).length > 0 && (
+  <View style={{ 
+    marginTop: 6, 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 4, 
+    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+  }}>
+    {Object.entries(groupedReactions).map(([emoji, data]) => (
+      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+        <TouchableOpacity
+          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+          style={[
+            styles.reactionBadge, 
+            data.hasReacted && styles.reactionBadgeActive
+          ]}
+        >
+          <Text style={{ fontSize: 14 }}>{emoji}</Text>
+          <Text style={[
+            styles.reactionCount, 
+            data.hasReacted && styles.reactionCountActive
+          ]}>
+            {data.count}
+          </Text>
+        </TouchableOpacity>
+
+        {showReactionDetail === emoji && (
+          <View style={styles.reactionDetailPopup}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+              Reacted by:
+            </Text>
+            {data.users.map((userName: string, idx: number) => (
+              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                • {userName}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+    ))}
+  </View>
+)}
         </View>
       </View>
     </>
