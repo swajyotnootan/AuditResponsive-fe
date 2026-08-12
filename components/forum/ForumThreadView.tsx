@@ -510,6 +510,7 @@ export default function ForumThreadView({
 
   // ========== SEND MESSAGE ==========
    // ========== SEND MESSAGE (NO MORE FAKE TIMERS) ==========
+    // ========== SEND MESSAGE (FIXED 500 ERROR) ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
@@ -519,9 +520,10 @@ export default function ForumThreadView({
     // ⏱️ Step 1: Optimistic message with SENDING status (Clock icon)
     const optimisticMsg = {
       id: tempId,
+      title: newPostData.content?.substring(0, 30) || "New Message", // ✅ FIX: Add title
       content: newPostData.content,
       createdBy: userEmail,
-      createdByName: displayName,
+      createdByName: displayName, // ✅ FIX: Add name
       createdAt: new Date().toISOString(),
       messageType: newPostData.messageType || "TEXT",
       attachments: newPostData.attachments || [],
@@ -536,8 +538,10 @@ export default function ForumThreadView({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          title: newPostData.content?.substring(0, 30) || "New Message", // ✅ FIX: Backend requires title
           content: newPostData.content,
           createdBy: userEmail,
+          createdByName: displayName, // ✅ FIX: Include sender's name
           messageType: newPostData.messageType || "TEXT",
           parentId: newPostData.parentId || null,
           attachments: newPostData.attachments || [],
@@ -556,11 +560,9 @@ export default function ForumThreadView({
 
         playNotificationSound('send');
 
-        // ✅ NOTE: No more fake timers! 
-        // DELIVERED status comes from loadPosts when message is confirmed in DB
-        // SEEN (blue tick) comes from seenBy array in ThreadCard getStatusIcon
-
       } else {
+        const errorText = await res.text();
+        console.error("❌ Send failed:", errorText);
         // ❌ Mark as FAILED
         setPosts(prev => prev.map(p =>
           p.id === tempId ? { ...p, deliveryStatus: 'FAILED', failed: true } : p
@@ -578,6 +580,7 @@ export default function ForumThreadView({
   // ========== REACTIONS (FIXED: Only removes YOUR reaction) ==========
     // ========== REACTIONS (FIXED: Safe user matching & correct endpoints) ==========
     // ========== REACTIONS (SAFE USER MATCHING) ==========
+   // ========== REACTIONS (FIXED 500 ERROR & SAFE MATCHING) ==========
   const handleReactToPost = async (postId: string | number, emoji: string) => {
     if (!mountedRef.current || !groupId) return;
     const userEmail = currentUser?.email || username || "";
@@ -623,6 +626,7 @@ export default function ForumThreadView({
     const tempId = `temp-react-${Date.now()}`;
     const optimisticReaction = {
       id: tempId,
+      title: "Reaction", // ✅ FIX: Add title for UI
       content: emoji,
       messageType: "REACTION",
       parentId: postId,
@@ -639,19 +643,24 @@ export default function ForumThreadView({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          title: "Reaction", // ✅ FIX 1: Backend requires a title for all threads
           content: emoji,
           createdBy: userEmail,
+          createdByName: displayName, // ✅ FIX 2: Include sender's name
           messageType: "REACTION",
-          parentId: Number(postId),
+          parentId: postId, // ✅ FIX 3: Send as-is (DO NOT use Number() here to prevent NaN)
           attachments: []
         })
       });
 
       if (!response.ok) {
-        console.error("❌ Reaction failed:", await response.text());
+        const errorText = await response.text();
+        console.error("❌ Reaction failed:", errorText);
         setPosts(prev => prev.filter(p => p.id !== tempId)); // Rollback
       } else {
         playNotificationSound('send');
+        // ✅ Refresh posts to get the real ID from the backend
+        setTimeout(() => loadPosts(), 500); 
       }
     } catch (err) {
       console.error("Failed to send reaction", err);
