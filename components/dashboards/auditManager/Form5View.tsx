@@ -1,5 +1,9 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ Added import for the API service
+import axios from "axios";
+import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import {
   ArrowLeft,
   Calendar,
@@ -33,6 +37,8 @@ import DocumentControlSection from "./DocumentControlSection";
 import ScheduleListView from "./ScheduleListView";
 import ScheduleMatrixView from "./ScheduleMatrixView";
 import ScheduleModal from "./ScheduleModal";
+
+
 
 // ═════ MNC STANDARD PALETTE ═════
 const COLORS = {
@@ -612,14 +618,81 @@ export default function Form5View({
     }
     setDownloading(true);
     try {
-      // Note: You can replace this placeholder with auditScheduleApi.downloadDetailedViewPdf
-      // once React Native file system handling is fully configured.
+      // ✅ FIXED ENDPOINT: Changed to '/download' to match your React Web backend
+      const pdfUrl = `${API_BASE_URL}/api/audit-schedule/${selectedYear}/${selectedMonth}/download`;
+
+      if (Platform.OS === "web") {
+        // ✅ WEB / DESKTOP: Standard Blob Download
+        const response = await axios.get(pdfUrl, {
+          responseType: "blob",
+          withCredentials: true,
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute(
+          "download",
+          `Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`,
+        );
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        showToast("PDF downloaded successfully!", "success");
+      } else {
+        // ✅ MOBILE / TABLET: FileSystem Download + Native Share Sheet (Save to Files)
+
+        // 1. Get Auth Token
+        let token = null;
+        try {
+          const AsyncStorage = (
+            await import("@react-native-async-storage/async-storage")
+          ).default;
+          token = await AsyncStorage.getItem("token");
+        } catch (e) {
+          console.warn("AsyncStorage not found, proceeding without token.");
+        }
+
+        // 2. Setup headers and file URI
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
+        const fileUri = `${FileSystem.documentDirectory}Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
+
+        // 3. Download the file to the app's local directory
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri, {
+          headers,
+        });
+
+        // 4. Open the native Share Sheet so the user can save it to "Files" or share it
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: "application/pdf",
+              dialogTitle: "Save or Share Audit Schedule",
+              UTI: "com.adobe.pdf", // iOS specific
+            });
+            showToast("PDF downloaded successfully!", "success");
+          } else {
+            showToast("PDF downloaded to app directory.", "success");
+          }
+        } else {
+          throw new Error(
+            "Download failed with status: " + downloadResult.status,
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error("PDF Export Error:", error);
       showToast(
-        "PDF Download initiated. (Note: File system handling required for RN)",
-        "success",
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to download PDF",
+        "error",
       );
-    } catch (error) {
-      showToast("Failed to download PDF", "error");
     } finally {
       setDownloading(false);
     }
@@ -1820,4 +1893,3 @@ export default function Form5View({
     </View>
   );
 }
-

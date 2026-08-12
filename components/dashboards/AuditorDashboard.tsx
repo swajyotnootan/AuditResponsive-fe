@@ -1,6 +1,7 @@
 ﻿import ForumThreadView from "@/components/forum/ForumThreadView";
 import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -39,6 +40,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import YearFilter from "../common/YearFilter";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import FiveSAuditForm from "./auditor/FiveSAuditForm";
 import ManufacturingProcessAuditForm from "./auditor/ManufacturingProcessAuditForm";
@@ -1355,6 +1357,8 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const [activeReportConfig, setActiveReportConfig] = useState<any>(null);
   const [activeFormConfig, setActiveFormConfig] = useState<any>(null);
+    const [availableYears, setAvailableYears] = useState<number[]>([]);
+
 
   // ✅ 1. Add new state for viewing NCR details
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
@@ -1480,6 +1484,46 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
     return hours * 60 + minutes;
   };
 
+  // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
+  const fetchAvailableFormsForDepartment = async (
+    department: string,
+    auditType: string,
+  ) => {
+    if (!department) return [];
+    const deptUpper = department.toUpperCase().trim();
+
+    // Only fetch multiple forms for IATF/System audits (Adjust if 5S/Process also have multiple forms)
+    const isIATF =
+      auditType.toLowerCase().includes("iatf") ||
+      auditType.toLowerCase().includes("16949") ||
+      auditType.toLowerCase().includes("system");
+    if (!isIATF) return [];
+
+    try {
+      let endpoint = "";
+      if (deptUpper === "SQA") {
+        endpoint = `/templates/iatf/by-department/SQA`;
+      } else {
+        const isQualityDept =
+          deptUpper.includes("QA") || deptUpper.includes("QC");
+        if (!isQualityDept) {
+          endpoint = `/templates/iatf/by-department/${encodeURIComponent(department)}`;
+        } else {
+          endpoint = `/templates/type/IATF_16949`;
+        }
+      }
+
+      const forms = await apiFetch(endpoint);
+      if (deptUpper.includes("QA") || deptUpper.includes("QC")) {
+        return (forms || []).filter((f: any) => f.department === "QA");
+      }
+      return forms || [];
+    } catch (error) {
+      console.error("❌ Error fetching forms for department:", error);
+      return [];
+    }
+  };
+
   // ============================================================
   // ✅ FIXED: Full fetchSchedulesWithStatus
   // ============================================================
@@ -1579,128 +1623,130 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
 
     const todayStr = toDateString(new Date()) || '';
 
-    const enhancedData = filteredSchedules.map((item: any) => {
-      const schedule = item.schedule || item;
-      const scheduleId = schedule.id;
+    // ✅ REPLACE YOUR ENTIRE enhancedData MAPPING BLOCK WITH THIS:
+const enhancedData = await Promise.all(filteredSchedules.map(async (item: any) => {
+    const schedule = item.schedule || item;
+    const scheduleId = schedule.id;
+    const department = schedule.department || "";
+    const auditType = schedule.auditType || "";
 
-      // Find all saved responses for this specific schedule
-      const scheduleResponses = allResponses.filter(
+    // 1. Find all saved responses for this specific schedule
+    const scheduleResponses = allResponses.filter(
         (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
-      );
+    );
 
-      // Calculate actual completion stats
-      const totalForms =
-        scheduleResponses.length > 0 ? scheduleResponses.length : 1;
-      const completedForms = scheduleResponses.filter(
-        (r: any) => r.status === "SUBMITTED",
-      ).length;
-      const hasFormData = scheduleResponses.length > 0;
-      const allFormsCompleted =
-        completedForms === totalForms && totalForms > 0;
-      const pendingForms = totalForms - completedForms;
+    // Create a map for quick lookup: checkSheetId -> response
+    const responseMap = new Map();
+    scheduleResponses.forEach((r: any) => {
+        if (r.checkSheet?.id) {
+            responseMap.set(String(r.checkSheet.id), r);
+        }
+    });
 
-      // Build accurate form details
-      const formDetails =
-        scheduleResponses.length > 0
-          ? scheduleResponses.map((r: any) => ({
-              id: r.checkSheet?.id || 1,
-              name: r.checkSheet?.name || schedule.auditType || "Audit Form",
-              processName:
-                r.checkSheet?.processName || schedule.auditType || "Audit",
-              completed: r.status === "SUBMITTED",
-              responseId: r.id,
-            }))
-          : [
-              {
-                id: schedule.checkSheet?.id || 1,
-                name: schedule.auditType || "Audit Form",
-                processName: schedule.auditType || "Audit",
-                completed: false,
-              },
-            ];
-
-      // ✅ FIXED: Timezone-safe status logic with date range support
-      let timeStatus = "SCHEDULED";
-      let canStart = false;
-
-      // ✅ Check if audit has a date range
-      const hasDateRange = schedule.fromDate && schedule.toDate && schedule.fromDate !== schedule.toDate;
-
-      if (hasDateRange) {
-        // ✅ DATE RANGE LOGIC
-        const fromStr = toDateString(schedule.fromDate);
-        const toStr = toDateString(schedule.toDate);
+    // 2. Determine the list of ALL assigned forms
+    let formDetails: any[] = [];
+    
+    // Check if backend already returns the full list of forms in the schedule object
+    const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
+    
+    if (Array.isArray(assignedForms) && assignedForms.length > 0) {
+        // Map over ALL assigned forms from backend
+        formDetails = assignedForms.map((form: any) => {
+            const existingResponse = responseMap.get(String(form.id));
+            return {
+                id: form.id,
+                name: form.name || form.processName || "Audit Form",
+                processName: form.processName || form.name || "Audit",
+                completed: !!existingResponse && (
+                    existingResponse.status === "COMPLETED" ||
+                    existingResponse.status === "APPROVED" ||
+                    existingResponse.status === "SUBMITTED" ||
+                    existingResponse.submittedAt !== null
+                ),
+                responseId: existingResponse?.id,
+                status: existingResponse?.status,
+            };
+        });
+    } else {
+        // Fallback: Fetch available forms from API (Exactly like your React web code)
+        const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
         
-        if (fromStr && toStr) {
-          if (todayStr < fromStr) {
-            // Today is BEFORE the range starts
-            timeStatus = "UPCOMING";
-          } else if (todayStr >= fromStr && todayStr <= toStr) {
-            // Today is WITHIN the range
-            const now = new Date();
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
-            const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
-
-            if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
-              timeStatus = "ACTIVE";
-              canStart = true;
-            } else if (nowMinutes < startMinutes) {
-              timeStatus = "UPCOMING";
-            } else {
-              // After end time on a date within range
-              timeStatus = "ACTIVE"; // Still active, just outside working hours
-              canStart = false;
-            }
-          } else if (todayStr > toStr) {
-            // Today is AFTER the range ends
-            timeStatus = "EXPIRED";
-          }
+        if (availableForms.length > 0) {
+            formDetails = availableForms.map((form: any) => {
+                const existingResponse = responseMap.get(String(form.id));
+                return {
+                    id: form.id,
+                    name: form.name || form.processName || "Audit Form",
+                    processName: form.processName || form.name || "Audit",
+                    completed: !!existingResponse && (
+                        existingResponse.status === "COMPLETED" ||
+                        existingResponse.status === "APPROVED" ||
+                        existingResponse.status === "SUBMITTED" ||
+                        existingResponse.submittedAt !== null
+                    ),
+                    responseId: existingResponse?.id,
+                    status: existingResponse?.status,
+                };
+            });
+        } else {
+            // Ultimate fallback: Single form audit or backend didn't provide forms
+            formDetails = scheduleResponses.length > 0
+                ? scheduleResponses.map((r: any) => ({
+                    id: r.checkSheet?.id || 1,
+                    name: r.checkSheet?.name || auditType || "Audit Form",
+                    processName: r.checkSheet?.processName || auditType || "Audit",
+                    completed:
+                        r.status === "COMPLETED" ||
+                        r.status === "APPROVED" ||
+                        r.status === "SUBMITTED" ||
+                        r.submittedAt !== null,
+                    responseId: r.id,
+                    status: r.status,
+                }))
+                : [
+                    {
+                        id: schedule.checkSheet?.id || 1,
+                        name: auditType || "Audit Form",
+                        processName: auditType || "Audit",
+                        completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
+                    },
+                ];
         }
-      } else if (schedule.scheduledDate) {
-        // ✅ SINGLE DATE LOGIC
-        const scheduleStr = toDateString(schedule.scheduledDate);
-        if (scheduleStr) {
-          if (scheduleStr < todayStr) {
-            timeStatus = "EXPIRED";
-          } else if (scheduleStr === todayStr) {
-            const now = new Date();
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            const startMinutes = parseTimeToMinutes(schedule.startTime || "09:00 AM");
-            const endMinutes = parseTimeToMinutes(schedule.endTime || "05:00 PM");
+    }
 
-            if (nowMinutes >= startMinutes && nowMinutes <= endMinutes) {
-              timeStatus = "ACTIVE";
-              canStart = true;
-            } else if (nowMinutes < startMinutes) {
-              timeStatus = "UPCOMING";
-            } else {
-              timeStatus = "EXPIRED";
-            }
-          } else if (scheduleStr > todayStr) {
-            timeStatus = "UPCOMING";
-          }
-        }
-      }
+    // 3. Calculate accurate stats based on ALL forms
+    const totalForms = formDetails.length;
+    const completedForms = formDetails.filter((f: any) => f.completed).length;
+    const hasFormData = completedForms > 0;
+    const isAllFormsCompleted = totalForms > 0 && completedForms === totalForms;
 
-      return {
+    const isAuditCompleted =
+        schedule.status === "COMPLETED" ||
+        schedule.status === "APPROVED" ||
+        schedule.status === "CLOSED";
+
+    const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
+    const finalTimeStatus = allFormsCompleted ? "COMPLETED" : item.timeStatus;
+    const finalCanStart = !allFormsCompleted && item.canStart;
+
+    return {
         ...item,
         schedule: {
-          ...schedule,
-          hasFormData,
-          totalForms,
-          completedForms,
-          pendingForms,
-          allFormsCompleted,
-          formDetails,
-          rescheduleRequested: pendingRescheduleIds.has(scheduleId),
-          extensionRequested: pendingExtensionIds.has(scheduleId),
-          coAuditorNames: schedule.coAuditorNames || [],
+            ...schedule,
+            hasFormData,
+            totalForms,
+            completedForms: allFormsCompleted ? totalForms : completedForms,
+            pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
+            allFormsCompleted,
+            formDetails, // ✅ Now contains ALL forms, not just completed ones!
+            rescheduleRequested: pendingRescheduleIds.has(scheduleId),
+            extensionRequested: pendingExtensionIds.has(scheduleId),
+            coAuditorNames: schedule.coAuditorNames || [],
         },
-        timeStatus,
-        canStart,
-      };
-    });
+        timeStatus: finalTimeStatus,
+        canStart: finalCanStart,
+    };
+}));
 
     setSchedules(enhancedData);
 
@@ -1749,6 +1795,38 @@ useEffect(() => {
   };
   fetchUsers();
 }, []);
+
+useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const startYear = 2020;
+    const endYear = currentYear + 5;
+    const allYears: number[] = [];
+
+    // Add default range
+    for (let i = startYear; i <= endYear; i++) allYears.push(i);
+
+    // Add years found in actual schedule data
+    if (schedules.length > 0) {
+      schedules.forEach((item) => {
+        const schedule = item.schedule;
+        if (schedule?.scheduledDate) {
+          const year = new Date(schedule.scheduledDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+        if (schedule?.fromDate) {
+          const year = new Date(schedule.fromDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+        if (schedule?.toDate) {
+          const year = new Date(schedule.toDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+      });
+    }
+
+    // Sort descending (newest first) and update state
+    setAvailableYears(allYears.sort((a, b) => b - a));
+  }, [schedules]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -2183,8 +2261,10 @@ const open8DForum = async (ncr: any) => {
             }}
           >
             {/* Header */}
+             {/* Header */}
+            {/* Replace the existing Header section (around line 850-880) with this: */}
             <View className="flex-row flex-wrap items-start justify-between gap-4 mb-6">
-              <View className="flex-1">
+              <View className="flex-1 min-w-[200px]">
                 <Text className="text-2xl font-bold text-slate-800">
                   Auditor Dashboard
                 </Text>
@@ -2200,23 +2280,40 @@ const open8DForum = async (ncr: any) => {
                   </Text>
                 </Text>
               </View>
-              <TouchableOpacity
-                onPress={handleRefresh}
-                disabled={refreshing}
-                className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
-              >
-                {refreshing ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={NAVBAR_COLORS.primary}
+
+              {/* Wrap buttons in a responsive container */}
+              <View className="flex-row flex-wrap items-center gap-3">
+                {/* Year Filter - make it more compact on mobile */}
+                <View className="flex-shrink-0">
+                  <YearFilter
+                    selectedYear={selectedYear}
+                    onYearChange={setSelectedYear}
+                    availableYears={availableYears}
                   />
-                ) : (
-                  <RefreshCw size={18} color="#475569" />
-                )}
-                <Text className="text-sm font-semibold text-slate-700">
-                  Refresh
-                </Text>
-              </TouchableOpacity>
+                </View>
+
+                {/* Refresh Button - smaller on mobile */}
+                <TouchableOpacity
+                  onPress={handleRefresh}
+                  disabled={refreshing}
+                  className={`flex-row items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl ${refreshing ? "opacity-60" : ""}`}
+                >
+                  {refreshing ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={NAVBAR_COLORS.primary}
+                    />
+                  ) : (
+                    <RefreshCw size={16} color="#475569" />
+                  )}
+                  {/* <Text className="text-xs font-semibold md:text-sm text-slate-700">
+                    {isMobile ? "" : "Refresh"}
+                    {isMobile && (
+                      <RefreshCw size={16} color="#475569" className="ml-1" />
+                    )}
+                  </Text> */}
+                </TouchableOpacity>
+              </View>
             </View>
 
             {activeTab === "my-audits" && (
@@ -2537,7 +2634,114 @@ const open8DForum = async (ncr: any) => {
   );
 }
 
+// ============================================================================
+// REUSABLE DATE PICKER COMPONENT
+// ============================================================================
+const DatePickerField = ({ 
+  label, 
+  value, 
+  onChange, 
+  error 
+}: { 
+  label: string, 
+  value: string, 
+  onChange: (val: string) => void, 
+  error?: string 
+}) => {
+  const [showPicker, setShowPicker] = useState(false);
+  
+  const parseDateSafe = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    return new Date(dateStr);
+  };
 
+  const [tempDate, setTempDate] = useState(parseDateSafe(value));
+
+  useEffect(() => {
+    if (value) setTempDate(parseDateSafe(value));
+  }, [value]);
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowPicker(false);
+      if (event.type === "set" && selectedDate) {
+        const formattedDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+        onChange(formattedDate);
+      }
+    } else {
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const handleConfirm = () => {
+    const formattedDate = `${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, "0")}-${String(tempDate.getDate()).padStart(2, "0")}`;
+    onChange(formattedDate);
+    setShowPicker(false);
+  };
+
+  return (
+    <View>
+      <Text className="mb-1.5 text-sm font-semibold text-slate-700">{label}</Text>
+      
+      {Platform.OS === "web" ? (
+        <View className={`w-full flex-row items-center px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}>
+          <Calendar size={18} color="#64748b" />
+          {/* @ts-ignore */}
+          <input
+            type="date"
+            value={value}
+            onChange={(e: any) => onChange(e.target.value)}
+            style={{
+              flex: 1, border: "none", outline: "none", backgroundColor: "transparent",
+              color: value ? "#1e293b" : "#94a3b8", fontSize: 14, padding: 0,
+              marginLeft: 8, fontFamily: "inherit", cursor: "pointer", width: "100%",
+            }}
+          />
+        </View>
+      ) : (
+        <>
+          <TouchableOpacity
+            onPress={() => setShowPicker(true)}
+            className={`w-full flex-row items-center justify-between px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
+          >
+            <Text className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}>
+              {value || "Select Date"}
+            </Text>
+            <Calendar size={18} color="#64748b" />
+          </TouchableOpacity>
+
+          {Platform.OS === "ios" && showPicker && (
+            <Modal transparent animationType="slide" visible={showPicker}>
+              <View className="justify-end flex-1 bg-slate-900/60">
+                <View className="p-4 pb-8 bg-white rounded-t-3xl">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <TouchableOpacity onPress={() => setShowPicker(false)}>
+                      <Text className="text-base font-medium text-rose-500">Cancel</Text>
+                    </TouchableOpacity>
+                    <Text className="text-base font-semibold text-slate-800">Select Date</Text>
+                    <TouchableOpacity onPress={handleConfirm}>
+                      <Text className="text-base font-bold text-blue-600">Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker value={tempDate} mode="date" display="spinner" onChange={onDateChange} textColor="#000000" />
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {Platform.OS === "android" && showPicker && (
+            <DateTimePicker value={tempDate} mode="date" display="default" onChange={onDateChange} />
+          )}
+        </>
+      )}
+      {error ? <Text className="mt-1 text-xs text-rose-600">{error}</Text> : null}
+    </View>
+  );
+};
 
 // ============================================================================
 // MODALS (Unchanged, fully functional)
@@ -2747,27 +2951,19 @@ const RescheduleRequestModal = ({
             <Text className="font-bold">{audit?.department}</Text>
           </Text>
           <View className="gap-4">
-            <View>
-              <Text className="mb-1.5 text-sm font-semibold text-slate-700">
-                New Date *
-              </Text>
-              <TextInput
-                value={newDate}
-                onChangeText={(text) => {
-                  setNewDate(text);
-                  if (text) validateDate(text);
-                  else {
-                    setDateError("");
-                    setTimeConflictError("");
-                  }
-                }}
-                placeholder="YYYY-MM-DD"
-                className={`w-full p-3 text-sm bg-white border rounded-xl ${dateError ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
-              />
-              {dateError ? (
-                <Text className="mt-1 text-xs text-rose-600">{dateError}</Text>
-              ) : null}
-            </View>
+                        <DatePickerField
+              label="New Date *"
+              value={newDate}
+              onChange={(text) => {
+                setNewDate(text);
+                if (text) validateDate(text);
+                else {
+                  setDateError("");
+                  setTimeConflictError("");
+                }
+              }}
+              error={dateError}
+            />
             <View className="flex-row gap-3">
               <View className="flex-1">
                 <Text className="mb-1.5 text-sm font-semibold text-slate-700">
@@ -2913,17 +3109,11 @@ const ExtensionRequestModal = ({
             <Text className="font-bold">{audit?.auditType}</Text>
           </Text>
           <View className="gap-4">
-            <View>
-              <Text className="mb-1.5 text-sm font-semibold text-slate-700">
-                New Due Date *
-              </Text>
-              <TextInput
-                value={newDate}
-                onChangeText={setNewDate}
-                placeholder="YYYY-MM-DD"
-                className="w-full p-3 text-sm bg-white border border-slate-200 rounded-xl"
-              />
-            </View>
+                        <DatePickerField
+              label="New Due Date *"
+              value={newDate}
+              onChange={setNewDate}
+            />
             <View className="flex-row gap-3">
               <View className="flex-1">
                 <Text className="mb-1.5 text-sm font-semibold text-slate-700">

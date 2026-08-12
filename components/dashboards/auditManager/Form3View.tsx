@@ -1,5 +1,6 @@
 import YearFilter from "@/components/common/YearFilter";
 import { apiClient } from "@/services/api"; // Adjust path if needed
+import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -21,6 +22,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +35,9 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // ✅ Toast Context Imported
 
+import { API_BASE_URL } from "@/config/apiConfig";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 // ══════ MNC STANDARD PALETTE ══════
 const COLORS = {
@@ -690,23 +695,82 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      await apiClient.get(`/api/audit-plan/${selectedYear}/export-pdf`, {
-        responseType: "blob",
-      });
-      addToast(
-        "PDF exported successfully! (Check your device downloads)",
-        "success",
-      ); // ✅ Toast
+      const pdfUrl = `${API_BASE_URL}/api/audit-plan/${selectedYear}/export-pdf`;
+
+      if (Platform.OS === "web") {
+        // ✅ WEB: Standard Blob Download
+        const response = await axios.get(pdfUrl, {
+          responseType: "blob",
+          withCredentials: true,
+        });
+
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `Annual_Audit_Plan_${selectedYear}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        addToast("PDF exported successfully!", "success");
+      } else {
+        // ✅ MOBILE: FileSystem Download + Native Share Sheet (Save to Files)
+
+        // 1. Get Auth Token (adjust key if you store it differently)
+        let token = null;
+        try {
+          const AsyncStorage = (
+            await import("@react-native-async-storage/async-storage")
+          ).default;
+          token = await AsyncStorage.getItem("token");
+        } catch (e) {
+          console.warn("AsyncStorage not found, proceeding without token.");
+        }
+
+        // ✅ FIX: Explicitly type headers as Record<string, string> to fix TS Error #2
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
+        // Using documentDirectory safely from the legacy import
+        const fileUri = `${FileSystem.documentDirectory}Annual_Audit_Plan_${selectedYear}.pdf`;
+
+        // 2. Download the file to the app's local directory
+        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri, {
+          headers,
+        });
+
+        // 3. Open the native Share Sheet so the user can save it to "Files" or share it
+        if (downloadResult.status === 200) {
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: "application/pdf",
+              dialogTitle: "Save or Share Annual Audit Plan",
+              UTI: "com.adobe.pdf", // iOS specific
+            });
+            addToast("PDF ready to save/share!", "success");
+          } else {
+            addToast("PDF downloaded to app directory.", "success");
+          }
+        } else {
+          throw new Error(
+            "Download failed with status: " + downloadResult.status,
+          );
+        }
+      }
     } catch (error: any) {
+      console.error("PDF Export Error:", error);
       addToast(
-        error.response?.data?.message || "Failed to export PDF",
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to export PDF",
         "error",
-      ); // ✅ Toast
+      );
     } finally {
       setExporting(false);
     }
   };
-
   const totalPlanned = useMemo(() => {
     let count = 0;
     planData.forEach((element) =>

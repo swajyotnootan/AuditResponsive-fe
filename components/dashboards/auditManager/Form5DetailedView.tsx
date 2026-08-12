@@ -1,5 +1,4 @@
 // Form5DetailedView.tsx
-import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi, User } from "@/services/auditScheduleApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
@@ -25,7 +24,8 @@ import {
   X,
 } from "lucide-react-native";
 
-import * as FileSystem from "expo-file-system";
+import { API_BASE_URL } from "@/config/apiConfig";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -41,7 +41,9 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
-// ═════ MNC STANDARD PALETTE ═════
+
+// Ensure API_BASE_U is defined dynamically for Web vs Mobile
+
 const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
@@ -597,7 +599,22 @@ export default function Form5DetailedView({
     msg: string,
     type: "success" | "error" | "warning" = "success",
   ) => {
-    Alert.alert(type.charAt(0).toUpperCase() + type.slice(1), msg);
+    const title = type.charAt(0).toUpperCase() + type.slice(1);
+
+    if (Platform.OS === "web") {
+      console.log(`[${type.toUpperCase()}] ${msg}`);
+
+      if (
+        typeof window !== "undefined" &&
+        typeof (window as any).alert === "function"
+      ) {
+        (window as any).alert(`${title}: ${msg}`);
+      }
+
+      return;
+    }
+
+    Alert.alert(title, msg);
   };
 
   // Parse URL params
@@ -1651,7 +1668,7 @@ export default function Form5DetailedView({
     }
   };
 
- const handleSubmitAllDraftSchedules = async () => {
+  const handleSubmitAllDraftSchedules = async () => {
     const userId = getUserIdAsNumber();
 
     if (!userId) {
@@ -1757,7 +1774,6 @@ export default function Form5DetailedView({
       },
     ]);
   };
-
 
   const handleDelete = async (id: number) => {
     const scheduleToDelete = auditSchedules.find((s) => s.id === id);
@@ -1869,7 +1885,7 @@ export default function Form5DetailedView({
     }
     setSubmitting(true);
     try {
-      // ✅ FIXED: Using fetch with API_BASE_URL
+      // ✅ FIXED: Using fetch with API_BASE_U
       const url = `${API_BASE_URL}/api/audit-schedule/detailed/${scheduleId}/request-changes?userId=${getUserIdAsNumber()}`;
       const response = await fetch(url, {
         method: "POST",
@@ -1927,6 +1943,20 @@ export default function Form5DetailedView({
     showToast("Schedule exported successfully!", "success");
   };
 
+  // ═════ PDF DOWNLOAD HELPERS ═════
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        // Extracts only the base64 string (removes "data:application/pdf;base64,")
+        resolve(result.split(",")[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const handleDownloadPdf = async () => {
     if (!selectedMonth) {
       showToast("Please select a month first", "warning");
@@ -1934,7 +1964,7 @@ export default function Form5DetailedView({
     }
     setDownloadingPdf(true);
     try {
-      // 1. Fetch the AxiosResponse containing the Blob
+      // 1. Use your existing API service (This guarantees the correct backend URL is used!)
       const response = await auditScheduleApi.downloadDetailedViewPdf(
         selectedYear,
         selectedMonth as any,
@@ -1945,21 +1975,58 @@ export default function Form5DetailedView({
         },
       );
 
-      // 2. Extract the blob and use the helper to save/share
-      const blob = response.data;
-      const result = await downloadAndSharePDF(
-        blob,
-        `audit_detailed_view_${selectedYear}_${selectedMonth}.pdf`,
-      );
+      // Ensure we have a Blob
+      const blob =
+        response.data instanceof Blob
+          ? response.data
+          : new Blob([response.data], { type: "application/pdf" });
 
-      if (result.success) {
+      if (Platform.OS === "web") {
+        // ✅ WEB / DESKTOP: Standard Browser Download
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute(
+          "download",
+          `Form5_Detailed_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`,
+        );
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
         showToast("Detailed schedule PDF downloaded successfully!", "success");
       } else {
-        showToast("Failed to share PDF", "error");
+        // ✅ MOBILE / TABLET: Convert Blob to Base64 -> Save to FileSystem -> Share
+        const base64Data = await blobToBase64(blob);
+
+        const fileUri = `${FileSystem.documentDirectory}Form5_Detailed_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
+
+        // Write the base64 string to the device's local storage
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+
+        // Open the native Share Sheet so the user can save it to "Files"
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: "application/pdf",
+            dialogTitle: "Save or Share Detailed Audit Schedule",
+            UTI: "com.adobe.pdf",
+          });
+          showToast("PDF ready to save/share!", "success");
+        } else {
+          showToast("PDF downloaded to app directory.", "success");
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error downloading detailed schedule PDF:", error);
-      showToast("Failed to download detailed schedule PDF", "error");
+      showToast(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to download detailed schedule PDF",
+        "error",
+      );
     } finally {
       setDownloadingPdf(false);
     }
@@ -2826,10 +2893,9 @@ export default function Form5DetailedView({
                                           color={COLORS.error}
                                         />
                                       </TouchableOpacity>
-                                      {(schedule.detailedApprovalStatus ===
-                                        "DRAFT" ||
-                                        schedule.detailedApprovalStatus ===
-                                          "CHANGE_REQUESTED") && (
+                                      {isSubmittableDraft(
+                                        schedule.detailedApprovalStatus,
+                                      ) && (
                                         <TouchableOpacity
                                           onPress={() =>
                                             handleSubmitScheduleForApproval(
@@ -4360,47 +4426,3 @@ export default function Form5DetailedView({
     </View>
   );
 }
-// ═════ PDF DOWNLOAD HELPERS ═════
-const getFileUri = (fileName: string): string => {
-  const fs = FileSystem as any;
-  const dir = fs.documentDirectory || fs.cacheDirectory;
-  if (!dir) throw new Error("No storage directory available");
-  const safeDir = dir.endsWith("/") ? dir : `${dir}/`;
-  return `${safeDir}${fileName}`;
-};
-
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      resolve(result.split(",")[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
-
-const downloadAndSharePDF = async (blob: Blob, fileName: string) => {
-  try {
-    const fileUri = getFileUri(fileName);
-    const base64Data = await blobToBase64(blob);
-    const fs = FileSystem as any;
-
-    await fs.writeAsStringAsync(fileUri, base64Data, {
-      encoding: fs.EncodingType.Base64,
-    });
-
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "application/pdf",
-        dialogTitle: "Share PDF",
-        UTI: "com.adobe.pdf",
-      });
-    }
-    return { success: true };
-  } catch (error) {
-    console.error("Error downloading PDF:", error);
-    return { success: false, error: String(error) };
-  }
-};

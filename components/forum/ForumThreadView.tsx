@@ -43,12 +43,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSFU } from "../../hooks/useSFU";
 import {
-  createForumPost,
   fetchGroupThreads,
-  sendCallNotification,
+  sendCallNotification
 } from "./Api/forumapi";
 import ThreadCard from "./ThreadCard";
 import ThreadComposer from "./ThreadComposer";
@@ -114,6 +114,7 @@ export default function ForumThreadView({
   memberEmails = [],
 }: ForumThreadViewProps) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // ---- Core State ----
   const [posts, setPosts] = useState<any[]>([]);
@@ -400,6 +401,8 @@ export default function ForumThreadView({
   }, [memberEmails, allUsers]);
 
   // ========== DATA FETCHING (FIXED SOUND LOOP) ==========
+    // ========== DATA FETCHING ==========
+    // ========== DATA FETCHING (WITH REAL READ RECEIPTS) ==========
   const loadPosts = useCallback(async () => {
     if (!groupId || !mountedRef.current) return;
     try {
@@ -410,14 +413,9 @@ export default function ForumThreadView({
           ? response
           : response?.data || response?.posts || [];
       }
-      if (!Array.isArray(postsData)) {
-        postsData = [];
-      }
+      if (!Array.isArray(postsData)) postsData = [];
 
-      // ✅ FIX 1: Use the Ref instead of the stale `posts` state array
       const newPosts = postsData.filter((p: any) => !lastKnownPostIdsRef.current.has(p.id));
-      
-      // ✅ FIX 2: Prevent sound from playing on the very first load when opening the chat
       const isFirstLoad = lastKnownPostIdsRef.current.size === 0;
       const hasNewMessages = newPosts.length > 0 && !isFirstLoad;
 
@@ -430,17 +428,24 @@ export default function ForumThreadView({
             x?.username === post.createdBy ||
             x?.id === post.createdBy,
         );
+
+        // ✅ Assign delivery status for own messages loaded from DB
+        let deliveryStatus = post.deliveryStatus;
+        if (!deliveryStatus && post.createdBy === currentUserEmail) {
+          deliveryStatus = 'DELIVERED';
+        }
+
         return {
           ...post,
           createdByProfileImage: u?.profileImage || "",
           createdByName: u
             ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email
             : post.createdBy || "Unknown",
+          deliveryStatus,
         };
       });
 
       if (mountedRef.current) {
-        // ✅ FIX 3: Update the Ref with current IDs BEFORE setting state
         lastKnownPostIdsRef.current = new Set(postsData.map((p: any) => p.id));
 
         setPosts(
@@ -454,13 +459,27 @@ export default function ForumThreadView({
         setUnreadCount(0);
         setLastSeen(new Date().toISOString());
 
-        // ✅ Play sound only for genuinely new messages from others
         if (hasNewMessages) {
           const latestPost = newPosts[newPosts.length - 1];
           if (latestPost?.createdBy !== currentUserEmail) {
             playNotificationSound('receive');
           }
         }
+
+        // ✅ REAL READ RECEIPTS: Mark all unread messages from OTHERS as "Seen"
+        const unreadMessages = enriched.filter((p: any) => 
+          p.createdBy !== currentUserEmail && 
+          p.messageType !== 'REACTION' &&
+          (!p.seenBy || !p.seenBy.includes(currentUserEmail))
+        );
+
+        // Fire-and-forget API calls to mark them as seen
+        unreadMessages.forEach((p: any) => {
+          fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${p.id}/mark-seen?requester=${currentUserEmail}`, {
+            method: 'POST',
+            credentials: 'include'
+          }).catch(() => {});
+        });
       }
     } catch (err) {
       console.error("❌ Load posts error:", err);
@@ -468,13 +487,12 @@ export default function ForumThreadView({
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [groupId, allUsers, currentUserEmail]); 
-
-  // ========== POLLING ==========
+  }, [groupId, allUsers, currentUserEmail]);
+    // ========== POLLING ==========
   const startPolling = useCallback(() => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     loadPosts();
-    pollingRef.current = setInterval(loadPosts, 5000);
+    pollingRef.current = setInterval(loadPosts, 5000); // Fetches every 5 seconds
     setIsChatConnected(true);
   }, [loadPosts]);
 
@@ -488,123 +506,212 @@ export default function ForumThreadView({
     }
   }, []);
 
-  // ========== MESSAGE HANDLING ==========
+
+
+  // ========== SEND MESSAGE ==========
+   // ========== SEND MESSAGE (NO MORE FAKE TIMERS) ==========
   const handleNewPost = async (newPostData: any) => {
     if (!mountedRef.current || !groupId) return;
 
     const userEmail = currentUser?.email || username || "";
+    const tempId = `temp-msg-${Date.now()}-${Math.random()}`;
+
+    // ⏱️ Step 1: Optimistic message with SENDING status (Clock icon)
+    const optimisticMsg = {
+      id: tempId,
+      content: newPostData.content,
+      createdBy: userEmail,
+      createdByName: displayName,
+      createdAt: new Date().toISOString(),
+      messageType: newPostData.messageType || "TEXT",
+      attachments: newPostData.attachments || [],
+      deliveryStatus: 'SENDING' as const,
+    };
+
+    setPosts(prev => [...prev, optimisticMsg]);
 
     try {
-      const res = await createForumPost(String(groupId), {
-        content: newPostData.content,
-        createdBy: userEmail,
-        messageType: newPostData.messageType || "TEXT",
-        attachments: newPostData.attachments || [],
+      const res = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          content: newPostData.content,
+          createdBy: userEmail,
+          messageType: newPostData.messageType || "TEXT",
+          parentId: newPostData.parentId || null,
+          attachments: newPostData.attachments || [],
+        })
       });
 
-      const safeAllUsers = Array.isArray(allUsers) ? allUsers : [];
-      const user = safeAllUsers.find(
-        (x: any) =>
-          x?.email === userEmail ||
-          x?.username === userEmail ||
-          x?.id === userEmail,
-      );
-      const name =
-        user?.firstName && user?.lastName
-          ? `${user.firstName} ${user.lastName}`.trim()
-          : user?.firstName || user?.lastName || userEmail;
+      if (res.ok) {
+        const savedMsg = await res.json();
 
-      if (mountedRef.current) {
-        setPosts((prev) => [
-          ...prev,
-          {
-            ...res,
-            createdByProfileImage: user?.profileImage || "",
-            createdByName: name,
-            optimistic: true,
-          },
-        ]);
-      }
+        // ✅ Step 2: Server confirmed → SENT (single gray check ✓)
+        setPosts(prev => prev.map(p =>
+          p.id === tempId
+            ? { ...savedMsg, deliveryStatus: 'SENT', createdByName: displayName }
+            : p
+        ));
 
-      // ✅ Play sound AFTER message is successfully sent
-      setTimeout(() => {
         playNotificationSound('send');
-      }, 100);
 
-      console.log("✅ Message sent via HTTP");
-    } catch (httpErr) {
-      console.error("❌ HTTP send failed:", httpErr);
-      if ((httpErr as any)?.response?.status >= 500) {
-        Alert.alert("Error", "Failed to send message. Please try again.");
+        // ✅ NOTE: No more fake timers! 
+        // DELIVERED status comes from loadPosts when message is confirmed in DB
+        // SEEN (blue tick) comes from seenBy array in ThreadCard getStatusIcon
+
+      } else {
+        // ❌ Mark as FAILED
+        setPosts(prev => prev.map(p =>
+          p.id === tempId ? { ...p, deliveryStatus: 'FAILED', failed: true } : p
+        ));
       }
+    } catch (err) {
+      console.error("❌ Send failed:", err);
+      setPosts(prev => prev.map(p =>
+        p.id === tempId ? { ...p, deliveryStatus: 'FAILED', failed: true } : p
+      ));
     }
   };
 
-  // ✅ REACTIONS
-  const handleReactToPost = async (postId: string, emoji: string) => {
+
+  // ========== REACTIONS (FIXED: Only removes YOUR reaction) ==========
+    // ========== REACTIONS (FIXED: Safe user matching & correct endpoints) ==========
+    // ========== REACTIONS (SAFE USER MATCHING) ==========
+  const handleReactToPost = async (postId: string | number, emoji: string) => {
     if (!mountedRef.current || !groupId) return;
     const userEmail = currentUser?.email || username || "";
     
-    const tempId = `temp-react-${Date.now()}-${Math.random()}`;
+    // ✅ SAFER CHECK: Prevent matching if userEmail is empty/undefined
+    const normalizedEmail = userEmail ? String(userEmail).toLowerCase().trim() : '';
+    const normalizedUsername = currentUser?.username ? String(currentUser.username).toLowerCase().trim() : '';
+
+    const existingReaction = posts.find(p => {
+      if (p.messageType !== 'REACTION') return false;
+      if (String(p.parentId) !== String(postId)) return false;
+      if (p.content !== emoji) return false;
+      
+      const creator = String(p.createdBy || '').toLowerCase().trim();
+      if (!creator) return false;
+      
+      return (normalizedEmail && creator === normalizedEmail) || 
+             (normalizedUsername && creator === normalizedUsername);
+    });
+
+    if (existingReaction) {
+      // ✅ User already reacted → Remove ONLY their reaction
+      try {
+        setPosts(prev => prev.filter(p => String(p.id) !== String(existingReaction.id)));
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${existingReaction.id}?requester=${userEmail}`,
+          { method: 'DELETE', credentials: 'include' }
+        );
+
+        if (!response.ok) {
+          console.error("❌ Failed to remove reaction:", await response.text());
+          setPosts(prev => [...prev, existingReaction]); // Rollback
+        }
+      } catch (err) {
+        console.error("Failed to remove reaction", err);
+        setPosts(prev => [...prev, existingReaction]); // Rollback
+      }
+      return;
+    }
+
+    // ✅ Add new reaction
+    const tempId = `temp-react-${Date.now()}`;
     const optimisticReaction = {
       id: tempId,
       content: emoji,
       messageType: "REACTION",
-      parentId: postId, 
+      parentId: postId,
       createdBy: userEmail,
       createdByName: displayName,
       createdAt: new Date().toISOString(),
     };
-    
+
     setPosts(prev => [...prev, optimisticReaction]);
 
     try {
-      await createForumPost(String(groupId), {
-        content: emoji,
-        createdBy: userEmail,
-        messageType: "REACTION",
-        parentId: postId, 
-        attachments: [],
+      const response = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          content: emoji,
+          createdBy: userEmail,
+          messageType: "REACTION",
+          parentId: Number(postId),
+          attachments: []
+        })
       });
-      playNotificationSound('send');
+
+      if (!response.ok) {
+        console.error("❌ Reaction failed:", await response.text());
+        setPosts(prev => prev.filter(p => p.id !== tempId)); // Rollback
+      } else {
+        playNotificationSound('send');
+      }
     } catch (err) {
       console.error("Failed to send reaction", err);
-      setPosts(prev => prev.filter(p => p.id !== tempId));
+      setPosts(prev => prev.filter(p => p.id !== tempId)); // Rollback
     }
   };
 
-  const getReactionsForThread = useCallback((threadId: string) => {
+    // ✅ FIXED REACTIONS (Prevents Type Mismatch)
+    const getReactionsForThread = useCallback((threadId: string | number) => {
     if (!threadId) return [];
     return posts.filter(p => 
       p.messageType === 'REACTION' && 
-      (p.parentId === threadId || p.replyTo === threadId)
+      String(p.parentId) === String(threadId) // ✅ FORCE STRING COMPARISON
     );
   }, [posts]);
 
   // ✅ EDIT & DELETE
+    // ✅ FIXED EDIT MESSAGE
   const handleUpdatePost = async (postData: any) => {
     try {
+      // 1. Optimistic UI update (updates screen instantly)
       setPosts(prev => prev.map(p => p.id === postData.id ? { ...p, content: postData.content, isEdited: true } : p));
       
-      await fetch(`${API_BASE_URL}/api/forum/groups/${groupId}/posts/${postData.id}`, {
+      // 2. Call the CORRECT 8D API endpoint with the requester
+      const response = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${postData.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ content: postData.content })
+        body: JSON.stringify({ 
+          content: postData.content,
+          requester: currentUserEmail // ✅ Backend requires this for security
+        })
       });
+
+      if (!response.ok) {
+        console.error("❌ Edit failed on backend:", await response.text());
+      }
     } catch (err) {
       console.error("Update failed", err);
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
+    // ✅ FIXED DELETE MESSAGE
+      const handleDeletePost = async (postId: string | number) => {
     try {
-      setPosts(prev => prev.filter(p => p.id !== postId));
+      // 1. Optimistic UI (Remove from screen instantly)
+      setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
       
-      await fetch(`${API_BASE_URL}/api/forum/groups/${groupId}/posts/${postId}`, {
+      // 2. DIRECT FETCH to 8D endpoint with requester
+      const response = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${postId}?requester=${currentUserEmail}`, {
         method: 'DELETE',
         credentials: 'include'
       });
+
+      if (!response.ok) {
+        console.error("❌ Delete failed on backend:", await response.text());
+        // Optional: Rollback UI if delete fails
+      } else {
+        console.log("✅ Delete successful");
+      }
     } catch (err) {
       console.error("Delete failed", err);
     }
@@ -1141,40 +1248,59 @@ export default function ForumThreadView({
   return (
     <View className="flex-1 bg-white">
       {/* Header */}
-      <View className="bg-blue-900 px-4 py-3 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-3 flex-1">
+            {/* Header */}
+            {/* Header with Safe Area Spacing */}
+      <View style={{ 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'space-between', 
+        backgroundColor: '#1e3a8a', 
+        paddingHorizontal: 12, 
+        paddingTop: insets.top + 10,  // ✅ Space for status bar / notch
+        paddingBottom: 10,
+      }}>
+        
+        {/* Left Side: Back & Title */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
           {onBack && (
-            <TouchableOpacity onPress={onBack} className="p-1">
+            <TouchableOpacity onPress={onBack} style={{ padding: 4, marginRight: 4 }}>
               <ArrowLeft size={20} color="white" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} className="flex-1">
-            <Text className="text-white font-semibold text-base">{displayGroupName}</Text>
-            <Text className="text-blue-200 text-xs">
+          <TouchableOpacity 
+            onPress={() => setShowMembersSidebar(!showMembersSidebar)} 
+            style={{ flex: 1 }}
+          >
+            <Text style={{ color: 'white', fontWeight: '600', fontSize: 15 }} numberOfLines={1}>
+              {displayGroupName}
+            </Text>
+            <Text style={{ color: '#bfdbfe', fontSize: 11 }} numberOfLines={1}>
               {Array.isArray(groupMembers) ? groupMembers.length : 0} members • {Array.isArray(posts) ? posts.length : 0} messages
             </Text>
           </TouchableOpacity>
         </View>
-        <View className="flex-row items-center gap-1">
-          <TouchableOpacity onPress={() => setShowEmailModal(true)} className="p-2">
+
+        {/* Right Side: Scrollable Icons */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={{ flex: 0.4 }}
+          contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 4, }}
+        >
+          <TouchableOpacity onPress={() => setShowEmailModal(true)} style={{ padding: 6 }}>
             <Mail size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} className="p-2">
+          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} style={{ padding: 6 }}>
             <Users size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setIsSearching(!isSearching)} className="p-2">
+          <TouchableOpacity onPress={() => setIsSearching(!isSearching)} style={{ padding: 6 }}>
             <Search size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowSettingsModal(true)} className="p-2">
+          <TouchableOpacity onPress={() => setShowSettingsModal(true)} style={{ padding: 6 }}>
             <Settings size={18} color="white" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleStartCall(true, "audio")} className="p-2">
-            <Phone size={18} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleStartCall(true, "video")} className="p-2">
-            <VideoIcon size={18} color="white" />
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
+
       </View>
 
       {/* Search Bar */}

@@ -2,13 +2,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import axios from "axios";
 import { router } from "expo-router";
+import { Grid, Layout } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
+  Pressable,
   ScrollView,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Animated, {
@@ -17,8 +21,8 @@ import Animated, {
   SlideOutLeft,
   SlideOutRight,
 } from "react-native-reanimated";
-// NOTE: Ensure these child components are also converted to React Native and typed
-import EightDStepper from "./EightDStepper";
+
+import EightDStepper, { Orientation } from "./EightDStepper";
 import D0PlanContain from "./steps/D0PlanContain";
 import D1FormTeam from "./steps/D1FormTeam";
 import D2FormProblem from "./steps/D2FormProblem";
@@ -30,7 +34,6 @@ import D7LessonsLearned from "./steps/D7LessonsLearned";
 import D8TeamReward from "./steps/D8TeamReward";
 import FinalPreview from "./steps/FinalPreview";
 
-// --- TypeScript Interfaces ---
 interface RouteParams {
   eventId?: string | null;
   step?: string;
@@ -88,9 +91,19 @@ export default function EightDFlow() {
   const isNcrBased = params.isNcrBased ?? false;
   const type = params.type;
 
-  // Add this with your other useState declarations
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+
+  const [orientation, setOrientation] = useState<Orientation>("horizontal");
+  const { width } = useWindowDimensions();
+  const isWeb = Platform.OS === "web";
+  const isDesktop = isWeb && width >= 768;
+
+  // ✅ Float the toggle in the empty right margin (no overlap, no gap)
+  const CONTAINER_MAX = 1080; // must match max-w-[1200px] below
+  const sideMargin = Math.max(0, (width - CONTAINER_MAX) / 2);
+  const toggleRight = sideMargin >= 70 ? (sideMargin - 42) / 2 : 12;
+
   const startedFromNcrFlow = Boolean(
     isNcrBased || type === "ncr" || String(eventId || "").startsWith("8D-"),
   );
@@ -153,19 +166,13 @@ export default function EightDFlow() {
     saveApprovals();
   }, [approvals]);
 
-  // ✅ NEW: Sync route params with state to prevent stale data when navigating between different reports
   useEffect(() => {
     const newEventId = params.eventId;
 
-    // If the route param eventId is different from our current state, update it
     if (newEventId !== eventNo) {
       setEventNo(newEventId || null);
-
-      // Reset UI states to prevent bleeding from the previous report
       setDocumentStatus("draft");
       setIsSubmitted(false);
-
-      // Optional: Clear form data briefly while the new data loads
       setFormData({
         d0: [],
         d1: [],
@@ -178,7 +185,7 @@ export default function EightDFlow() {
         d8: [],
       });
     }
-  }, [params.eventId]); // <-- This triggers whenever you click a new card on the Landing Page
+  }, [params.eventId]);
 
   const saveStep = async (
     currentFormData: EightDFormData,
@@ -198,7 +205,6 @@ export default function EightDFlow() {
 
       const payload: Record<string, any> = {};
 
-      // ✅ NEW: Add status to the root of the payload if provided
       if (finalStatus) {
         payload.status = finalStatus;
       }
@@ -249,16 +255,12 @@ export default function EightDFlow() {
       return false;
     }
   };
+
   const nextStep = async () => {
     const success = await saveStep(formData);
     if (!success) return;
 
     if (currentStep === 0 && currentStep + 1 === 1) {
-      console.log(
-        "🚦 Checking if can move from D0 to D1. Status:",
-        documentStatus,
-      );
-
       if (documentStatus === "rejected") {
         Alert.alert(
           "Rejected",
@@ -288,13 +290,6 @@ export default function EightDFlow() {
   };
 
   const goToStep = (index: number) => {
-    console.log(
-      "🔄 Navigating to step",
-      index,
-      "Current document status:",
-      documentStatus,
-    );
-
     if (index === 0) {
       setDirection(index > currentStep ? 1 : -1);
       setCurrentStep(index);
@@ -314,11 +309,10 @@ export default function EightDFlow() {
   };
 
   const handleFinalSubmit = async () => {
-    if (isSubmitting) return; // Prevents double clicks
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      // ✅ Pass "Submitted" to update the backend status
       const success = await saveStep(formData, "Submitted");
 
       if (success) {
@@ -329,7 +323,6 @@ export default function EightDFlow() {
           {
             text: "OK",
             onPress: () => {
-              // ✅ Force Landing Page to refresh by passing a unique param
               router.replace({
                 pathname: "/",
                 params: { refreshToken: Date.now().toString() },
@@ -347,11 +340,10 @@ export default function EightDFlow() {
       setIsSubmitting(false);
     }
   };
+
   useEffect(() => {
     const fetchData = async () => {
-      if (!eventNo) return; // Will wait until Step 1 updates eventNo
-
-      console.log("🔍 [EightDFlow] Fetching data for Event ID:", eventNo); // ✅ Helpful debug log
+      if (!eventNo) return;
 
       try {
         const response = await axios.get(
@@ -380,10 +372,10 @@ export default function EightDFlow() {
       }
     };
     fetchData();
-  }, [eventNo, startStep]); // <-- Dependencies are correct
+  }, [eventNo, startStep]);
+
   useEffect(() => {
     const normalizedStatus = documentStatus?.toLowerCase();
-    // Check if this event was already submitted or closed
     if (normalizedStatus === "submitted" || normalizedStatus === "closed") {
       setIsSubmitted(true);
     }
@@ -408,10 +400,6 @@ export default function EightDFlow() {
             updateParent={(rows: any[]) => {
               setFormData((prev) => ({ ...prev, d0: rows }));
               if (rows[0]?.status) {
-                console.log(
-                  "📋 Parent received D0 status update:",
-                  rows[0].status,
-                );
                 setDocumentStatus(rows[0].status);
               }
             }}
@@ -498,21 +486,78 @@ export default function EightDFlow() {
 
   return (
     <View className="flex-1 bg-gray-50">
+      {/* ✅ Floating toggle — absolute, zero layout space */}
+      {isDesktop && (
+        <Pressable
+          onPress={() =>
+            setOrientation(
+              orientation === "horizontal" ? "vertical" : "horizontal",
+            )
+          }
+          style={{
+            position: "absolute",
+            top: 8,
+            right: toggleRight,
+            zIndex: 50,
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#3b82f6",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 4,
+            elevation: 4,
+          }}
+        >
+          {orientation === "horizontal" ? (
+            <Grid size={20} color="#ffffff" />
+          ) : (
+            <Layout size={20} color="#ffffff" />
+          )}
+        </Pressable>
+      )}
+
       <ScrollView
-        className="flex-1"
-        // REDUCED: Changed from p-4 to p-2 for tighter outer margins
-        contentContainerClassName="p-2 min-h-full"
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingBottom: 8,
+          paddingTop: 4,
+          paddingHorizontal: isDesktop ? 8 : 0, // ✅ no side padding on mobile
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="self-center w-full max-w-4xl">
+        <View
+          style={{
+            alignSelf: "center",
+            width: "100%",
+            maxWidth: isDesktop ? 1080 : "100%", // ✅ full width on mobile (like UserFormModal)
+          }}
+        >
           <EightDStepper
             steps={steps}
             currentStep={currentStep}
             onStepClick={goToStep}
             stepData={formData}
+            orientation={orientation}
           >
-            {/* REDUCED: Changed from p-4 sm:p-5 mt-4 to p-2 sm:p-3 mt-2 */}
-            <View className="w-full p-2 mt-2 bg-white shadow-md rounded-xl sm:p-3">
+            <View
+              style={{
+                width: "100%",
+                backgroundColor: "white",
+                marginTop: isDesktop ? 8 : 2,
+                padding: isDesktop ? 16 : 8, // ✅ tighter on mobile
+                borderRadius: 12,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
               <Animated.View
                 key={currentStep}
                 entering={
@@ -529,13 +574,10 @@ export default function EightDFlow() {
               >
                 {renderStepContent()}
               </Animated.View>
-
-              {/* REDUCED: Changed from mt-6 pt-4 gap-3 to mt-3 pt-3 gap-2 */}
-              <View className="flex flex-row items-center justify-between gap-2 pt-3 mt-3 border-t border-gray-200">
+              <View className="flex flex-col items-stretch justify-between gap-2 pt-3 mt-3 border-t border-gray-200 sm:flex-row sm:items-center">
                 <TouchableOpacity
                   onPress={prevStep}
                   disabled={currentStep === 0}
-                  // REDUCED: Changed from px-5 py-3 min-w-[120px] to px-4 py-2.5 min-w-[100px]
                   className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border bg-gray-100 border-gray-300 ${currentStep === 0 ? "opacity-50" : ""}`}
                 >
                   <Text className="text-sm font-medium text-gray-700">

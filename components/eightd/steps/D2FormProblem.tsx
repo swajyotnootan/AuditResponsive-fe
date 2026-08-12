@@ -1,10 +1,13 @@
 // app/components/eightd/steps/D2FormProblem.tsx
 "use client";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  Modal, // 👈 Add Modal
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -68,6 +71,76 @@ export default function D2FormProblem({
     how: "",
     howMuch: "",
   });
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date());
+  const [tempTime, setTempTime] = useState(new Date());
+
+  const showDateTimePicker = () => {
+    // Initialize pickers with current value or current time
+    if (formData.when) {
+      const d = new Date(formData.when);
+      if (!isNaN(d.getTime())) {
+        setTempDate(d);
+        setTempTime(d);
+      }
+    } else {
+      const now = new Date();
+      setTempDate(now);
+      setTempTime(now);
+    }
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+      if (event.type === "set" && selectedDate) {
+        setTempDate(selectedDate);
+        setShowTimePicker(true); // 👈 Chain to time picker automatically on Android
+      }
+    } else {
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const handleDateConfirm = () => {
+    setShowDatePicker(false);
+    setShowTimePicker(true); // 👈 Chain to time picker on iOS
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    if (Platform.OS === "android") {
+      setShowTimePicker(false);
+      if (event.type === "set" && selectedTime) {
+        const combined = new Date(tempDate);
+        combined.setHours(selectedTime.getHours());
+        combined.setMinutes(selectedTime.getMinutes());
+        handleChange("when", combined.toISOString());
+      }
+    } else {
+      if (selectedTime) setTempTime(selectedTime);
+    }
+  };
+
+  const handleTimeConfirm = () => {
+    const combined = new Date(tempDate);
+    combined.setHours(tempTime.getHours());
+    combined.setMinutes(tempTime.getMinutes());
+    handleChange("when", combined.toISOString());
+    setShowTimePicker(false);
+  };
+
+  // 👇 Helper to format ISO string for HTML datetime-local input (Web)
+  const formatForWebInput = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - offset * 60000);
+    return localDate.toISOString().slice(0, 16); // Returns "YYYY-MM-DDTHH:mm"
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -287,12 +360,34 @@ export default function D2FormProblem({
           <View style={styles.gridRight}>
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>WHEN did it occur?</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.when}
-                onChangeText={(text) => handleChange("when", text)}
-                placeholder="Date and time"
-              />
+              {Platform.OS === "web" ? (
+                // @ts-ignore - HTML input is valid in RN Web
+                <input
+                  type="datetime-local"
+                  value={formatForWebInput(formData.when)}
+                  onChange={(e: any) => {
+                    const localDate = new Date(e.target.value);
+                    handleChange("when", localDate.toISOString());
+                  }}
+                  style={styles.webDateTimeInput as any}
+                />
+              ) : (
+                // 👇 MOBILE PLATFORMS: Opens Date Picker, then Time Picker
+                <TouchableOpacity
+                  style={[styles.input, styles.dateTouchable]}
+                  onPress={showDateTimePicker}
+                >
+                  <Text
+                    style={
+                      formData.when ? styles.dateText : styles.datePlaceholder
+                    }
+                  >
+                    {formData.when
+                      ? new Date(formData.when).toLocaleString()
+                      : "Select Date & Time"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.fieldGroup}>
@@ -339,6 +434,94 @@ export default function D2FormProblem({
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* iOS Date Picker Modal */}
+      {Platform.OS === "ios" && showDatePicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showDatePicker}
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitleText}>Select Date</Text>
+                <TouchableOpacity onPress={handleDateConfirm}>
+                  <Text style={styles.modalDoneText}>Next</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+                textColor="#000000"
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* iOS Time Picker Modal */}
+      {Platform.OS === "ios" && showTimePicker && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible={showTimePicker}
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowTimePicker(false)}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalTitleText}>Select Time</Text>
+                <TouchableOpacity onPress={handleTimeConfirm}>
+                  <Text style={styles.modalDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempTime}
+                mode="time"
+                display="spinner"
+                onChange={onTimeChange}
+                textColor="#000000"
+              />
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* Android Native Dialogs (No Modal wrapper needed) */}
+      {Platform.OS === "android" && showDatePicker && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+        />
+      )}
+      {Platform.OS === "android" && showTimePicker && (
+        <DateTimePicker
+          value={tempTime}
+          mode="time"
+          display="default"
+          onChange={onTimeChange}
+        />
+      )}
     </View>
   );
 }
@@ -486,6 +669,67 @@ const styles = StyleSheet.create({
   autoFillButtonText: {
     color: "#FFFFFF",
     fontSize: 12,
+    fontWeight: "600",
+  },
+  // --- Add these inside your StyleSheet.create ---
+  webDateTimeInput: {
+    width: "100%",
+    boxSizing: "border-box", // Ensures border+padding are included in 100% width
+    borderRadius: 8,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    fontSize: 14,
+    color: "#1F2937",
+    backgroundColor: "#FFFFFF",
+    outline: "none",
+    fontFamily: "inherit",
+    cursor: "pointer",
+  },
+  dateTouchable: {
+    justifyContent: "center",
+  },
+  dateText: {
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  datePlaceholder: {
+    fontSize: 14,
+    color: "#9CA3AF",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: "#EF4444",
+    fontWeight: "500",
+  },
+  modalTitleText: {
+    fontSize: 16,
+    color: "#1F2937",
+    fontWeight: "600",
+  },
+  modalDoneText: {
+    fontSize: 16,
+    color: "#2563EB",
     fontWeight: "600",
   },
 });

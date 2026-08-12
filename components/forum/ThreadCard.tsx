@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Profile Modal, Reactions, Edit & Delete Added
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -9,18 +9,20 @@ import {
   Building2,
   Calendar,
   Check,
+  CheckCheck, // ✅ WhatsApp double check
+  Clock, // ✅ WhatsApp sending status
   Download,
-  Edit, // ✅ ADDED
+  Edit,
   Eye,
   FileText,
   Mail,
   MapPin,
-  MoreVertical, // ✅ ADDED
+  MoreVertical,
   Pause,
   Play,
   RefreshCw,
-  Smile, // ✅ ADDED
-  Trash2, // ✅ ADDED
+  Smile,
+  Trash2,
   User,
   X,
 } from "lucide-react-native";
@@ -28,6 +30,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated, // ✅ For blink animation
   Dimensions,
   Image,
   Linking,
@@ -45,11 +48,10 @@ import {
 // Types
 // =====================================================
 
-type AttachmentType =
-  "IMAGE" | "VIDEO" | "AUDIO" | "LOCATION" | "EVENT" | "DOCUMENT";
+type AttachmentType = "IMAGE" | "VIDEO" | "AUDIO" | "LOCATION" | "EVENT" | "DOCUMENT";
 
 interface Attachment {
-  id?: string;
+  id?: string | number;
   fileName?: string;
   fileSize?: number;
   fileType?: string;
@@ -59,7 +61,7 @@ interface Attachment {
 }
 
 interface Thread {
-  id?: string;
+  id?: string | number;
   content?: string;
   createdBy?: string; 
   createdByName?: string;
@@ -68,7 +70,9 @@ interface Thread {
   messageType?: string;
   failed?: boolean;
   attachments?: Attachment[];
-  isEdited?: boolean; // ✅ ADDED
+  isEdited?: boolean;
+  deliveryStatus?: 'SENDING' | 'SENT' | 'DELIVERED' | 'SEEN' | 'FAILED';
+  seenBy?: string[]; // ✅ ADD THIS for real read receipts
 }
 
 interface ThreadCardProps {
@@ -81,10 +85,10 @@ interface ThreadCardProps {
   };
   allUsers?: any[];
   onRetry?: (thread: Thread) => void;
-  reactions?: any[]; // ✅ ADDED
-  onReact?: (threadId: string, emoji: string) => void; // ✅ ADDED
-  onEdit?: (thread: Thread) => void; // ✅ ADDED
-  onDelete?: (threadId: string) => void; // ✅ ADDED
+  reactions?: any[];
+  onReact?: (threadId: string | number, emoji: string) => void;
+  onEdit?: (thread: Thread) => void;
+  onDelete?: (threadId: string | number) => void;
 }
 
 interface UserProfile {
@@ -102,29 +106,27 @@ interface UserProfile {
 // =====================================================
 
 const getProfileImageUrl = (userId?: string | number | null, existingImage?: string) => {
-  if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) {
-    return existingImage;
-  }
-  if (userId) {
-    return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
-  }
+  if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) return existingImage;
+  if (userId) return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
   return null;
 };
 
+// ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
 const formatDateAndTime = (dateString?: string) => {
+  if (!dateString) return "";
   try {
-    if (!dateString) return "";
-    let dateToParse = dateString;
-    if (!dateString.includes('Z') && !dateString.match(/([+-]\d{2}:\d{2})$/)) {
-      dateToParse = dateString + 'Z';
-    }
-    const date = new Date(dateToParse);
-    if (isNaN(date.getTime())) {
-      const fallbackDate = new Date(dateString);
-      if (isNaN(fallbackDate.getTime())) return "";
-      return fallbackDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
-    }
-    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+    let isoString = dateString.replace(' ', 'T');
+    // Let JS parse it as local time naturally
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "";
+    
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
   } catch (error) {
     return "";
   }
@@ -156,7 +158,7 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
     if (videoRef.current) {
       const video = videoRef.current;
       const handleLoadedData = () => { setIsLoading(false); setError(null); };
-      const handleError = (e: any) => { console.warn("Video error:", e); setError("Failed to load video"); setIsLoading(false); };
+      const handleError = (e: any) => { setError("Failed to load video"); setIsLoading(false); };
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
       video.addEventListener("loadeddata", handleLoadedData);
@@ -168,9 +170,7 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
         video.removeEventListener("error", handleError);
         video.removeEventListener("play", handlePlay);
         video.removeEventListener("pause", handlePause);
-        video.pause();
-        video.src = "";
-        video.load();
+        video.pause(); video.src = ""; video.load();
       };
     }
   }, [url]);
@@ -214,9 +214,7 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
 
   const formatDuration = (seconds: number) => {
     if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   };
 
   useEffect(() => {
@@ -227,10 +225,10 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
         audio.addEventListener("loadedmetadata", () => { setDuration(audio.duration); setIsLoading(false); });
         audio.addEventListener("timeupdate", () => setCurrentTime(audio.currentTime));
         audio.addEventListener("ended", () => { setIsPlaying(false); setCurrentTime(0); });
-        audio.addEventListener("error", (e) => { console.warn("Audio error:", e); setError("Cannot play audio"); setIsLoading(false); });
+        audio.addEventListener("error", () => { setError("Cannot play audio"); setIsLoading(false); });
         audioRef.current = audio;
         return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; } };
-      } catch (err) { console.warn("Audio setup error:", err); setError("Cannot setup audio"); setIsLoading(false); }
+      } catch (err) { setError("Cannot setup audio"); setIsLoading(false); }
     }
   }, [uri]);
 
@@ -350,15 +348,69 @@ export default function ThreadCard({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  // ✅ NEW: Reactions & Menu State
   const [showReactionBar, setShowReactionBar] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showReactionDetail, setShowReactionDetail] = useState<string | null>(null);
   const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
 
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
 
-  // ✅ NEW: Group reactions by emoji
+  // ✅ WhatsApp Blink Animation
+  const blinkAnim = useRef(new Animated.Value(1)).current;
+  const prevStatusRef = useRef(thread.deliveryStatus);
+
+  useEffect(() => {
+    if (thread.deliveryStatus === 'SEEN' && prevStatusRef.current !== 'SEEN') {
+      blinkAnim.setValue(0.3);
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(blinkAnim, { toValue: 0.3, duration: 200, useNativeDriver: true }),
+        Animated.timing(blinkAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    }
+    prevStatusRef.current = thread.deliveryStatus;
+  }, [thread.deliveryStatus]);
+
+  // ✅ WhatsApp Status Icons
+    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
+  const getStatusIcon = () => {
+    if (thread.failed || thread.deliveryStatus === 'FAILED') {
+      return (
+        <Pressable onPress={() => onRetry?.(thread)}>
+          <RefreshCw size={13} color="#ef4444" />
+        </Pressable>
+      );
+    }
+
+    // ✅ REAL WHATSAPP LOGIC: Check if anyone ELSE has seen it
+    const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && 
+      thread.seenBy.some((email: string) => email !== currentEmail);
+
+    if (seenByOthers) {
+      // 🔵 BLUE TICK (Seen by recipient)
+      return (
+        <Animated.View style={{ opacity: blinkAnim }}>
+          <CheckCheck size={13} color="#3b82f6" />
+        </Animated.View>
+      );
+    }
+
+    // ⚪ GRAY TICKS (Not seen yet)
+    switch (thread.deliveryStatus) {
+      case 'SENDING': return <Clock size={13} color="#9ca3af" />;
+      case 'SENT': return <Check size={13} color="#9ca3af" />;
+      case 'DELIVERED': return <CheckCheck size={13} color="#9ca3af" />;
+      case 'SEEN':
+        return (
+          <Animated.View style={{ opacity: blinkAnim }}>
+            <CheckCheck size={13} color="#3b82f6" />
+          </Animated.View>
+        );
+      default: return <CheckCheck size={13} color="#9ca3af" />;
+    }
+  };
+
   const groupedReactions = useMemo(() => {
     const groups: Record<string, { count: number; users: string[]; hasReacted: boolean }> = {};
     reactions?.forEach((r: any) => {
@@ -377,7 +429,29 @@ export default function ThreadCard({
     setShowReactionBar(false);
   };
 
-  // Process attachments
+  // ✅ Cross-platform delete confirmation
+  const confirmDelete = () => {
+    setShowMenu(false);
+    const executeDelete = () => {
+      console.log("🗑️ Executing delete for thread ID:", thread.id);
+      onDelete?.(String(thread.id));
+    };
+
+    if (Platform.OS === 'web') {
+      const isConfirmed = window.confirm("Are you sure you want to delete this message?");
+      if (isConfirmed) executeDelete();
+    } else {
+      Alert.alert(
+        "Delete Message", 
+        "Are you sure you want to delete this?", 
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: executeDelete }
+        ]
+      );
+    }
+  };
+
   const processedAttachments = useMemo(() => {
     if (!thread.attachments || thread.attachments.length === 0) return [];
     return thread.attachments.filter(att => att != null).map((attachment) => {
@@ -427,13 +501,8 @@ export default function ThreadCard({
 
   const openImagePreview = (url: string) => setImageModal({ open: true, url });
   const closeImagePreview = () => setImageModal({ open: false, url: "" });
-
-  const openVideoPreview = (url: string) => {
-    if (Platform.OS === "web") setVideoModal({ open: true, url });
-    else Linking.openURL(url);
-  };
+  const openVideoPreview = (url: string) => { if (Platform.OS === "web") setVideoModal({ open: true, url }); else Linking.openURL(url); };
   const closeVideoPreview = () => setVideoModal({ open: false, url: "" });
-
   const openPdfPreview = (url: string, fileName: string) => setPdfModal({ open: true, url, fileName });
   const closePdfPreview = () => setPdfModal({ open: false, url: "", fileName: "" });
 
@@ -442,161 +511,82 @@ export default function ThreadCard({
       setLoading(true);
       const fileName = attachment.fileName || `file_${attachment.id}`;
       const url = attachment.uri || `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-
       if (Platform.OS === "web") {
         const link = document.createElement("a");
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setLoading(false);
-        return;
+        link.href = url; link.download = fileName;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        setLoading(false); return;
       }
-
       const localUri = documentDirectory + fileName;
       const downloadResumable = FileSystem.createDownloadResumable(url, localUri, {});
       const result = await downloadResumable.downloadAsync();
-
-      if (result && result.uri) {
-        await Sharing.shareAsync(result.uri, { mimeType: attachment.fileType || 'application/octet-stream', dialogTitle: `Downloaded: ${fileName}` });
-      } else {
-        Alert.alert("Error", "Download failed.");
-      }
-    } catch (error) {
-      Alert.alert("Download failed");
-    } finally {
-      setLoading(false);
-    }
+      if (result && result.uri) await Sharing.shareAsync(result.uri, { mimeType: attachment.fileType || 'application/octet-stream', dialogTitle: `Downloaded: ${fileName}` });
+      else Alert.alert("Error", "Download failed.");
+    } catch (error) { Alert.alert("Download failed"); } finally { setLoading(false); }
   };
 
   const handleProfileClick = async (userIdentifier?: string | number | null) => {
     if (!userIdentifier) return;
-    setProfileModalOpen(true);
-    setProfileLoading(true);
-    setProfileError(null);
-    setFetchedProfile(null);
-
+    setProfileModalOpen(true); setProfileLoading(true); setProfileError(null); setFetchedProfile(null);
     if (allUsers && allUsers.length > 0) {
-      const localUser = allUsers.find((u: any) => 
-        String(u.id) === String(userIdentifier) || 
-        String(u.email).toLowerCase() === String(userIdentifier).toLowerCase()
-      );
+      const localUser = allUsers.find((u: any) => String(u.id) === String(userIdentifier) || String(u.email).toLowerCase() === String(userIdentifier).toLowerCase());
       if (localUser) {
-        setFetchedProfile({
-          id: localUser.id,
-          name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim(),
-          email: localUser.email,
-          username: localUser.username,
-          role: localUser.role,
-          department: localUser.department,
-          profilePhoto: localUser.profilePhoto || localUser.profileImage,
-        });
-        setProfileLoading(false);
-        return;
+        setFetchedProfile({ id: localUser.id, name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim(), email: localUser.email, username: localUser.username, role: localUser.role, department: localUser.department, profilePhoto: localUser.profilePhoto || localUser.profileImage });
+        setProfileLoading(false); return;
       }
     }
-
     try {
       let url = `${API_BASE_URL}/api/users/${userIdentifier}`;
       let response = await fetch(url);
-      if (!response.ok && typeof userIdentifier === 'string' && userIdentifier.includes('@')) {
-        response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userIdentifier)}`);
-      }
-      if (response.ok) {
-        const data = await response.json();
-        setFetchedProfile(data);
-      } else {
-        setFetchedProfile({
-          id: userIdentifier,
-          name: thread.createdByName || (typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier.split('@')[0] : "User"),
-          email: typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier : undefined,
-        });
-      }
-    } catch (error) {
-      setFetchedProfile({ id: userIdentifier, name: thread.createdByName || "User" });
-    } finally {
-      setProfileLoading(false);
-    }
+      if (!response.ok && typeof userIdentifier === 'string' && userIdentifier.includes('@')) response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userIdentifier)}`);
+      if (response.ok) { const data = await response.json(); setFetchedProfile(data); }
+      else setFetchedProfile({ id: userIdentifier, name: thread.createdByName || (typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier.split('@')[0] : "User"), email: typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier : undefined });
+    } catch (error) { setFetchedProfile({ id: userIdentifier, name: thread.createdByName || "User" }); }
+    finally { setProfileLoading(false); }
   };
 
   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
-
     if (attachment.attachmentType === "IMAGE") {
       let imageUri = attachment.uri || "";
-      if (attachment.hasValidFileData && attachment.fileData) {
-        const mimeType = attachment.fileType || "image/jpeg";
-        imageUri = base64ToUri(attachment.fileData, mimeType);
-      } else if (attachment.id && imageDataCache[attachment.id]) {
-        imageUri = imageDataCache[attachment.id];
-      } else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) {
-        loadImageData(attachment);
-      }
-      if (loadingImages[attachment.id] && !imageUri) {
-        return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#4a90d9" /><Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text></View></View>);
-      }
-      if (!imageUri || imageErrors[attachment.id]) {
-        return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>{imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}</View></View>);
-      }
+      if (attachment.hasValidFileData && attachment.fileData) imageUri = base64ToUri(attachment.fileData, attachment.fileType || "image/jpeg");
+      else if (attachment.id && imageDataCache[attachment.id]) imageUri = imageDataCache[attachment.id];
+      else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) loadImageData(attachment);
+      if (loadingImages[attachment.id] && !imageUri) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#4a90d9" /><Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text></View></View>);
+      if (!imageUri || imageErrors[attachment.id]) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>{imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}</View></View>);
       return (<View key={index} style={styles.attachmentContainer}><Pressable onPress={() => openImagePreview(imageUri)}><Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} /></Pressable><View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text><Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable></View></View>);
     }
-
     if (attachment.attachmentType === "VIDEO") {
       let videoUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100) {
-        const mimeType = attachment.fileType || "video/mp4";
-        videoUri = base64ToUri(attachment.fileData, mimeType);
-      } else if (Platform.OS === "web" && attachment.id) {
-        videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      }
+      if (attachment.fileData && attachment.fileData.length > 100) videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
+      else if (Platform.OS === "web" && attachment.id) videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return (<View key={index} style={styles.attachmentContainer}><Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`); }}><View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View><Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>{attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}</Pressable></View>);
     }
-
     if (attachment.attachmentType === "AUDIO") {
       let audioUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100) {
-        const mimeType = attachment.fileType || "audio/mpeg";
-        audioUri = base64ToUri(attachment.fileData, mimeType);
-      } else if (Platform.OS === "web" && attachment.id) {
-        audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      }
+      if (attachment.fileData && attachment.fileData.length > 100) audioUri = base64ToUri(attachment.fileData, attachment.fileType || "audio/mpeg");
+      else if (Platform.OS === "web" && attachment.id) audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
     }
-
     if (attachment.attachmentType === "LOCATION") {
       let location: any = {};
-      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); location = JSON.parse(decoded); } } catch (error) {}
+      try { if (attachment.fileData) location = JSON.parse(atob(attachment.fileData)); } catch (error) {}
       return (<Pressable key={index} style={styles.locationContainer} onPress={() => { const map = location.url || location.mapUrl; if (map) Linking.openURL(map); }}><MapPin size={20} color="red" /><Text style={{ fontSize: 14 }}>Open shared location</Text></Pressable>);
     }
-
     if (attachment.attachmentType === "EVENT") {
       let event: any = {};
-      try { if (attachment.fileData) { const decoded = atob(attachment.fileData); event = JSON.parse(decoded); } } catch (error) {}
+      try { if (attachment.fileData) event = JSON.parse(atob(attachment.fileData)); } catch (error) {}
       return (<View key={index} style={styles.eventContainer}><Calendar size={22} color="purple" /><View><Text style={styles.eventTitle}>{event.title || "Event"}</Text><Text style={{ fontSize: 12, color: "#555" }}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text></View></View>);
     }
-
     const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     if (isPDF) {
-      if (attachment.fileData && attachment.fileData.length > 100) {
-        const mimeType = attachment.fileType || "application/pdf";
-        fileUri = base64ToUri(attachment.fileData, mimeType);
-      } else if (Platform.OS === "web" && attachment.id) {
-        fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      }
+      if (attachment.fileData && attachment.fileData.length > 100) fileUri = base64ToUri(attachment.fileData, attachment.fileType || "application/pdf");
+      else if (Platform.OS === "web" && attachment.id) fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#dc2626" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => { if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf"); else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf"); }} style={{ padding: 8 }}><Eye size={20} color="#2563eb" /></TouchableOpacity><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
     }
-
     return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#555" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
   };
-
-  const getStatus = () => {
-    if (thread.failed) return { icon: (<Pressable onPress={() => onRetry?.(thread)}><RefreshCw size={13} color="red" /></Pressable>), text: "Failed" };
-    return { icon: <Check size={13} color="blue" />, text: "Sent" };
-  };
-
-  const status = getStatus();
 
   const getAvatarUserId = () => {
     if (isOwnMessage) return currentUser?.id;
@@ -605,27 +595,20 @@ export default function ThreadCard({
     if (typeof senderIdentifier === 'number') return senderIdentifier;
     if (typeof senderIdentifier === 'string' && !isNaN(Number(senderIdentifier)) && !senderIdentifier.includes('@')) return Number(senderIdentifier);
     if (allUsers && allUsers.length > 0 && typeof senderIdentifier === 'string' && senderIdentifier.includes('@')) {
-      const matchedUser = allUsers.find((u: any) => 
-        String(u.email || "").toLowerCase() === senderIdentifier.toLowerCase() ||
-        String(u.username || "").toLowerCase() === senderIdentifier.toLowerCase()
-      );
+      const matchedUser = allUsers.find((u: any) => String(u.email || "").toLowerCase() === senderIdentifier.toLowerCase() || String(u.username || "").toLowerCase() === senderIdentifier.toLowerCase());
       if (matchedUser) return matchedUser.id;
     }
     return null; 
   };
 
   const avatarUserId = getAvatarUserId();
-  const avatar = isOwnMessage 
-    ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) 
-    : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
+  const avatar = isOwnMessage ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
 
   return (
     <>
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
 
-      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}>
-        <View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View>
-      </Modal>
+      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}><View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View></Modal>
       {Platform.OS === "web" && (<Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide"><WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} /></Modal>)}
       <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
 
@@ -664,21 +647,15 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
-      {/* Message Bubble */}
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         
-        {/* ✅ REACTION BAR POPUP */}
         {showReactionBar && (
           <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
             <View style={styles.reactionBar}>
               {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}>
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </TouchableOpacity>
+                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
               ))}
-              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}>
-                <X size={16} color="#666" />
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
             </View>
           </View>
         )}
@@ -706,14 +683,18 @@ export default function ThreadCard({
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
-            {isOwnMessage && (<View style={styles.statusIcon}>{status.icon}</View>)}
             
-            {/* ✅ Reaction Trigger */}
+            {/* ✅ WhatsApp Status Icons */}
+            {isOwnMessage && (
+              <View style={styles.statusIcon}>{getStatusIcon()}</View>
+            )}
+            
+            {/* ✅ Reaction Trigger (Visible on ALL messages) */}
             <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
               <Smile size={14} color="#9ca3af" />
             </TouchableOpacity>
 
-            {/* ✅ 3-Dot Menu for Edit/Delete */}
+            {/* ✅ 3-Dot Menu (Only on own messages) */}
             {isOwnMessage && (
               <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
                 <MoreVertical size={14} color="#9ca3af" />
@@ -721,33 +702,41 @@ export default function ThreadCard({
             )}
           </View>
 
-          {/* ✅ Edit/Delete Menu Popup */}
           {showMenu && isOwnMessage && (
             <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
               <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
                 <Edit size={14} color="#374151" />
                 <Text style={styles.menuText}>Edit Message</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={() => { 
-                Alert.alert("Delete Message", "Are you sure you want to delete this?", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Delete", style: "destructive", onPress: () => { onDelete?.(thread.id!); setShowMenu(false); } }
-                ]);
-              }}>
+              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
                 <Trash2 size={14} color="#ef4444" />
                 <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
           {Object.keys(groupedReactions).length > 0 && (
-            <View style={[styles.reactionsDisplayContainer, isOwnMessage ? styles.reactionsDisplayRight : styles.reactionsDisplayLeft]}>
+            <View style={{ marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' }}>
               {Object.entries(groupedReactions).map(([emoji, data]) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}>
-                  <Text style={{ fontSize: 12 }}>{emoji}</Text>
-                  <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>{data.count}</Text>
-                </TouchableOpacity>
+                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}
+                  >
+                    <Text style={{ fontSize: 12 }}>{emoji}</Text>
+                    <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>{data.count}</Text>
+                  </TouchableOpacity>
+
+                  {showReactionDetail === emoji && (
+                    <View style={styles.reactionDetailPopup}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Reacted by:</Text>
+                      {data.users.map((userName: string, idx: number) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>• {userName}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
               ))}
             </View>
           )}
@@ -775,7 +764,7 @@ const styles = StyleSheet.create({
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
   timeText: { fontSize: 10, color: "#777" },
-  statusIcon: { marginLeft: 4 },
+  statusIcon: { marginLeft: 4, alignItems: 'center', justifyContent: 'center', minWidth: 16 },
   avatarContainer: { marginHorizontal: 6 },
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
@@ -841,20 +830,16 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  
-  // ✅ NEW: Reaction & Menu Styles
   reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
   reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBarItem: { paddingHorizontal: 8, paddingVertical: 4 },
-  reactionsDisplayContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 4 },
-  reactionsDisplayLeft: { justifyContent: 'flex-start' },
-  reactionsDisplayRight: { justifyContent: 'flex-end' },
   reactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
+  reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
   menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },

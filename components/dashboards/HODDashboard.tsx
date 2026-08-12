@@ -1,6 +1,4 @@
-﻿"use client";
-
-import axios from "axios";
+﻿import axios from "axios";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -15,11 +13,15 @@ import {
   User,
   UserCheck,
   Users,
+  X, // 👈 ADD
 } from "lucide-react-native";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  Modal, // 👈 ADD
   Platform,
+  SafeAreaView, // 👈 ADD
   ScrollView,
   Text,
   TouchableOpacity,
@@ -27,6 +29,9 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+
+// 👈 ADD (adjust the path to where FinalPreview lives in your project)
+import FinalPreview from "../eightd/steps/FinalPreview";
 
 const NAVBAR_COLORS = {
   primary1: "#005f9b",
@@ -268,6 +273,7 @@ export default function HODDashboard() {
   }
 
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [previewEvent, setPreviewEvent] = useState<any | null>(null);
   const [stats, setStats] = useState({
     pendingApprovals: 0,
     freshPendingApprovals: 0,
@@ -330,15 +336,7 @@ export default function HODDashboard() {
   );
 
   const handleReview = (event: any) => {
-    router.push({
-      pathname: "/eightdflow",
-      params: {
-        eventId: event.eventNo,
-        step: "Final Preview",
-        isHOD: "true",
-        isNcrBased: isNcrBasedEvent(event) ? "true" : "false",
-      },
-    });
+    setPreviewEvent(event); // 👈 This is all you need to open the Modal
   };
 
   const handleViewDashboard = (type = "all") => {
@@ -365,192 +363,266 @@ export default function HODDashboard() {
 
   // ... [Keep your entire return (JSX) statement exactly as it was] ...
   return (
-    <ScrollView
-      className="flex-1 bg-blue-50"
-      showsVerticalScrollIndicator={false}
-      contentContainerClassName="pb-8"
-    >
-      <View className="w-full px-4 py-6 mx-auto md:px-6 lg:px-8 md:py-12 max-w-7xl">
-        <View className="items-center mb-8 md:mb-10">
-          <Text className="text-2xl font-bold text-center text-[#005f9b] md:text-4xl">
-            HOD Dashboard
-          </Text>
-          <Text className="mt-2 text-base text-center text-gray-500 md:text-lg">
-            Welcome back, {user?.name || user?.username || "User"}
-          </Text>
-          <View className="flex-row flex-wrap items-center justify-center gap-2 mt-3">
-            <View className="px-3 py-1 bg-blue-100 rounded-full">
-              <Text className="text-xs font-medium text-blue-700">
-                {user?.department || "Quality Assurance"}
-              </Text>
-            </View>
-            <View className="px-3 py-1 bg-blue-100 rounded-full">
-              <Text className="text-xs font-medium text-blue-700">
-                Head of Department
-              </Text>
+    <>
+      <ScrollView
+        className="flex-1 bg-blue-50"
+        showsVerticalScrollIndicator={false}
+        contentContainerClassName="pb-8"
+      >
+        <View className="w-full px-4 py-6 mx-auto md:px-6 lg:px-8 md:py-12 max-w-7xl">
+          <View className="items-center mb-8 md:mb-10">
+            <Text className="text-2xl font-bold text-center text-[#005f9b] md:text-4xl">
+              HOD Dashboard
+            </Text>
+            <Text className="mt-2 text-base text-center text-gray-500 md:text-lg">
+              Welcome back, {user?.name || user?.username || "User"}
+            </Text>
+            <View className="flex-row flex-wrap items-center justify-center gap-2 mt-3">
+              <View className="px-3 py-1 bg-blue-100 rounded-full">
+                <Text className="text-xs font-medium text-blue-700">
+                  {user?.department || "Quality Assurance"}
+                </Text>
+              </View>
+              <View className="px-3 py-1 bg-blue-100 rounded-full">
+                <Text className="text-xs font-medium text-blue-700">
+                  Head of Department
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View className="flex-col gap-4 mb-8 md:flex-row md:gap-6 md:mb-12">
-          <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-2">
-                <Text className="text-sm font-medium text-gray-500">
-                  Pending Approvals
-                </Text>
-                <Text className="mt-1 text-2xl font-bold text-black md:text-3xl">
-                  {stats.pendingApprovals}
-                </Text>
+          <View className="flex-col gap-4 mb-8 md:flex-row md:gap-6 md:mb-12">
+            <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-2">
+                  <Text className="text-sm font-medium text-gray-500">
+                    Pending Approvals
+                  </Text>
+                  <Text className="mt-1 text-2xl font-bold text-black md:text-3xl">
+                    {stats.pendingApprovals}
+                  </Text>
+                </View>
+                <View
+                  className="items-center justify-center w-12 h-12 rounded-xl"
+                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
+                >
+                  <Clock size={24} color="#FFFFFF" />
+                </View>
               </View>
-              <View
-                className="items-center justify-center w-12 h-12 rounded-xl"
-                style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-              >
-                <Clock size={24} color="#FFFFFF" />
+            </View>
+            <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-2">
+                  <Text className="text-sm font-medium text-gray-500">
+                    Department
+                  </Text>
+                  <Text
+                    className="mt-1 text-lg font-bold text-gray-800 md:text-xl"
+                    numberOfLines={1}
+                  >
+                    {user?.department || "Quality"}
+                  </Text>
+                </View>
+                <View
+                  className="items-center justify-center w-12 h-12 rounded-xl"
+                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
+                >
+                  <Users size={24} color="#FFFFFF" />
+                </View>
+              </View>
+            </View>
+            <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 pr-2">
+                  <Text className="text-sm font-medium text-gray-500">
+                    Role
+                  </Text>
+                  <Text className="mt-1 text-lg font-bold text-gray-800 md:text-xl">
+                    HOD
+                  </Text>
+                </View>
+                <View
+                  className="items-center justify-center w-12 h-12 rounded-xl"
+                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
+                >
+                  <UserCheck size={24} color="#FFFFFF" />
+                </View>
               </View>
             </View>
           </View>
-          <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-2">
-                <Text className="text-sm font-medium text-gray-500">
-                  Department
-                </Text>
+
+          <View className="flex-col gap-6 mb-8 md:flex-row md:gap-8 md:mb-12">
+            <View className="w-full md:flex-1">
+              <ActionCard
+                title="Fresh 8D Dashboard"
+                description={`${stats.freshPendingApprovals} item(s) waiting for HOD action.`}
+                iconName="bar-chart-2"
+                onPress={() => handleViewDashboard("fresh")}
+              />
+            </View>
+            <View className="w-full md:flex-1">
+              <ActionCard
+                title="NCR 8D Dashboard"
+                description={`${stats.ncrPendingApprovals} item(s) waiting for HOD action.`}
+                iconName="user-check"
+                onPress={() => handleViewDashboard("ncr")}
+              />
+            </View>
+          </View>
+
+          {freshPendingApprovals.length > 0 && (
+            <>
+              <View className="flex-row items-center justify-center mb-6">
+                <View className="flex-1 h-px bg-gray-200" />
+                <View className="px-4 bg-blue-50">
+                  <Text className="text-xs font-medium tracking-wider text-center text-gray-500 uppercase">
+                    Fresh 8D Awaiting Approval
+                  </Text>
+                </View>
+                <View className="flex-1 h-px bg-gray-200" />
+              </View>
+              <View className="flex-col gap-4 mb-8 md:flex-row md:flex-wrap md:gap-6">
+                {freshPendingApprovals.map((event) => (
+                  <View
+                    key={event.eventNo || event.id}
+                    className="w-full md:w-[48%] lg:w-[32%]"
+                  >
+                    <ApprovalCard
+                      report={event}
+                      onReview={() => handleReview(event)}
+                    />
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {ncrPendingApprovals.length > 0 && (
+            <>
+              <View className="flex-row items-center justify-center mb-6">
+                <View className="flex-1 h-px bg-gray-200" />
+                <View className="px-4 bg-blue-50">
+                  <Text className="text-xs font-medium tracking-wider text-center text-gray-500 uppercase">
+                    NCR 8D Awaiting Approval
+                  </Text>
+                </View>
+                <View className="flex-1 h-px bg-gray-200" />
+              </View>
+              <View className="flex-col gap-4 mb-8 md:flex-row md:flex-wrap md:gap-6">
+                {ncrPendingApprovals.map((event) => (
+                  <View
+                    key={event.eventNo || event.id}
+                    className="w-full md:w-[48%] lg:w-[32%]"
+                  >
+                    <ApprovalCard
+                      report={event}
+                      onReview={() => handleReview(event)}
+                    />
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {pendingApprovals.length === 0 && (
+            <View className="items-center justify-center py-12 mt-4 bg-white border border-gray-300 border-dashed rounded-3xl">
+              <CheckCircle
+                size={48}
+                color={NAVBAR_COLORS.primary1}
+                style={{ marginBottom: 12 }}
+              />
+              <Text className="text-lg font-medium text-gray-500">
+                No pending approvals
+              </Text>
+              <Text className="px-6 mt-2 text-sm text-center text-gray-400">
+                All 8D reports are approved or in progress
+              </Text>
+              <TouchableOpacity
+                onPress={fetchPendingApprovals}
+                className="flex-row items-center gap-2 px-6 py-3 mt-6 rounded-xl bg-blue-50"
+              >
+                <RefreshCw size={16} color={NAVBAR_COLORS.primary1} />
                 <Text
-                  className="mt-1 text-lg font-bold text-gray-800 md:text-xl"
-                  numberOfLines={1}
+                  className="text-sm font-semibold"
+                  style={{ color: NAVBAR_COLORS.primary1 }}
                 >
-                  {user?.department || "Quality"}
+                  Refresh Dashboard
                 </Text>
-              </View>
-              <View
-                className="items-center justify-center w-12 h-12 rounded-xl"
-                style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-              >
-                <Users size={24} color="#FFFFFF" />
-              </View>
+              </TouchableOpacity>
             </View>
-          </View>
-          <View className="w-full p-5 bg-white border shadow-lg border-slate-200 rounded-2xl md:flex-1">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-2">
-                <Text className="text-sm font-medium text-gray-500">Role</Text>
-                <Text className="mt-1 text-lg font-bold text-gray-800 md:text-xl">
-                  HOD
-                </Text>
-              </View>
-              <View
-                className="items-center justify-center w-12 h-12 rounded-xl"
-                style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-              >
-                <UserCheck size={24} color="#FFFFFF" />
-              </View>
-            </View>
-          </View>
+          )}
         </View>
+      </ScrollView>
 
-        <View className="flex-col gap-6 mb-8 md:flex-row md:gap-8 md:mb-12">
-          <View className="w-full md:flex-1">
-            <ActionCard
-              title="Fresh 8D Dashboard"
-              description={`${stats.freshPendingApprovals} item(s) waiting for HOD action.`}
-              iconName="bar-chart-2"
-              onPress={() => handleViewDashboard("fresh")}
-            />
-          </View>
-          <View className="w-full md:flex-1">
-            <ActionCard
-              title="NCR 8D Dashboard"
-              description={`${stats.ncrPendingApprovals} item(s) waiting for HOD action.`}
-              iconName="user-check"
-              onPress={() => handleViewDashboard("ncr")}
-            />
-          </View>
-        </View>
+      {/* Preview Drawer Modal (Right Side) */}
+      <Modal
+        visible={!!previewEvent}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent={true}
+        onRequestClose={() => setPreviewEvent(null)}
+      >
+        <View className="flex-1 flex-row bg-black/50">
+          {/* Left Backdrop (closes the drawer when tapped) */}
+          <TouchableOpacity
+            className="flex-1 h-full"
+            onPress={() => setPreviewEvent(null)}
+            activeOpacity={1}
+          />
 
-        {freshPendingApprovals.length > 0 && (
-          <>
-            <View className="flex-row items-center justify-center mb-6">
-              <View className="flex-1 h-px bg-gray-200" />
-              <View className="px-4 bg-blue-50">
-                <Text className="text-xs font-medium tracking-wider text-center text-gray-500 uppercase">
-                  Fresh 8D Awaiting Approval
-                </Text>
-              </View>
-              <View className="flex-1 h-px bg-gray-200" />
-            </View>
-            <View className="flex-col gap-4 mb-8 md:flex-row md:flex-wrap md:gap-6">
-              {freshPendingApprovals.map((event) => (
-                <View
-                  key={event.eventNo || event.id}
-                  className="w-full md:w-[48%] lg:w-[32%]"
-                >
-                  <ApprovalCard
-                    report={event}
-                    onReview={() => handleReview(event)}
-                  />
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {ncrPendingApprovals.length > 0 && (
-          <>
-            <View className="flex-row items-center justify-center mb-6">
-              <View className="flex-1 h-px bg-gray-200" />
-              <View className="px-4 bg-blue-50">
-                <Text className="text-xs font-medium tracking-wider text-center text-gray-500 uppercase">
-                  NCR 8D Awaiting Approval
-                </Text>
-              </View>
-              <View className="flex-1 h-px bg-gray-200" />
-            </View>
-            <View className="flex-col gap-4 mb-8 md:flex-row md:flex-wrap md:gap-6">
-              {ncrPendingApprovals.map((event) => (
-                <View
-                  key={event.eventNo || event.id}
-                  className="w-full md:w-[48%] lg:w-[32%]"
-                >
-                  <ApprovalCard
-                    report={event}
-                    onReview={() => handleReview(event)}
-                  />
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {pendingApprovals.length === 0 && (
-          <View className="items-center justify-center py-12 mt-4 bg-white border border-gray-300 border-dashed rounded-3xl">
-            <CheckCircle
-              size={48}
-              color={NAVBAR_COLORS.primary1}
-              style={{ marginBottom: 12 }}
-            />
-            <Text className="text-lg font-medium text-gray-500">
-              No pending approvals
-            </Text>
-            <Text className="px-6 mt-2 text-sm text-center text-gray-400">
-              All 8D reports are approved or in progress
-            </Text>
-            <TouchableOpacity
-              onPress={fetchPendingApprovals}
-              className="flex-row items-center gap-2 px-6 py-3 mt-6 rounded-xl bg-blue-50"
-            >
-              <RefreshCw size={16} color={NAVBAR_COLORS.primary1} />
+          {/* Right Drawer */}
+          <SafeAreaView
+            className="h-full bg-white"
+            style={{
+              // Takes 550px on desktop, 90% width on mobile
+              width:
+                Dimensions.get("window").width >= 768
+                  ? 550
+                  : Dimensions.get("window").width * 0.9,
+              maxWidth: 650,
+              shadowColor: "#000",
+              shadowOffset: { width: -4, height: 0 }, // Shadow casts to the left
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              elevation: 20,
+            }}
+          >
+            {/* Drawer Header */}
+            <View className="z-10 flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
               <Text
-                className="text-sm font-semibold"
-                style={{ color: NAVBAR_COLORS.primary1 }}
+                className="text-base font-semibold text-[#005f9b] flex-1 mr-2"
+                numberOfLines={1}
               >
-                Refresh Dashboard
+                8D Review — {previewEvent?.eventNo || previewEvent?.id || ""}
               </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+              <TouchableOpacity
+                onPress={() => setPreviewEvent(null)}
+                className="p-2 rounded-full active:bg-gray-200 bg-gray-100"
+              >
+                <X size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Drawer Content */}
+            <ScrollView
+              className="flex-1 bg-gray-50"
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+            >
+              {previewEvent && (
+                <FinalPreview
+                  key={previewEvent.eventNo || previewEvent.id}
+                  eventId={previewEvent.eventNo || previewEvent.id || null}
+                  isHOD={true}
+                  onRefresh={fetchPendingApprovals}
+                  onClose={() => setPreviewEvent(null)}
+                />
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+    </>
   );
 }

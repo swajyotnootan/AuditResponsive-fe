@@ -2,42 +2,47 @@ import YearFilter from "@/components/common/YearFilter"; // Add this line
 import { apiClient } from "@/services/api"; // Adjust path if needed
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    AlertCircle,
-    ArrowLeft,
-    Calendar,
-    Check,
-    CheckCircle,
-    CheckSquare,
-    ChevronDown,
-    ChevronUp,
-    Clock,
-    Download,
-    FileText,
-    Filter,
-    MessageSquare,
-    Plus,
-    RefreshCw,
-    Repeat,
-    Save,
-    Send,
-    Star,
-    X,
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  Check,
+  CheckCircle,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Download,
+  FileText,
+  Filter,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Repeat,
+  Save,
+  Send,
+  Star,
+  X,
 } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
-    ViewStyle,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  ViewStyle,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // Adjust path if needed
+
+import { API_BASE_URL } from "@/config/apiConfig";
+import * as FileSystem from "expo-file-system/legacy"; // Required for mobile file saving
+import * as Sharing from "expo-sharing"; // Required for mobile share sheet
 
 
 // ══════ MNC STANDARD PALETTE ══════
@@ -536,7 +541,7 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   const [tempApprovalComment, setTempApprovalComment] = useState("");
   const [tempRejectionReason, setTempRejectionReason] = useState("");
   const [changeRequestReason, setChangeRequestReason] = useState("");
-
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [auditFrequency, setAuditFrequency] = useState("Half yearly");
   const [documentRevision, setDocumentRevision] = useState("1.0");
   const [revisionDate, setRevisionDate] = useState(
@@ -1090,10 +1095,97 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   };
 
   const handleDownloadPDF = async () => {
-    addToast(
-      "PDF Download initiated. (Note: File system handling required for RN)",
-      "success",
-    );
+    setDownloadingPdf(true);
+    try {
+      const fileName = `Form4_Internal_Quality_Audit_Plan_${selectedYear}.pdf`;
+      const endpoint = `${API_BASE_URL}/api/department-plan/${selectedYear}/download`;
+
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: { Accept: "application/pdf" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch PDF: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      // WEB BROWSER
+      if (Platform.OS === "web") {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        addToast("PDF downloaded successfully!", "success");
+      }
+      // NATIVE MOBILE (iOS / Android)
+      else {
+        const directory =
+          FileSystem.documentDirectory || FileSystem.cacheDirectory;
+        const fileUri = `${directory}${fileName}`;
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const base64data = reader.result as string;
+            const base64Content = base64data.split(",")[1];
+
+            await FileSystem.writeAsStringAsync(fileUri, base64Content, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+              await Sharing.shareAsync(fileUri, {
+                mimeType: "application/pdf",
+                dialogTitle: "Form 4 Internal Quality Audit Plan",
+              });
+              addToast("PDF ready to view/share!", "success");
+            } else {
+              addToast("PDF saved to device storage.", "success");
+            }
+          } catch (saveError: any) {
+            console.error("Error saving PDF:", saveError);
+            addToast(`Failed to save PDF: ${saveError.message}`, "error");
+          } finally {
+            setDownloadingPdf(false);
+          }
+        };
+        reader.onerror = () => {
+          addToast("Failed to read PDF data", "error");
+          setDownloadingPdf(false);
+        };
+        reader.readAsDataURL(blob);
+        return; // Exit early, the reader.onloadend handles the rest
+      }
+    } catch (error: any) {
+      console.error("PDF Download Error:", error);
+      addToast(error?.message || "Failed to download PDF", "error");
+    } finally {
+      if (Platform.OS === "web") {
+        setDownloadingPdf(false);
+      }
+    }
+  };
+
+  // Helper function to trigger the native share sheet
+  const shareFileOnMobile = async (uri: string) => {
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Form 4 Internal Quality Audit Plan",
+        UTI: "com.adobe.pdf", // Helps iOS recognize the file type
+      });
+      addToast("PDF ready to view/share!", "success");
+    } else {
+      addToast("PDF saved to device storage.", "success");
+    }
   };
 
   const getMonthStatusBadge = (status: string, hasElements: boolean) => {
@@ -1342,9 +1434,14 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleDownloadPDF}
+                  disabled={downloadingPdf}
                   className="p-2 bg-gray-100 rounded-lg"
                 >
-                  <Download size={16} color={COLORS.success} />
+                  {downloadingPdf ? (
+                    <ActivityIndicator size="small" color={COLORS.success} />
+                  ) : (
+                    <Download size={16} color={COLORS.success} />
+                  )}
                 </TouchableOpacity>
               </View>
             )}

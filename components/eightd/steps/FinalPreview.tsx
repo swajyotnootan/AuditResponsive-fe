@@ -24,6 +24,7 @@ import {
   X,
   XCircle,
 } from "lucide-react-native";
+
 import React, { ReactNode, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -41,6 +42,7 @@ import {
 import { API_BASE_URL } from "@/config/apiConfig";
 import { isInitiator } from "@/utils/roleUtils";
 import Generate8DPdf from "../Generate8DPdf";
+
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -235,10 +237,12 @@ export default function FinalPreview({
   eventId,
   isHOD = false,
   onRefresh,
+  onClose,
 }: {
   eventId: string | number | null;
   isHOD?: boolean;
   onRefresh?: () => void;
+  onClose?: () => void;
 }) {
   const [eventData, setEventData] = useState<any>(null);
   const [files, setFiles] = useState<FileData[]>([]);
@@ -273,7 +277,7 @@ export default function FinalPreview({
       if (!eventId) return;
       try {
         setLoading(true);
-        
+
         const [eventRes, filesRes] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/eightd/data/${eventId}`),
           axios.get(`${API_BASE_URL}/api/eightd/data/${eventId}/files`),
@@ -514,6 +518,32 @@ export default function FinalPreview({
     setPreviewFile(null);
   };
 
+  // 👇 ADD THIS HELPER FUNCTION
+  const handleDownloadOrShare = async () => {
+    if (!previewUrl || !previewFile) return;
+
+    if (Platform.OS === "web") {
+      // On Web, trigger a direct download using a hidden anchor tag
+      const link = document.createElement("a");
+      link.href = previewUrl;
+      link.download = previewFile.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      // On Native (iOS/Android), use Expo Sharing
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(previewUrl);
+      } else {
+        Alert.alert(
+          "Info",
+          "File saved to cache. Sharing not available on this platform.",
+        );
+      }
+    }
+  };
+
   const handleApprove = async () => {
     if (!isHOD || !approvalComment.trim() || approvalComment.trim().length < 10)
       return;
@@ -528,13 +558,21 @@ export default function FinalPreview({
           comment: approvalComment.trim(),
         },
       );
+
       if (res.data.success) {
+        // 👇 FIX: Update local state immediately so it shows "Approved / In Progress"
+        setEventData((prev: any) => ({
+          ...prev,
+          status: "in progress",
+          currentStep: "d1",
+        }));
         Alert.alert("Success", "✅ Document approved successfully!", [
           {
             text: "OK",
             onPress: () => {
               setApprovalComment("");
               if (onRefresh) onRefresh();
+              if (onClose) onClose();
             },
           },
         ]);
@@ -556,20 +594,25 @@ export default function FinalPreview({
       setRejecting(true);
       const userStr = await AsyncStorage.getItem("user");
       const user = userStr ? JSON.parse(userStr) : null;
-      const res = await axios.post(
-        `${API_BASE_URL}/api/eightd/reject/${eventId}`,
-        {
-          userEmail: user?.email,
-          comment: approvalComment.trim(),
-        },
-      );
+      const res = await axios.post(`${API_BASE_URL}/api/eightd/reject/${eventId}`, {
+        userEmail: user?.email,
+        comment: approvalComment.trim(),
+      });
       if (res.data.success) {
+        // 👇 FIX: Update local state immediately so it shows "Rejected"
+        setEventData((prev: any) => ({
+          ...prev,
+          status: "rejected",
+          currentStep: "d0",
+        }));
+
         Alert.alert("Rejected", "❌ Document rejected successfully!", [
           {
             text: "OK",
             onPress: () => {
               setApprovalComment("");
-              if (onRefresh) onRefresh();
+              if (onRefresh) onRefresh(); // Triggers dashboard to re-fetch (turns card red)
+              if (onClose) onClose(); // 👈 FIX: Closes the modal
             },
           },
         ]);
@@ -700,7 +743,7 @@ export default function FinalPreview({
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      <View className="flex-1 p-4 bg-white border border-gray-200 shadow-lg rounded-xl">
+      <View className="p-4 bg-white border border-gray-200 shadow-lg rounded-xl">
         <View className="flex-row items-center justify-between pb-4 mb-4 border-b border-gray-200">
           <View className="flex-row items-center">
             <Image
@@ -1117,11 +1160,12 @@ export default function FinalPreview({
                         Attachments ({stepFiles.length})
                       </Text>
                     </View>
-                    <View className="flex-row flex-wrap gap-2">
+                    <View className="flex-row flex-wrap justify-between mt-2">
                       {stepFiles.map((file) => (
                         <TouchableOpacity
                           key={file.id}
-                          className="w-[48%] sm:w-[32%] md:w-[24%] border border-gray-200 rounded-lg overflow-hidden active:opacity-80 bg-white"
+                          className="w-[48%] mb-3 border border-gray-200 rounded-lg overflow-hidden bg-white"
+                          activeOpacity={0.8}
                           onPress={() =>
                             handleFileClick(
                               file.id,
@@ -1133,7 +1177,8 @@ export default function FinalPreview({
                           {file.fileType === "IMAGE" ? (
                             <Image
                               source={{ uri: getEightDFileUrl(file.id) }}
-                              className="w-full h-20 sm:h-24"
+                              style={{ width: "100%", height: 96 }}
+                              className="w-full h-24"
                               resizeMode="cover"
                             />
                           ) : file.mimeType === "application/pdf" ? (
@@ -1245,7 +1290,9 @@ export default function FinalPreview({
           onRequestClose={closePreview}
         >
           <View className="items-center justify-center flex-1 p-4 bg-black/70">
-            <View className="bg-white rounded-lg w-full max-h-[90vh] overflow-hidden">
+            {/* 👇 FIXED: Added max-w-4xl to constrain width on desktop, and shadow-2xl for depth */}
+            <View className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
+              {/* Header */}
               <View className="flex-row items-center justify-between px-4 py-3 bg-gray-800">
                 <Text
                   className="flex-1 mr-2 text-sm font-semibold text-white truncate"
@@ -1255,38 +1302,24 @@ export default function FinalPreview({
                 </Text>
                 <View className="flex-row gap-3">
                   <TouchableOpacity
-                    onPress={async () => {
-                      if (previewUrl && previewFile) {
-                        if (Platform.OS === "web") {
-                          const link = document.createElement("a");
-                          link.href = previewUrl;
-                          link.download = previewFile.fileName;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                        } else {
-                          const canShare = await Sharing.isAvailableAsync();
-                          if (canShare) await Sharing.shareAsync(previewUrl);
-                          else
-                            Alert.alert(
-                              "Info",
-                              "File saved to cache. Sharing not available on this platform.",
-                            );
-                        }
-                      }
-                    }}
-                    className="p-1"
+                    onPress={handleDownloadOrShare}
+                    className="p-1 active:bg-gray-700 rounded"
                   >
                     <Download size={20} color="white" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={closePreview} className="p-1">
+                  <TouchableOpacity
+                    onPress={closePreview}
+                    className="p-1 active:bg-gray-700 rounded"
+                  >
                     <X size={24} color="white" />
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Media Preview Area */}
               <View
-                className="items-center justify-center bg-gray-100"
-                style={{ height: 400 }}
+                className="items-center justify-center bg-gray-900 flex-1" // ✅ flex-1 fills the remaining height
+                style={{ minHeight: 400 }} // Keeps it from collapsing on tiny screens
               >
                 {previewFile?.mimeType?.startsWith("image/") ? (
                   <Image
@@ -1294,48 +1327,57 @@ export default function FinalPreview({
                     className="w-full h-full"
                     resizeMode="contain"
                   />
+                ) : previewFile?.mimeType?.startsWith("video/") &&
+                  Platform.OS === "web" ? (
+                  // Native HTML5 Video Player for Web
+                  <video
+                    src={previewUrl}
+                    controls
+                    autoPlay
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      backgroundColor: "#000",
+                    }}
+                  />
                 ) : previewFile?.mimeType === "application/pdf" ? (
-                  <View className="items-center justify-center p-4">
+                  <View className="items-center justify-center p-4 flex-1">
                     <File size={48} color="#DC2626" />
-                    <Text className="mt-2 text-center text-gray-600">
-                      PDF Preview requires a native viewer.
+                    <Text className="mt-4 text-center text-white font-semibold text-lg">
+                      {previewFile?.fileName}
+                    </Text>
+                    <Text className="mt-2 text-center text-gray-300 px-4">
+                      Native PDF preview is not supported. Tap below to
+                      download.
                     </Text>
                     <TouchableOpacity
-                      className="px-4 py-2 mt-4 bg-indigo-600 rounded-lg active:bg-indigo-700"
-                      onPress={() =>
-                        Alert.alert(
-                          "Info",
-                          "Use expo-print or react-native-pdf to display PDFs natively.",
-                        )
-                      }
+                      className="flex-row items-center gap-2 px-6 py-3 mt-6 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                      onPress={handleDownloadOrShare}
                     >
+                      <Download size={18} color="white" />
                       <Text className="font-medium text-white">
-                        Open PDF Viewer
+                        {Platform.OS === "web"
+                          ? "Download PDF"
+                          : "Open / Share PDF"}
                       </Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View className="items-center p-4">
                     <File size={48} color="#9CA3AF" />
-                    <Text className="mt-2 text-sm text-center text-gray-600">
+                    <Text className="mt-2 text-sm text-center text-gray-300">
                       This file type cannot be previewed directly.
                     </Text>
                     <TouchableOpacity
                       className="flex-row items-center gap-2 px-6 py-3 mt-4 bg-blue-600 rounded-lg active:bg-blue-700"
-                      onPress={async () => {
-                        const canShare = await Sharing.isAvailableAsync();
-                        if (canShare && previewUrl)
-                          await Sharing.shareAsync(previewUrl);
-                        else
-                          Alert.alert(
-                            "Downloaded",
-                            "File is available in the app cache directory.",
-                          );
-                      }}
+                      onPress={handleDownloadOrShare}
                     >
                       <Download size={18} color="white" />
                       <Text className="font-medium text-white">
-                        Download / Share File
+                        {Platform.OS === "web"
+                          ? "Download File"
+                          : "Download / Share File"}
                       </Text>
                     </TouchableOpacity>
                   </View>

@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadComposer.tsx
-// FINAL FIXED: Android video recording, document handling, Emoji Picker, and Edit Mode
+// FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), and Edit Mode
 
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, ResizeMode, Video } from 'expo-av';
@@ -25,6 +25,9 @@ import {
   View
 } from 'react-native';
 
+// ✅ Import Emoji Picker Library
+// @ts-ignore
+import EmojiSelector, { Categories } from 'react-native-emoji-selector';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ========== TYPES ==========
@@ -47,8 +50,8 @@ interface ThreadComposerProps {
   onInputStart?: () => void;
   onInputEnd?: () => void;
   username?: string;
-  editingPost?: any; // ✅ NEW: For Edit Mode
-  onCancelEdit?: () => void; // ✅ NEW: Cancel Edit
+  editingPost?: any;
+  onCancelEdit?: () => void;
 }
 
 // ========== HELPER FUNCTIONS ==========
@@ -101,7 +104,7 @@ export default function ThreadComposer({
   const [micError, setMicError] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false); // ✅ NEW: Emoji State
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   // Camera states
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -128,18 +131,6 @@ export default function ThreadComposer({
   
   const isMounted = useRef(true);
 
-  // ✅ NEW: Inbuilt Custom Emoji Grid (No external libraries needed!)
-  const COMMON_EMOJIS = [
-    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
-    '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
-    '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸',
-    '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️',
-    '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡',
-    '👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪',
-    '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
-    '🔥', '✨', '🎉', '🎊', '🏆', '🥇', '🥈', '🥉', '⚽', '🏀',
-  ];
-
   // ========== LIFECYCLE ==========
   useEffect(() => {
     isMounted.current = true;
@@ -156,7 +147,6 @@ export default function ThreadComposer({
     };
   }, []);
 
-  // ✅ NEW: Auto-fill text when Edit is clicked
   useEffect(() => {
     if (editingPost) {
       setContent(editingPost.content || "");
@@ -184,7 +174,6 @@ export default function ThreadComposer({
         });
       }
 
-      // Check if file exists
       const fileInfo = await FileSystem.getInfoAsync(uri);
       if (!fileInfo.exists) {
         console.error('File does not exist:', uri);
@@ -200,7 +189,6 @@ export default function ThreadComposer({
     }
   };
 
-  // Read text file content
   const readTextFile = async (uri: string): Promise<string> => {
     try {
       if (Platform.OS === 'web') {
@@ -862,6 +850,12 @@ export default function ThreadComposer({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ========== EMOJI HANDLER ==========
+  const handleEmojiSelect = (emoji: string) => {
+    setContent(prev => prev + emoji);
+    onInputStart?.();
+  };
+
   // ========== SUBMIT ==========
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -935,7 +929,6 @@ export default function ThreadComposer({
         attachments: resolvedAttachments,
       };
 
-      // ✅ NEW: Handle Edit Mode Payload
       if (editingPost) {
         payload.id = editingPost.id;
         payload.isEdit = true;
@@ -1022,7 +1015,7 @@ export default function ThreadComposer({
         </View>
       ) : null}
 
-      {/* ✅ NEW: Edit Mode Banner */}
+      {/* Edit Mode Banner */}
       {editingPost && (
         <View style={styles.editBanner}>
           <View style={styles.editBannerIndicator} />
@@ -1036,30 +1029,41 @@ export default function ThreadComposer({
         </View>
       )}
 
-      {/* ✅ NEW: Emoji Picker */}
+      {/* ✅ FIXED: Emoji Picker with Library */}
       {showEmojiPicker && (
         <View style={styles.emojiPickerContainer}>
           <View style={styles.emojiPickerHeader}>
-            <Text style={styles.emojiPickerTitle}>Emojis</Text>
+            <Text style={styles.emojiPickerTitle}>😊 Emojis</Text>
             <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
               <Ionicons name="close" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.emojiPickerScroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.emojiGrid}>
-              {COMMON_EMOJIS.map((emoji, idx) => (
-                <TouchableOpacity 
-                  key={idx} 
-                  onPress={() => {
-                    setContent(prev => prev + emoji);
-                    onInputStart?.();
-                  }} 
-                  style={styles.emojiItem}
-                >
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <ScrollView 
+            style={{ height: 280 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
+            {Platform.OS === 'android' ? (
+              <EmojiSelector
+                onEmojiSelected={handleEmojiSelect}
+                showSearchBar={false} 
+                showTabs={false}
+                showHistory={false}
+                showSectionTitles={false}
+                category={Categories.all}
+              />
+            ) : (
+              <EmojiSelector
+                onEmojiSelected={handleEmojiSelect}
+                columns={8}
+                showSearchBar={true}
+                showTabs={true}
+                showHistory={false}
+                showSectionTitles={false}
+                category={Categories.all}
+              />
+            )}
           </ScrollView>
         </View>
       )}
@@ -1307,7 +1311,7 @@ export default function ThreadComposer({
           <Ionicons name="attach" size={22} color="#6b7280" />
         </TouchableOpacity>
 
-        {/* ✅ NEW: Emoji Button */}
+        {/* ✅ FIXED: Emoji Button with Library */}
         <TouchableOpacity onPress={() => setShowEmojiPicker(!showEmojiPicker)} style={styles.iconBtn}>
           <Ionicons name="happy-outline" size={22} color={showEmojiPicker ? "#3b82f6" : "#6b7280"} />
         </TouchableOpacity>
@@ -1441,8 +1445,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  
-  // ✅ NEW: Edit Banner Styles
   editBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1479,13 +1481,13 @@ const styles = StyleSheet.create({
   editBannerClose: {
     padding: 4,
   },
-
-  // ✅ NEW: Emoji Picker Styles
+  // ✅ FIXED: Emoji Picker Styles
   emojiPickerContainer: {
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderColor: '#e5e7eb',
-    maxHeight: 250,
+    height: 320,
+    overflow: 'hidden',
   },
   emojiPickerHeader: {
     flexDirection: 'row',
@@ -1501,24 +1503,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
-  emojiPickerScroll: {
-    maxHeight: 200,
+  emojiPicker: {
+    height: 260,
   },
-  emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 8,
-    gap: 8,
-  },
-  emojiItem: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: '#f9fafb',
-  },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

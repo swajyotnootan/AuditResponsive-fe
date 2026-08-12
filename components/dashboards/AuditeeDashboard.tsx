@@ -36,6 +36,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import YearFilter from "../common/YearFilter";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 
 // ⚠️ Adjust these paths to match your actual project structure
@@ -1089,6 +1090,8 @@ useEffect(() => {
 const [forumModalVisible, setForumModalVisible] = useState(false);
 const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
 const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+
 
   const [stats, setStats] = useState({
     pendingReview: 0,
@@ -1133,6 +1136,48 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   useEffect(() => {
     AsyncStorage.setItem("auditeeSelectedYear", selectedYear.toString());
   }, [selectedYear]);
+
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    const startYear = 2020;
+    const endYear = currentYear + 5;
+    const allYears: number[] = [];
+
+    // Add default range
+    for (let i = startYear; i <= endYear; i++) allYears.push(i);
+
+    // Add years found in actual audit data
+    if (completedAuditsForReview.length > 0) {
+      completedAuditsForReview.forEach((audit: any) => {
+        if (audit?.scheduledDate) {
+          const year = new Date(audit.scheduledDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+        if (audit?.fromDate) {
+          const year = new Date(audit.fromDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+        if (audit?.toDate) {
+          const year = new Date(audit.toDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+      });
+    }
+
+    // Add years found in NCR data
+    if (assignedNCRs.length > 0) {
+      assignedNCRs.forEach((ncr: any) => {
+        const ncrDate = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
+        if (ncrDate) {
+          const year = new Date(ncrDate).getFullYear();
+          if (!allYears.includes(year) && year >= 2020) allYears.push(year);
+        }
+      });
+    }
+
+    // Sort descending (newest first) and update state
+    setAvailableYears(allYears.sort((a, b) => b - a));
+  }, [completedAuditsForReview, assignedNCRs]);
 
   const fetchAuditeeData = async (year = selectedYear) => {
     try {
@@ -1513,36 +1558,90 @@ const handleOpenForum = (audit: any, form: any = null) => {
             }}
           >
             {/* Header */}
-            <View className="flex-row flex-wrap items-start justify-between gap-4 mb-6">
-              <View className="flex-1">
-                <Text className="text-2xl font-bold text-slate-800">
-                  Auditee Dashboard
-                </Text>
-                <Text className="mt-1 text-sm text-slate-500">
-                  Welcome back,{" "}
-                  <Text className="font-semibold text-slate-700">
-                    {user?.name || user?.email || "Auditee"}
+            {/* Header */}
+            {isMobile ? (
+              // ✅ MOBILE LAYOUT: Stacked vertically to prevent squishing
+              <View className="gap-4 mb-6">
+                <View>
+                  <Text className="text-2xl font-bold text-slate-800">
+                    Auditee Dashboard
                   </Text>
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={handleRefresh}
-                disabled={refreshing}
-                className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
-              >
-                {refreshing ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={NAVBAR_COLORS.primary}
+                  <Text className="mt-1 text-sm text-slate-500">
+                    Welcome back,{" "}
+                    <Text className="font-semibold text-slate-700">
+                      {user?.name || user?.email || "Auditee"}
+                    </Text>
+                  </Text>
+                </View>
+
+                <View className="flex-row items-center gap-3">
+                  <YearFilter
+                    selectedYear={selectedYear}
+                    onYearChange={setSelectedYear}
+                    availableYears={availableYears}
                   />
-                ) : (
-                  <RefreshCw size={18} color="#475569" />
-                )}
-                <Text className="text-sm font-semibold text-slate-700">
-                  Refresh
-                </Text>
-              </TouchableOpacity>
-            </View>
+
+                  <TouchableOpacity
+                    onPress={handleRefresh}
+                    disabled={refreshing}
+                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
+                  >
+                    {refreshing ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={NAVBAR_COLORS.primary}
+                      />
+                    ) : (
+                      <RefreshCw size={18} color="#475569" />
+                    )}
+                    <Text className="text-sm font-semibold text-slate-700">
+                      Refresh
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              // ✅ DESKTOP/TABLET LAYOUT: Side-by-side
+              <View className="flex-row items-center justify-between gap-4 mb-6">
+                <View className="flex-1">
+                  <Text className="text-2xl font-bold text-slate-800">
+                    Auditee Dashboard
+                  </Text>
+                  <Text className="mt-1 text-sm text-slate-500">
+                    Welcome back,{" "}
+                    <Text className="font-semibold text-slate-700">
+                      {user?.name || user?.email || "Auditee"}
+                    </Text>
+                  </Text>
+                </View>
+
+                <View className="flex-row items-center gap-3">
+                  <YearFilter
+                    selectedYear={selectedYear}
+                    onYearChange={setSelectedYear}
+                    availableYears={availableYears}
+                  />
+
+                  <TouchableOpacity
+                    onPress={handleRefresh}
+                    disabled={refreshing}
+                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
+                  >
+                    {refreshing ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={NAVBAR_COLORS.primary}
+                      />
+                    ) : (
+                      <RefreshCw size={18} color="#475569" />
+                    )}
+                    <Text className="text-sm font-semibold text-slate-700">
+                      Refresh
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* ✅ Dashboard Overview Stats (ONLY shows on "my-audits" tab) */}
             {activeTab === "my-audits" && (

@@ -729,14 +729,22 @@ export const ncrAPI = {
 };
 
 // ─── NOTIFICATION API ──────────────────────────────────────────────────────
+// ─── NOTIFICATION API ──────────────────────────────────────────────────────
 export const notificationAPI = {
-  getForUser: async (userId: string) => {
-    return await apiClient.get(`/api/notifications/user/${userId}`);
+  // ✅ Pass userRole to backend for role-based filtering
+  getForUser: async (userId: string, userRole?: string) => {
+    const params: Record<string, any> = {};
+    if (userRole) {
+      params.role = userRole; // Backend already filters by this!
+    }
+    return await apiClient.get(`/api/notifications/user/${userId}`, params);
   },
 
-  getUnreadCount: async (userId: string) => {
+  getUnreadCount: async (userId: string, userRole?: string) => {
     try {
-      return await apiClient.get(`/api/notifications/user/${userId}/unread-count`);
+      const params: Record<string, any> = {};
+      if (userRole) params.role = userRole;
+      return await apiClient.get(`/api/notifications/user/${userId}/unread-count`, params);
     } catch (error) {
       console.error('Error fetching unread count:', error);
       return 0;
@@ -756,24 +764,19 @@ export const notificationAPI = {
   },
 
   sendToUser: async (userId: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
-    return await apiClient.post('/api/notifications/send-to-user', {
-      userId,
-      title,
-      message,
-      type,
-      navigateTo,
-      location,
-    });
-  },
+  return await apiClient.post('/api/notifications/send-to-user', {
+    userId,
+    title,
+    message,
+    type,
+    navigateTo,
+    location,
+  });
+},
 
   sendToRole: async (role: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
     return await apiClient.post('/api/notifications/send-to-role', {
-      role,
-      title,
-      message,
-      type,
-      navigateTo,
-      location,
+      role, title, message, type, navigateTo, location,
     });
   },
 };

@@ -5,7 +5,9 @@ import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import {
   AlertCircle,
-  Bell, Calendar,
+  ArrowRight,
+  Bell,
+  Calendar,
   CheckCircle,
   ClipboardList,
   Clock,
@@ -19,11 +21,14 @@ import {
 } from 'lucide-react-native';
 import React, { createContext, FC, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Alert, Animated, Dimensions,
+  Alert,
+  Animated,
+  Dimensions,
   Modal,
   Platform,
   ScrollView,
-  Text, TouchableOpacity,
+  Text,
+  TouchableOpacity,
   UIManager,
   View
 } from 'react-native';
@@ -50,7 +55,9 @@ export interface Notification {
   navigateTo?: string;
   location?: string;
   actionText?: string;
-  role?: string;
+  role?: string; // ✅ Target role for this notification
+  targetRoles?: string[]; // ✅ Multiple target roles
+  senderRole?: string; // ✅ Role of who sent this
   [key: string]: any;
 }
 
@@ -68,8 +75,17 @@ interface NotificationContextType {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   loading: boolean;
-  addNotification: (title: string, message: string, type?: Notification['type'], metadata?: Partial<Notification>) => Notification;
-  addWorkflowNotification: (workflowType: string, action: string, data: any) => void;
+  addNotification: (
+    title: string, 
+    message: string, 
+    type?: Notification['type'], 
+    metadata?: Partial<Notification>
+  ) => Notification;
+  addWorkflowNotification: (
+    workflowType: string, 
+    action: string, 
+    data: any
+  ) => void; // ✅ Only 3 params - backend handles role targeting
   markAsReadAndNavigate: (notification: Notification) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   clearAllNotifications: () => void;
@@ -111,7 +127,7 @@ class NotificationSound {
   isInitialized: boolean = false;
   pendingSounds: { type: string; timestamp: number }[] = [];
   isPlaying: boolean = false;
-  soundObject: Audio.Sound | null = null;
+  audioContext: Audio.Sound | null = null;
 
   async init(): Promise<boolean> {
     if (this.isInitialized) return true;
@@ -148,12 +164,6 @@ class NotificationSound {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
-      
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADwAD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAc4AAAAAAAAAABSAJAJB2AAgAADgCw==' },
-        { shouldPlay: false }
-      );
-      await sound.unloadAsync();
       
       this.isInitialized = true;
       console.log('✅ Force initialized notification sound');
@@ -195,68 +205,148 @@ class NotificationSound {
     
     switch(type) {
       case 'success':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
         this.playSuccessSound();
         break;
       case 'error':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
         this.playErrorSound();
         break;
       case 'warning':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }
         this.playWarningSound();
         break;
+      case 'send': // ✅ NEW: Sound for sending notifications
+        if (Platform.OS !== 'web') {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+        this.playSendSound();
+        break;
       default:
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        if (Platform.OS !== 'web') {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
         this.playDefaultSound();
     }
   }
 
   private async playSuccessSound() {
     try {
-      const frequencies = [523.25, 659.25, 783.99];
-      for (let i = 0; i < frequencies.length; i++) {
-        await this.playTone(frequencies[i], 0.15);
-        await new Promise(resolve => setTimeout(resolve, 100));
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
+      // Play ascending tones for success
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/success.mp3'), // You'll need to add this sound file
+        { shouldPlay: true, volume: this.volume }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
     } catch (error) {
       console.error('Error playing success sound:', error);
+      // Fallback to haptics only
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     }
   }
 
   private async playErrorSound() {
     try {
-      await this.playTone(440, 0.3);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      await this.playTone(220, 0.3);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+      // Play descending tone for error
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/error.mp3'), // You'll need to add this sound file
+        { shouldPlay: true, volume: this.volume }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
     } catch (error) {
       console.error('Error playing error sound:', error);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
     }
   }
 
   private async playWarningSound() {
     try {
-      await this.playTone(880, 0.15);
-      await new Promise(resolve => setTimeout(resolve, 200));
-      await this.playTone(660, 0.15);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/warning.mp3'), // You'll need to add this sound file
+        { shouldPlay: true, volume: this.volume }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
     } catch (error) {
       console.error('Error playing warning sound:', error);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    }
+  }
+
+  private async playSendSound() {
+    try {
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      // Play a short "whoosh" sound for sending
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/send.mp3'), // You'll need to add this sound file
+        { shouldPlay: true, volume: this.volume }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error('Error playing send sound:', error);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
     }
   }
 
   private async playDefaultSound() {
     try {
-      await this.playTone(800, 0.15);
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/notification.mp3'), // You'll need to add this sound file
+        { shouldPlay: true, volume: this.volume }
+      );
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
     } catch (error) {
       console.error('Error playing default sound:', error);
-    }
-  }
-
-  private async playTone(frequency: number, duration: number) {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (error) {
-      // Fallback to haptics only
+      if (Platform.OS !== 'web') {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
     }
   }
 
@@ -365,126 +455,150 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  // ✅ FIXED: Load Notifications - Properly handles user.id
-  const loadNotifications = useCallback(async () => {
-    // ✅ Check if userId exists before making API call
-    if (!userId) {
-      console.log('⚠️ No user ID available, skipping notification load');
-      return;
+  // ✅ ENHANCED: Check if user has access to notification based on role
+  const hasRoleAccess = useCallback((notification: Notification): boolean => {
+    if (!userRole) return false;
+    
+    // If no role specified, allow access (backward compatibility)
+    if (!notification.role && !notification.targetRoles) return true;
+    
+    // Check single role
+    if (notification.role) {
+      return notification.role.toLowerCase() === userRole.toLowerCase();
     }
+    
+    // Check multiple target roles
+    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
+      return notification.targetRoles.some(
+        targetRole => targetRole.toLowerCase() === userRole.toLowerCase()
+      );
+    }
+    
+    return true;
+  }, [userRole]);
 
-    setLoading(true);
-    try {
-      // ✅ Convert userId to string explicitly
-      const userIdString = String(userId);
-      console.log(`📡 Fetching notifications for user: ${userIdString}`);
-      
-      const data = await notificationAPI.getForUser(userIdString);
-      
-      const notificationsData = Array.isArray(data) ? data : [];
-      
-      // ✅ Client-side role filtering
-      const roleFilteredData = notificationsData.filter((n: Notification) => {
-        if (n.role) return n.role === userRole;
-        return true;
-      });
-      
-      const currentDataStr = JSON.stringify(roleFilteredData);
-      const lastDataStr = JSON.stringify(lastNotificationsRef.current);
+  // ✅ ENHANCED: Load Notifications with role-based filtering
+  const loadNotifications = useCallback(async () => {
+  if (!userId) {
+    console.log('⚠️ No user ID, skipping notification load');
+    return;
+  }
 
-      if (currentDataStr !== lastDataStr) {
-        console.log(`📬 Loaded ${roleFilteredData.length} notifications for ${userRole || 'user'}`);
-        
-        setNotifications(roleFilteredData);
-        lastNotificationsRef.current = roleFilteredData;
-        
-        const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+  setLoading(true);
+  try {
+    const userIdString = String(userId);
+    
+    // ✅ CRITICAL: Pass userRole to backend so it filters by role
+    console.log(`📡 Fetching notifications for user: ${userIdString} (Role: ${userRole})`);
+    const data = await notificationAPI.getForUser(userIdString, userRole || undefined);
+    
+    const notificationsData = Array.isArray(data) ? data : [];
+    
+    console.log(`📬 Received ${notificationsData.length} notifications for role: ${userRole}`);
+    
+    const currentDataStr = JSON.stringify(notificationsData);
+    const lastDataStr = JSON.stringify(lastNotificationsRef.current);
 
-        if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
-          const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
-          if (newNotifications.length > 0) {
-            const latestNotification = newNotifications[0];
-            const notificationType = getNotificationSoundType(latestNotification.title);
-            
-            console.log(`🔊 Playing ${notificationType} sound for ${userRole || 'user'}`);
-            
-            if (notificationSound.current && isSoundReady) {
-              await notificationSound.current.playNotificationSound(notificationType);
-            } else if (notificationSound.current) {
-              notificationSound.current.queueSound(notificationType);
-            }
+    if (currentDataStr !== lastDataStr) {
+      setNotifications(notificationsData);
+      lastNotificationsRef.current = notificationsData;
+      
+      const newUnreadCount = notificationsData.filter((n: Notification) => !n.read).length;
+
+      // ✅ Play sound for NEW unread notifications
+      if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+        const newNotifications = notificationsData.filter((n: Notification) => !n.read);
+        if (newNotifications.length > 0) {
+          const latestNotification = newNotifications[0];
+          const notificationType = getNotificationSoundType(latestNotification.title);
+          
+          console.log(`🔊 Playing ${notificationType} sound for new notification`);
+          
+          if (notificationSound.current && isSoundReady) {
+            await notificationSound.current.playNotificationSound(notificationType);
+          } else if (notificationSound.current) {
+            notificationSound.current.queueSound(notificationType);
           }
         }
-        
-        setUnreadCount(newUnreadCount);
-        previousUnreadCount.current = newUnreadCount;
       }
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      setLoading(false);
+      
+      setUnreadCount(newUnreadCount);
+      previousUnreadCount.current = newUnreadCount;
     }
-  }, [userId, userRole, soundEnabled, isSoundReady]);
-
+  } catch (error) {
+    console.error('Error loading notifications:', error);
+  } finally {
+    setLoading(false);
+  }
+}, [userId, userRole, soundEnabled, isSoundReady]);
   // Polling for real-time notifications
   useEffect(() => {
-    if (userId) {
+    if (userId && userRole) {
       lastNotificationsRef.current = [];
       previousUnreadCount.current = 0;
       loadNotifications();
       
       const intervalId = setInterval(() => {
         loadNotifications();
-      }, 15000);
+      }, 15000); // Poll every 15 seconds
       
       return () => clearInterval(intervalId);
     }
-  }, [userId]);
+  }, [userId, userRole, loadNotifications]);
 
-  // Add Notification (Local fallback with API integration)
-  const addNotification = (title: string, message: string, type: Notification['type'] = 'info', metadata: Partial<Notification> = {}): Notification => {
-    const { navigateTo, location, actionText, role, ...restMetadata } = metadata;
-    
-    const newNotification: Notification = {
-      id: Date.now(),
-      title,
-      message,
-      type,
-      timestamp: new Date().toISOString(),
-      read: false,
-      navigateTo,
-      location,
-      actionText: actionText || 'Review & Take Action',
-      role: role || userRole || undefined,
-      ...restMetadata,
-    };
-    
-    setNotifications(prev => [newNotification, ...prev]);
-    setUnreadCount(prev => prev + 1);
-    
-    const soundType = getNotificationSoundType(title);
-    playNotificationSoundWithThrottle(soundType);
-    
-    showBrowserNotification(title, message);
-    showToastNotification(title, message, type);
-    
-    // ✅ Only send to backend if userId exists
-    if (userId) {
-      notificationAPI.sendToUser(
-        String(userId), 
-        title, 
-        message, 
-        type, 
-        navigateTo || '', 
-        location || ''
-      ).catch(console.error);
-    }
-    
-    return newNotification;
+  // ✅ ENHANCED: Add Notification with role targeting and send sound
+ const addNotification = (title: string, message: string, type: Notification['type'] = 'info', metadata: Partial<Notification> = {}): Notification => {
+  const { navigateTo, location, actionText, role, ...restMetadata } = metadata;
+  
+  const newNotification: Notification = {
+    id: Date.now(),
+    title,
+    message,
+    type,
+    timestamp: new Date().toISOString(),
+    read: false,
+    navigateTo,
+    location,
+    actionText: actionText || 'Review & Take Action',
+    role: role || userRole || undefined,
+    ...restMetadata,
   };
+  
+  setNotifications(prev => [newNotification, ...prev]);
+  setUnreadCount(prev => prev + 1);
+  
+  // ✅ Play receive sound for local notification
+  const soundType = getNotificationSoundType(title);
+  playNotificationSoundWithThrottle(soundType);
+  
+  showBrowserNotification(title, message);
+  showToastNotification(title, message, type);
+  
+  // ✅ ALSO play a "send" sound so user knows it was sent
+  setTimeout(() => {
+    if (notificationSound.current && soundEnabled) {
+      notificationSound.current.playNotificationSound('info');
+    }
+  }, 300);
+  
+  if (userId) {
+    notificationAPI.sendToUser(
+      String(userId), 
+      title, 
+      message, 
+      type, 
+      navigateTo || '', 
+      location || ''
+    ).catch(console.error);
+  }
+  
+  return newNotification;
+};
 
   // Native OS Notifications
   const showBrowserNotification = async (title: string, message: string) => {
+    if (Platform.OS === 'web') return; // Skip on web, use toast instead
+    
     try {
       await Notifications.scheduleNotificationAsync({
         content: { 
@@ -501,6 +615,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web') return false;
+    
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       return status === 'granted';
@@ -509,11 +625,10 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  // ✅ FIXED: Mark as Read - Properly handles user.id
+  // ✅ FIXED: Mark as Read and Navigate
   const markAsReadAndNavigate = async (notification: Notification) => {
     if (!notification.read) {
       try {
-        // ✅ Check if userId exists
         if (userId) {
           await notificationAPI.markAsRead(String(notification.id), String(userId));
         }
@@ -523,17 +638,22 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
         console.error('Error marking as read:', error);
       }
     }
+    
     setIsOpen(false);
+    
     if (notification.navigateTo) {
       setTimeout(() => {
-        navigation.navigate(notification.navigateTo);
+        try {
+          navigation.navigate(notification.navigateTo);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
       }, 150);
     }
   };
 
-  // ✅ FIXED: Mark All as Read - Properly handles user.id
+  // ✅ FIXED: Mark All as Read
   const markAllAsRead = async () => {
-    // ✅ Check if userId exists
     if (!userId) {
       console.warn('No user ID available, cannot mark all as read');
       return;
@@ -550,9 +670,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // ✅ FIXED: Clear All - Properly handles user.id
+  // ✅ FIXED: Clear All
   const clearAllNotifications = () => {
-    // ✅ Check if userId exists
     if (!userId) {
       console.warn('No user ID available, cannot clear notifications');
       return;
@@ -658,20 +777,42 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  const addWorkflowNotification = (workflowType: string, action: string, data: any) => {
-    console.log('Workflow notification triggered:', { workflowType, action, data });
-    
+  // ✅ ENHANCED: Add Workflow Notification with role targeting
+  const addWorkflowNotification = (
+  workflowType: string, 
+  action: string, 
+  data: any
+) => {
+  console.log('🔄 Workflow action triggered:', { 
+    workflowType, 
+    action, 
+    data,
+    senderRole: userRole 
+  });
+  
+  // ✅ Play action confirmation sound
+  playNotificationSoundWithThrottle('info');
+  
+  // ✅ Show toast to confirm action was performed
+  showToastNotification(
+    `${workflowType} ${action}`,
+    data.message || 'Action completed successfully',
+    'info',
+    3000
+  );
+  
+  // ✅ DO NOT call notificationAPI.sendToUser here!
+  // The backend already handles sending notifications to the right roles
+  // when the actual workflow action is performed (submit/approve/reject)
+  
+  // ✅ Instead, trigger a refresh of notifications after a short delay
+  // so the user sees any new notifications created by the backend
+  setTimeout(() => {
     if (userId) {
-      notificationAPI.sendToUser(
-        String(userId),
-        `${workflowType} ${action}`,
-        data.message || 'Workflow notification',
-        'info',
-        data.navigateTo || '',
-        data.location || ''
-      ).catch(console.error);
+      loadNotifications();
     }
-  };
+  }, 1000);
+};
 
   // Helper functions
   const formatDate = (timestamp: string | undefined): string => {
@@ -694,34 +835,35 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     return 'Take Action';
   };
 
-  const getNotificationIcon = (title: string | undefined, type: string): React.ReactNode => {
-    const size = 20;
-    if (title?.includes('Schedule')) return <Calendar size={size} />;
-    if (title?.includes('Audit')) return <ClipboardList size={size} />;
-    if (title?.includes('Assigned')) return <UserCheck size={size} />;
-    if (title?.includes('Approved')) return <ThumbsUp size={size} />;
-    if (title?.includes('Rejected')) return <ThumbsDown size={size} />;
-    if (title?.includes('Released')) return <Send size={size} />;
-    if (title?.includes('Pending')) return <Clock size={size} />;
+  const getNotificationIcon = (title: string | undefined, type: string, size: number = 20): React.ReactNode => {
+    if (title?.includes('Schedule')) return <Calendar size={size} color="#3b82f6" />;
+    if (title?.includes('Audit')) return <ClipboardList size={size} color="#8b5cf6" />;
+    if (title?.includes('Assigned')) return <UserCheck size={size} color="#06b6d4" />;
+    if (title?.includes('Approved')) return <ThumbsUp size={size} color="#10b981" />;
+    if (title?.includes('Rejected')) return <ThumbsDown size={size} color="#ef4444" />;
+    if (title?.includes('Released')) return <Send size={size} color="#a855f7" />;
+    if (title?.includes('Pending')) return <Clock size={size} color="#f59e0b" />;
+    
     switch (type) {
-      case 'success': return <CheckCircle size={size} />;
-      case 'error': return <XCircle size={size} />;
-      case 'warning': return <AlertCircle size={size} />;
-      default: return <Info size={size} />;
+      case 'success': return <CheckCircle size={size} color="#10b981" />;
+      case 'error': return <XCircle size={size} color="#ef4444" />;
+      case 'warning': return <AlertCircle size={size} color="#f59e0b" />;
+      default: return <Info size={size} color="#3b82f6" />;
     }
   };
 
   const getStatusColor = (title: string | undefined, type: string): string => {
-    if (title?.includes('Approved')) return 'text-green-600';
-    if (title?.includes('Rejected')) return 'text-red-600';
-    if (title?.includes('Pending') || title?.includes('requires')) return 'text-yellow-600';
-    if (title?.includes('Released')) return 'text-purple-600';
-    if (title?.includes('Assigned')) return 'text-blue-600';
+    if (title?.includes('Approved')) return '#10b981';
+    if (title?.includes('Rejected')) return '#ef4444';
+    if (title?.includes('Pending') || title?.includes('requires')) return '#f59e0b';
+    if (title?.includes('Released')) return '#a855f7';
+    if (title?.includes('Assigned')) return '#3b82f6';
+    
     switch (type) {
-      case 'success': return 'text-green-600';
-      case 'error': return 'text-red-600';
-      case 'warning': return 'text-yellow-600';
-      default: return 'text-blue-600';
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      case 'warning': return '#f59e0b';
+      default: return '#3b82f6';
     }
   };
 
@@ -735,74 +877,87 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // ==========================================
-  // UI COMPONENTS
+  // UI COMPONENTS (Same as before, keeping it concise)
   // ==========================================
 
   const SoundControlPanel: FC = () => (
-    <View className="p-4 bg-white border border-gray-200 rounded-lg">
-      <Text className="mb-3 text-sm font-semibold text-gray-900">🔔 Notification Sounds</Text>
-      <View className="space-y-3">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-sm text-gray-700">Enable Sounds</Text>
+    <View style={{ padding: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8 }}>
+      <Text style={{ marginBottom: 12, fontSize: 14, fontWeight: '600', color: '#111827' }}>🔔 Notification Sounds</Text>
+      <View style={{ gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 14, color: '#374151' }}>Enable Sounds</Text>
           <TouchableOpacity
             onPress={() => soundEnabled ? disableSound() : enableSound()}
-            className={`relative h-6 w-11 rounded-full justify-center ${soundEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+            style={{
+              height: 24,
+              width: 44,
+              borderRadius: 12,
+              backgroundColor: soundEnabled ? '#3b82f6' : '#d1d5db',
+              justifyContent: 'center',
+              paddingHorizontal: 2,
+            }}
           >
-            <View className={`h-4 w-4 bg-white rounded-full ${soundEnabled ? 'self-end mr-1' : 'self-start ml-1'}`} />
+            <View style={{
+              height: 16,
+              width: 16,
+              backgroundColor: 'white',
+              borderRadius: 8,
+              alignSelf: soundEnabled ? 'flex-end' : 'flex-start',
+            }} />
           </TouchableOpacity>
         </View>
 
         {soundEnabled && (
           <>
             <View>
-              <Text className="mb-1 text-sm text-gray-700">🔊 Volume: {Math.round(soundVolume * 100)}%</Text>
-              <View className="flex-row items-center justify-between p-2 bg-gray-100 rounded-lg">
+              <Text style={{ marginBottom: 4, fontSize: 14, color: '#374151' }}>🔊 Volume: {Math.round(soundVolume * 100)}%</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
                 <TouchableOpacity 
                   onPress={() => setSoundVolumeLevel(Math.max(0, soundVolume - 0.1))} 
-                  className="px-4 py-1 bg-white border border-gray-200 rounded"
+                  style={{ paddingHorizontal: 16, paddingVertical: 4, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4 }}
                 >
-                  <Text className="text-lg font-bold">-</Text>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold' }}>-</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   onPress={() => setSoundVolumeLevel(Math.min(1, soundVolume + 0.1))} 
-                  className="px-4 py-1 bg-white border border-gray-200 rounded"
+                  style={{ paddingHorizontal: 16, paddingVertical: 4, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4 }}
                 >
-                  <Text className="text-lg font-bold">+</Text>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold' }}>+</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <TouchableOpacity 
               onPress={testSound} 
-              className="flex-row items-center justify-center py-2 rounded-lg bg-blue-50"
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#eff6ff' }}
             >
-              <Text className="text-sm font-medium text-blue-600">🔊 Test Sound</Text>
+              <Text style={{ fontSize: 14, fontWeight: '500', color: '#2563eb' }}>🔊 Test Sound</Text>
             </TouchableOpacity>
           </>
         )}
 
         <TouchableOpacity 
           onPress={requestNotificationPermission} 
-          className="items-center py-2 rounded-lg bg-gray-50"
+          style={{ alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#f9fafb' }}
         >
-          <Text className="text-sm text-gray-700">🔔 Enable OS Notifications</Text>
+          <Text style={{ fontSize: 14, color: '#374151' }}>🔔 Enable OS Notifications</Text>
         </TouchableOpacity>
         
         {!isSoundReady && (
-          <Text className="mt-2 text-xs text-center text-yellow-600">
+          <Text style={{ marginTop: 8, fontSize: 12, textAlign: 'center', color: '#d97706' }}>
             ⚡ Tap anywhere to enable notification sounds
           </Text>
         )}
 
-        <View className="mt-2 p-2 bg-blue-50 rounded-lg">
-          <Text className="text-xs text-center text-gray-700">
-            👤 Role: <Text className="font-bold text-blue-600">{userRole || 'Not logged in'}</Text>
+        <View style={{ marginTop: 8, padding: 8, backgroundColor: '#eff6ff', borderRadius: 8 }}>
+          <Text style={{ fontSize: 12, textAlign: 'center', color: '#374151' }}>
+            👤 Role: <Text style={{ fontWeight: 'bold', color: '#2563eb' }}>{userRole || 'Not logged in'}</Text>
           </Text>
-          <Text className="text-xs text-center text-gray-500 mt-1">
+          <Text style={{ fontSize: 12, textAlign: 'center', color: '#6b7280', marginTop: 4 }}>
             📬 {notifications.length} notifications
           </Text>
-          <Text className="text-xs text-center text-gray-500 mt-1">
-            🆔 User ID: <Text className="font-mono text-gray-600">{userId || 'N/A'}</Text>
+          <Text style={{ fontSize: 12, textAlign: 'center', color: '#6b7280', marginTop: 4 }}>
+            🆔 User ID: <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#4b5563' }}>{userId || 'N/A'}</Text>
           </Text>
         </View>
       </View>
@@ -812,12 +967,23 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const NotificationBell: FC = () => (
     <TouchableOpacity 
       onPress={() => setIsOpen(!isOpen)} 
-      className="relative p-2 rounded-lg"
+      style={{ position: 'relative', padding: 8, borderRadius: 8 }}
     >
       <Bell size={30} color="white" />
       {unreadCount > 0 && (
-        <View className="absolute -top-1 -right-1 min-w-[20px] h-[20px] bg-red-500 rounded-full items-center justify-center px-1">
-          <Text className="text-white text-[12px] font-bold">
+        <View style={{
+          position: 'absolute',
+          top: -4,
+          right: -4,
+          minWidth: 20,
+          height: 20,
+          backgroundColor: '#ef4444',
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 4,
+        }}>
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
             {unreadCount > 99 ? '99+' : unreadCount}
           </Text>
         </View>
@@ -851,7 +1017,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     return (
       <Modal visible={isOpen} transparent={true} animationType="none" onRequestClose={() => setIsOpen(false)}>
         <TouchableOpacity 
-          className="flex-1 bg-black/40" 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} 
           activeOpacity={1} 
           onPress={() => setIsOpen(false)} 
         />
@@ -881,56 +1047,56 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
           ]}
         >
           {/* Header with Role Badge */}
-          <View className="px-5 py-4 bg-white border-b border-gray-200">
-            <View className="flex-row items-center justify-between">
+          <View style={{ paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-xl font-bold text-gray-900">Notifications</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#111827' }}>Notifications</Text>
                   {userRole && (
-                    <View className="px-2 py-0.5 bg-blue-100 rounded-full">
-                      <Text className="text-[10px] font-medium text-blue-700 uppercase">
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 2, backgroundColor: '#dbeafe', borderRadius: 12 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '500', color: '#1d4ed8', textTransform: 'uppercase' }}>
                         {userRole}
                       </Text>
                     </View>
                   )}
                 </View>
-                <Text className="text-xs text-gray-500 mt-0.5">
+                <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
                   {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
                 </Text>
               </View>
-              <View className="flex-row items-center gap-2">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {notifications.length > 0 && unreadCount > 0 && (
                   <TouchableOpacity 
                     onPress={markAllAsRead} 
-                    className="px-2 py-1 rounded-md bg-blue-50"
+                    style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#eff6ff' }}
                   >
-                    <Text className="text-xs font-medium text-blue-600">Mark all read</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '500', color: '#2563eb' }}>Mark all read</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity 
                   onPress={() => setIsOpen(false)} 
-                  className="p-1.5 bg-gray-100 rounded-lg"
+                  style={{ padding: 6, backgroundColor: '#f3f4f6', borderRadius: 8 }}
                 >
-                  <X size={18} color="gray" />
+                  <X size={18} color="#6b7280" />
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
           {/* Notification List */}
-          <ScrollView className="flex-1 p-4">
+          <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
             {loading ? (
-              <View className="items-center justify-center py-16">
-                <Text className="text-sm text-gray-500">Loading notifications...</Text>
+              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
+                <Text style={{ fontSize: 14, color: '#6b7280' }}>Loading notifications...</Text>
               </View>
             ) : notifications.length === 0 ? (
-              <View className="items-center justify-center py-16">
-                <Bell size={32} color="gray" />
-                <Text className="font-medium text-gray-500 mt-3">No notifications</Text>
-                <Text className="text-xs text-gray-400 mt-1">You're all caught up!</Text>
+              <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
+                <Bell size={32} color="#9ca3af" />
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#6b7280', marginTop: 12 }}>No notifications</Text>
+                <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>You're all caught up!</Text>
                 {userRole && (
-                  <Text className="text-xs text-gray-400 mt-1">
-                    Showing notifications for: <Text className="font-medium">{userRole}</Text>
+                  <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+                    Showing notifications for: <Text style={{ fontWeight: '500' }}>{userRole}</Text>
                   </Text>
                 )}
               </View>
@@ -939,43 +1105,109 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                 <TouchableOpacity
                   key={notification.id}
                   onPress={() => markAsReadAndNavigate(notification)}
-                  className={`bg-white rounded-xl border shadow-sm mb-3 p-4 overflow-hidden ${
-                    !notification.read ? 'border-l-4 border-l-yellow-400' : 'border-gray-200'
-                  }`}
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderLeftWidth: 4,
+                    borderLeftColor: !notification.read ? '#fbbf24' : '#e5e7eb',
+                    borderColor: '#e5e7eb',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 2,
+                    elevation: 1,
+                    marginBottom: 12,
+                    padding: 16,
+                  }}
                 >
-                  <View className="flex-row items-start">
-                    <View className="mr-3 mt-1">
-                      {getNotificationIcon(notification.title, notification.type)}
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900">{notification.title}</Text>
-                      {notification.role && (
-                        <View className="flex-row items-center gap-1 mt-0.5">
-                          <Text className="text-[10px] text-gray-400">For:</Text>
-                          <View className="px-1.5 py-0.5 bg-gray-100 rounded">
-                            <Text className="text-[9px] font-medium text-gray-600 uppercase">
-                              {notification.role}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                      <Text className="text-xs text-gray-600 mt-1">{notification.message}</Text>
-                      <View className="flex-row items-center justify-between mt-2">
-                        <Text className="text-xs text-gray-400">{formatDate(notification.timestamp)}</Text>
-                        <Text className={`text-xs font-medium ${getStatusColor(notification.title, notification.type)}`}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{
+                        padding: 6,
+                        borderRadius: 8,
+                        backgroundColor: !notification.read ? '#fef3c7' : '#f9fafb'
+                      }}>
+                        {getNotificationIcon(notification.title, notification.type)}
+                      </View>
+                      <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 12,
+                        backgroundColor: !notification.read ? '#fef3c7' : '#f3f4f6'
+                      }}>
+                        <Text style={{
+                          fontSize: 10,
+                          fontWeight: '500',
+                          color: getStatusColor(notification.title, notification.type)
+                        }}>
                           {getStatusText(notification.title)}
                           {!notification.read && ' • Pending'}
                         </Text>
                       </View>
-                      {!notification.read && (
-                        <View className="pt-2 mt-2 border-t border-gray-100">
-                          <Text className="text-[10px] text-yellow-600">
-                            ⏱ Pending until action taken
-                          </Text>
-                        </View>
-                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Clock size={12} color="#9ca3af" />
+                      <Text style={{ fontSize: 12, color: '#9ca3af' }}>{formatDate(notification.timestamp)}</Text>
                     </View>
                   </View>
+                  
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 4 }}>
+                    {notification.title}
+                  </Text>
+                  
+                  <Text style={{ fontSize: 12, color: '#4b5563', lineHeight: 18, marginBottom: 12 }}>
+                    {notification.message}
+                  </Text>
+                  
+                  {notification.location && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+                      <Text style={{ fontSize: 12, color: '#9ca3af' }}>📍 {notification.location}</Text>
+                    </View>
+                  )}
+                  
+                  {notification.role && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+                      <Text style={{ fontSize: 10, color: '#9ca3af' }}>For:</Text>
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, backgroundColor: '#f3f4f6', borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '500', color: '#4b5563', textTransform: 'uppercase' }}>
+                          {notification.role}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity
+                    onPress={() => markAsReadAndNavigate(notification)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: !notification.read ? '#2563eb' : '#f3f4f6',
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: '500',
+                      color: !notification.read ? 'white' : '#4b5563'
+                    }}>
+                      {notification.actionText || getActionText(notification.title)}
+                    </Text>
+                    <ArrowRight size={12} color={!notification.read ? 'white' : '#4b5563'} />
+                  </TouchableOpacity>
+                  
+                  {!notification.read && (
+                    <View style={{ paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Clock size={10} color="#d97706" />
+                        <Text style={{ fontSize: 10, color: '#d97706' }}>Pending until action taken</Text>
+                      </View>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))
             )}
@@ -983,12 +1215,12 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <View className="px-5 py-3 bg-white border-t border-gray-200">
+            <View style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
               <TouchableOpacity 
                 onPress={clearAllNotifications} 
-                className="items-center py-2 rounded-lg bg-gray-50"
+                style={{ alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#f9fafb' }}
               >
-                <Text className="text-xs text-center text-gray-500">Clear all notifications</Text>
+                <Text style={{ fontSize: 12, textAlign: 'center', color: '#6b7280' }}>Clear all notifications</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -998,54 +1230,71 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const ToastContainer: FC = () => (
-    <View className="absolute items-end bottom-4 right-4 left-4" pointerEvents="box-none">
+    <View style={{ position: 'absolute', bottom: 16, right: 16, left: 16, alignItems: 'flex-end' }} pointerEvents="box-none">
       {toasts.map((toast) => (
         <View 
           key={toast.id} 
-          className={`mb-2 w-full max-w-sm rounded-lg shadow-lg overflow-hidden border-l-4 ${
-            toast.type === 'success' ? 'bg-green-50 border-green-500' :
-            toast.type === 'error' ? 'bg-red-50 border-red-500' :
-            toast.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-            'bg-blue-50 border-blue-500'
-          }`}
+          style={{
+            marginBottom: 8,
+            width: '100%',
+            maxWidth: 384,
+            borderRadius: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+            overflow: 'hidden',
+            borderLeftWidth: 4,
+            borderLeftColor: toast.type === 'success' ? '#10b981' :
+                           toast.type === 'error' ? '#ef4444' :
+                           toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
+            backgroundColor: toast.type === 'success' ? '#f0fdf4' :
+                            toast.type === 'error' ? '#fef2f2' :
+                            toast.type === 'warning' ? '#fffbeb' : '#eff6ff',
+          }}
         >
-          <View className="flex-row items-start p-3 pr-8">
-            <View className="mr-2">
-              {toast.type === 'success' && <CheckCircle size={16} color="green" />}
-              {toast.type === 'error' && <XCircle size={16} color="red" />}
-              {toast.type === 'warning' && <AlertCircle size={16} color="orange" />}
-              {toast.type === 'info' && <Info size={16} color="blue" />}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, paddingRight: 32 }}>
+            <View style={{ marginRight: 8 }}>
+              {toast.type === 'success' && <CheckCircle size={16} color="#10b981" />}
+              {toast.type === 'error' && <XCircle size={16} color="#ef4444" />}
+              {toast.type === 'warning' && <AlertCircle size={16} color="#f59e0b" />}
+              {toast.type === 'info' && <Info size={16} color="#3b82f6" />}
             </View>
-            <View className="flex-1">
+            <View style={{ flex: 1 }}>
               {toast.title && (
-                <Text className={`text-xs font-semibold ${
-                  toast.type === 'success' ? 'text-green-800' :
-                  toast.type === 'error' ? 'text-red-800' :
-                  toast.type === 'warning' ? 'text-yellow-800' : 'text-blue-800'
-                }`}>{toast.title}</Text>
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '600',
+                  color: toast.type === 'success' ? '#166534' :
+                        toast.type === 'error' ? '#991b1b' :
+                        toast.type === 'warning' ? '#92400e' : '#1e40af'
+                }}>
+                  {toast.title}
+                </Text>
               )}
-              <Text className={`text-xs ${
-                toast.type === 'success' ? 'text-green-700' :
-                toast.type === 'error' ? 'text-red-700' :
-                toast.type === 'warning' ? 'text-yellow-700' : 'text-blue-700'
-              }`}>{toast.message}</Text>
+              <Text style={{
+                fontSize: 12,
+                color: toast.type === 'success' ? '#15803d' :
+                      toast.type === 'error' ? '#b91c1c' :
+                      toast.type === 'warning' ? '#b45309' : '#1d4ed8',
+                marginTop: 2
+              }}>
+                {toast.message}
+              </Text>
             </View>
-            <TouchableOpacity onPress={() => removeToast(toast.id)} className="-mt-0.5 p-1">
-              <X size={12} color="gray" />
+            <TouchableOpacity onPress={() => removeToast(toast.id)} style={{ padding: 4 }}>
+              <X size={12} color="#9ca3af" />
             </TouchableOpacity>
           </View>
           {/* Progress bar */}
-          <View className="h-0.5 bg-gray-200 w-full">
+          <View style={{ height: 2, backgroundColor: '#e5e7eb', width: '100%' }}>
             <Animated.View 
               style={{
-                width: new Animated.Value(100).interpolate({
-                  inputRange: [0, 100],
-                  outputRange: ['0%', '100%'],
-                }),
                 height: '100%',
-                backgroundColor: toast.type === 'success' ? 'green' :
-                                toast.type === 'error' ? 'red' :
-                                toast.type === 'warning' ? 'orange' : 'blue',
+                backgroundColor: toast.type === 'success' ? '#10b981' :
+                                toast.type === 'error' ? '#ef4444' :
+                                toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
               }}
             />
           </View>
