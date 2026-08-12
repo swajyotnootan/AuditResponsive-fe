@@ -585,112 +585,87 @@ export default function ForumThreadView({
 // Replace ONLY the handleReactToPost function
 
 // ========== REACTIONS (COMPLETELY FIXED) ==========
-const handleReactToPost = async (postId: string | number, emoji: string) => {
-  if (!mountedRef.current || !groupId) return;
-  
-  const userEmail = currentUser?.email || username || "";
-  if (!userEmail) {
-    console.error("❌ No user email available for reaction");
-    return;
-  }
-
-  // Convert postId to string for consistent comparison
-  const postIdStr = String(postId);
-
-  // ✅ Find existing reaction from THIS user on THIS post
-  const existingReaction = posts.find(p => {
-    if (p.messageType !== 'REACTION') return false;
-    if (String(p.parentId) !== postIdStr) return false;
-    if (p.content !== emoji) return false;
+  // ========== REACTIONS (MINIMAL PAYLOAD TO FIX 500 ERROR) ==========
+  const handleReactToPost = async (postId: string | number, emoji: string) => {
+    if (!mountedRef.current || !groupId) return;
+    const userEmail = currentUser?.email || username || "";
     
-    // Check if this reaction was created by the current user
-    const creator = String(p.createdBy || '').toLowerCase().trim();
-    const userEmailLower = userEmail.toLowerCase().trim();
-    return creator === userEmailLower;
-  });
+    const normalizedEmail = userEmail ? String(userEmail).toLowerCase().trim() : '';
+    const normalizedUsername = currentUser?.username ? String(currentUser.username).toLowerCase().trim() : '';
 
-  // ✅ If user already reacted with this emoji → REMOVE it
-  if (existingReaction) {
-    try {
-      // Optimistic UI update
-      setPosts(prev => prev.filter(p => String(p.id) !== String(existingReaction.id)));
-
-      // DELETE request to remove the reaction
-      const response = await fetch(
-        `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${existingReaction.id}?requester=${encodeURIComponent(userEmail)}`,
-        { method: 'DELETE', credentials: 'include' }
-      );
-
-      if (!response.ok) {
-        console.error("❌ Failed to remove reaction:", await response.text());
-        // Rollback on failure
-        setPosts(prev => [...prev, existingReaction]);
-      } else {
-        console.log("✅ Reaction removed successfully");
-      }
-    } catch (err) {
-      console.error("Failed to remove reaction", err);
-      setPosts(prev => [...prev, existingReaction]);
-    }
-    return;
-  }
-
-  // ✅ Add new reaction
-  const tempId = `temp-react-${Date.now()}`;
-  const optimisticReaction = {
-    id: tempId,
-    title: `Reaction: ${emoji}`,
-    content: emoji,
-    messageType: "REACTION",
-    parentId: postIdStr,
-    createdBy: userEmail,
-    createdByName: displayName,
-    createdAt: new Date().toISOString(),
-  };
-
-  // Optimistic UI update
-  setPosts(prev => [...prev, optimisticReaction]);
-
-  try {
-    // ✅ CORRECT PAYLOAD for backend
-    const payload = {
-      title: `Reaction: ${emoji}`,        // ✅ REQUIRED by backend
-      content: emoji,
-      createdBy: userEmail,
-      createdByName: displayName,
-      messageType: "REACTION",
-      parentId: postIdStr,                  // ✅ STRING, not Number()
-      attachments: []
-    };
-
-    console.log("📤 Sending reaction payload:", payload);
-
-    const response = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
+    // 1. Check if user already reacted (to toggle off)
+    const existingReaction = posts.find(p => {
+      if (p.messageType !== 'REACTION') return false;
+      if (String(p.parentId) !== String(postId)) return false;
+      if (p.content !== emoji) return false;
+      
+      const creator = String(p.createdBy || '').toLowerCase().trim();
+      if (!creator) return false;
+      
+      return (normalizedEmail && creator === normalizedEmail) || 
+             (normalizedUsername && creator === normalizedUsername);
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Reaction failed:", errorText);
-      // Remove optimistic reaction
-      setPosts(prev => prev.filter(p => p.id !== tempId));
-    } else {
-      const savedReaction = await response.json();
-      console.log("✅ Reaction saved:", savedReaction);
-      // Replace temp with real reaction
-      setPosts(prev => prev.map(p => 
-        p.id === tempId ? { ...savedReaction, createdByName: displayName } : p
-      ));
-      playNotificationSound('send');
+    if (existingReaction) {
+      // Remove reaction
+      try {
+        setPosts(prev => prev.filter(p => String(p.id) !== String(existingReaction.id)));
+        const response = await fetch(
+          `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${existingReaction.id}?requester=${userEmail}`,
+          { method: 'DELETE', credentials: 'include' }
+        );
+        if (!response.ok) {
+          setPosts(prev => [...prev, existingReaction]); // Rollback
+        }
+      } catch (err) {
+        setPosts(prev => [...prev, existingReaction]); // Rollback
+      }
+      return;
     }
-  } catch (err) {
-    console.error("❌ Failed to send reaction:", err);
-    setPosts(prev => prev.filter(p => p.id !== tempId));
-  }
-};
+
+    // 2. Add new reaction (Optimistic UI)
+    const tempId = `temp-react-${Date.now()}`;
+    const optimisticReaction = {
+      id: tempId,
+      content: emoji,
+      messageType: "REACTION",
+      parentId: postId,
+      createdBy: userEmail,
+      createdByName: displayName,
+      createdAt: new Date().toISOString(),
+    };
+    setPosts(prev => [...prev, optimisticReaction]);
+
+    try {
+      // ✅ MINIMAL PAYLOAD: Removed title, attachments, and createdByName to prevent backend crashes
+      const response = await fetch(`${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          groupId: String(groupId),       // ✅ Include groupId in body just in case
+          content: emoji,                 // The emoji itself
+          createdBy: userEmail,           // User email
+          messageType: "REACTION",        // Must match backend Enum exactly
+          parentId: Number(postId)        // ✅ FORCE NUMBER to prevent String/Long mismatch
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Reaction failed with status:", response.status);
+        console.error("❌ Backend error details:", errorText);
+        setPosts(prev => prev.filter(p => p.id !== tempId)); // Rollback
+      } else {
+        playNotificationSound('send');
+        // Refresh to get the real database ID
+        setTimeout(() => loadPosts(), 500); 
+      }
+    } catch (err) {
+      console.error("Network error sending reaction:", err);
+      setPosts(prev => prev.filter(p => p.id !== tempId)); // Rollback
+    }
+  };
 
     // ✅ FIXED REACTIONS (Prevents Type Mismatch)
     const getReactionsForThread = useCallback((threadId: string | number) => {
