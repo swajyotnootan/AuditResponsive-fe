@@ -8,6 +8,7 @@ import * as Sharing from 'expo-sharing';
 
 // ─── API CLIENT ──────────────────────────────────────────────────────────────
 // ─── API CLIENT ──────────────────────────────────────────────────────────────
+// ─── API CLIENT ──────────────────────────────────────────────────────────────
 export const apiClient = {
   get: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
     const token = await AsyncStorage.getItem('authToken');
@@ -24,7 +25,8 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
+    // ✅ Safely handle empty responses
+    return text ? JSON.parse(text) : ({} as T);
   },
 
   post: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
@@ -43,7 +45,7 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
+    return text ? JSON.parse(text) : ({} as T);
   },
 
   postFormData: async <T = any>(endpoint: string, formData: any): Promise<T> => {
@@ -736,16 +738,26 @@ export const ncrAPI = {
 
 // ─── NOTIFICATION API ──────────────────────────────────────────────────────
 // ─── NOTIFICATION API ──────────────────────────────────────────────────────
+// ─── NOTIFICATION API ──────────────────────────────────────────────────────
 export const notificationAPI = {
-  // ✅ Pass userRole to backend for role-based filtering
+  /**
+   * Get notifications for a specific user with optional role filtering
+   * @param userId - The user ID
+   * @param userRole - Optional role to filter notifications by
+   */
   getForUser: async (userId: string, userRole?: string) => {
     const params: Record<string, any> = {};
     if (userRole) {
-      params.role = userRole; // Backend already filters by this!
+      params.role = userRole; // Backend filters by role
     }
     return await apiClient.get(`/api/notifications/user/${userId}`, params);
   },
 
+  /**
+   * Get unread notification count for a user
+   * @param userId - The user ID
+   * @param userRole - Optional role to filter by
+   */
   getUnreadCount: async (userId: string, userRole?: string) => {
     try {
       const params: Record<string, any> = {};
@@ -757,33 +769,84 @@ export const notificationAPI = {
     }
   },
 
+  /**
+   * Mark a single notification as read
+   */
   markAsRead: async (notificationId: string, userId: string) => {
     return await apiClient.put(`/api/notifications/${notificationId}/read`, null, { userId });
   },
 
+  /**
+   * Mark all notifications as read for a user
+   */
   markAllAsRead: async (userId: string) => {
     return await apiClient.put(`/api/notifications/user/${userId}/read-all`);
   },
 
+  /**
+   * Clear all notifications for a user
+   */
   clearAll: async (userId: string) => {
     return await apiClient.delete(`/api/notifications/user/${userId}`);
   },
 
+  /**
+   * Send notification to a specific user
+   */
   sendToUser: async (userId: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
-  return await apiClient.post('/api/notifications/send-to-user', {
-    userId,
-    title,
-    message,
-    type,
-    navigateTo,
-    location,
-  });
-},
+    return await apiClient.post('/api/notifications/send-to-user', {
+      userId,
+      title,
+      message,
+      type,
+      navigateTo,
+      location,
+    });
+  },
 
+  /**
+   * Send notification to all users with a specific role
+   */
   sendToRole: async (role: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
     return await apiClient.post('/api/notifications/send-to-role', {
-      role, title, message, type, navigateTo, location,
+      role,
+      title,
+      message,
+      type,
+      navigateTo,
+      location,
     });
+  },
+
+  /**
+   * Send notification to multiple roles
+   */
+  sendToRoles: async (roles: string[], title: string, message: string, type: string, navigateTo: string, location: string) => {
+    return await apiClient.post('/api/notifications/send-to-roles', {
+      roles,
+      title,
+      message,
+      type,
+      navigateTo,
+      location,
+    });
+  },
+
+  /**
+   * Send workflow notification with role targeting
+   */
+  sendWorkflowNotification: async (data: {
+    workflowType: string;
+    action: string;
+    targetRoles?: string[];
+    targetRole?: string;
+    title: string;
+    message: string;
+    navigateTo?: string;
+    location?: string;
+    metadata?: any;
+  }) => {
+    return await apiClient.post('/api/notifications/workflow', data);
   },
 };
 

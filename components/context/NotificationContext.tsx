@@ -55,7 +55,7 @@ export interface Notification {
   navigateTo?: string;
   location?: string;
   actionText?: string;
-  role?: string; // ✅ Target role for this notification
+  role?: string; // ✅ Single target role
   targetRoles?: string[]; // ✅ Multiple target roles
   senderRole?: string; // ✅ Role of who sent this
   [key: string]: any;
@@ -85,7 +85,7 @@ interface NotificationContextType {
     workflowType: string, 
     action: string, 
     data: any
-  ) => void; // ✅ Only 3 params - backend handles role targeting
+  ) => void;
   markAsReadAndNavigate: (notification: Notification) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   clearAllNotifications: () => void;
@@ -222,12 +222,6 @@ class NotificationSound {
         }
         this.playWarningSound();
         break;
-      case 'send': // ✅ NEW: Sound for sending notifications
-        if (Platform.OS !== 'web') {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-        this.playSendSound();
-        break;
       default:
         if (Platform.OS !== 'web') {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -243,7 +237,7 @@ class NotificationSound {
       }
       // Play ascending tones for success
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/success.mp3'), // You'll need to add this sound file
+        require('../assets/sounds/success.mp3'),
         { shouldPlay: true, volume: this.volume }
       );
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -253,7 +247,6 @@ class NotificationSound {
       });
     } catch (error) {
       console.error('Error playing success sound:', error);
-      // Fallback to haptics only
       if (Platform.OS !== 'web') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -265,9 +258,8 @@ class NotificationSound {
       if (Platform.OS !== 'web') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
-      // Play descending tone for error
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/error.mp3'), // You'll need to add this sound file
+        require('../assets/sounds/error.mp3'),
         { shouldPlay: true, volume: this.volume }
       );
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -289,7 +281,7 @@ class NotificationSound {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/warning.mp3'), // You'll need to add this sound file
+        require('../assets/sounds/warning.mp3'),
         { shouldPlay: true, volume: this.volume }
       );
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -305,36 +297,13 @@ class NotificationSound {
     }
   }
 
-  private async playSendSound() {
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      // Play a short "whoosh" sound for sending
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/send.mp3'), // You'll need to add this sound file
-        { shouldPlay: true, volume: this.volume }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.error('Error playing send sound:', error);
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-    }
-  }
-
   private async playDefaultSound() {
     try {
       if (Platform.OS !== 'web') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/notification.mp3'), // You'll need to add this sound file
+        require('../assets/sounds/notification.mp3'),
         { shouldPlay: true, volume: this.volume }
       );
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -388,10 +357,32 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const initAttempted = useRef<boolean>(false);
   const lastNotificationsRef = useRef<Notification[]>([]);
 
-  // ✅ Safe access to user properties with fallbacks
+  // ✅ Safe access to user properties
   const userId = user?.id ?? null;
   const userRole = user?.role ?? null;
   const userEmail = user?.email ?? null;
+
+  // ✅ ROLE-BASED FILTERING: Check if notification is for this user
+  const hasRoleAccess = useCallback((notification: Notification): boolean => {
+    if (!userRole) return false;
+    
+    // If no role specified, show to everyone (backward compatibility)
+    if (!notification.role && !notification.targetRoles) return true;
+    
+    // Check single role
+    if (notification.role) {
+      return notification.role.toLowerCase() === userRole.toLowerCase();
+    }
+    
+    // Check multiple target roles
+    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
+      return notification.targetRoles.some(
+        targetRole => targetRole.toLowerCase() === userRole.toLowerCase()
+      );
+    }
+    
+    return true;
+  }, [userRole]);
 
   // Initialize sound system
   const initSoundSystem = useCallback(async () => {
@@ -455,82 +446,64 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  // ✅ ENHANCED: Check if user has access to notification based on role
-  const hasRoleAccess = useCallback((notification: Notification): boolean => {
-    if (!userRole) return false;
-    
-    // If no role specified, allow access (backward compatibility)
-    if (!notification.role && !notification.targetRoles) return true;
-    
-    // Check single role
-    if (notification.role) {
-      return notification.role.toLowerCase() === userRole.toLowerCase();
-    }
-    
-    // Check multiple target roles
-    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
-      return notification.targetRoles.some(
-        targetRole => targetRole.toLowerCase() === userRole.toLowerCase()
-      );
-    }
-    
-    return true;
-  }, [userRole]);
-
-  // ✅ ENHANCED: Load Notifications with role-based filtering
+  // ✅ FIXED: Load Notifications with role-based filtering
   const loadNotifications = useCallback(async () => {
-  if (!userId) {
-    console.log('⚠️ No user ID, skipping notification load');
-    return;
-  }
+    if (!userId) {
+      console.log('⚠️ No user ID, skipping notification load');
+      return;
+    }
 
-  setLoading(true);
-  try {
-    const userIdString = String(userId);
-    
-    // ✅ CRITICAL: Pass userRole to backend so it filters by role
-    console.log(`📡 Fetching notifications for user: ${userIdString} (Role: ${userRole})`);
-    const data = await notificationAPI.getForUser(userIdString, userRole || undefined);
-    
-    const notificationsData = Array.isArray(data) ? data : [];
-    
-    console.log(`📬 Received ${notificationsData.length} notifications for role: ${userRole}`);
-    
-    const currentDataStr = JSON.stringify(notificationsData);
-    const lastDataStr = JSON.stringify(lastNotificationsRef.current);
-
-    if (currentDataStr !== lastDataStr) {
-      setNotifications(notificationsData);
-      lastNotificationsRef.current = notificationsData;
+    setLoading(true);
+    try {
+      const userIdString = String(userId);
       
-      const newUnreadCount = notificationsData.filter((n: Notification) => !n.read).length;
+      // ✅ Pass userRole to backend for filtering
+      console.log(`📡 Fetching notifications for user: ${userIdString} (Role: ${userRole})`);
+      const data = await notificationAPI.getForUser(userIdString, userRole || undefined);
+      
+      const notificationsData = Array.isArray(data) ? data : [];
+      
+      // ✅ Client-side role filtering (double safety)
+      const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
+      
+      console.log(`📬 Received ${roleFilteredData.length} notifications for role: ${userRole}`);
+      
+      const currentDataStr = JSON.stringify(roleFilteredData);
+      const lastDataStr = JSON.stringify(lastNotificationsRef.current);
 
-      // ✅ Play sound for NEW unread notifications
-      if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
-        const newNotifications = notificationsData.filter((n: Notification) => !n.read);
-        if (newNotifications.length > 0) {
-          const latestNotification = newNotifications[0];
-          const notificationType = getNotificationSoundType(latestNotification.title);
-          
-          console.log(`🔊 Playing ${notificationType} sound for new notification`);
-          
-          if (notificationSound.current && isSoundReady) {
-            await notificationSound.current.playNotificationSound(notificationType);
-          } else if (notificationSound.current) {
-            notificationSound.current.queueSound(notificationType);
+      if (currentDataStr !== lastDataStr) {
+        setNotifications(roleFilteredData);
+        lastNotificationsRef.current = roleFilteredData;
+        
+        const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+
+        // ✅ Play sound for NEW unread notifications
+        if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+          const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
+          if (newNotifications.length > 0) {
+            const latestNotification = newNotifications[0];
+            const notificationType = getNotificationSoundType(latestNotification.title);
+            
+            console.log(`🔊 Playing ${notificationType} sound for new notification`);
+            
+            if (notificationSound.current && isSoundReady) {
+              await notificationSound.current.playNotificationSound(notificationType);
+            } else if (notificationSound.current) {
+              notificationSound.current.queueSound(notificationType);
+            }
           }
         }
+        
+        setUnreadCount(newUnreadCount);
+        previousUnreadCount.current = newUnreadCount;
       }
-      
-      setUnreadCount(newUnreadCount);
-      previousUnreadCount.current = newUnreadCount;
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error loading notifications:', error);
-  } finally {
-    setLoading(false);
-  }
-}, [userId, userRole, soundEnabled, isSoundReady]);
+  }, [userId, userRole, soundEnabled, isSoundReady, hasRoleAccess]);
+
   // Polling for real-time notifications
   useEffect(() => {
     if (userId && userRole) {
@@ -540,64 +513,74 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       
       const intervalId = setInterval(() => {
         loadNotifications();
-      }, 15000); // Poll every 15 seconds
+      }, 15000);
       
       return () => clearInterval(intervalId);
     }
   }, [userId, userRole, loadNotifications]);
 
-  // ✅ ENHANCED: Add Notification with role targeting and send sound
- const addNotification = (title: string, message: string, type: Notification['type'] = 'info', metadata: Partial<Notification> = {}): Notification => {
-  const { navigateTo, location, actionText, role, ...restMetadata } = metadata;
-  
-  const newNotification: Notification = {
-    id: Date.now(),
-    title,
-    message,
-    type,
-    timestamp: new Date().toISOString(),
-    read: false,
-    navigateTo,
-    location,
-    actionText: actionText || 'Review & Take Action',
-    role: role || userRole || undefined,
-    ...restMetadata,
-  };
-  
-  setNotifications(prev => [newNotification, ...prev]);
-  setUnreadCount(prev => prev + 1);
-  
-  // ✅ Play receive sound for local notification
-  const soundType = getNotificationSoundType(title);
-  playNotificationSoundWithThrottle(soundType);
-  
-  showBrowserNotification(title, message);
-  showToastNotification(title, message, type);
-  
-  // ✅ ALSO play a "send" sound so user knows it was sent
-  setTimeout(() => {
-    if (notificationSound.current && soundEnabled) {
-      notificationSound.current.playNotificationSound('info');
+  // ✅ FIXED: Add Notification with role targeting
+  const addNotification = (title: string, message: string, type: Notification['type'] = 'info', metadata: Partial<Notification> = {}): Notification => {
+    const { navigateTo, location, actionText, role, targetRoles, senderRole, ...restMetadata } = metadata;
+    
+    const newNotification: Notification = {
+      id: Date.now(),
+      title,
+      message,
+      type,
+      timestamp: new Date().toISOString(),
+      read: false,
+      navigateTo,
+      location,
+      actionText: actionText || 'Review & Take Action',
+      role: role || undefined,
+      targetRoles: targetRoles || undefined,
+      senderRole: senderRole || userRole || undefined,
+      ...restMetadata,
+    };
+    
+    // ✅ If this notification is for the current user's role, show it
+    if (hasRoleAccess(newNotification)) {
+      setNotifications(prev => [newNotification, ...prev]);
+      setUnreadCount(prev => prev + 1);
+      
+      const soundType = getNotificationSoundType(title);
+      playNotificationSoundWithThrottle(soundType);
     }
-  }, 300);
-  
-  if (userId) {
-    notificationAPI.sendToUser(
-      String(userId), 
-      title, 
-      message, 
-      type, 
-      navigateTo || '', 
-      location || ''
-    ).catch(console.error);
-  }
-  
-  return newNotification;
-};
+    
+    // ✅ Always show toast for the action (user knows they performed an action)
+    showToastNotification(title, message, type);
+    
+    // ✅ Send to backend with role targeting
+    if (userId && (role || targetRoles)) {
+      const targetRole = role || (targetRoles && targetRoles[0]) || undefined;
+      if (targetRole) {
+        notificationAPI.sendToRole(
+          targetRole,
+          title,
+          message,
+          type,
+          navigateTo || '',
+          location || ''
+        ).catch(console.error);
+      } else {
+        notificationAPI.sendToUser(
+          String(userId),
+          title,
+          message,
+          type,
+          navigateTo || '',
+          location || ''
+        ).catch(console.error);
+      }
+    }
+    
+    return newNotification;
+  };
 
   // Native OS Notifications
   const showBrowserNotification = async (title: string, message: string) => {
-    if (Platform.OS === 'web') return; // Skip on web, use toast instead
+    if (Platform.OS === 'web') return;
     
     try {
       await Notifications.scheduleNotificationAsync({
@@ -777,42 +760,42 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  // ✅ ENHANCED: Add Workflow Notification with role targeting
+  // ✅ FIXED: Add Workflow Notification (DOES NOT SEND DUPLICATE NOTIFICATIONS)
   const addWorkflowNotification = (
-  workflowType: string, 
-  action: string, 
-  data: any
-) => {
-  console.log('🔄 Workflow action triggered:', { 
-    workflowType, 
-    action, 
-    data,
-    senderRole: userRole 
-  });
-  
-  // ✅ Play action confirmation sound
-  playNotificationSoundWithThrottle('info');
-  
-  // ✅ Show toast to confirm action was performed
-  showToastNotification(
-    `${workflowType} ${action}`,
-    data.message || 'Action completed successfully',
-    'info',
-    3000
-  );
-  
-  // ✅ DO NOT call notificationAPI.sendToUser here!
-  // The backend already handles sending notifications to the right roles
-  // when the actual workflow action is performed (submit/approve/reject)
-  
-  // ✅ Instead, trigger a refresh of notifications after a short delay
-  // so the user sees any new notifications created by the backend
-  setTimeout(() => {
-    if (userId) {
-      loadNotifications();
-    }
-  }, 1000);
-};
+    workflowType: string, 
+    action: string, 
+    data: any
+  ) => {
+    console.log('🔄 Workflow action triggered:', { 
+      workflowType, 
+      action, 
+      data,
+      senderRole: userRole 
+    });
+    
+    // ✅ Play action confirmation sound
+    playNotificationSoundWithThrottle('info');
+    
+    // ✅ Show toast to confirm action was performed
+    showToastNotification(
+      `${workflowType} ${action}`,
+      data.message || 'Action completed successfully',
+      'info',
+      3000
+    );
+    
+    // ✅ DO NOT call notificationAPI.sendToUser here!
+    // The backend already handles sending notifications to the right roles
+    // when the actual workflow action is performed (submit/approve/reject)
+    
+    // ✅ Instead, trigger a refresh of notifications after a short delay
+    // so the user sees any new notifications created by the backend
+    setTimeout(() => {
+      if (userId) {
+        loadNotifications();
+      }
+    }, 1000);
+  };
 
   // Helper functions
   const formatDate = (timestamp: string | undefined): string => {
@@ -877,7 +860,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // ==========================================
-  // UI COMPONENTS (Same as before, keeping it concise)
+  // UI COMPONENTS
   // ==========================================
 
   const SoundControlPanel: FC = () => (
@@ -1121,6 +1104,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                     padding: 16,
                   }}
                 >
+                  {/* Notification content - same as before */}
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{
@@ -1166,6 +1150,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                     </View>
                   )}
                   
+                  {/* ✅ Show target role badge */}
                   {notification.role && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>For:</Text>
@@ -1287,7 +1272,6 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
               <X size={12} color="#9ca3af" />
             </TouchableOpacity>
           </View>
-          {/* Progress bar */}
           <View style={{ height: 2, backgroundColor: '#e5e7eb', width: '100%' }}>
             <Animated.View 
               style={{
