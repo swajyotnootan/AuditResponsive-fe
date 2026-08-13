@@ -1,14 +1,233 @@
 // services/api.ts
+
 import { API_BASE_URL } from '@/config/apiConfig';
 import { LoginResponse, User } from '@/types/user';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+// ============================================
+// ✅ ROLE DEFINITIONS
+// ============================================
+
+export const ROLES = {
+  MASTER: 'MASTER',
+  AUDIT_MANAGER: 'AUDIT_MANAGER',
+  LEAD_AUDITOR: 'LEAD_AUDITOR',
+  AUDITOR: 'AUDITOR',
+  HOD: 'HOD',
+  AUDITEE: 'AUDITEE',
+  INITIATOR: 'INITIATOR',
+  HR_ADMIN: 'HR_ADMIN',
+  TOP_MANAGEMENT: 'TOP_MANAGEMENT',
+  QMS_ADMIN: 'QMS_ADMIN',
+} as const;
+
+export type RoleType = typeof ROLES[keyof typeof ROLES];
+
+// ============================================
+// ✅ ROLE-TO-NAVIGATION MAPPING
+// ============================================
+
+export const roleNavigationMap: Record<RoleType, string> = {
+  MASTER: '/master-dashboard',
+  AUDIT_MANAGER: '/audit-manager',
+  LEAD_AUDITOR: '/lead-auditor',
+  AUDITOR: '/auditor',
+  HOD: '/hod',
+  AUDITEE: '/auditee',
+  INITIATOR: '/initiator',
+  HR_ADMIN: '/hr-admin',
+  TOP_MANAGEMENT: '/top-management',
+  QMS_ADMIN: '/qms-admin',
+};
+
+// ============================================
+// ✅ ROLE-TO-LOCATION MAPPING
+// ============================================
+
+export const roleLocationMap: Record<RoleType, string> = {
+  MASTER: 'Master Dashboard',
+  AUDIT_MANAGER: 'Audit Manager Dashboard',
+  LEAD_AUDITOR: 'Lead Auditor Dashboard',
+  AUDITOR: 'Auditor Dashboard',
+  HOD: 'HOD Dashboard',
+  AUDITEE: 'Auditee Dashboard',
+  INITIATOR: 'Initiator Dashboard',
+  HR_ADMIN: 'HR Admin Dashboard',
+  TOP_MANAGEMENT: 'Top Management Dashboard',
+  QMS_ADMIN: 'QMS Admin Dashboard',
+};
+
+// ============================================
+// ✅ ROLE-RELATED KEYWORDS FOR SMART FILTERING
+// ============================================
+
+export const roleKeywords: Record<RoleType, string[]> = {
+  MASTER: ['master', 'admin', 'system'],
+  AUDIT_MANAGER: ['manager', 'approval', 'audit manager'],
+  LEAD_AUDITOR: ['lead auditor', 'lead', 'auditor'],
+  AUDITOR: ['auditor', 'audit'],
+  HOD: ['hod', 'head of department', 'department head'],
+  AUDITEE: ['auditee', 'audit schedule'],
+  INITIATOR: ['initiator', 'form submission'],
+  HR_ADMIN: ['hr', 'human resources', 'admin'],
+  TOP_MANAGEMENT: ['top management', 'director', 'vp'],
+  QMS_ADMIN: ['qms', 'quality'],
+};
+
+// ============================================
+// ✅ SMART ROLE DETECTION FROM NOTIFICATION
+// ============================================
+
+export const detectTargetRole = (notification: any): RoleType | null => {
+  // 1. Check if role is explicitly stored
+  if (notification.role) {
+    const role = notification.role.toUpperCase().trim();
+    if (Object.values(ROLES).includes(role as RoleType)) {
+      return role as RoleType;
+    }
+  }
+
+  // 2. Check targetRoles array
+  if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
+    for (const r of notification.targetRoles) {
+      const role = r.toUpperCase().trim();
+      if (Object.values(ROLES).includes(role as RoleType)) {
+        return role as RoleType;
+      }
+    }
+  }
+
+  // 3. Detect from title
+  const title = notification.title?.toLowerCase() || '';
+  const message = notification.message?.toLowerCase() || '';
+  const combined = `${title} ${message}`;
+
+  for (const [role, keywords] of Object.entries(roleKeywords)) {
+    if (keywords.some(keyword => combined.includes(keyword))) {
+      return role as RoleType;
+    }
+  }
+
+  // 4. Detect from navigation path
+  if (notification.navigateTo) {
+    const path = notification.navigateTo.toLowerCase();
+    for (const [role, navPath] of Object.entries(roleNavigationMap)) {
+      if (path.includes(navPath.toLowerCase())) {
+        return role as RoleType;
+      }
+    }
+  }
+
+  // 5. Default: return null (public notification)
+  return null;
+};
+
+// ============================================
+// ✅ NOTIFICATION FILTERING SERVICE
+// ============================================
+
+export const notificationFilter = {
+  /**
+   * Check if a notification is meant for this user's role
+   */
+  isForRole: (notification: any, userRole: string | null): boolean => {
+    if (!userRole) return false;
+
+    const normalizedUserRole = userRole.toUpperCase().trim();
+
+    // ✅ If notification has explicit role targeting
+    if (notification.role) {
+      const notificationRole = notification.role.toUpperCase().trim();
+      return notificationRole === normalizedUserRole;
+    }
+
+    // ✅ If notification has multiple target roles
+    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
+      return notification.targetRoles.some(
+        (r: string) => r.toUpperCase().trim() === normalizedUserRole
+      );
+    }
+
+    // ✅ Smart detection from content
+    const detectedRole = detectTargetRole(notification);
+    if (detectedRole) {
+      return detectedRole === normalizedUserRole;
+    }
+
+    // ✅ If no role targeting, it's a public notification (show to all)
+    return true;
+  },
+
+  /**
+   * Filter notifications by user role
+   */
+  filterByRole: (notifications: any[], userRole: string | null): any[] => {
+    if (!userRole || !notifications.length) return [];
+
+    return notifications.filter(notification => 
+      notificationFilter.isForRole(notification, userRole)
+    );
+  },
+
+  /**
+   * Get unread count for user role
+   */
+  getUnreadCount: (notifications: any[], userRole: string | null): number => {
+    if (!userRole || !notifications.length) return 0;
+
+    return notifications.filter(n => 
+      !n.read && notificationFilter.isForRole(n, userRole)
+    ).length;
+  },
+
+  /**
+   * Group notifications by role
+   */
+  groupByRole: (notifications: any[]): Map<string, any[]> => {
+    const grouped = new Map<string, any[]>();
+
+    notifications.forEach(notification => {
+      const role = notification.role || detectTargetRole(notification) || 'PUBLIC';
+      if (!grouped.has(role)) {
+        grouped.set(role, []);
+      }
+      grouped.get(role)!.push(notification);
+    });
+
+    return grouped;
+  },
+
+  /**
+   * Get notifications that are specifically for this role (not public)
+   */
+  getSpecificForRole: (notifications: any[], userRole: string | null): any[] => {
+    if (!userRole || !notifications.length) return [];
+
+    const normalizedRole = userRole.toUpperCase().trim();
+
+    return notifications.filter(n => {
+      if (n.role) {
+        return n.role.toUpperCase().trim() === normalizedRole;
+      }
+      if (n.targetRoles) {
+        return n.targetRoles.some((r: string) => r.toUpperCase().trim() === normalizedRole);
+      }
+      return false;
+    });
+  },
+
+  /**
+   * Get public notifications (no role targeting)
+   */
+  getPublicNotifications: (notifications: any[]): any[] => {
+    return notifications.filter(n => !n.role && !n.targetRoles);
+  },
+};
 
 // ─── API CLIENT ──────────────────────────────────────────────────────────────
-// ─── API CLIENT ──────────────────────────────────────────────────────────────
-// ─── API CLIENT ──────────────────────────────────────────────────────────────
+
 export const apiClient = {
   get: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
     const token = await AsyncStorage.getItem('authToken');
@@ -25,7 +244,6 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    // ✅ Safely handle empty responses
     return text ? JSON.parse(text) : ({} as T);
   },
 
@@ -59,7 +277,7 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
+    return text ? JSON.parse(text) : ({} as T);
   },
 
   put: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
@@ -78,7 +296,7 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T); // ✅ FIX: Safely handle empty responses
+    return text ? JSON.parse(text) : ({} as T);
   },
 
   delete: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
@@ -96,7 +314,7 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T); // ✅ Safely handle empty responses
+    return text ? JSON.parse(text) : ({} as T);
   },
 
   downloadBlob: async (endpoint: string, params?: Record<string, any>): Promise<Blob> => {
@@ -115,7 +333,6 @@ export const apiClient = {
     return response.blob();
   },
 };
-
 
 // ─── PDF HELPERS ─────────────────────────────────────────────────────────────
 
@@ -164,6 +381,7 @@ const downloadAndSharePDF = async (blob: Blob, fileName: string) => {
 };
 
 // ─── Helper to normalize user data ──────────────────────────────────────────
+
 const normalizeUser = (data: any): User => {
   return {
     id: data.id || data.userId || '',
@@ -184,6 +402,7 @@ const normalizeUser = (data: any): User => {
 };
 
 // ─── AUTH API ────────────────────────────────────────────────────────────────
+
 export const authAPI = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
     try {
@@ -211,7 +430,6 @@ export const authAPI = {
 
       const data = await response.json();
       
-      // ✅ Normalize the user data
       const user = data.user ? normalizeUser(data.user) : normalizeUser(data);
       
       return {
@@ -247,6 +465,7 @@ export const authAPI = {
 };
 
 // ─── USER API ────────────────────────────────────────────────────────────────
+
 export const userAPI = {
   create: async (userData: any): Promise<User> => {
     const data = await apiClient.post('/api/users', userData);
@@ -327,6 +546,7 @@ export const userAPI = {
 };
 
 // ─── INSPECTION FORMS API ──────────────────────────────────────────────────
+
 export const inspectionFormAPI = {
   getAllForms: async () => {
     return await apiClient.get('/api/inspection-forms');
@@ -380,6 +600,7 @@ export const inspectionFormAPI = {
 };
 
 // ─── PRINTING INSPECTION API ──────────────────────────────────────────────
+
 export const printingInspectionAPI = {
   getAllReports: async () => {
     return await apiClient.get('/api/printing-inspection');
@@ -434,6 +655,7 @@ export const printingInspectionAPI = {
 };
 
 // ─── LINE CLEARANCE API ────────────────────────────────────────────────────
+
 export const lineClearanceAPI = {
   getAllForms: async () => {
     return await apiClient.get('/api/line-clearance');
@@ -487,6 +709,7 @@ export const lineClearanceAPI = {
 };
 
 // ─── SCHEDULE API ──────────────────────────────────────────────────────────
+
 export const scheduleAPI = {
   getAll: async () => {
     return await apiClient.get('/api/schedules/all');
@@ -562,6 +785,7 @@ export const scheduleAPI = {
 };
 
 // ─── AUDIT API ──────────────────────────────────────────────────────────────
+
 export const auditAPI = {
   getForAuditor: async (auditorId: string) => {
     return await apiClient.get(`/api/audits/auditor/${auditorId}`);
@@ -690,6 +914,7 @@ export const signatureAPI = {
 };
 
 // ─── NCR API ────────────────────────────────────────────────────────────────
+
 export const ncrAPI = {
   getAll: async () => {
     return await apiClient.get('/api/ncr/all');
@@ -736,33 +961,45 @@ export const ncrAPI = {
   },
 };
 
-// ─── NOTIFICATION API ──────────────────────────────────────────────────────
-// ─── NOTIFICATION API ──────────────────────────────────────────────────────
-// ─── NOTIFICATION API ──────────────────────────────────────────────────────
+// ─── NOTIFICATION API (UPDATED WITH ROLE FILTERING) ─────────────────────
+
 export const notificationAPI = {
   /**
-   * Get notifications for a specific user with optional role filtering
-   * @param userId - The user ID
-   * @param userRole - Optional role to filter notifications by
+   * Get notifications for a specific user with role-based filtering (client-side)
    */
-  getForUser: async (userId: string, userRole?: string) => {
-    const params: Record<string, any> = {};
-    if (userRole) {
-      params.role = userRole; // Backend filters by role
+  getForUser: async (userId: string, userRole?: string): Promise<any[]> => {
+    try {
+      // Fetch ALL notifications from backend (no role filtering on backend)
+      const data = await apiClient.get(`/api/notifications/user/${userId}`);
+      const notifications = Array.isArray(data) ? data : [];
+      
+      // If no role provided, return all notifications
+      if (!userRole) {
+        return notifications;
+      }
+
+      // Filter client-side by role
+      const filtered = notificationFilter.filterByRole(notifications, userRole);
+      
+      console.log(`📬 Found ${filtered.length} notifications for role: ${userRole}`);
+      console.log(`   (${notifications.length} total, ${notifications.length - filtered.length} filtered out)`);
+      
+      return filtered;
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      return [];
     }
-    return await apiClient.get(`/api/notifications/user/${userId}`, params);
   },
 
   /**
-   * Get unread notification count for a user
-   * @param userId - The user ID
-   * @param userRole - Optional role to filter by
+   * Get unread count with role-based filtering (client-side)
    */
-  getUnreadCount: async (userId: string, userRole?: string) => {
+  getUnreadCount: async (userId: string, userRole?: string): Promise<number> => {
     try {
-      const params: Record<string, any> = {};
-      if (userRole) params.role = userRole;
-      return await apiClient.get(`/api/notifications/user/${userId}/unread-count`, params);
+      // First get all notifications
+      const notifications = await notificationAPI.getForUser(userId, userRole);
+      // Count unread among filtered notifications
+      return notifications.filter(n => !n.read).length;
     } catch (error) {
       console.error('Error fetching unread count:', error);
       return 0;
@@ -851,6 +1088,7 @@ export const notificationAPI = {
 };
 
 // ─── DEPARTMENT API ────────────────────────────────────────────────────────
+
 export const departmentAPI = {
   getActive: async () => {
     return await apiClient.get('/api/superadmin/departments/active');
@@ -874,6 +1112,7 @@ export const departmentAPI = {
 };
 
 // ─── ROLE API ──────────────────────────────────────────────────────────────
+
 export const roleAPI = {
   getActive: async () => {
     return await apiClient.get('/api/superadmin/roles/active');
@@ -897,6 +1136,7 @@ export const roleAPI = {
 };
 
 // ─── DASHBOARD STATS API ──────────────────────────────────────────────────
+
 export const dashboardAPI = {
   getStats: async (year?: number) => {
     return await apiClient.get('/api/dashboard/stats', year ? { year } : {});
@@ -908,11 +1148,13 @@ export const dashboardAPI = {
 };
 
 // ─── LOGO API ──────────────────────────────────────────────────────────────
+
 export const logoAPI = {
   getUrl: () => `${API_BASE_URL}/api/logo`,
 };
 
 // ─── MASTER DATA API ──────────────────────────────────────────────────────
+
 export const masterDataAPI = {
   getRoles: async (): Promise<string[]> => {
     try {
@@ -965,12 +1207,9 @@ export const masterDataAPI = {
   },
 };
 
-// services/api.ts
-// ... (keep all your existing code above)
-
 // ─── 8D API ────────────────────────────────────────────────────────────────
+
 export const eightDAPI = {
-  // Get all 8D events
   getAll: async (params?: { year?: number; type?: string }): Promise<any> => {
     const queryParams: Record<string, any> = {};
     if (params?.year) queryParams.year = params.year;
@@ -978,17 +1217,14 @@ export const eightDAPI = {
     return await apiClient.get('/api/eightd/data', Object.keys(queryParams).length ? queryParams : undefined);
   },
 
-  // Get single 8D event by ID
   getById: async (id: string): Promise<any> => {
     return await apiClient.get(`/api/eightd/data/${id}`);
   },
 
-  // Create new 8D event
   create: async (formData: FormData): Promise<any> => {
     return await apiClient.postFormData('/api/eightd/data', formData);
   },
 
-  // Update existing 8D event
   update: async (id: string, formData: FormData): Promise<any> => {
     const token = await AsyncStorage.getItem('authToken');
     const url = new URL(`${API_BASE_URL}/api/eightd/data/${id}`);
@@ -1003,85 +1239,70 @@ export const eightDAPI = {
     return response.json();
   },
 
-  // Delete 8D event
   delete: async (id: string): Promise<any> => {
     return await apiClient.delete(`/api/eightd/data/${id}`);
   },
 
-  // Approve 8D event (HOD approval)
   approve: async (id: string, data: { userEmail: string; comment?: string }): Promise<any> => {
     return await apiClient.post(`/api/eightd/approve/${id}`, data);
   },
 
-  // Reject 8D event
   reject: async (id: string, data: { userEmail: string; comment?: string }): Promise<any> => {
     return await apiClient.post(`/api/eightd/reject/${id}`, data);
   },
 
-  // Get files for 8D event
   getFiles: async (id: string): Promise<any> => {
     return await apiClient.get(`/api/eightd/data/${id}/files`);
   },
 
-  // Download file
   downloadFile: async (fileId: string): Promise<Blob> => {
     return await apiClient.downloadBlob(`/api/eightd/files/${fileId}`);
   },
 
-  // Get 8D event by year
   getByYear: async (year: number): Promise<any> => {
     return await apiClient.get('/api/eightd/data', { year });
   },
 
-  // Get 8D events by status
   getByStatus: async (status: string): Promise<any> => {
     return await apiClient.get('/api/eightd/data', { status });
   },
 
-  // Get NCR-based 8D events
   getNcrBased: async (): Promise<any> => {
     return await apiClient.get('/api/eightd/data', { type: 'ncr' });
   },
 
-  // Get Fresh 8D events
   getFresh: async (): Promise<any> => {
     return await apiClient.get('/api/eightd/data', { type: 'fresh' });
   },
 
-  // Submit 8D for approval
   submitForApproval: async (id: string, data: { userEmail: string }): Promise<any> => {
     return await apiClient.post(`/api/eightd/submit/${id}`, data);
   },
 
-  // Get step data for specific step
   getStepData: async (id: string, step: string): Promise<any> => {
     return await apiClient.get(`/api/eightd/data/${id}/step/${step}`);
   },
 
-  // Update specific step
   updateStep: async (id: string, step: string, data: any): Promise<any> => {
     return await apiClient.put(`/api/eightd/data/${id}/step/${step}`, data);
   },
 
-  // Get 8D summary
   getSummary: async (id: string): Promise<any> => {
     return await apiClient.get(`/api/eightd/data/${id}/summary`);
   },
 
-  // Get 8D timeline
   getTimeline: async (id: string): Promise<any> => {
     return await apiClient.get(`/api/eightd/data/${id}/timeline`);
   },
 
-  // Get 8D statistics
   getStats: async (year?: number): Promise<any> => {
     return await apiClient.get('/api/eightd/stats', year ? { year } : {});
   },
 };
 
 // ─── FORUM API ──────────────────────────────────────────────────────────────
+
 export const forumAPI = {
-  // Create forum group for 8D event
   create8DGroup: async (data: {
     groupId: string;
     groupName: string;
@@ -1092,65 +1313,54 @@ export const forumAPI = {
     return await apiClient.post('/api/forum/8d/groups', data);
   },
 
-  // Get forum group by event ID
   getGroupByEventId: async (eventId: string): Promise<any> => {
     return await apiClient.get(`/api/forum/8d/groups/event/${eventId}`);
   },
 
-  // Get forum threads
   getThreads: async (groupId: string): Promise<any> => {
     return await apiClient.get(`/api/forum/groups/${groupId}/threads`);
   },
 
-  // Create forum thread
   createThread: async (groupId: string, data: any): Promise<any> => {
     return await apiClient.post(`/api/forum/groups/${groupId}/threads`, data);
   },
 
-  // Get thread messages
   getMessages: async (threadId: string): Promise<any> => {
     return await apiClient.get(`/api/forum/threads/${threadId}/messages`);
   },
 
-  // Post message
   postMessage: async (threadId: string, data: any): Promise<any> => {
     return await apiClient.post(`/api/forum/threads/${threadId}/messages`, data);
   },
 
-  // Add members to group
   addMembers: async (groupId: string, members: string[]): Promise<any> => {
     return await apiClient.post(`/api/forum/groups/${groupId}/members`, { members });
   },
 
-  // Remove member from group
   removeMember: async (groupId: string, memberId: string): Promise<any> => {
     return await apiClient.delete(`/api/forum/groups/${groupId}/members/${memberId}`);
   },
 
-  // Get group members
   getMembers: async (groupId: string): Promise<any> => {
     return await apiClient.get(`/api/forum/groups/${groupId}/members`);
   },
 };
 
 // ─── 8D PDF GENERATION ──────────────────────────────────────────────────────
+
 export const eightDPdfAPI = {
-  // Generate PDF for 8D report
   generatePdf: async (id: string, includeAttachments: boolean = true): Promise<Blob> => {
     return await apiClient.downloadBlob(`/api/eightd/data/${id}/pdf`, { includeAttachments });
   },
 
-  // Generate Word document for 8D report
   generateWord: async (id: string, includeAttachments: boolean = true): Promise<Blob> => {
     return await apiClient.downloadBlob(`/api/eightd/data/${id}/word`, { includeAttachments });
   },
 
-  // Generate Excel export
   generateExcel: async (ids: string[]): Promise<Blob> => {
     return await apiClient.downloadBlob('/api/eightd/export/excel', { ids: ids.join(',') });
   },
 
-  // Download and share PDF
   downloadAndSharePDF: async (id: string, fileName?: string): Promise<any> => {
     try {
       const blob = await eightDPdfAPI.generatePdf(id);
@@ -1162,7 +1372,6 @@ export const eightDPdfAPI = {
     }
   },
 
-  // Download and share Word document
   downloadAndShareWord: async (id: string, fileName?: string): Promise<any> => {
     try {
       const blob = await eightDPdfAPI.generateWord(id);
@@ -1175,7 +1384,8 @@ export const eightDPdfAPI = {
   },
 };
 
-// ─── UPDATE EXPORTS ─────────────────────────────────────────────────────────
+// ─── EXPORTS ────────────────────────────────────────────────────────────────
+
 export default {
   auth: authAPI,
   inspectionForms: inspectionFormAPI,

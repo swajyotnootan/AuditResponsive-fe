@@ -1,4 +1,5 @@
 // context/NotificationContext.tsx
+
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -33,8 +34,7 @@ import {
   View
 } from 'react-native';
 
-// ✅ Import from your api.ts
-import { notificationAPI } from '../../services/api';
+import { notificationAPI, notificationFilter } from '../../services/api';
 import { useAuth } from './AuthContext';
 
 // Enable LayoutAnimation on Android
@@ -45,6 +45,7 @@ if (Platform.OS === 'android') {
 // ==========================================
 // TYPE DEFINITIONS
 // ==========================================
+
 export interface Notification {
   id: number | string;
   title: string;
@@ -55,9 +56,9 @@ export interface Notification {
   navigateTo?: string;
   location?: string;
   actionText?: string;
-  role?: string; // ✅ Single target role
-  targetRoles?: string[]; // ✅ Multiple target roles
-  senderRole?: string; // ✅ Role of who sent this
+  role?: string;
+  targetRoles?: string[];
+  senderRole?: string;
   [key: string]: any;
 }
 
@@ -76,14 +77,14 @@ interface NotificationContextType {
   setIsOpen: (isOpen: boolean) => void;
   loading: boolean;
   addNotification: (
-    title: string, 
-    message: string, 
-    type?: Notification['type'], 
+    title: string,
+    message: string,
+    type?: Notification['type'],
     metadata?: Partial<Notification>
   ) => Notification;
   addWorkflowNotification: (
-    workflowType: string, 
-    action: string, 
+    workflowType: string,
+    action: string,
     data: any
   ) => void;
   markAsReadAndNavigate: (notification: Notification) => Promise<void>;
@@ -121,6 +122,7 @@ export const useNotifications = (): NotificationContextType => {
 // ==========================================
 // ENHANCED NOTIFICATION SOUND MANAGER
 // ==========================================
+
 class NotificationSound {
   isEnabled: boolean = true;
   volume: number = 0.8;
@@ -131,7 +133,7 @@ class NotificationSound {
 
   async init(): Promise<boolean> {
     if (this.isInitialized) return true;
-    
+
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -140,14 +142,14 @@ class NotificationSound {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
-      
+
       this.isInitialized = true;
       console.log('✅ Notification sound system initialized');
-      
+
       if (this.pendingSounds.length > 0) {
         this.processPendingSounds();
       }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to initialize notification sound:', error);
@@ -164,7 +166,7 @@ class NotificationSound {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
-      
+
       this.isInitialized = true;
       console.log('✅ Force initialized notification sound');
       return true;
@@ -202,8 +204,8 @@ class NotificationSound {
   async playNotificationSound(type: string = 'info') {
     if (!this.isEnabled) return;
     await this.ensureInitialized();
-    
-    switch(type) {
+
+    switch (type) {
       case 'success':
         if (Platform.OS !== 'web') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -235,7 +237,6 @@ class NotificationSound {
       if (Platform.OS !== 'web') {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      // Play ascending tones for success
       const { sound } = await Audio.Sound.createAsync(
         require('../assets/sounds/success.mp3'),
         { shouldPlay: true, volume: this.volume }
@@ -338,6 +339,7 @@ class NotificationSound {
 // ==========================================
 // NOTIFICATION PROVIDER
 // ==========================================
+
 export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
@@ -357,31 +359,14 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const initAttempted = useRef<boolean>(false);
   const lastNotificationsRef = useRef<Notification[]>([]);
 
-  // ✅ Safe access to user properties
+  // Safe access to user properties
   const userId = user?.id ?? null;
   const userRole = user?.role ?? null;
-  const userEmail = user?.email ?? null;
 
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
   const hasRoleAccess = useCallback((notification: Notification): boolean => {
     if (!userRole) return false;
-    
-    // If no role specified, show to everyone (backward compatibility)
-    if (!notification.role && !notification.targetRoles) return true;
-    
-    // Check single role
-    if (notification.role) {
-      return notification.role.toLowerCase() === userRole.toLowerCase();
-    }
-    
-    // Check multiple target roles
-    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
-      return notification.targetRoles.some(
-        targetRole => targetRole.toLowerCase() === userRole.toLowerCase()
-      );
-    }
-    
-    return true;
+    return notificationFilter.isForRole(notification, userRole);
   }, [userRole]);
 
   // Initialize sound system
@@ -393,10 +378,9 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       notificationSound.current = new NotificationSound();
       notificationSound.current.setVolume(soundVolume);
       notificationSound.current.setEnabled(soundEnabled);
-      
+
       const initResult = await notificationSound.current.forceInit();
       setIsSoundReady(initResult);
-      
     } catch (error) {
       console.error('Failed to initialize sound system:', error);
     }
@@ -411,16 +395,15 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       console.log('👤 User logged in:', {
         id: userId,
         role: userRole,
-        email: userEmail,
       });
-      
+
       if (notificationSound.current) {
         notificationSound.current.init();
       } else {
         initSoundSystem();
       }
     }
-  }, [userId, userRole, userEmail, initSoundSystem]);
+  }, [userId, userRole, initSoundSystem]);
 
   // Get sound type based on notification title
   const getNotificationSoundType = (title: string | undefined): string => {
@@ -433,11 +416,11 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   // Play sound with throttling
   const playNotificationSoundWithThrottle = useCallback(async (type: string = 'info') => {
     if (!soundEnabled) return;
-    
+
     const now = Date.now();
     if (now - lastNotificationTime.current < 500) return;
     lastNotificationTime.current = now;
-    
+
     if (notificationSound.current) {
       if (!notificationSound.current.isInitialized) {
         await notificationSound.current.init();
@@ -456,36 +439,46 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     setLoading(true);
     try {
       const userIdString = String(userId);
-      
-      // ✅ Pass userRole to backend for filtering
-      console.log(`📡 Fetching notifications for user: ${userIdString} (Role: ${userRole})`);
-      const data = await notificationAPI.getForUser(userIdString, userRole || undefined);
-      
+
+      // ✅ Fetch ALL notifications from backend
+      console.log(`📡 Fetching notifications for user: ${userIdString}`);
+      const data = await notificationAPI.getForUser(userIdString);
+
       const notificationsData = Array.isArray(data) ? data : [];
-      
-      // ✅ Client-side role filtering (double safety)
+
+      // ✅ Filter client-side by role
       const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
-      
-      console.log(`📬 Received ${roleFilteredData.length} notifications for role: ${userRole}`);
-      
+
+      console.log(`📬 Found ${roleFilteredData.length} notifications for role: ${userRole}`);
+      console.log(`   Total: ${notificationsData.length}, Filtered: ${notificationsData.length - roleFilteredData.length}`);
+
+      // Debug: Show notification breakdown
+      if (__DEV__) {
+        const grouped = notificationFilter.groupByRole(notificationsData);
+        console.log('📊 Notification breakdown:');
+        grouped.forEach((notifs, role) => {
+          console.log(`   ${role}: ${notifs.length} notifications`);
+        });
+      }
+
       const currentDataStr = JSON.stringify(roleFilteredData);
       const lastDataStr = JSON.stringify(lastNotificationsRef.current);
 
       if (currentDataStr !== lastDataStr) {
         setNotifications(roleFilteredData);
         lastNotificationsRef.current = roleFilteredData;
-        
+
         const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
 
-        // ✅ Play sound for NEW unread notifications
+        // Play sound for NEW unread notifications
         if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
           const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
           if (newNotifications.length > 0) {
             const latestNotification = newNotifications[0];
             const notificationType = getNotificationSoundType(latestNotification.title);
-            
+
             console.log(`🔊 Playing ${notificationType} sound for new notification`);
-            
+
             if (notificationSound.current && isSoundReady) {
               await notificationSound.current.playNotificationSound(notificationType);
             } else if (notificationSound.current) {
@@ -493,7 +486,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             }
           }
         }
-        
+
         setUnreadCount(newUnreadCount);
         previousUnreadCount.current = newUnreadCount;
       }
@@ -510,19 +503,24 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       lastNotificationsRef.current = [];
       previousUnreadCount.current = 0;
       loadNotifications();
-      
+
       const intervalId = setInterval(() => {
         loadNotifications();
       }, 15000);
-      
+
       return () => clearInterval(intervalId);
     }
   }, [userId, userRole, loadNotifications]);
 
   // ✅ FIXED: Add Notification with role targeting
-  const addNotification = (title: string, message: string, type: Notification['type'] = 'info', metadata: Partial<Notification> = {}): Notification => {
+  const addNotification = (
+    title: string,
+    message: string,
+    type: Notification['type'] = 'info',
+    metadata: Partial<Notification> = {}
+  ): Notification => {
     const { navigateTo, location, actionText, role, targetRoles, senderRole, ...restMetadata } = metadata;
-    
+
     const newNotification: Notification = {
       id: Date.now(),
       title,
@@ -538,20 +536,20 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       senderRole: senderRole || userRole || undefined,
       ...restMetadata,
     };
-    
-    // ✅ If this notification is for the current user's role, show it
+
+    // If this notification is for the current user's role, show it
     if (hasRoleAccess(newNotification)) {
       setNotifications(prev => [newNotification, ...prev]);
       setUnreadCount(prev => prev + 1);
-      
+
       const soundType = getNotificationSoundType(title);
       playNotificationSoundWithThrottle(soundType);
     }
-    
-    // ✅ Always show toast for the action (user knows they performed an action)
+
+    // Always show toast for the action
     showToastNotification(title, message, type);
-    
-    // ✅ Send to backend with role targeting
+
+    // Send to backend with role targeting
     if (userId && (role || targetRoles)) {
       const targetRole = role || (targetRoles && targetRoles[0]) || undefined;
       if (targetRole) {
@@ -574,18 +572,18 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
         ).catch(console.error);
       }
     }
-    
+
     return newNotification;
   };
 
   // Native OS Notifications
   const showBrowserNotification = async (title: string, message: string) => {
     if (Platform.OS === 'web') return;
-    
+
     try {
       await Notifications.scheduleNotificationAsync({
-        content: { 
-          title, 
+        content: {
+          title,
           body: message,
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,
@@ -599,7 +597,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web') return false;
-    
+
     try {
       const { status } = await Notifications.requestPermissionsAsync();
       return status === 'granted';
@@ -608,7 +606,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  // ✅ FIXED: Mark as Read and Navigate
+  // Mark as Read and Navigate
   const markAsReadAndNavigate = async (notification: Notification) => {
     if (!notification.read) {
       try {
@@ -621,9 +619,9 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
         console.error('Error marking as read:', error);
       }
     }
-    
+
     setIsOpen(false);
-    
+
     if (notification.navigateTo) {
       setTimeout(() => {
         try {
@@ -635,13 +633,13 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // ✅ FIXED: Mark All as Read
+  // Mark All as Read
   const markAllAsRead = async () => {
     if (!userId) {
       console.warn('No user ID available, cannot mark all as read');
       return;
     }
-    
+
     try {
       await notificationAPI.markAllAsRead(String(userId));
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -653,13 +651,13 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // ✅ FIXED: Clear All
+  // Clear All
   const clearAllNotifications = () => {
     if (!userId) {
       console.warn('No user ID available, cannot clear notifications');
       return;
     }
-    
+
     Alert.alert(
       'Clear Notifications',
       'Are you sure you want to clear all notifications? This action cannot be undone.',
@@ -760,36 +758,31 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  // ✅ FIXED: Add Workflow Notification (DOES NOT SEND DUPLICATE NOTIFICATIONS)
+  // Add Workflow Notification
   const addWorkflowNotification = (
-    workflowType: string, 
-    action: string, 
+    workflowType: string,
+    action: string,
     data: any
   ) => {
-    console.log('🔄 Workflow action triggered:', { 
-      workflowType, 
-      action, 
+    console.log('🔄 Workflow action triggered:', {
+      workflowType,
+      action,
       data,
-      senderRole: userRole 
+      senderRole: userRole
     });
-    
-    // ✅ Play action confirmation sound
+
+    // Play action confirmation sound
     playNotificationSoundWithThrottle('info');
-    
-    // ✅ Show toast to confirm action was performed
+
+    // Show toast to confirm action was performed
     showToastNotification(
       `${workflowType} ${action}`,
       data.message || 'Action completed successfully',
       'info',
       3000
     );
-    
-    // ✅ DO NOT call notificationAPI.sendToUser here!
-    // The backend already handles sending notifications to the right roles
-    // when the actual workflow action is performed (submit/approve/reject)
-    
-    // ✅ Instead, trigger a refresh of notifications after a short delay
-    // so the user sees any new notifications created by the backend
+
+    // Trigger a refresh of notifications after a short delay
     setTimeout(() => {
       if (userId) {
         loadNotifications();
@@ -801,12 +794,12 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const formatDate = (timestamp: string | undefined): string => {
     if (!timestamp) return 'Just now';
     const date = new Date(timestamp);
-    return date.toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      hour12: true 
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -826,7 +819,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     if (title?.includes('Rejected')) return <ThumbsDown size={size} color="#ef4444" />;
     if (title?.includes('Released')) return <Send size={size} color="#a855f7" />;
     if (title?.includes('Pending')) return <Clock size={size} color="#f59e0b" />;
-    
+
     switch (type) {
       case 'success': return <CheckCircle size={size} color="#10b981" />;
       case 'error': return <XCircle size={size} color="#ef4444" />;
@@ -841,7 +834,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     if (title?.includes('Pending') || title?.includes('requires')) return '#f59e0b';
     if (title?.includes('Released')) return '#a855f7';
     if (title?.includes('Assigned')) return '#3b82f6';
-    
+
     switch (type) {
       case 'success': return '#10b981';
       case 'error': return '#ef4444';
@@ -895,14 +888,14 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             <View>
               <Text style={{ marginBottom: 4, fontSize: 14, color: '#374151' }}>🔊 Volume: {Math.round(soundVolume * 100)}%</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
-                <TouchableOpacity 
-                  onPress={() => setSoundVolumeLevel(Math.max(0, soundVolume - 0.1))} 
+                <TouchableOpacity
+                  onPress={() => setSoundVolumeLevel(Math.max(0, soundVolume - 0.1))}
                   style={{ paddingHorizontal: 16, paddingVertical: 4, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4 }}
                 >
                   <Text style={{ fontSize: 18, fontWeight: 'bold' }}>-</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => setSoundVolumeLevel(Math.min(1, soundVolume + 0.1))} 
+                <TouchableOpacity
+                  onPress={() => setSoundVolumeLevel(Math.min(1, soundVolume + 0.1))}
                   style={{ paddingHorizontal: 16, paddingVertical: 4, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4 }}
                 >
                   <Text style={{ fontSize: 18, fontWeight: 'bold' }}>+</Text>
@@ -910,8 +903,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
               </View>
             </View>
 
-            <TouchableOpacity 
-              onPress={testSound} 
+            <TouchableOpacity
+              onPress={testSound}
               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#eff6ff' }}
             >
               <Text style={{ fontSize: 14, fontWeight: '500', color: '#2563eb' }}>🔊 Test Sound</Text>
@@ -919,13 +912,13 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
           </>
         )}
 
-        <TouchableOpacity 
-          onPress={requestNotificationPermission} 
+        <TouchableOpacity
+          onPress={requestNotificationPermission}
           style={{ alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#f9fafb' }}
         >
           <Text style={{ fontSize: 14, color: '#374151' }}>🔔 Enable OS Notifications</Text>
         </TouchableOpacity>
-        
+
         {!isSoundReady && (
           <Text style={{ marginTop: 8, fontSize: 12, textAlign: 'center', color: '#d97706' }}>
             ⚡ Tap anywhere to enable notification sounds
@@ -948,8 +941,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const NotificationBell: FC = () => (
-    <TouchableOpacity 
-      onPress={() => setIsOpen(!isOpen)} 
+    <TouchableOpacity
+      onPress={() => setIsOpen(!isOpen)}
       style={{ position: 'relative', padding: 8, borderRadius: 8 }}
     >
       <Bell size={30} color="white" />
@@ -978,34 +971,34 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     const screenWidth = Dimensions.get('window').width;
     const screenHeight = Dimensions.get('window').height;
     const isMobile = screenWidth < 768;
-    
+
     const slideAnim = useRef(new Animated.Value(isMobile ? screenHeight : screenWidth)).current;
 
     useEffect(() => {
       if (isOpen) {
-        Animated.spring(slideAnim, { 
-          toValue: 0, 
-          useNativeDriver: true, 
-          friction: 8 
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8
         }).start();
       } else {
-        Animated.timing(slideAnim, { 
-          toValue: isMobile ? screenHeight : screenWidth, 
-          duration: 200, 
-          useNativeDriver: true 
+        Animated.timing(slideAnim, {
+          toValue: isMobile ? screenHeight : screenWidth,
+          duration: 200,
+          useNativeDriver: true
         }).start();
       }
     }, [isOpen, isMobile]);
 
     return (
       <Modal visible={isOpen} transparent={true} animationType="none" onRequestClose={() => setIsOpen(false)}>
-        <TouchableOpacity 
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }} 
-          activeOpacity={1} 
-          onPress={() => setIsOpen(false)} 
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          activeOpacity={1}
+          onPress={() => setIsOpen(false)}
         />
-        
-        <Animated.View 
+
+        <Animated.View
           style={[
             {
               position: 'absolute',
@@ -1049,15 +1042,15 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 {notifications.length > 0 && unreadCount > 0 && (
-                  <TouchableOpacity 
-                    onPress={markAllAsRead} 
+                  <TouchableOpacity
+                    onPress={markAllAsRead}
                     style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#eff6ff' }}
                   >
                     <Text style={{ fontSize: 12, fontWeight: '500', color: '#2563eb' }}>Mark all read</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity 
-                  onPress={() => setIsOpen(false)} 
+                <TouchableOpacity
+                  onPress={() => setIsOpen(false)}
                   style={{ padding: 6, backgroundColor: '#f3f4f6', borderRadius: 8 }}
                 >
                   <X size={18} color="#6b7280" />
@@ -1104,7 +1097,6 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                     padding: 16,
                   }}
                 >
-                  {/* Notification content - same as before */}
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{
@@ -1135,22 +1127,22 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                       <Text style={{ fontSize: 12, color: '#9ca3af' }}>{formatDate(notification.timestamp)}</Text>
                     </View>
                   </View>
-                  
+
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 4 }}>
                     {notification.title}
                   </Text>
-                  
+
                   <Text style={{ fontSize: 12, color: '#4b5563', lineHeight: 18, marginBottom: 12 }}>
                     {notification.message}
                   </Text>
-                  
+
                   {notification.location && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
                       <Text style={{ fontSize: 12, color: '#9ca3af' }}>📍 {notification.location}</Text>
                     </View>
                   )}
-                  
-                  {/* ✅ Show target role badge */}
+
+                  {/* Show target role badge */}
                   {notification.role && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>For:</Text>
@@ -1161,7 +1153,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                       </View>
                     </View>
                   )}
-                  
+
                   <TouchableOpacity
                     onPress={() => markAsReadAndNavigate(notification)}
                     style={{
@@ -1184,7 +1176,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                     </Text>
                     <ArrowRight size={12} color={!notification.read ? 'white' : '#4b5563'} />
                   </TouchableOpacity>
-                  
+
                   {!notification.read && (
                     <View style={{ paddingTop: 8, marginTop: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1201,8 +1193,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
           {/* Footer */}
           {notifications.length > 0 && (
             <View style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
-              <TouchableOpacity 
-                onPress={clearAllNotifications} 
+              <TouchableOpacity
+                onPress={clearAllNotifications}
                 style={{ alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: '#f9fafb' }}
               >
                 <Text style={{ fontSize: 12, textAlign: 'center', color: '#6b7280' }}>Clear all notifications</Text>
@@ -1217,8 +1209,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const ToastContainer: FC = () => (
     <View style={{ position: 'absolute', bottom: 16, right: 16, left: 16, alignItems: 'flex-end' }} pointerEvents="box-none">
       {toasts.map((toast) => (
-        <View 
-          key={toast.id} 
+        <View
+          key={toast.id}
           style={{
             marginBottom: 8,
             width: '100%',
@@ -1232,11 +1224,11 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             overflow: 'hidden',
             borderLeftWidth: 4,
             borderLeftColor: toast.type === 'success' ? '#10b981' :
-                           toast.type === 'error' ? '#ef4444' :
-                           toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
+              toast.type === 'error' ? '#ef4444' :
+                toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
             backgroundColor: toast.type === 'success' ? '#f0fdf4' :
-                            toast.type === 'error' ? '#fef2f2' :
-                            toast.type === 'warning' ? '#fffbeb' : '#eff6ff',
+              toast.type === 'error' ? '#fef2f2' :
+                toast.type === 'warning' ? '#fffbeb' : '#eff6ff',
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 12, paddingRight: 32 }}>
@@ -1252,8 +1244,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                   fontSize: 12,
                   fontWeight: '600',
                   color: toast.type === 'success' ? '#166534' :
-                        toast.type === 'error' ? '#991b1b' :
-                        toast.type === 'warning' ? '#92400e' : '#1e40af'
+                    toast.type === 'error' ? '#991b1b' :
+                      toast.type === 'warning' ? '#92400e' : '#1e40af'
                 }}>
                   {toast.title}
                 </Text>
@@ -1261,8 +1253,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
               <Text style={{
                 fontSize: 12,
                 color: toast.type === 'success' ? '#15803d' :
-                      toast.type === 'error' ? '#b91c1c' :
-                      toast.type === 'warning' ? '#b45309' : '#1d4ed8',
+                  toast.type === 'error' ? '#b91c1c' :
+                    toast.type === 'warning' ? '#b45309' : '#1d4ed8',
                 marginTop: 2
               }}>
                 {toast.message}
@@ -1273,12 +1265,12 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             </TouchableOpacity>
           </View>
           <View style={{ height: 2, backgroundColor: '#e5e7eb', width: '100%' }}>
-            <Animated.View 
+            <Animated.View
               style={{
                 height: '100%',
                 backgroundColor: toast.type === 'success' ? '#10b981' :
-                                toast.type === 'error' ? '#ef4444' :
-                                toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
+                  toast.type === 'error' ? '#ef4444' :
+                    toast.type === 'warning' ? '#f59e0b' : '#3b82f6',
               }}
             />
           </View>
