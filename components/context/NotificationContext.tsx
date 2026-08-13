@@ -1,5 +1,6 @@
 // context/NotificationContext.tsx
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -107,6 +108,7 @@ interface NotificationContextType {
   requestNotificationPermission: () => Promise<boolean>;
   isSoundReady: boolean;
   userRole: string | null;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -117,6 +119,52 @@ export const useNotifications = (): NotificationContextType => {
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
+};
+
+// ==========================================
+// PERSISTENCE HELPERS
+// ==========================================
+
+const STORAGE_KEY = '@notifications_cache';
+const STORAGE_KEY_USER = '@notifications_user_cache';
+
+const saveNotificationsToStorage = async (userId: string, notifications: Notification[]) => {
+  try {
+    const cacheData = {
+      userId,
+      notifications,
+      timestamp: Date.now(),
+    };
+    await AsyncStorage.setItem(`${STORAGE_KEY}_${userId}`, JSON.stringify(cacheData));
+    await AsyncStorage.setItem(STORAGE_KEY_USER, userId);
+  } catch (error) {
+    console.error('Error saving notifications to storage:', error);
+  }
+};
+
+const loadNotificationsFromStorage = async (userId: string): Promise<Notification[] | null> => {
+  try {
+    const data = await AsyncStorage.getItem(`${STORAGE_KEY}_${userId}`);
+    if (data) {
+      const parsed = JSON.parse(data);
+      // Check if cache is less than 5 minutes old
+      if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+        return parsed.notifications;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading notifications from storage:', error);
+    return null;
+  }
+};
+
+const clearUserStorage = async (userId: string) => {
+  try {
+    await AsyncStorage.removeItem(`${STORAGE_KEY}_${userId}`);
+  } catch (error) {
+    console.error('Error clearing user storage:', error);
+  }
 };
 
 // ==========================================
@@ -352,12 +400,14 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [soundVolume, setSoundVolume] = useState<number>(0.8);
   const [isSoundReady, setIsSoundReady] = useState<boolean>(false);
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
 
   const notificationSound = useRef<NotificationSound | null>(null);
   const lastNotificationTime = useRef<number>(0);
   const previousUnreadCount = useRef<number>(0);
   const initAttempted = useRef<boolean>(false);
   const lastNotificationsRef = useRef<Notification[]>([]);
+  const currentUserIdRef = useRef<string | null>(null);
 
   // Safe access to user properties
   const userId = user?.id ?? null;
@@ -369,7 +419,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     return notificationFilter.isForRole(notification, userRole);
   }, [userRole]);
 
-  // Initialize sound system
+  // ✅ Initialize sound system
   const initSoundSystem = useCallback(async () => {
     if (initAttempted.current) return;
     initAttempted.current = true;
@@ -402,6 +452,9 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       } else {
         initSoundSystem();
       }
+
+      // Update current user ID ref
+      currentUserIdRef.current = String(userId);
     }
   }, [userId, userRole, initSoundSystem]);
 
@@ -429,90 +482,139 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [soundEnabled]);
 
-  // ✅ FIXED: Load Notifications with role-based filtering
-  const loadNotifications = useCallback(async () => {
+  // ✅ Load Notifications with persistence and role filtering
+  const loadNotifications = useCallback(async (forceRefresh: boolean = false) => {
     if (!userId) {
       console.log('⚠️ No user ID, skipping notification load');
       return;
     }
 
+    const userIdStr = String(userId);
     setLoading(true);
+
     try {
-      const userIdString = String(userId);
-
-      // ✅ Fetch ALL notifications from backend
-      console.log(`📡 Fetching notifications for user: ${userIdString}`);
-      const data = await notificationAPI.getForUser(userIdString);
-
-      const notificationsData = Array.isArray(data) ? data : [];
-
-      // ✅ Filter client-side by role
-      const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
-
-      console.log(`📬 Found ${roleFilteredData.length} notifications for role: ${userRole}`);
-      console.log(`   Total: ${notificationsData.length}, Filtered: ${notificationsData.length - roleFilteredData.length}`);
-
-      // Debug: Show notification breakdown
-      if (__DEV__) {
-        const grouped = notificationFilter.groupByRole(notificationsData);
-        console.log('📊 Notification breakdown:');
-        grouped.forEach((notifs, role) => {
-          console.log(`   ${role}: ${notifs.length} notifications`);
-        });
+      // Try loading from cache first (unless force refresh)
+      let cachedNotifications: Notification[] | null = null;
+      if (!forceRefresh) {
+        cachedNotifications = await loadNotificationsFromStorage(userIdStr);
       }
 
-      const currentDataStr = JSON.stringify(roleFilteredData);
-      const lastDataStr = JSON.stringify(lastNotificationsRef.current);
-
-      if (currentDataStr !== lastDataStr) {
-        setNotifications(roleFilteredData);
-        lastNotificationsRef.current = roleFilteredData;
-
-        const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
-
-        // Play sound for NEW unread notifications
-        if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
-          const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
-          if (newNotifications.length > 0) {
-            const latestNotification = newNotifications[0];
-            const notificationType = getNotificationSoundType(latestNotification.title);
-
-            console.log(`🔊 Playing ${notificationType} sound for new notification`);
-
-            if (notificationSound.current && isSoundReady) {
-              await notificationSound.current.playNotificationSound(notificationType);
-            } else if (notificationSound.current) {
-              notificationSound.current.queueSound(notificationType);
-            }
-          }
-        }
-
+      if (cachedNotifications && cachedNotifications.length > 0) {
+        // ✅ Use cached notifications with role filtering
+        const filtered = cachedNotifications.filter((n: Notification) => hasRoleAccess(n));
+        console.log(`📦 Loaded ${filtered.length} notifications from cache for role: ${userRole}`);
+        
+        setNotifications(filtered);
+        const newUnreadCount = filtered.filter((n: Notification) => !n.read).length;
         setUnreadCount(newUnreadCount);
         previousUnreadCount.current = newUnreadCount;
+        lastNotificationsRef.current = filtered;
+        setIsInitialLoad(false);
+        setLoading(false);
+        
+        // Still fetch in background for updates
+        fetchAndUpdateNotifications(userIdStr);
+        return;
       }
+
+      // No cache, fetch from API
+      await fetchAndUpdateNotifications(userIdStr);
+      
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
       setLoading(false);
+      setIsInitialLoad(false);
     }
-  }, [userId, userRole, soundEnabled, isSoundReady, hasRoleAccess]);
+  }, [userId, userRole, hasRoleAccess]);
 
-  // Polling for real-time notifications
+  // ✅ Fetch from API and update cache
+  const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
+    try {
+      console.log(`📡 Fetching fresh notifications for user: ${userIdStr}`);
+      const data = await notificationAPI.getForUser(userIdStr);
+      
+      const notificationsData = Array.isArray(data) ? data : [];
+      
+      // Filter by role
+      const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
+      
+      console.log(`📬 Found ${roleFilteredData.length} notifications for role: ${userRole}`);
+      console.log(`   Total: ${notificationsData.length}, Filtered: ${notificationsData.length - roleFilteredData.length}`);
+
+      // Save to cache
+      await saveNotificationsToStorage(userIdStr, roleFilteredData);
+
+      // Update state
+      setNotifications(roleFilteredData);
+      lastNotificationsRef.current = roleFilteredData;
+
+      const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+      
+      // Play sound for NEW unread notifications
+      if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+        const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
+        if (newNotifications.length > 0) {
+          const latestNotification = newNotifications[0];
+          const notificationType = getNotificationSoundType(latestNotification.title);
+          
+          console.log(`🔊 Playing ${notificationType} sound for new notification`);
+          
+          if (notificationSound.current && isSoundReady) {
+            await notificationSound.current.playNotificationSound(notificationType);
+          } else if (notificationSound.current) {
+            notificationSound.current.queueSound(notificationType);
+          }
+        }
+      }
+
+      setUnreadCount(newUnreadCount);
+      previousUnreadCount.current = newUnreadCount;
+      
+    } catch (error) {
+      console.error('Error fetching notifications from API:', error);
+    }
+  }, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
+
+  // ✅ Clear cache on logout
+  const clearNotificationCache = useCallback(async () => {
+    if (userId) {
+      await clearUserStorage(String(userId));
+    }
+    setNotifications([]);
+    setUnreadCount(0);
+    lastNotificationsRef.current = [];
+    previousUnreadCount.current = 0;
+  }, [userId]);
+
+  // ✅ Refresh notifications (exposed to components)
+  const refreshNotifications = useCallback(async () => {
+    if (userId) {
+      await loadNotifications(true);
+    }
+  }, [userId, loadNotifications]);
+
+  // ✅ Initial load and polling
   useEffect(() => {
     if (userId && userRole) {
-      lastNotificationsRef.current = [];
-      previousUnreadCount.current = 0;
-      loadNotifications();
+      // Load notifications (with cache)
+      loadNotifications(false);
 
+      // Poll every 15 seconds for updates
       const intervalId = setInterval(() => {
-        loadNotifications();
+        if (userId) {
+          fetchAndUpdateNotifications(String(userId));
+        }
       }, 15000);
 
       return () => clearInterval(intervalId);
+    } else {
+      // Clear notifications when logged out
+      clearNotificationCache();
     }
-  }, [userId, userRole, loadNotifications]);
+  }, [userId, userRole, loadNotifications, fetchAndUpdateNotifications, clearNotificationCache]);
 
-  // ✅ FIXED: Add Notification with role targeting
+  // ✅ FIXED: Add Notification with persistence
   const addNotification = (
     title: string,
     message: string,
@@ -539,7 +641,14 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
     // If this notification is for the current user's role, show it
     if (hasRoleAccess(newNotification)) {
-      setNotifications(prev => [newNotification, ...prev]);
+      setNotifications(prev => {
+        const updated = [newNotification, ...prev];
+        // Save to cache
+        if (userId) {
+          saveNotificationsToStorage(String(userId), updated);
+        }
+        return updated;
+      });
       setUnreadCount(prev => prev + 1);
 
       const soundType = getNotificationSoundType(title);
@@ -606,14 +715,21 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  // Mark as Read and Navigate
+  // ✅ Mark as Read with persistence
   const markAsReadAndNavigate = async (notification: Notification) => {
     if (!notification.read) {
       try {
         if (userId) {
           await notificationAPI.markAsRead(String(notification.id), String(userId));
         }
-        setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n));
+        setNotifications(prev => {
+          const updated = prev.map(n => n.id === notification.id ? { ...n, read: true } : n);
+          // Save to cache
+          if (userId) {
+            saveNotificationsToStorage(String(userId), updated);
+          }
+          return updated;
+        });
         setUnreadCount(prev => Math.max(0, prev - 1));
       } catch (error) {
         console.error('Error marking as read:', error);
@@ -633,7 +749,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // Mark All as Read
+  // ✅ Mark All as Read with persistence
   const markAllAsRead = async () => {
     if (!userId) {
       console.warn('No user ID available, cannot mark all as read');
@@ -642,7 +758,14 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
     try {
       await notificationAPI.markAllAsRead(String(userId));
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications(prev => {
+        const updated = prev.map(n => ({ ...n, read: true }));
+        // Save to cache
+        if (userId) {
+          saveNotificationsToStorage(String(userId), updated);
+        }
+        return updated;
+      });
       setUnreadCount(0);
       showSuccess('All notifications marked as read', 'Success');
     } catch (error) {
@@ -651,7 +774,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  // Clear All
+  // ✅ Clear All with persistence
   const clearAllNotifications = () => {
     if (!userId) {
       console.warn('No user ID available, cannot clear notifications');
@@ -669,6 +792,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
           onPress: async () => {
             try {
               await notificationAPI.clearAll(String(userId));
+              await clearUserStorage(String(userId));
               setNotifications([]);
               setUnreadCount(0);
               showSuccess('All notifications cleared', 'Success');
@@ -771,10 +895,8 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       senderRole: userRole
     });
 
-    // Play action confirmation sound
     playNotificationSoundWithThrottle('info');
 
-    // Show toast to confirm action was performed
     showToastNotification(
       `${workflowType} ${action}`,
       data.message || 'Action completed successfully',
@@ -782,10 +904,10 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       3000
     );
 
-    // Trigger a refresh of notifications after a short delay
+    // Refresh notifications after action
     setTimeout(() => {
       if (userId) {
-        loadNotifications();
+        refreshNotifications();
       }
     }, 1000);
   };
@@ -853,7 +975,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // ==========================================
-  // UI COMPONENTS
+  // UI COMPONENTS (Same as before, with refresh button)
   // ==========================================
 
   const SoundControlPanel: FC = () => (
@@ -1022,7 +1144,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             },
           ]}
         >
-          {/* Header with Role Badge */}
+          {/* Header with Role Badge and Refresh Button */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View>
@@ -1041,6 +1163,13 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {/* Refresh Button */}
+                <TouchableOpacity
+                  onPress={refreshNotifications}
+                  style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#f3f4f6' }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '500', color: '#4b5563' }}>🔄</Text>
+                </TouchableOpacity>
                 {notifications.length > 0 && unreadCount > 0 && (
                   <TouchableOpacity
                     onPress={markAllAsRead}
@@ -1059,7 +1188,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
             </View>
           </View>
 
-          {/* Notification List */}
+          {/* Notification List (same as before) */}
           <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
             {loading ? (
               <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
@@ -1142,7 +1271,6 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
                     </View>
                   )}
 
-                  {/* Show target role badge */}
                   {notification.role && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 }}>
                       <Text style={{ fontSize: 10, color: '#9ca3af' }}>For:</Text>
@@ -1307,6 +1435,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     requestNotificationPermission,
     isSoundReady,
     userRole,
+    refreshNotifications,
   };
 
   return (
