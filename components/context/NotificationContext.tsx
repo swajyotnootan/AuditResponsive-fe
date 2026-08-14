@@ -172,13 +172,16 @@ const clearUserStorage = async (userId: string) => {
 // ENHANCED NOTIFICATION SOUND MANAGER
 // ==========================================
 
+// ==========================================
+// ENHANCED NOTIFICATION SOUND MANAGER
+// ✅ Uses YOUR notify.mp3 from public/sounds (web) or assets/sounds (native)
+// ==========================================
 class NotificationSound {
   isEnabled: boolean = true;
   volume: number = 0.8;
   isInitialized: boolean = false;
   pendingSounds: { type: string; timestamp: number }[] = [];
   isPlaying: boolean = false;
-  audioContext: Audio.Sound | null = null;
 
   async init(): Promise<boolean> {
     if (this.isInitialized) return true;
@@ -250,127 +253,59 @@ class NotificationSound {
     this.isPlaying = false;
   }
 
+  // ✅ NEW: Play YOUR notify.mp3 file
+  // ✅ NEW: Play YOUR notify.mp3 file — works on BOTH web and native
+private async playNotifyFile(): Promise<void> {
+  try {
+    // ✅ Unified approach: use expo-av Audio.Sound on BOTH platforms
+    const source = Platform.OS === 'web'
+      ? { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
+      : require('../assets/sounds/notify.mp3');
+
+    const { sound } = await Audio.Sound.createAsync(
+      source,
+      { shouldPlay: true, volume: this.volume }
+    );
+
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+
+    console.log(`🔊 Played notify.mp3 (${Platform.OS})`);
+  } catch (error) {
+    console.error('Error playing notify sound:', error);
+  }
+}
+  // ✅ Play notify sound for ALL types (with haptics per type on native)
   async playNotificationSound(type: string = 'info') {
     if (!this.isEnabled) return;
     await this.ensureInitialized();
 
-    switch (type) {
-      case 'success':
-        if (Platform.OS !== 'web') {
+    // Haptics feedback per type (native only)
+    if (Platform.OS !== 'web') {
+      try {
+        if (type === 'success') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-        this.playSuccessSound();
-        break;
-      case 'error':
-        if (Platform.OS !== 'web') {
+        } else if (type === 'error') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        }
-        this.playErrorSound();
-        break;
-      case 'warning':
-        if (Platform.OS !== 'web') {
+        } else if (type === 'warning') {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        }
-        this.playWarningSound();
-        break;
-      default:
-        if (Platform.OS !== 'web') {
+        } else {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
-        this.playDefaultSound();
+      } catch (e) {
+        // Ignore haptics errors
+      }
     }
-  }
 
-  private async playSuccessSound() {
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/success.mp3'),
-        { shouldPlay: true, volume: this.volume }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.error('Error playing success sound:', error);
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    }
-  }
-
-  private async playErrorSound() {
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/error.mp3'),
-        { shouldPlay: true, volume: this.volume }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.error('Error playing error sound:', error);
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }
-    }
-  }
-
-  private async playWarningSound() {
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/warning.mp3'),
-        { shouldPlay: true, volume: this.volume }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.error('Error playing warning sound:', error);
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-    }
-  }
-
-  private async playDefaultSound() {
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/notification.mp3'),
-        { shouldPlay: true, volume: this.volume }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.error('Error playing default sound:', error);
-      if (Platform.OS !== 'web') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    }
+    // ✅ Play YOUR notify.mp3 for every notification
+    await this.playNotifyFile();
   }
 
   async playBeep() {
-    await this.playDefaultSound();
+    await this.playNotifyFile();
   }
 
   setEnabled(enabled: boolean) {
