@@ -41,9 +41,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import AddScheduleModal from "./AddScheduleModal"; // ✅ NEW IMPORT
 
-// Ensure API_BASE is defined dynamically for Web vs Mobile
-
-
 const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
