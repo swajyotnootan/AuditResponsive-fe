@@ -20,9 +20,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-import Form7DetailView from "../auditor/view/Form7DetailView";
-
-
+import NCRViewManager from "../auditor/view/NCRViewManager";
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
   bg: "#F8FAFC",
@@ -264,7 +262,7 @@ const NCRDashboard = ({
   onBack?: () => void;
   onViewNcr?: (id: string) => void;
 }) => {
-  const [viewingNcrId, setViewingNcrId] = useState<string | null>(null);
+  const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null); // ... rest of your code
   // ... rest of your code
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -481,14 +479,26 @@ const NCRDashboard = ({
     );
   }
 
-  if (viewingNcrId) {
+    // ✅ Render function for the NCR View Manager
+  const renderActiveNcrView = () => {
+    if (!activeNcrViewConfig) return null;
     return (
-      <Form7DetailView
-        initialParams={{ id: viewingNcrId }}
-        onClose={() => setViewingNcrId(null)} // Clears state to return to dashboard
+      <NCRViewManager
+        initialId={activeNcrViewConfig.id}
+        initialType={activeNcrViewConfig.type || "form7"}
+        onClose={() => {
+          setActiveNcrViewConfig(null); // Closes the view and goes back to dashboard
+          loadData(); // Refreshes the NCR list data when returning
+        }}
       />
     );
+  };
+
+  // ✅ Early return to show the manager if an NCR is selected
+  if (activeNcrViewConfig) {
+    return renderActiveNcrView();
   }
+
 
   return (
     <SafeAreaView className="flex-1 bg-[#F8FAFC]" style={{ height: "100%" }}>
@@ -1042,8 +1052,12 @@ const NCRDashboard = ({
                         <View className="w-[220px] px-2 flex-row items-center gap-2">
                           <Pressable
                             // ✅ UPDATED: Set the state to trigger the detail view
-                            onPress={() => setViewingNcrId(ncr.id)}
-                            className="w-8 h-8 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] items-center justify-center"
+                             onPress={() =>
+                              setActiveNcrViewConfig({
+                                id: ncr.id,
+                                type: "form7",
+                              })
+                            }                            className="w-8 h-8 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] items-center justify-center"
                           >
                             {({ pressed }) => (
                               <Feather

@@ -45,8 +45,8 @@ import Form5View from "@/components/dashboards/auditManager/Form5View";
 import Form9View from "@/components/dashboards/auditManager/Form9View";
 import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
 import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
-import Form7DetailView from "@/components/dashboards/auditor/view/Form7DetailView";
 import { apiClient, ncrAPI, userAPI } from "@/services/api";
+import NCRViewManager from "./auditor/view/NCRViewManager";
 
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
@@ -1793,8 +1793,10 @@ export default function AuditManagerDashboard() {
   // ============================================================================
   if (activeNcrViewId) {
     return (
-      <Form7DetailView
-        initialParams={{ id: activeNcrViewId }}
+      // ✅ USE YOUR MANAGER HERE
+      <NCRViewManager
+        initialId={activeNcrViewId}
+        initialType="form7"
         onClose={() => {
           setActiveNcrViewId(null);
           fetchAllData();

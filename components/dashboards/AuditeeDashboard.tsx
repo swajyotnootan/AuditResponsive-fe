@@ -45,9 +45,9 @@ import { useToast } from "../context/ToastContext";
 
 // ⚠️ Adjust these paths to match your actual project structure
 import FiveSView from "./auditor/view/FiveSView";
-import Form7DetailView from "./auditor/view/Form7DetailView";
 import IATFInternalView from "./auditor/view/IATFInternalView";
 import ManufacturingProcessView from "./auditor/view/ManufacturingProcessView";
+import NCRViewManager from "./auditor/view/NCRViewManager";
 
 const NAVBAR_COLORS = {
   primary: "#00529B",
@@ -1396,14 +1396,16 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
     );
   };
 
-  const renderActiveNcrView = () => {
+   const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
     return (
-      <Form7DetailView
-        initialParams={activeNcrViewConfig}
+      // ✅ USE YOUR NEW MANAGER HERE
+      <NCRViewManager
+        initialId={activeNcrViewConfig.id}
+        initialType={activeNcrViewConfig.type || "form7"}
         onClose={() => {
           setActiveNcrViewConfig(null); // Closes the view and goes back to dashboard
-          handleRefresh(); // Optional: refreshes data when returning
+          handleRefresh(); // Refreshes data when returning
         }}
       />
     );

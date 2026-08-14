@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import FiveSView from "../auditor/view/FiveSView";
-import Form7DetailView from "../auditor/view/Form7DetailView";
 import IATFInternalView from "../auditor/view/IATFInternalView";
 import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
+import NCRViewManager from "../auditor/view/NCRViewManager"; // Adjust path if needed
 
 interface User {
   id: string | number;
@@ -464,6 +464,45 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     ? getNCRs(selectedStakeholder.id)
     : [];
 
+  // ✅ FIX 1: NCR PREVIEW — rendered inline (NOT in a Modal) so the navbar stays visible
+  if (selectedNcrId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+        <NCRViewManager
+          initialId={String(selectedNcrId)}
+          initialType="form7"
+          onClose={() => setSelectedNcrId(null)}
+        />
+      </View>
+    );
+  }
+
+  // ✅ FIX 2: CHECK SHEET REPORT PREVIEW — rendered inline (NOT in a Modal)
+  if (reportView) {
+    return (
+      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+        {reportView.type === "5S" && (
+          <FiveSView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+        {reportView.type === "IATF" && (
+          <IATFInternalView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+        {reportView.type === "MANUFACTURING" && (
+          <ManufacturingProcessView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.grid}>
@@ -626,49 +665,6 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               }
             />
           </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={!!selectedNcrId}
-        animationType="slide"
-        onRequestClose={() => setSelectedNcrId(null)}
-      >
-        <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
-          {selectedNcrId && (
-            <Form7DetailView
-              initialParams={{ id: String(selectedNcrId) }}
-              onClose={() => setSelectedNcrId(null)}
-            />
-          )}
-        </View>
-      </Modal>
-
-      {/* ✅ AUDIT REPORT DETAIL VIEW — opens per audit no / NCR no */}
-      <Modal
-        visible={!!reportView}
-        animationType="slide"
-        onRequestClose={() => setReportView(null)}
-      >
-        <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
-          {reportView?.type === "5S" && (
-            <FiveSView
-              initialId={String(reportView.id)}
-              onClose={() => setReportView(null)}
-            />
-          )}
-          {reportView?.type === "IATF" && (
-            <IATFInternalView
-              initialId={String(reportView.id)}
-              onClose={() => setReportView(null)}
-            />
-          )}
-          {reportView?.type === "MANUFACTURING" && (
-            <ManufacturingProcessView
-              initialId={String(reportView.id)}
-              onClose={() => setReportView(null)}
-            />
-          )}
         </View>
       </Modal>
     </ScrollView>

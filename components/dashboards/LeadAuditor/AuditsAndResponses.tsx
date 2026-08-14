@@ -2,7 +2,7 @@
 "use client";
 
 import { format } from "date-fns";
-import React from "react";
+import React, { useState } from "react";
 import {
   Dimensions,
   ScrollView,
@@ -13,6 +13,10 @@ import {
   View,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FiveSView from "../auditor/view/FiveSView";
+import IATFInternalView from "../auditor/view/IATFInternalView";
+import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
+import NCRViewManager from "../auditor/view/NCRViewManager";
 
 // Types
 interface Schedule {
@@ -118,6 +122,54 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
+  // ✅ PREVIEW STATE (Same pattern as StakeholderManagement)
+  const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(
+    null,
+  );
+
+  type AuditReportType = "5S" | "IATF" | "MANUFACTURING";
+  const [reportView, setReportView] = useState<{
+    type: AuditReportType;
+    id: string | number;
+  } | null>(null);
+
+  const safeParseAnswers = (answers: any): any => {
+    if (!answers) return {};
+    if (typeof answers === "object") return answers;
+    try {
+      return JSON.parse(answers);
+    } catch {
+      return {};
+    }
+  };
+
+  // ✅ Decides which check sheet report view to open
+  const detectReportType = (r: Response): AuditReportType => {
+    const a = safeParseAnswers(r.answers);
+    const raw = String(
+      (r as any).auditType ||
+        (r as any).templateType ||
+        (r as any).checkSheet?.templateType ||
+        (r as any).checkSheet?.name ||
+        a.auditType ||
+        a.templateType ||
+        a.checkSheetName ||
+        "",
+    ).toUpperCase();
+
+    if (raw.includes("5S") || raw.includes("FIVE")) return "5S";
+    if (raw.includes("MANUFACT") || raw.includes("PROCESS"))
+      return "MANUFACTURING";
+    if (raw.includes("IATF")) return "IATF";
+
+    if (a.scores) return "5S";
+    if (a.partNumber || a.machine || a.wefDate || a.revNo || a.issueDate)
+      return "MANUFACTURING";
+    if (a.processName || a.responses || a.observations) return "IATF";
+
+    return "5S";
+  };
+
   const getStatusBadge = (status?: string) => {
     const colors: Record<string, any> = {
       SCHEDULED: { bg: "#DBEAFE", text: "#2563EB" },
@@ -218,7 +270,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
           <View style={styles.verticalItemActions}>
             <TouchableOpacity
               style={styles.verticalActionButton}
-              onPress={() => onViewResponse(item)}
+              onPress={() => {
+                onViewResponse(item);
+                setReportView({ type: detectReportType(item), id: item.id });
+              }}
             >
               <Icon name="eye" size={16} color="#6B7280" />
               <Text style={styles.verticalActionText}>View</Text>
@@ -251,7 +306,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     return (
       <TouchableOpacity
         style={styles.verticalItemContainer}
-        onPress={() => onViewNCR(item)}
+        onPress={() => {
+          onViewNCR(item);
+          setSelectedNcrId(item.id);
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.verticalItemRow}>
@@ -291,7 +349,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
           <View style={styles.verticalItemActions}>
             <TouchableOpacity
               style={styles.verticalActionButton}
-              onPress={() => onViewNCR(item)}
+              onPress={() => {
+                onViewNCR(item);
+                setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
+              }}
             >
               <Icon name="eye" size={16} color="#1D4ED8" />
               <Text style={[styles.verticalActionText, { color: "#1D4ED8" }]}>
@@ -343,7 +404,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
         <View style={styles.responseActions}>
           <TouchableOpacity
             style={styles.responseActionButton}
-            onPress={() => onViewResponse(item)}
+            onPress={() => {
+              onViewResponse(item);
+              setReportView({ type: detectReportType(item), id: item.id });
+            }}
           >
             <Icon name="eye" size={14} color="#6B7280" />
             <Text style={styles.responseActionText}>View</Text>
@@ -375,7 +439,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       <View style={styles.ncrCard}>
         <TouchableOpacity
           style={{ flex: 1 }}
-          onPress={() => onViewNCR(item)}
+          onPress={() => {
+            onViewNCR(item);
+            setSelectedNcrId(item.id);
+          }}
           activeOpacity={0.7}
         >
           <View style={styles.ncrHeader}>
@@ -411,7 +478,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
         <View style={styles.ncrActions}>
           <TouchableOpacity
             style={styles.ncrActionButton}
-            onPress={() => onViewNCR(item)}
+            onPress={() => {
+              onViewNCR(item);
+              setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
+            }}
           >
             <Icon name="eye" size={14} color="#1D4ED8" />
             <Text style={styles.ncrActionText}>View Details</Text>
@@ -420,6 +490,45 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       </View>
     );
   };
+
+  // ✅ NCR PREVIEW (Form7 / Form8 / NCR2 via the common manager)
+  if (selectedNcrId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+        <NCRViewManager
+          initialId={String(selectedNcrId)}
+          initialType="form7"
+          onClose={() => setSelectedNcrId(null)}
+        />
+      </View>
+    );
+  }
+
+  // ✅ CHECK SHEET REPORT PREVIEW (5S / IATF / Manufacturing)
+  if (reportView) {
+    return (
+      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+        {reportView.type === "5S" && (
+          <FiveSView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+        {reportView.type === "IATF" && (
+          <IATFInternalView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+        {reportView.type === "MANUFACTURING" && (
+          <ManufacturingProcessView
+            initialId={String(reportView.id)}
+            onClose={() => setReportView(null)}
+          />
+        )}
+      </View>
+    );
+  }
 
   // ============================================================
   // AUDITS TAB

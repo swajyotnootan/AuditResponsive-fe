@@ -1,8 +1,11 @@
 // Form5DetailedView.tsx
+import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi, User } from "@/services/auditScheduleApi";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker"; // ← ADD THIS LINE
 import { Picker } from "@react-native-picker/picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import {
   AlertCircle,
   ArrowLeft,
@@ -16,18 +19,13 @@ import {
   Plus,
   Printer,
   RefreshCw,
-  Save,
   Send,
   Sunrise,
   Sunset,
   Trash2,
   X,
 } from "lucide-react-native";
-
-import { API_BASE_URL } from "@/config/apiConfig";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -41,8 +39,10 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import AddScheduleModal from "./AddScheduleModal"; // ✅ NEW IMPORT
 
-// Ensure API_BASE_U is defined dynamically for Web vs Mobile
+// Ensure API_BASE is defined dynamically for Web vs Mobile
+
 
 const COLORS = {
   bg: "#F8FAFC",
@@ -132,6 +132,7 @@ const timeOptions = (() => {
   return options;
 })();
 
+// ═════ INTERFACES ═════
 interface Schedule {
   id?: number;
   scheduledDate?: string;
@@ -230,22 +231,24 @@ interface BasicSchedule {
   approvedByName?: string;
 }
 
+// ═════ SUB-COMPONENTS ═════
 const Card = ({
   children,
   className = "",
-  style, // ✅ Added style prop
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
-  style?: any; // ✅ Added style type
+  style?: any;
 }) => (
   <View
     className={`rounded-xl border border-gray-200 bg-white shadow-sm mb-4 ${className}`}
-    style={style} // ✅ Pass style to the inner View
+    style={style}
   >
     {children}
   </View>
 );
+
 const ActionButton = ({
   onPress,
   disabled,
@@ -467,114 +470,62 @@ const ActionModal = ({
   );
 };
 
-// ═════ CROSS-PLATFORM DATE PICKER ═════
-const DatePickerField = ({
-  value,
-  onChange,
-  placeholder = "Select Date",
-  iconColor = "#6B7280",
-  className = "",
-}: {
-  value: string;
-  onChange: (dateStr: string) => void;
-  placeholder?: string;
-  iconColor?: string;
-  className?: string;
-}) => {
-  if (Platform.OS === "web") {
-    // ✅ Web/Desktop: Use native HTML date input - fully visible and clickable
-    return (
-      <View className={`relative ${className}`}>
-        <View
-          className="flex-row items-center justify-between px-3 bg-white border border-gray-200 rounded-lg h-11"
-          style={{ position: "relative", overflow: "hidden" }}
-        >
-          <Text
-            className="flex-1 text-gray-800"
-            style={{ pointerEvents: "none" }}
-          >
-            {value || placeholder}
-          </Text>
-          <Calendar
-            size={16}
-            color={iconColor}
-            style={{ pointerEvents: "none" }}
-          />
-        </View>
-        <input
-          type="date"
-          value={value || ""}
-          onChange={(e) => {
-            console.log("Date changed:", e.target.value);
-            onChange(e.target.value);
-          }}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            opacity: 0,
-            cursor: "pointer",
-            zIndex: 10,
-          }}
-          onClick={(e) => {
-            console.log("Date input clicked");
-            // Ensure the native picker opens
-            const target = e.target as HTMLInputElement;
-            target.showPicker?.();
-          }}
-        />
-      </View>
-    );
-  }
-
-  // ✅ Mobile: Use existing DateTimePicker
-  const [showPicker, setShowPicker] = useState(false);
-  return (
-    <>
-      <TouchableOpacity
-        onPress={() => setShowPicker(true)}
-        className={`flex-row items-center justify-between px-3 bg-white border border-gray-200 rounded-lg h-11 ${className}`}
-      >
-        <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
-        <Calendar size={16} color={iconColor} />
-      </TouchableOpacity>
-      {showPicker && (
-        <DateTimePicker
-          value={value ? new Date(value) : new Date()}
-          mode="date"
-          display={Platform.OS === "android" ? "calendar" : "default"}
-          onChange={(event, selectedDate) => {
-            if (Platform.OS === "android") setShowPicker(false);
-            if (selectedDate) {
-              onChange(selectedDate.toISOString().split("T")[0]);
-            }
-            if (Platform.OS === "ios" && event.type === "dismissed") {
-              setShowPicker(false);
-            }
-          }}
-        />
-      )}
-    </>
-  );
+// ═════ HELPERS ═════
+const toISODate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
-// ✅ Helper function to fix draft submit button
+const addDaysISO = (dateStr: string, days: number): string => {
+  const date = new Date(`${dateStr}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+};
+
+const normalizeWeek = (week?: string | null): string => {
+  if (!week) return "";
+  const cleaned = String(week).trim().toUpperCase();
+  if (/^W-\d+$/.test(cleaned)) return cleaned;
+  const number = cleaned.replace(/[^0-9]/g, "");
+  if (number) return `W-${number}`;
+  return cleaned;
+};
+
 const isSubmittableDraft = (status?: string | null): boolean => {
   const normalized = (status ?? "").toUpperCase().trim();
-
   return (
     normalized === "" ||
     normalized === "DRAFT" ||
     normalized === "CHANGE_REQUESTED"
   );
 };
+
+const convertToMinutes = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  const [time, modifier] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+  if (modifier === "PM" && hours !== 12) hours += 12;
+  if (modifier === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+const getTimeValue = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  const [time, modifier] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+  if (modifier === "PM" && hours !== 12) hours += 12;
+  if (modifier === "AM" && hours === 12) hours = 0;
+  return hours + minutes / 60;
+};
+
 // ═════ MAIN COMPONENT ═════
 interface Form5DetailedViewProps {
   year?: number;
   month?: string;
   preSelectedDepartment?: string;
+  preSelectedWeek?: string;
   startDate?: string;
   endDate?: string;
   onBack?: () => void;
@@ -584,12 +535,12 @@ export default function Form5DetailedView({
   year: propYear,
   month: propMonth,
   preSelectedDepartment,
+  preSelectedWeek,
   startDate: preStartDate,
   endDate: preEndDate,
   onBack,
 }: Form5DetailedViewProps = {}) {
   const router = useRouter();
-
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement } = useAuth();
   const { width } = useWindowDimensions();
@@ -600,20 +551,16 @@ export default function Form5DetailedView({
     type: "success" | "error" | "warning" = "success",
   ) => {
     const title = type.charAt(0).toUpperCase() + type.slice(1);
-
     if (Platform.OS === "web") {
       console.log(`[${type.toUpperCase()}] ${msg}`);
-
       if (
         typeof window !== "undefined" &&
         typeof (window as any).alert === "function"
       ) {
         (window as any).alert(`${title}: ${msg}`);
       }
-
       return;
     }
-
     Alert.alert(title, msg);
   };
 
@@ -622,6 +569,7 @@ export default function Form5DetailedView({
   const urlMonth = (params?.month as string) || null;
   const urlStartDate = (params?.startDate as string) || null;
   const urlEndDate = (params?.endDate as string) || null;
+  const urlWeek = (params?.week as string) || null;
 
   // State
   const [loading, setLoading] = useState(true);
@@ -629,14 +577,15 @@ export default function Form5DetailedView({
   const [submitting, setSubmitting] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  // ✅ NEW CODE
-  // 1. Create a fallback for the current month (e.g., "Jul") and year
   const defaultMonth = new Date().toLocaleString("default", { month: "short" });
   const defaultYear = new Date().getFullYear();
 
-  // 2. Initialize state with the fallbacks
   const [selectedYear] = useState(urlYear || propYear || defaultYear);
-  const [selectedMonth] = useState(urlMonth || propMonth || defaultMonth); // ✅ Now defaults to "Jul"
+  const [selectedMonth] = useState(urlMonth || propMonth || defaultMonth);
+  const [selectedWeek] = useState(
+    normalizeWeek(urlWeek || preSelectedWeek || ""),
+  );
+
   const [basicSchedules, setBasicSchedules] = useState<BasicSchedule[]>([]);
   const [auditSchedules, setAuditSchedules] = useState<Schedule[]>([]);
   const [auditors, setAuditors] = useState<User[]>([]);
@@ -670,7 +619,6 @@ export default function Form5DetailedView({
   const [loadingDepartmentUsers, setLoadingDepartmentUsers] = useState(false);
   const [selectedAuditDepartment, setSelectedAuditDepartment] = useState("");
   const [tempScheduleId, setTempScheduleId] = useState<number | null>(null);
-
   const [headerData, setHeaderData] = useState<HeaderData>({
     auditObjective: "",
     auditScope: "",
@@ -682,7 +630,6 @@ export default function Form5DetailedView({
     preparedBy: "",
     approvedBy: "",
   });
-
   const [formData, setFormData] = useState<FormData>({
     id: null,
     date: "",
@@ -696,17 +643,19 @@ export default function Form5DetailedView({
     auditType: "",
     status: "SCHEDULED",
   });
-
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [bulkSelectedAuditDepartment, setBulkSelectedAuditDepartment] =
     useState("");
-
   const [bulkDepartmentAuditors, setBulkDepartmentAuditors] = useState<User[]>(
     [],
   );
   const [bulkDepartmentAuditees, setBulkDepartmentAuditees] = useState<User[]>(
     [],
   );
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const [departmentTeamInfo, setDepartmentTeamInfo] =
     useState<DepartmentTeamInfo>({
@@ -752,23 +701,86 @@ export default function Form5DetailedView({
     return `W-${weekNum}`;
   };
 
-  const convertToMinutes = (timeStr: string): number => {
-    if (!timeStr) return 0;
-    const [time, modifier] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-    if (modifier === "PM" && hours !== 12) hours += 12;
-    if (modifier === "AM" && hours === 12) hours = 0;
-    return hours * 60 + minutes;
-  };
+  const getMonthLimits = useCallback(() => {
+    if (!selectedMonth) return null;
+    const monthIdx = monthNumber[selectedMonth];
+    const year =
+      selectedMonth === "Jan" ||
+      selectedMonth === "Feb" ||
+      selectedMonth === "Mar"
+        ? selectedYear + 1
+        : selectedYear;
+    const firstDate = new Date(year, monthIdx, 1);
+    const lastDate = new Date(year, monthIdx + 1, 0);
+    return { min: toISODate(firstDate), max: toISODate(lastDate) };
+  }, [selectedMonth, selectedYear]);
 
-  const getTimeValue = (timeStr: string): number => {
-    if (!timeStr) return 0;
-    const [time, modifier] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-    if (modifier === "PM" && hours !== 12) hours += 12;
-    if (modifier === "AM" && hours === 12) hours = 0;
-    return hours + minutes / 60;
-  };
+  const getWeekLimits = useCallback(
+    (week: string) => {
+      const monthLimits = getMonthLimits();
+      if (!monthLimits) return null;
+      const start = new Date(`${monthLimits.min}T00:00:00`);
+      const end = new Date(`${monthLimits.max}T00:00:00`);
+      let weekMin = "";
+      let weekMax = "";
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = toISODate(d);
+        if (getWeekNumber(dateStr) === week) {
+          if (!weekMin) weekMin = dateStr;
+          weekMax = dateStr;
+        }
+      }
+      if (weekMin && weekMax) return { min: weekMin, max: weekMax };
+      return monthLimits;
+    },
+    [getMonthLimits],
+  );
+
+  // ✅ NEW — only uses selectedWeek or full month, never startDate
+  const getDateLimits = useCallback(() => {
+    if (selectedWeek) {
+      return getWeekLimits(selectedWeek);
+    }
+    // Always fall back to full month limits so user can pick ANY date in the month
+    return getMonthLimits();
+  }, [selectedWeek, getWeekLimits, getMonthLimits]);
+
+  // useEffect(() => {
+  //   if (!selectedWeek) return;
+  //   const limits = getWeekLimits(selectedWeek);
+  //   if (!limits) return;
+  //   if (!startDate && !endDate) {
+  //     setStartDate(limits.min);
+  //     setEndDate(limits.max);
+  //   }
+  // }, [selectedWeek, getWeekLimits, startDate, endDate]);
+
+  // ✅ Fill table data: sync auditSchedules → filteredAuditSchedules
+  useEffect(() => {
+    if (!globalAuditType || globalAuditType === "") {
+      setFilteredAuditSchedules(auditSchedules);
+      return;
+    }
+    const filtered = auditSchedules.filter((schedule: any) => {
+      if (schedule.isSpecialEvent) return true;
+      let auditElements: string[] = [];
+      if (schedule.auditElements) {
+        if (typeof schedule.auditElements === "string") {
+          try {
+            auditElements = JSON.parse(schedule.auditElements);
+          } catch (_e) {
+            auditElements = [];
+          }
+        } else if (Array.isArray(schedule.auditElements)) {
+          auditElements = schedule.auditElements;
+        }
+      }
+      return auditElements.some((el) =>
+        el.toLowerCase().includes(globalAuditType.toLowerCase()),
+      );
+    });
+    setFilteredAuditSchedules(filtered);
+  }, [auditSchedules, globalAuditType]);
 
   const generateDateRange = (): {
     dateStr: string;
@@ -835,7 +847,7 @@ export default function Form5DetailedView({
         schedule.department &&
         schedule.department !== "OPENING" &&
         schedule.department !== "CLOSING" &&
-        schedule.approvalStatus === "APPROVED" // ✅ FIX: Added missing approval check
+        schedule.approvalStatus === "APPROVED"
       ) {
         let auditElements: string[] = [];
         if (schedule.auditElements) {
@@ -894,9 +906,8 @@ export default function Form5DetailedView({
         schedule.department &&
         schedule.department !== "OPENING" &&
         schedule.department !== "CLOSING" &&
-        schedule.approvalStatus === "APPROVED", // ✅ FIX: Added missing approval check
+        schedule.approvalStatus === "APPROVED",
     );
-    // ... (keep the rest of the function exactly as it was)
     relevantSchedules.forEach((schedule) => {
       let auditElements: string[] = [];
       if (schedule.auditElements) {
@@ -964,12 +975,10 @@ export default function Form5DetailedView({
     ): DepartmentTeamInfo => {
       const targetWeek = dateStr ? getWeekNumber(dateStr) : null;
       let matchedSchedule: BasicSchedule | null = null;
-
       const candidates = basicSchedules.filter((schedule) => {
         if (schedule.department !== departmentName) return false;
         if (schedule.approvalStatus !== "APPROVED") return false;
         if (targetWeek && schedule.week !== targetWeek) return false;
-
         if (auditType) {
           let elements: string[] = [];
           if (typeof schedule.auditElements === "string") {
@@ -990,11 +999,7 @@ export default function Form5DetailedView({
         }
         return true;
       });
-
-      if (candidates.length > 0) {
-        matchedSchedule = candidates[0];
-      }
-
+      if (candidates.length > 0) matchedSchedule = candidates[0];
       if (!matchedSchedule) {
         return {
           leadAuditorId: null,
@@ -1005,7 +1010,6 @@ export default function Form5DetailedView({
           auditeeNames: [],
         };
       }
-
       let teamIds: number[] = [];
       let teamNames: string[] = [];
       if (matchedSchedule.teamAuditorIds) {
@@ -1031,7 +1035,6 @@ export default function Form5DetailedView({
       teamIds = Array.isArray(teamIds)
         ? teamIds.map((id) => parseInt(id as any)).filter((id) => !isNaN(id))
         : [];
-
       if (matchedSchedule.teamAuditorNames) {
         teamNames = matchedSchedule.teamAuditorNames as string[];
         if (typeof teamNames === "string") {
@@ -1052,7 +1055,6 @@ export default function Form5DetailedView({
           }
         }
       }
-
       let auditeeIds: number[] = [];
       let auditeeNames: string[] = [];
       if (matchedSchedule.auditeeIds) {
@@ -1077,7 +1079,6 @@ export default function Form5DetailedView({
       auditeeIds = Array.isArray(auditeeIds)
         ? auditeeIds.map((id) => parseInt(id as any)).filter((id) => !isNaN(id))
         : [];
-
       if (matchedSchedule.auditeeNames) {
         auditeeNames = matchedSchedule.auditeeNames as string[];
         if (typeof auditeeNames === "string") {
@@ -1088,11 +1089,9 @@ export default function Form5DetailedView({
           }
         }
       }
-
       if (teamIds.length > 0 && teamNames.length === 0) {
         teamNames = teamIds.map((id) => `Co-Auditor ${id}`);
       }
-
       return {
         leadAuditorId:
           matchedSchedule.leadAuditorId || matchedSchedule.auditorId || null,
@@ -1109,13 +1108,11 @@ export default function Form5DetailedView({
     [basicSchedules],
   );
 
-  // ═════ API CALLS USING auditScheduleApi ═════
+  // ═════ API CALLS ═════
   const fetchUsers = useCallback(async () => {
     try {
-      // The new API returns User[] directly, and the types now match perfectly
       const auditorsData = await auditScheduleApi.getAuditors();
       setAuditors(auditorsData);
-
       const auditeesData = await auditScheduleApi.getAuditees();
       setAuditees(auditeesData);
     } catch (error) {
@@ -1125,63 +1122,47 @@ export default function Form5DetailedView({
     }
   }, []);
 
-  const fetchDepartmentUsers = useCallback(
-    async (departmentCode: string) => {
-      if (!departmentCode) {
-        setDepartmentAuditors([]);
-        setDepartmentAuditees([]);
-        return;
-      }
-      const enumValue =
-        departmentDisplayToEnum[departmentCode] ||
-        departmentCode.toUpperCase().replace(/[&\s/]+/g, "_");
-      setLoadingDepartmentUsers(true);
-      try {
-        const token = "YOUR_AUTH_TOKEN";
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // Adjust if your backend uses a different auth scheme
-        };
-
-        const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
-        const auditorsRes = await fetch(auditorsUrl, { headers });
-        const auditorsData = await auditorsRes.json();
-        setDepartmentAuditors(
-          Array.isArray(auditorsData) ? auditorsData : auditorsData.data || [],
-        );
-
-        const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
-        const auditeesRes = await fetch(auditeesUrl, { headers });
-        const auditeesData = await auditeesRes.json();
-        setDepartmentAuditees(
-          Array.isArray(auditeesData) ? auditeesData : auditeesData.data || [],
-        );
-      } catch (error) {
-        console.error("Error fetching department users:", error);
-        showToast("Failed to load department users", "error");
-        setDepartmentAuditors([]);
-        setDepartmentAuditees([]);
-      } finally {
-        setLoadingDepartmentUsers(false);
-      }
-    },
-    [showToast],
-  );
-  const fetchBasicSchedules = useCallback(async () => {
-    console.log(
-      "🚀 [RN] fetchBasicSchedules triggered. Month:",
-      selectedMonth,
-      "Year:",
-      selectedYear,
-    );
-
-    if (!selectedMonth) {
-      console.warn("⚠️ [RN] Aborting fetch: selectedMonth is still empty!");
+  const fetchDepartmentUsers = useCallback(async (departmentCode: string) => {
+    if (!departmentCode) {
+      setDepartmentAuditors([]);
+      setDepartmentAuditees([]);
       return;
     }
-
+    const enumValue =
+      departmentDisplayToEnum[departmentCode] ||
+      departmentCode.toUpperCase().replace(/[&\s/]+/g, "_");
+    setLoadingDepartmentUsers(true);
     try {
-      // ✅ NEW CODE (Matches your working Web version)
+      const token = "YOUR_AUTH_TOKEN";
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
+      const auditorsRes = await fetch(auditorsUrl, { headers });
+      const auditorsData = await auditorsRes.json();
+      setDepartmentAuditors(
+        Array.isArray(auditorsData) ? auditorsData : auditorsData.data || [],
+      );
+      const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
+      const auditeesRes = await fetch(auditeesUrl, { headers });
+      const auditeesData = await auditeesRes.json();
+      setDepartmentAuditees(
+        Array.isArray(auditeesData) ? auditeesData : auditeesData.data || [],
+      );
+    } catch (error) {
+      console.error("Error fetching department users:", error);
+      showToast("Failed to load department users", "error");
+      setDepartmentAuditors([]);
+      setDepartmentAuditees([]);
+    } finally {
+      setLoadingDepartmentUsers(false);
+    }
+  }, []);
+
+  const fetchBasicSchedules = useCallback(async () => {
+    if (!selectedMonth) return;
+    try {
       const weekSchedules = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
         selectedMonth as any,
@@ -1190,13 +1171,11 @@ export default function Form5DetailedView({
         selectedYear,
         selectedMonth as any,
       );
-
       const allSchedules = [
         ...(weekSchedules.data || []),
         ...(dateSchedules.data || []),
       ];
       setBasicSchedules(allSchedules);
-
       const hasApprovedSchedules = allSchedules.some(
         (s: any) => s.approvalStatus === "APPROVED",
       );
@@ -1223,14 +1202,16 @@ export default function Form5DetailedView({
             teamAuditorNames: first.teamAuditorNames || [],
             documentRevision: first.documentRevision || "1.0",
             preparedBy:
-              first.preparedByName || user?.name || user?.username || "",
+              first.preparedByName ||
+              userRef.current?.name ||
+              userRef.current?.username ||
+              "",
             approvedBy: first.approvedByName || "",
           });
         }
       } else {
         setApprovalStatus("NOT_APPROVED");
       }
-
       setAuditNumber(`INT/${selectedYear}/01`);
       const auditTypesSet = new Set<string>();
       allSchedules.forEach((schedule: any) => {
@@ -1252,23 +1233,20 @@ export default function Form5DetailedView({
       });
       const auditTypes = Array.from(auditTypesSet);
       setGlobalAuditTypesList(auditTypes);
-      if (auditTypes.length > 0 && !globalAuditType)
-        setGlobalAuditType(auditTypes[0]);
+      setGlobalAuditType((prev) => (prev ? prev : auditTypes[0] || ""));
     } catch (error) {
       console.error("Error fetching basic schedules:", error);
       setApprovalStatus("ERROR");
     }
-  }, [selectedYear, selectedMonth, globalAuditType, user]);
+  }, [selectedYear, selectedMonth]);
 
   const fetchDetailedSchedules = useCallback(async () => {
     if (!selectedMonth) return;
     try {
-      // ✅ NEW CODE
       const response = await auditScheduleApi.getDateSchedulesByMonth(
         selectedYear,
         selectedMonth as any,
       );
-
       const dateSchedules = response.data || [];
       const processedSchedules = dateSchedules.map((schedule: any) => {
         if ((!schedule.startTime || !schedule.endTime) && schedule.remarks) {
@@ -1292,46 +1270,20 @@ export default function Form5DetailedView({
         return schedule;
       });
       setAuditSchedules(processedSchedules);
-
-      if (globalAuditType && globalAuditType !== "") {
-        const filtered = processedSchedules.filter((schedule: any) => {
-          if (schedule.isSpecialEvent) return true;
-          let auditElements: string[] = [];
-          if (schedule.auditElements) {
-            if (typeof schedule.auditElements === "string") {
-              try {
-                auditElements = JSON.parse(schedule.auditElements);
-              } catch (_e) {
-                auditElements = [];
-              }
-            } else if (Array.isArray(schedule.auditElements)) {
-              auditElements = schedule.auditElements;
-            }
-          }
-          return auditElements.some((element) =>
-            element.toLowerCase().includes(globalAuditType.toLowerCase()),
-          );
-        });
-        setFilteredAuditSchedules(filtered);
-      } else {
-        setFilteredAuditSchedules(processedSchedules);
-      }
-
-      if (processedSchedules.length > 0 && (!startDate || !endDate)) {
+      if (processedSchedules.length > 0) {
         const dates = [
           ...new Set(processedSchedules.map((s: any) => s.scheduledDate)),
         ].sort();
         if (dates.length > 0) {
-          setStartDate(String(dates[0]));
-          setEndDate(String(dates[dates.length - 1]));
+          setStartDate((prev) => (prev ? prev : String(dates[0])));
+          setEndDate((prev) => (prev ? prev : String(dates[dates.length - 1])));
         }
       }
     } catch (error) {
       console.error("Error fetching detailed schedules:", error);
       setAuditSchedules([]);
-      setFilteredAuditSchedules([]);
     }
-  }, [selectedYear, selectedMonth, startDate, endDate, globalAuditType]);
+  }, [selectedYear, selectedMonth]);
 
   const checkTimeConflict = (
     date: string,
@@ -1529,7 +1481,6 @@ export default function Form5DetailedView({
           saveData,
           getUserIdAsNumber(),
         );
-
         showToast("Schedule added successfully!", "success");
       }
       setShowModal(false);
@@ -1557,7 +1508,6 @@ export default function Form5DetailedView({
       showToast("From Date must be before To Date", "error");
       return;
     }
-
     if (bulkData.isSpecialEvent) {
       if (!bulkData.specialEventType) {
         showToast("Please select event type", "error");
@@ -1598,7 +1548,6 @@ export default function Form5DetailedView({
         return;
       }
     }
-
     setSaving(true);
     try {
       const firstDate = new Date(fromDate);
@@ -1670,58 +1619,38 @@ export default function Form5DetailedView({
 
   const handleSubmitAllDraftSchedules = async () => {
     const userId = getUserIdAsNumber();
-
     if (!userId) {
       showToast("Logged-in user is invalid", "error");
       return;
     }
-
     const draftSchedules = filteredAuditSchedules.filter(
       (s) => s.id != null && isSubmittableDraft(s.detailedApprovalStatus),
     );
-
-    console.log(
-      "[SubmitAll] filtered schedules:",
-      filteredAuditSchedules.length,
-    );
-    console.log("[SubmitAll] draft schedules:", draftSchedules.length);
-    console.log(
-      "[SubmitAll] statuses:",
-      filteredAuditSchedules.map((s) => s.detailedApprovalStatus),
-    );
-
     if (draftSchedules.length === 0) {
       const message = globalAuditType
         ? `No draft schedules to submit for "${globalAuditType}"`
         : "No draft schedules to submit";
-
       showToast(message, "warning");
       return;
     }
-
     const submitDrafts = async () => {
       setSubmitting(true);
-
       let successCount = 0;
       let failCount = 0;
-
       try {
         for (const schedule of draftSchedules) {
           try {
             if (!schedule.id) continue;
-
             await auditScheduleApi.submitScheduleForApproval(
               schedule.id,
               userId,
             );
-
             successCount++;
           } catch (error: any) {
             console.error(`Failed to submit schedule ${schedule.id}:`, error);
             failCount++;
           }
         }
-
         if (successCount > 0 && failCount === 0) {
           showToast(
             `✅ ${successCount} schedule(s) submitted for approval!`,
@@ -1738,7 +1667,6 @@ export default function Form5DetailedView({
             "error",
           );
         }
-
         await fetchDetailedSchedules();
       } catch (error) {
         console.error("Error in submit all:", error);
@@ -1747,23 +1675,16 @@ export default function Form5DetailedView({
         setSubmitting(false);
       }
     };
-
     const confirmMessage = `Are you sure you want to submit ${draftSchedules.length} draft schedule(s) for "${globalAuditType || "All"}"?`;
-
     if (Platform.OS === "web") {
       const confirmed =
         typeof window !== "undefined" &&
         typeof (window as any).confirm === "function"
           ? (window as any).confirm(confirmMessage)
           : true;
-
-      if (confirmed) {
-        await submitDrafts();
-      }
-
+      if (confirmed) await submitDrafts();
       return;
     }
-
     Alert.alert("Confirm Submit", confirmMessage, [
       { text: "Cancel", style: "cancel" },
       {
@@ -1885,18 +1806,13 @@ export default function Form5DetailedView({
     }
     setSubmitting(true);
     try {
-      // ✅ FIXED: Using fetch with API_BASE_U
       const url = `${API_BASE_URL}/api/audit-schedule/detailed/${scheduleId}/request-changes?userId=${getUserIdAsNumber()}`;
       const response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: changeRequestReason }),
       });
-
       if (!response.ok) throw new Error("Failed to request changes");
-
       showToast(`Change request submitted for schedule`, "warning");
       setShowChangeRequestModal(false);
       setChangeRequestReason("");
@@ -1908,6 +1824,7 @@ export default function Form5DetailedView({
       setSubmitting(false);
     }
   };
+
   const handleExport = () => {
     const headers = [
       "Date",
@@ -1943,13 +1860,11 @@ export default function Form5DetailedView({
     showToast("Schedule exported successfully!", "success");
   };
 
-  // ═════ PDF DOWNLOAD HELPERS ═════
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        // Extracts only the base64 string (removes "data:application/pdf;base64,")
         resolve(result.split(",")[1]);
       };
       reader.onerror = reject;
@@ -1964,7 +1879,6 @@ export default function Form5DetailedView({
     }
     setDownloadingPdf(true);
     try {
-      // 1. Use your existing API service (This guarantees the correct backend URL is used!)
       const response = await auditScheduleApi.downloadDetailedViewPdf(
         selectedYear,
         selectedMonth as any,
@@ -1974,15 +1888,11 @@ export default function Form5DetailedView({
           auditType: globalAuditType || undefined,
         },
       );
-
-      // Ensure we have a Blob
       const blob =
         response.data instanceof Blob
           ? response.data
           : new Blob([response.data], { type: "application/pdf" });
-
       if (Platform.OS === "web") {
-        // ✅ WEB / DESKTOP: Standard Browser Download
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -1994,20 +1904,13 @@ export default function Form5DetailedView({
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
-
         showToast("Detailed schedule PDF downloaded successfully!", "success");
       } else {
-        // ✅ MOBILE / TABLET: Convert Blob to Base64 -> Save to FileSystem -> Share
         const base64Data = await blobToBase64(blob);
-
         const fileUri = `${FileSystem.documentDirectory}Form5_Detailed_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
-
-        // Write the base64 string to the device's local storage
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
-
-        // Open the native Share Sheet so the user can save it to "Files"
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri, {
             mimeType: "application/pdf",
@@ -2132,13 +2035,11 @@ export default function Form5DetailedView({
         },
       ];
     }
-
     let departmentToSelect = "";
     if (selectedDepartments.length > 0)
       departmentToSelect = selectedDepartments[0].department;
     else if (schedule.department && schedule.department !== "General")
       departmentToSelect = schedule.department;
-
     setFormData({
       id: schedule.id || null,
       date: schedule.scheduledDate || schedule.date || "",
@@ -2156,8 +2057,8 @@ export default function Form5DetailedView({
     if (departmentToSelect) {
       const teamInfo = getTeamMembersForDepartment(
         departmentToSelect,
-        formData.date,
-        formData.auditType || globalAuditType,
+        schedule.scheduledDate || schedule.date || null,
+        schedule.auditType || globalAuditType,
       );
       setDepartmentTeamInfo(teamInfo);
       fetchDepartmentUsers(departmentToSelect);
@@ -2165,14 +2066,13 @@ export default function Form5DetailedView({
     setShowModal(true);
   };
 
+  // ═════ EFFECTS ═════
   useEffect(() => {
     if (bulkSelectedAuditDepartment) {
       fetchDepartmentUsers(bulkSelectedAuditDepartment);
-      // Also update bulk department users
       const enumValue =
         departmentDisplayToEnum[bulkSelectedAuditDepartment] ||
         bulkSelectedAuditDepartment.toUpperCase().replace(/[&\s/]+/g, "_");
-      // Fetch auditors and auditees for bulk
       const fetchBulkDepartmentUsers = async () => {
         try {
           const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
@@ -2199,7 +2099,6 @@ export default function Form5DetailedView({
     }
   }, [bulkSelectedAuditDepartment]);
 
-  // ═════ EFFECTS ═════
   useEffect(() => {
     if (showModal && formData.date && formData.startTime && formData.endTime) {
       if (formData.isSpecialEvent && formData.specialEventType === "LUNCH") {
@@ -2243,22 +2142,38 @@ export default function Form5DetailedView({
     formData.id,
   ]);
 
+  // ✅ Auto-fill defaults on first load
   useEffect(() => {
-    if (selectedMonth && (!startDate || !endDate)) {
-      const monthIdx = monthNumber[selectedMonth];
-      const year =
-        selectedMonth === "Jan" ||
-        selectedMonth === "Feb" ||
-        selectedMonth === "Mar"
-          ? selectedYear + 1
-          : selectedYear;
-      const firstDay = `${year}-${String(monthIdx + 1).padStart(2, "0")}-01`;
-      const lastDay = new Date(year, monthIdx + 1, 0).getDate();
-      const lastDayStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      setStartDate(firstDay);
-      setEndDate(lastDayStr);
+    const limits = getDateLimits();
+    if (!limits) return;
+    if (!startDate && !endDate) {
+      setStartDate(limits.min);
+      setEndDate(limits.max);
     }
-  }, [selectedMonth, selectedYear]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWeek, selectedMonth, selectedYear]);
+
+  // ✅ Clamp dates if they fall outside month/week boundaries
+  useEffect(() => {
+    const limits = getDateLimits();
+    if (!limits) return;
+
+    if (startDate) {
+      if (startDate < limits.min) setStartDate(limits.min);
+      else if (startDate > limits.max) setStartDate(limits.max);
+    }
+    if (endDate) {
+      if (endDate < limits.min || endDate > limits.max) setEndDate("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWeek, selectedMonth, selectedYear]);
+
+  // ✅ Clear To Date if it's before From Date
+  useEffect(() => {
+    if (startDate && endDate && endDate < startDate) {
+      setEndDate("");
+    }
+  }, [startDate, endDate]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -2278,11 +2193,217 @@ export default function Form5DetailedView({
   const hasSchedules = auditSchedules.length > 0;
   const dateRange = generateDateRange();
 
+  const getBulkDateLimits = useCallback(() => {
+    // If From Date is selected → lock to that week
+    if (bulkData.fromDate) {
+      const weekNum = getWeekNumber(bulkData.fromDate);
+      return getWeekLimits(weekNum);
+    }
+    // Before any date is picked → allow full month
+    return getMonthLimits();
+  }, [bulkData.fromDate, getWeekLimits, getMonthLimits]);
+
+  const bulkDateLimits = getDateLimits();
+
+  const bulkFromMaxDate = bulkDateLimits?.max;
+  const bulkToMinDate = bulkData.fromDate || bulkDateLimits?.min;
+
+  const bulkFromMinDate = bulkDateLimits?.min;
+  const bulkRawFromMaxDate = bulkDateLimits
+    ? bulkData.toDate && bulkData.toDate < bulkDateLimits.max
+      ? bulkData.toDate
+      : bulkDateLimits.max
+    : undefined;
+  const bulkSafeFromMaxDate =
+    bulkFromMinDate &&
+    bulkRawFromMaxDate &&
+    bulkRawFromMaxDate < bulkFromMinDate
+      ? bulkFromMinDate
+      : bulkRawFromMaxDate;
+  const bulkRawToMinDate = bulkDateLimits
+    ? bulkData.fromDate
+      ? bulkData.fromDate
+      : bulkDateLimits.min
+    : undefined;
+  const bulkToMaxDate = bulkDateLimits?.max;
+  const bulkSafeToMinDate =
+    bulkRawToMinDate && bulkToMaxDate && bulkRawToMinDate > bulkToMaxDate
+      ? bulkToMaxDate
+      : bulkRawToMinDate;
+  const isBulkToDateDisabled =
+    !bulkData.fromDate ||
+    Boolean(
+      bulkRawToMinDate && bulkToMaxDate && bulkRawToMinDate > bulkToMaxDate,
+    );
   const bulkTeamInfo = getTeamMembersForDepartment(
     bulkSelectedAuditDepartment,
     bulkData.fromDate,
     globalAuditType,
   );
+  const dateLimits = getDateLimits();
+
+  const fromMaxDate = dateLimits?.max;
+
+  // To Date: min = selected startDate (if any), max = month/week end
+  const toMinDate = startDate || dateLimits?.min;
+
+  const fromMinDate = dateLimits?.min;
+  const rawFromMaxDate = dateLimits
+    ? endDate && endDate < dateLimits.max
+      ? endDate
+      : dateLimits.max
+    : undefined;
+  const safeFromMaxDate =
+    fromMinDate && rawFromMaxDate && rawFromMaxDate < fromMinDate
+      ? fromMinDate
+      : rawFromMaxDate;
+  const rawToMinDate = dateLimits
+    ? startDate
+      ? startDate
+      : dateLimits.min
+    : undefined;
+  const toMaxDate = dateLimits?.max;
+  const safeToMinDate =
+    rawToMinDate && toMaxDate && rawToMinDate > toMaxDate
+      ? toMaxDate
+      : rawToMinDate;
+  const isToDateDisabled =
+    !startDate ||
+    Boolean(rawToMinDate && toMaxDate && rawToMinDate > toMaxDate);
+
+  // ═════ REAL WORKING DATE PICKER ═════
+  const DatePickerField = ({
+    value,
+    onChange,
+    minDate,
+    maxDate,
+    disabled = false,
+    placeholder = "Select Date",
+    iconColor = "#6B7280",
+    className = "",
+  }: {
+    value: string;
+    onChange: (dateStr: string) => void;
+    minDate?: string;
+    maxDate?: string;
+    disabled?: boolean;
+    placeholder?: string;
+    iconColor?: string;
+    className?: string;
+  }) => {
+    const [showPicker, setShowPicker] = useState(false);
+
+    const getSafeDate = (dateStr: string) => {
+      if (!dateStr) return dateStr;
+      if (minDate && dateStr < minDate) return minDate;
+      if (maxDate && dateStr > maxDate) return maxDate;
+      return dateStr;
+    };
+
+    const pickerValue = value
+      ? new Date(`${value}T00:00:00`)
+      : minDate
+        ? new Date(`${minDate}T00:00:00`)
+        : new Date();
+
+    // ✅ WEB: Use native HTML date input
+    if (Platform.OS === "web") {
+      return (
+        <View className={`relative ${className}`}>
+          <View
+            className="flex-row items-center justify-between px-3 bg-white border border-gray-200 rounded-lg h-11"
+            style={{
+              position: "relative",
+              overflow: "hidden",
+              opacity: disabled ? 0.6 : 1,
+              backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+            }}
+          >
+            <Text
+              className="flex-1 text-gray-800"
+              style={{ pointerEvents: "none" }}
+            >
+              {value || placeholder}
+            </Text>
+            <Calendar
+              size={16}
+              color={iconColor}
+              style={{ pointerEvents: "none" }}
+            />
+          </View>
+          <input
+            type="date"
+            value={value || ""}
+            min={minDate || undefined}
+            max={maxDate || undefined}
+            disabled={disabled}
+            onChange={(e: any) => {
+              const selectedDate = e.target.value;
+              onChange(getSafeDate(selectedDate));
+            }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0,
+              cursor: disabled ? "not-allowed" : "pointer",
+              zIndex: 10,
+              pointerEvents: disabled ? "none" : "auto",
+            }}
+            onClick={(e: any) => {
+              if (disabled) return;
+              const target = e.target as HTMLInputElement;
+              target.showPicker?.();
+            }}
+          />
+        </View>
+      );
+    }
+
+    // ✅ MOBILE: Use DateTimePicker
+    return (
+      <>
+        <TouchableOpacity
+          onPress={() => {
+            if (!disabled) setShowPicker(true);
+          }}
+          disabled={disabled}
+          className={`flex-row items-center justify-between px-3 border border-gray-200 rounded-lg h-11 ${className}`}
+          style={{
+            backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+            opacity: disabled ? 0.7 : 1,
+          }}
+        >
+          <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
+          <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
+        </TouchableOpacity>
+        {showPicker && (
+          <DateTimePicker
+            value={pickerValue}
+            mode="date"
+            display={Platform.OS === "android" ? "calendar" : "default"}
+            minimumDate={minDate ? new Date(`${minDate}T00:00:00`) : undefined}
+            maximumDate={maxDate ? new Date(`${maxDate}T23:59:59`) : undefined}
+            onChange={(event: any, selectedDate: any) => {
+              if (Platform.OS === "android") {
+                setShowPicker(false);
+              }
+              if (selectedDate) {
+                const isoDate = toISODate(selectedDate);
+                onChange(getSafeDate(isoDate));
+              }
+              if (Platform.OS === "ios" && event.type === "dismissed") {
+                setShowPicker(false);
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  };
+
   // ═════ RENDER ═════
   if (loading) {
     return (
@@ -2411,7 +2532,6 @@ export default function Form5DetailedView({
                 </Text>
               </View>
             </View>
-
             <View
               style={{
                 flexDirection: "row",
@@ -2492,11 +2612,17 @@ export default function Form5DetailedView({
               </Text>
               <DatePickerField
                 value={startDate}
-                onChange={(dateStr) => setStartDate(dateStr)}
+                onChange={(dateStr) => {
+                  setStartDate(dateStr);
+                  if (endDate && dateStr && endDate < dateStr) {
+                    setEndDate("");
+                  }
+                }}
+                minDate={fromMinDate}
+                maxDate={fromMaxDate}
                 placeholder="Select Start Date"
               />
             </View>
-
             <View style={{ flex: 1 }}>
               <Text className="mb-2 text-sm font-semibold text-gray-900">
                 To Date
@@ -2504,7 +2630,12 @@ export default function Form5DetailedView({
               <DatePickerField
                 value={endDate}
                 onChange={(dateStr) => setEndDate(dateStr)}
-                placeholder="Select End Date"
+                minDate={toMinDate}
+                maxDate={toMaxDate}
+                disabled={isToDateDisabled}
+                placeholder={
+                  !startDate ? "Select From Date first" : "Select End Date"
+                }
               />
             </View>
           </View>
@@ -2547,7 +2678,6 @@ export default function Form5DetailedView({
         {/* Schedule Table */}
         <Card className="w-full overflow-hidden">
           <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
-            {/* Inner View: minWidth ensures scroll on mobile, width 100% ensures it fills desktop */}
             <View style={{ width: 1350 }}>
               {/* Table Header */}
               <View className="flex-row border-b border-gray-200 bg-gray-50">
@@ -2606,7 +2736,6 @@ export default function Form5DetailedView({
                           Weekend
                         </Text>
                       </View>
-                      {/* Empty spacers to maintain perfect equal column alignment */}
                       <View style={{ flex: 1 }} className="p-4" />
                       <View style={{ flex: 1 }} className="p-4" />
                       <View style={{ flex: 1 }} className="p-4" />
@@ -2647,6 +2776,7 @@ export default function Form5DetailedView({
                       <View style={{ flex: 1 }} className="p-4" />
                       <View style={{ flex: 1 }} className="p-4" />
                     </View>
+
                     {daySchedules.length === 0 ? (
                       <View className="flex-row bg-white border-b border-gray-200">
                         <View style={{ flex: 1 }} className="p-4">
@@ -2725,7 +2855,7 @@ export default function Form5DetailedView({
                             key={`${idx}-${sIdx}`}
                             className={`flex-row border-b border-gray-200 ${schedule.isSpecialEvent ? "bg-gray-50" : "bg-white"}`}
                           >
-                            {/* Date & Time Column */}
+                            {/* Date & Time */}
                             <View style={{ flex: 1 }} className="p-4">
                               {schedule.fromDate &&
                               schedule.toDate &&
@@ -2757,7 +2887,7 @@ export default function Form5DetailedView({
                                 {schedule.auditType || globalAuditType || "-"}
                               </Text>
                             </View>
-                            {/* Area/Department Column */}
+                            {/* Area/Department */}
                             <View style={{ flex: 1 }} className="p-4">
                               {schedule.isSpecialEvent ? (
                                 <View className="flex-row items-center gap-2">
@@ -2797,7 +2927,7 @@ export default function Form5DetailedView({
                                 </View>
                               )}
                             </View>
-                            {/* Auditor Column */}
+                            {/* Auditor */}
                             <View style={{ flex: 1 }} className="p-4">
                               <Text
                                 className="text-sm text-gray-900"
@@ -2806,7 +2936,7 @@ export default function Form5DetailedView({
                                 {schedule.auditorName || "-"}
                               </Text>
                             </View>
-                            {/* Auditee Column */}
+                            {/* Auditee */}
                             <View style={{ flex: 1 }} className="p-4">
                               <Text
                                 className="text-sm text-gray-900"
@@ -2815,7 +2945,7 @@ export default function Form5DetailedView({
                                 {schedule.auditeeName || "-"}
                               </Text>
                             </View>
-                            {/* Status Column */}
+                            {/* Status */}
                             <View style={{ flex: 1 }} className="p-4">
                               <View className="gap-1">
                                 <View
@@ -2857,7 +2987,7 @@ export default function Form5DetailedView({
                                 </View>
                               </View>
                             </View>
-                            {/* Actions Column */}
+                            {/* Actions */}
                             <View
                               style={{ flex: 1 }}
                               className="items-center p-4"
@@ -3069,653 +3199,29 @@ export default function Form5DetailedView({
         </Card>
       </ScrollView>
 
-      {/* Add/Edit Schedule Modal */}
-      {showModal && (
-        <Modal
-          visible={showModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => {
-            setShowModal(false);
-            resetForm();
-          }}
-        >
-          <TouchableOpacity
-            className="items-center justify-center flex-1 p-5 bg-black/30"
-            activeOpacity={1}
-            onPress={() => {
-              setShowModal(false);
-              resetForm();
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              className="bg-white rounded-2xl max-h-[90%] overflow-hidden"
-              style={{
-                maxWidth: isDesktop ? 800 : "100%",
-                alignSelf: "center",
-                margin: isDesktop ? 40 : 0,
-                width: isDesktop ? "90%" : "100%",
-              }}
-            >
-              {/* Header */}
-              <View className="flex-row items-center justify-between p-6 border-b border-gray-200">
-                <View>
-                  <Text className="text-lg font-bold text-gray-900">
-                    {formData.id ? "Edit Schedule" : "Add Schedule"}
-                  </Text>
-                  <Text className="text-xs text-gray-500">
-                    Schedule daily audit for department
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                  className="items-center justify-center border border-gray-200 rounded-lg w-9 h-9"
-                >
-                  <X size={20} color="#64748B" />
-                </TouchableOpacity>
-              </View>
+      {/* ✅ EXTRACTED ADD SCHEDULE MODAL */}
+      <AddScheduleModal
+        showModal={showModal}
+        onClose={() => {
+          setShowModal(false);
+          resetForm();
+        }}
+        formData={formData}
+        setFormData={setFormData}
+        conflictWarning={conflictWarning}
+        selectedAuditDepartment={selectedAuditDepartment}
+        setSelectedAuditDepartment={setSelectedAuditDepartment}
+        departmentTeamInfo={departmentTeamInfo}
+        departmentAuditors={departmentAuditors}
+        departmentAuditees={departmentAuditees}
+        saving={saving}
+        onSave={handleSave}
+        onAuditDepartmentChange={handleAuditDepartmentChange}
+        getAvailableDepartmentsForDate={getAvailableDepartmentsForDate}
+        isDesktop={isDesktop}
+      />
 
-              {/* Body */}
-              <ScrollView
-                className="p-6"
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: isDesktop ? 40 : 24,
-                }}
-              >
-                {conflictWarning && (
-                  <AlertBanner
-                    type="error"
-                    icon={AlertCircle}
-                    title="Schedule Conflict!"
-                    message={
-                      conflictWarning.type === "auditor"
-                        ? `Auditor ${conflictWarning.conflict.auditorName} already scheduled`
-                        : conflictWarning.type === "auditee"
-                          ? `Auditee ${conflictWarning.conflict.auditeeName} already scheduled`
-                          : "Another event already scheduled at this time"
-                    }
-                  />
-                )}
-
-                {/* Department Selector - Replaced <select> with <Picker> */}
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
-                    Department to Audit *
-                  </Text>
-                  <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                    <Picker
-                      selectedValue={selectedAuditDepartment}
-                      onValueChange={(itemValue) => {
-                        setSelectedAuditDepartment(itemValue);
-                        handleAuditDepartmentChange(itemValue);
-
-                        // Auto-select elements if available (Matching Web Logic)
-                        if (itemValue && formData.date) {
-                          const availableDepts = getAvailableDepartmentsForDate(
-                            formData.date,
-                          );
-                          const selectedDeptInfo = availableDepts.find(
-                            (d) => d.department === itemValue,
-                          );
-                          if (selectedDeptInfo) {
-                            setFormData((prev) => ({
-                              ...prev,
-                              selectedDepartments: [
-                                {
-                                  department: itemValue,
-                                  selectedElements: [
-                                    ...selectedDeptInfo.auditElements,
-                                  ],
-                                },
-                              ],
-                            }));
-                          }
-                        } else if (!itemValue) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            selectedDepartments: [],
-                          }));
-                        }
-                      }}
-                      style={{ height: 50, width: "100%" }}
-                    >
-                      <Picker.Item label="Select Department" value="" />
-                      {getAvailableDepartmentsForDate(formData.date).map(
-                        (dept, index) => (
-                          <Picker.Item
-                            key={index}
-                            label={dept.department}
-                            value={dept.department}
-                          />
-                        ),
-                      )}
-                    </Picker>
-                  </View>
-                </View>
-
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
-                    Date *
-                  </Text>
-                  <DatePickerField
-                    value={formData.date}
-                    onChange={(dateStr) =>
-                      setFormData({ ...formData, date: dateStr })
-                    }
-                    placeholder="Select Date"
-                  />
-                </View>
-
-                {/* Time Pickers - Replaced <select> with <Picker> */}
-                <View className="flex-row gap-4 mb-4">
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      Start Time *
-                    </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                      <Picker
-                        selectedValue={formData.startTime}
-                        onValueChange={(itemValue) => {
-                          let newEndTime = formData.endTime;
-                          if (
-                            newEndTime &&
-                            getTimeValue(newEndTime) <= getTimeValue(itemValue)
-                          ) {
-                            newEndTime = "";
-                          }
-                          setFormData({
-                            ...formData,
-                            startTime: itemValue,
-                            endTime: newEndTime,
-                          });
-                        }}
-                        style={{ height: 50 }}
-                      >
-                        {timeOptions.map((time) => (
-                          <Picker.Item key={time} label={time} value={time} />
-                        ))}
-                      </Picker>
-                    </View>
-                  </View>
-
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      End Time *
-                    </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                      <Picker
-                        selectedValue={formData.endTime}
-                        onValueChange={(itemValue) =>
-                          setFormData({ ...formData, endTime: itemValue })
-                        }
-                        style={{ height: 50 }}
-                      >
-                        {timeOptions
-                          .filter(
-                            (t) =>
-                              !formData.startTime ||
-                              getTimeValue(t) >
-                                getTimeValue(formData.startTime),
-                          )
-                          .map((time) => (
-                            <Picker.Item key={time} label={time} value={time} />
-                          ))}
-                      </Picker>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Special Event Checkbox */}
-                <View className="flex-row items-center gap-3 mb-4">
-                  <TouchableOpacity
-                    onPress={() =>
-                      setFormData({
-                        ...formData,
-                        isSpecialEvent: !formData.isSpecialEvent,
-                        specialEventType: "",
-                      })
-                    }
-                    className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
-                    style={{
-                      backgroundColor: formData.isSpecialEvent
-                        ? COLORS.accent
-                        : "transparent",
-                    }}
-                  >
-                    {formData.isSpecialEvent && (
-                      <Check size={14} color="#FFF" />
-                    )}
-                  </TouchableOpacity>
-                  <Text className="text-sm text-gray-900">
-                    This is a Special Event (Opening/Lunch/Closing)
-                  </Text>
-                </View>
-
-                {formData.isSpecialEvent ? (
-                  <>
-                    {/* Event Type Picker */}
-                    <View className="mb-4">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Event Type *
-                      </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                        <Picker
-                          selectedValue={formData.specialEventType}
-                          onValueChange={(itemValue) =>
-                            setFormData({
-                              ...formData,
-                              specialEventType: itemValue,
-                            })
-                          }
-                          style={{ height: 50 }}
-                        >
-                          <Picker.Item label="Select Event Type" value="" />
-                          <Picker.Item
-                            label="Opening Meeting"
-                            value="OPENING"
-                          />
-                          <Picker.Item label="Lunch Break" value="LUNCH" />
-                          <Picker.Item
-                            label="Closing Meeting"
-                            value="CLOSING"
-                          />
-                        </Picker>
-                      </View>
-                    </View>
-
-                    {formData.specialEventType !== "LUNCH" && (
-                      <View className="flex-row gap-4 mb-4">
-                        {/* Auditor Picker for Special Events */}
-                        <View className="flex-1">
-                          <Text className="mb-2 text-sm font-semibold text-gray-900">
-                            Auditor *
-                          </Text>
-                          <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                            <Picker
-                              selectedValue={formData.auditorId}
-                              onValueChange={(itemValue) =>
-                                setFormData({
-                                  ...formData,
-                                  auditorId: itemValue,
-                                })
-                              }
-                              style={{ height: 50 }}
-                            >
-                              <Picker.Item label="Select Auditor" value="" />
-                              {departmentTeamInfo.teamAuditorIds.length > 0 ? (
-                                departmentAuditors
-                                  .filter((a) =>
-                                    departmentTeamInfo.teamAuditorIds.includes(
-                                      Number(a.id),
-                                    ),
-                                  )
-                                  .map((auditor) => (
-                                    <Picker.Item
-                                      key={auditor.id}
-                                      label={`${auditor.firstName} ${auditor.lastName}`}
-                                      value={auditor.id.toString()}
-                                    />
-                                  ))
-                              ) : (
-                                <Picker.Item
-                                  label="No team auditors assigned"
-                                  value=""
-                                  enabled={false}
-                                />
-                              )}
-                            </Picker>
-                          </View>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="mb-2 text-sm font-semibold text-gray-900">
-                            Auditee *
-                          </Text>
-                          <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                            <Picker
-                              selectedValue={formData.auditeeId}
-                              onValueChange={(itemValue) =>
-                                setFormData({
-                                  ...formData,
-                                  auditeeId: itemValue,
-                                })
-                              }
-                              style={{ height: 50 }}
-                            >
-                              <Picker.Item label="Select Auditee" value="" />
-                              {departmentTeamInfo.auditeeIds.length > 0 ? (
-                                departmentAuditees
-                                  .filter((a) =>
-                                    departmentTeamInfo.auditeeIds.includes(
-                                      Number(a.id),
-                                    ),
-                                  )
-                                  .map((auditee) => (
-                                    <Picker.Item
-                                      key={auditee.id}
-                                      label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                      value={auditee.id.toString()}
-                                    />
-                                  ))
-                              ) : (
-                                <Picker.Item
-                                  label="No matching auditees found"
-                                  value=""
-                                  enabled={false}
-                                />
-                              )}
-                            </Picker>
-                          </View>
-                        </View>
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {/* Departments & Elements Selection */}
-                    <View className="mb-4">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Select Departments & Audit Elements *
-                      </Text>
-                      <View className="p-4 border border-gray-200 rounded-lg max-h-60">
-                        {getAvailableDepartmentsForDate(formData.date)
-                          .filter(
-                            (deptInfo) =>
-                              !selectedAuditDepartment ||
-                              deptInfo.department === selectedAuditDepartment,
-                          )
-                          .map((deptInfo) => {
-                            const departmentName = deptInfo.department;
-                            const availableElements =
-                              deptInfo.auditElements || [];
-                            const selectedDept =
-                              formData.selectedDepartments?.find(
-                                (d) => d.department === departmentName,
-                              );
-                            const selectedElements =
-                              selectedDept?.selectedElements || [];
-
-                            return (
-                              <View
-                                key={departmentName}
-                                className="pb-3 mb-3 border-b border-gray-200"
-                              >
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    let updated = [
-                                      ...(formData.selectedDepartments || []),
-                                    ];
-                                    const existingIndex = updated.findIndex(
-                                      (d) => d.department === departmentName,
-                                    );
-                                    if (existingIndex >= 0) {
-                                      updated[existingIndex].selectedElements =
-                                        [...availableElements];
-                                    } else {
-                                      updated.push({
-                                        department: departmentName,
-                                        selectedElements: [
-                                          ...availableElements,
-                                        ],
-                                      });
-                                    }
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      selectedDepartments: updated,
-                                    }));
-                                    if (
-                                      departmentName === selectedAuditDepartment
-                                    )
-                                      setSelectedAuditDepartment("");
-                                  }}
-                                  className="flex-row items-center gap-3 mb-2"
-                                >
-                                  <View
-                                    className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
-                                    style={{
-                                      backgroundColor:
-                                        availableElements.length > 0 &&
-                                        selectedElements.length ===
-                                          availableElements.length
-                                          ? COLORS.accent
-                                          : "transparent",
-                                    }}
-                                  >
-                                    {availableElements.length > 0 &&
-                                      selectedElements.length ===
-                                        availableElements.length && (
-                                        <Check size={14} color="#FFF" />
-                                      )}
-                                  </View>
-                                  <Text className="font-semibold text-gray-900">
-                                    {departmentName}
-                                  </Text>
-                                </TouchableOpacity>
-
-                                <View className="flex-row flex-wrap gap-2 ml-8">
-                                  {availableElements.map((element) => (
-                                    <TouchableOpacity
-                                      key={element}
-                                      onPress={() => {
-                                        let updated = [
-                                          ...(formData.selectedDepartments ||
-                                            []),
-                                        ];
-                                        let deptIndex = updated.findIndex(
-                                          (d) =>
-                                            d.department === departmentName,
-                                        );
-                                        if (deptIndex === -1) {
-                                          updated.push({
-                                            department: departmentName,
-                                            selectedElements: [],
-                                          });
-                                          deptIndex = updated.length - 1;
-                                        }
-                                        const isSelected =
-                                          updated[
-                                            deptIndex
-                                          ].selectedElements.includes(element);
-                                        if (isSelected) {
-                                          updated[deptIndex].selectedElements =
-                                            updated[
-                                              deptIndex
-                                            ].selectedElements.filter(
-                                              (el) => el !== element,
-                                            );
-                                        } else {
-                                          updated[deptIndex].selectedElements =
-                                            [
-                                              ...updated[deptIndex]
-                                                .selectedElements,
-                                              element,
-                                            ];
-                                        }
-                                        if (
-                                          updated[deptIndex].selectedElements
-                                            .length === 0
-                                        )
-                                          updated.splice(deptIndex, 1);
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          selectedDepartments: updated,
-                                        }));
-                                      }}
-                                      className={`px-3 py-1.5 rounded-full border flex-row items-center gap-2 ${selectedElements.includes(element) ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}
-                                    >
-                                      {selectedElements.includes(element) && (
-                                        <Check
-                                          size={12}
-                                          color={COLORS.accent}
-                                        />
-                                      )}
-                                      <Text
-                                        className={`text-xs font-medium ${selectedElements.includes(element) ? "text-blue-700" : "text-gray-700"}`}
-                                      >
-                                        {element}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  ))}
-                                </View>
-                              </View>
-                            );
-                          })}
-                      </View>
-                    </View>
-
-                    {/* Regular Auditor/Auditee Pickers */}
-                    <View className="flex-row gap-4 mb-4">
-                      <View className="flex-1">
-                        <Text className="mb-2 text-sm font-semibold text-gray-900">
-                          Auditor *
-                        </Text>
-                        <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                          <Picker
-                            selectedValue={formData.auditorId}
-                            onValueChange={(itemValue) =>
-                              setFormData({ ...formData, auditorId: itemValue })
-                            }
-                            style={{ height: 50 }}
-                          >
-                            <Picker.Item label="Select Auditor" value="" />
-                            {departmentTeamInfo.teamAuditorIds.length > 0 ? (
-                              departmentAuditors
-                                .filter((a) =>
-                                  departmentTeamInfo.teamAuditorIds.includes(
-                                    Number(a.id),
-                                  ),
-                                )
-                                .map((auditor) => (
-                                  <Picker.Item
-                                    key={auditor.id}
-                                    label={`${auditor.firstName} ${auditor.lastName}`}
-                                    value={auditor.id.toString()}
-                                  />
-                                ))
-                            ) : (
-                              <Picker.Item
-                                label="No team auditors assigned"
-                                value=""
-                                enabled={false}
-                              />
-                            )}
-                          </Picker>
-                        </View>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="mb-2 text-sm font-semibold text-gray-900">
-                          Auditee *
-                        </Text>
-                        <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                          <Picker
-                            selectedValue={formData.auditeeId}
-                            onValueChange={(itemValue) =>
-                              setFormData({ ...formData, auditeeId: itemValue })
-                            }
-                            style={{ height: 50 }}
-                          >
-                            <Picker.Item label="Select Auditee" value="" />
-                            {departmentTeamInfo.auditeeIds.length > 0 ? (
-                              departmentAuditees
-                                .filter((a) =>
-                                  departmentTeamInfo.auditeeIds.includes(
-                                    Number(a.id),
-                                  ),
-                                )
-                                .map((auditee) => (
-                                  <Picker.Item
-                                    key={auditee.id}
-                                    label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                    value={auditee.id.toString()}
-                                  />
-                                ))
-                            ) : (
-                              <Picker.Item
-                                label="No matching auditees found"
-                                value=""
-                                enabled={false}
-                              />
-                            )}
-                          </Picker>
-                        </View>
-                      </View>
-                    </View>
-                  </>
-                )}
-
-                {/* Status Picker */}
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
-                    Status
-                  </Text>
-                  <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
-                    <Picker
-                      selectedValue={formData.status}
-                      onValueChange={(itemValue) =>
-                        setFormData({ ...formData, status: itemValue })
-                      }
-                      style={{ height: 50 }}
-                    >
-                      <Picker.Item label="Scheduled" value="SCHEDULED" />
-                      <Picker.Item label="In Progress" value="IN_PROGRESS" />
-                      <Picker.Item label="Completed" value="COMPLETED" />
-                      <Picker.Item label="Cancelled" value="CANCELLED" />
-                    </Picker>
-                  </View>
-                </View>
-              </ScrollView>
-
-              {/* Footer Buttons */}
-              <View className="flex-row justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                  className="justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
-                >
-                  <Text className="text-sm font-semibold text-gray-700">
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSave}
-                  disabled={
-                    saving ||
-                    !selectedAuditDepartment ||
-                    !formData.auditorId ||
-                    !formData.auditeeId
-                  }
-                  className="flex-row items-center h-10 gap-2 px-5 rounded-lg"
-                  style={{
-                    backgroundColor:
-                      saving ||
-                      !selectedAuditDepartment ||
-                      !formData.auditorId ||
-                      !formData.auditeeId
-                        ? "#F1F5F9"
-                        : COLORS.accent,
-                  }}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Save size={16} color="#FFF" />
-                  )}
-                  <Text className="text-sm font-semibold text-white">
-                    {formData.id ? "Update Schedule" : "Add Schedule"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
-      )}
-
+      {/* Bulk Schedule Modal (kept in main file) */}
       {showBulkModal && (
         <Modal
           visible={showBulkModal}
@@ -3761,7 +3267,8 @@ export default function Form5DetailedView({
 
               {/* Body */}
               <ScrollView className="p-6" showsVerticalScrollIndicator={false}>
-                {/* Date Range with Calendar Icons */}
+                {/* Date Range */}
+                {/* Date Range - Week Locked */}
                 <View className="flex-row gap-4 mb-4">
                   <View className="flex-1">
                     <Text className="mb-2 text-sm font-semibold text-gray-900">
@@ -3770,14 +3277,22 @@ export default function Form5DetailedView({
                     <DatePickerField
                       value={bulkData.fromDate}
                       onChange={(dateStr) =>
-                        setBulkData({
-                          ...bulkData,
+                        setBulkData((prev) => ({
+                          ...prev,
                           fromDate: dateStr,
+                          // Reset To Date if it falls outside the new week
                           toDate: "",
-                        })
+                        }))
                       }
-                      placeholder="YYYY-MM-DD"
+                      minDate={getMonthLimits()?.min}
+                      maxDate={getMonthLimits()?.max}
+                      placeholder="Select Start Date"
                     />
+                    {bulkData.fromDate && (
+                      <Text className="mt-1 text-xs text-blue-600">
+                        📅 Week: {getWeekNumber(bulkData.fromDate)}
+                      </Text>
+                    )}
                   </View>
                   <View className="flex-1">
                     <Text className="mb-2 text-sm font-semibold text-gray-900">
@@ -3788,8 +3303,20 @@ export default function Form5DetailedView({
                       onChange={(dateStr) =>
                         setBulkData({ ...bulkData, toDate: dateStr })
                       }
-                      placeholder="YYYY-MM-DD"
+                      minDate={bulkToMinDate}
+                      maxDate={bulkToMaxDate}
+                      disabled={isBulkToDateDisabled}
+                      placeholder={
+                        !bulkData.fromDate
+                          ? "Select From Date first"
+                          : "Select End Date"
+                      }
                     />
+                    {bulkData.fromDate && bulkData.toDate && (
+                      <Text className="mt-1 text-xs text-gray-500">
+                        Range: {bulkData.fromDate} → {bulkData.toDate}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -3798,19 +3325,17 @@ export default function Form5DetailedView({
                   <Text className="mb-2 text-sm font-semibold text-gray-900">
                     Department to Audit *
                   </Text>
-
-                  {/* ✅ FIX: Show message if dates are not selected yet */}
                   {!bulkData.fromDate || !bulkData.toDate ? (
                     <View className="justify-center px-3 bg-gray-100 border border-gray-200 rounded-lg h-11">
                       <Text className="text-sm text-gray-500">
-                        ️ Please select From Date and To Date first
+                        ⚠️ Please select From Date and To Date first
                       </Text>
                     </View>
                   ) : (
                     <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                       <Picker
                         selectedValue={bulkSelectedAuditDepartment}
-                        onValueChange={(itemValue) => {
+                        onValueChange={(itemValue: string) => {
                           setBulkSelectedAuditDepartment(itemValue);
                           if (itemValue) {
                             const availableDepts =
@@ -3862,7 +3387,7 @@ export default function Form5DetailedView({
                     <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                       <Picker
                         selectedValue={bulkData.startTime}
-                        onValueChange={(itemValue) => {
+                        onValueChange={(itemValue: string) => {
                           let newEndTime = bulkData.endTime;
                           if (
                             newEndTime &&
@@ -3890,7 +3415,7 @@ export default function Form5DetailedView({
                     <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                       <Picker
                         selectedValue={bulkData.endTime}
-                        onValueChange={(itemValue) =>
+                        onValueChange={(itemValue: string) =>
                           setBulkData({ ...bulkData, endTime: itemValue })
                         }
                         style={{ height: 50 }}
@@ -3939,7 +3464,6 @@ export default function Form5DetailedView({
 
                 {bulkData.isSpecialEvent ? (
                   <>
-                    {/* Event Type Picker */}
                     <View className="mb-4">
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Event Type *
@@ -3947,7 +3471,7 @@ export default function Form5DetailedView({
                       <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                         <Picker
                           selectedValue={bulkData.specialEventType}
-                          onValueChange={(itemValue) =>
+                          onValueChange={(itemValue: string) =>
                             setBulkData({
                               ...bulkData,
                               specialEventType: itemValue,
@@ -3970,7 +3494,6 @@ export default function Form5DetailedView({
                     </View>
                     {bulkData.specialEventType !== "LUNCH" && (
                       <View className="flex-row gap-4 mb-4">
-                        {/* Auditor Picker */}
                         <View className="flex-1">
                           <Text className="mb-2 text-sm font-semibold text-gray-900">
                             Auditor *
@@ -3978,7 +3501,7 @@ export default function Form5DetailedView({
                           <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                             <Picker
                               selectedValue={bulkData.auditorId}
-                              onValueChange={(itemValue) =>
+                              onValueChange={(itemValue: string) =>
                                 setBulkData({
                                   ...bulkData,
                                   auditorId: itemValue,
@@ -4011,8 +3534,6 @@ export default function Form5DetailedView({
                             </Picker>
                           </View>
                         </View>
-
-                        {/* Auditee Picker */}
                         <View className="flex-1">
                           <Text className="mb-2 text-sm font-semibold text-gray-900">
                             Auditee *
@@ -4020,7 +3541,7 @@ export default function Form5DetailedView({
                           <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                             <Picker
                               selectedValue={bulkData.auditeeId}
-                              onValueChange={(itemValue) =>
+                              onValueChange={(itemValue: string) =>
                                 setBulkData({
                                   ...bulkData,
                                   auditeeId: itemValue,
@@ -4216,14 +3737,14 @@ export default function Form5DetailedView({
                       </View>
                     </View>
                     {/* Auditor Picker */}
-                    <View className="flex-1">
+                    <View className="flex-1 mb-4">
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Auditor *
                       </Text>
                       <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                         <Picker
                           selectedValue={bulkData.auditorId}
-                          onValueChange={(itemValue) =>
+                          onValueChange={(itemValue: string) =>
                             setBulkData({ ...bulkData, auditorId: itemValue })
                           }
                           style={{ height: 50 }}
@@ -4253,16 +3774,15 @@ export default function Form5DetailedView({
                         </Picker>
                       </View>
                     </View>
-
                     {/* Auditee Picker */}
-                    <View className="flex-1">
+                    <View className="flex-1 mb-4">
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Auditee *
                       </Text>
                       <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                         <Picker
                           selectedValue={bulkData.auditeeId}
-                          onValueChange={(itemValue) =>
+                          onValueChange={(itemValue: string) =>
                             setBulkData({ ...bulkData, auditeeId: itemValue })
                           }
                           style={{ height: 50 }}
@@ -4301,7 +3821,7 @@ export default function Form5DetailedView({
                   <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
                     <Picker
                       selectedValue={bulkData.status}
-                      onValueChange={(itemValue) =>
+                      onValueChange={(itemValue: string) =>
                         setBulkData({ ...bulkData, status: itemValue })
                       }
                       style={{ height: 50 }}
