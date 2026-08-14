@@ -1,4 +1,4 @@
-﻿// AuditorDashboard.tsx - Updated version with fixes
+﻿// AuditorDashboard.tsx - Fixed timezone handling
 
 import { useAuth } from "@/components/context/AuthContext";
 import { useToast } from "@/components/context/ToastContext";
@@ -73,15 +73,15 @@ const NAVBAR_COLORS = {
 };
 
 // ============================================================================
-// ✅ TIMEZONE-SAFE HELPER FUNCTIONS
+// ✅ TIMEZONE-SAFE HELPER FUNCTIONS - FIXED FOR LOCAL TIME
 // ============================================================================
 
 /**
- * Get date string in YYYY-MM-DD format without timezone issues
+ * Get today's date as YYYY-MM-DD in LOCAL timezone
+ * This is critical because the backend uses local time (IST)
  */
-const getDateStr = (date: any): string => {
-  if (!date) return "";
-  const d = typeof date === "string" ? new Date(date) : date;
+const getLocalDateStr = (date?: Date | string): string => {
+  const d = date ? new Date(date) : new Date();
   if (isNaN(d.getTime())) return "";
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -90,41 +90,67 @@ const getDateStr = (date: any): string => {
 };
 
 /**
- * Parse time string to minutes for comparison
+ * Get today's date as YYYY-MM-DD in LOCAL timezone
+ */
+const getTodayLocalStr = (): string => {
+  const now = new Date();
+  return getLocalDateStr(now);
+};
+
+/**
+ * Parse time string to minutes since midnight
+ * Handles both AM/PM and 24-hour formats
  */
 const parseTimeToMinutes = (timeStr: string): number => {
   if (!timeStr) return 0;
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return 0;
-  let hours = parseInt(match[1]);
-  const minutes = parseInt(match[2]);
-  const meridian = match[3].toUpperCase();
-  if (meridian === "PM" && hours !== 12) hours += 12;
-  if (meridian === "AM" && hours === 12) hours = 0;
-  return hours * 60 + minutes;
+  
+  // Try 24-hour format first
+  let match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    // If hours >= 12, it's already in 24-hour format
+    return hours * 60 + minutes;
+  }
+  
+  // Try 12-hour AM/PM format
+  match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const meridian = match[3].toUpperCase();
+    if (meridian === "PM" && hours !== 12) hours += 12;
+    if (meridian === "AM" && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  }
+  
+  return 0;
 };
 
 /**
- * Get today's date at midnight (UTC-safe)
+ * Get current time in minutes since midnight (LOCAL time)
  */
-const getTodayMidnight = (): Date => {
-  const today = new Date();
-  return new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+const getCurrentTimeMinutes = (): number => {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
 };
 
 /**
- * Check if an audit is expired - FIXED for timezone issues
+ * Check if an audit is expired - FIXED: Uses LOCAL time, not UTC
  */
 const isAuditExpired = (audit: any): boolean => {
-  if (!audit || audit.status === "COMPLETED" || audit.status === "CLOSED") return false;
+  if (!audit) return false;
+  if (audit.status === "COMPLETED" || audit.status === "CLOSED" || audit.status === "APPROVED") {
+    return false;
+  }
 
-  const today = getTodayMidnight();
-  const todayStr = getDateStr(today);
+  const todayStr = getTodayLocalStr();
+  const currentMinutes = getCurrentTimeMinutes();
 
-  // Case 1: Date range audit
+  // Case 1: Date range audit (fromDate - toDate)
   if (audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate) {
-    const fromDateStr = getDateStr(audit.fromDate);
-    const toDateStr = getDateStr(audit.toDate);
+    const fromDateStr = getLocalDateStr(audit.fromDate);
+    const toDateStr = getLocalDateStr(audit.toDate);
 
     // If today is BEFORE the range starts → NOT EXPIRED
     if (todayStr < fromDateStr) return false;
@@ -134,31 +160,105 @@ const isAuditExpired = (audit: any): boolean => {
 
     // If today is WITHIN the range → Check end time
     if (todayStr === toDateStr && audit.endTime) {
-      const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
       const endMinutes = parseTimeToMinutes(audit.endTime);
-      return nowMinutes > endMinutes;
+      return currentMinutes > endMinutes;
     }
     return false;
   }
 
-  // Case 2: Single date audit
+  // Case 2: Single date audit (scheduledDate)
   if (!audit?.scheduledDate) return false;
-  
-  const scheduleDateStr = getDateStr(audit.scheduledDate);
-  
+
+  const scheduleDateStr = getLocalDateStr(audit.scheduledDate);
+
   // If scheduled date is before today → EXPIRED
   if (scheduleDateStr < todayStr) return true;
-  
+
   // If scheduled date is today → Check end time
   if (scheduleDateStr === todayStr && audit.endTime) {
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const endMinutes = parseTimeToMinutes(audit.endTime);
-    return nowMinutes > endMinutes;
+    return currentMinutes > endMinutes;
   }
-  
+
   return false;
+};
+
+/**
+ * Get the status of an audit based on current date/time (LOCAL time)
+ */
+const getAuditStatus = (audit: any): { status: string; canStart: boolean } => {
+  if (!audit) return { status: "UNKNOWN", canStart: false };
+  
+  // Completed audits
+  if (audit.status === "COMPLETED" || audit.status === "CLOSED" || audit.status === "APPROVED") {
+    return { status: "COMPLETED", canStart: false };
+  }
+
+  const todayStr = getTodayLocalStr();
+  const currentMinutes = getCurrentTimeMinutes();
+  
+  // Get date strings
+  let fromDateStr = audit.fromDate ? getLocalDateStr(audit.fromDate) : null;
+  let toDateStr = audit.toDate ? getLocalDateStr(audit.toDate) : null;
+  let scheduledDateStr = audit.scheduledDate ? getLocalDateStr(audit.scheduledDate) : null;
+  
+  // Parse times
+  const startMinutes = audit.startTime ? parseTimeToMinutes(audit.startTime) : 0;
+  const endMinutes = audit.endTime ? parseTimeToMinutes(audit.endTime) : 0;
+
+  // Case 1: Date range audit
+  if (fromDateStr && toDateStr && fromDateStr !== toDateStr) {
+    // Upcoming: Today is before the start date
+    if (todayStr < fromDateStr) {
+      return { status: "UPCOMING", canStart: false };
+    }
+    
+    // Active: Today is within the range
+    if (todayStr >= fromDateStr && todayStr <= toDateStr) {
+      // Check if within time window
+      if (todayStr === fromDateStr) {
+        // Start date: Can start only if current time >= start time
+        const canStart = currentMinutes >= startMinutes;
+        return { status: "ACTIVE", canStart };
+      }
+      if (todayStr === toDateStr) {
+        // End date: Can start only if current time <= end time
+        const canStart = currentMinutes <= endMinutes;
+        return { status: "ACTIVE", canStart };
+      }
+      // Middle of range: Can start anytime
+      return { status: "ACTIVE", canStart: true };
+    }
+    
+    // Expired: Today is after the end date
+    if (todayStr > toDateStr) {
+      return { status: "EXPIRED", canStart: false };
+    }
+    
+    return { status: "UPCOMING", canStart: false };
+  }
+
+  // Case 2: Single date audit
+  if (scheduledDateStr) {
+    // Upcoming: Today is before the scheduled date
+    if (todayStr < scheduledDateStr) {
+      return { status: "UPCOMING", canStart: false };
+    }
+    
+    // Today is the scheduled date
+    if (todayStr === scheduledDateStr) {
+      // Can start if current time is between start and end time
+      const canStart = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+      return { status: "ACTIVE", canStart };
+    }
+    
+    // Expired: Today is after the scheduled date
+    if (todayStr > scheduledDateStr) {
+      return { status: "EXPIRED", canStart: false };
+    }
+  }
+
+  return { status: "UNKNOWN", canStart: false };
 };
 
 // ============================================================================
@@ -305,7 +405,7 @@ const buildPendingNcrQuery = (item: any) => {
 };
 
 // ============================================================================
-// REUSABLE COMPONENTS
+// REUSABLE COMPONENTS (Same as before - keep all existing components)
 // ============================================================================
 const TimePicker = ({ value, onChange, disabled, options }: any) => {
   const [showPicker, setShowPicker] = useState(false);
@@ -1239,12 +1339,12 @@ const NcrListTab = ({
             const className =
               statusConfig[item.status] ||
               "bg-slate-50 text-slate-700 border-slate-200";
-            
-            const is8D = item.status === "SENT_TO_8D" || 
-                         item.status === "IN_8D_PROCESS" || 
-                         item.status === "NCR2_IN_PROGRESS" ||
-                         item.status === "NCR2_COMPLETED" ||
-                         item.requires8D === true;
+
+            const is8D = item.status === "SENT_TO_8D" ||
+              item.status === "IN_8D_PROCESS" ||
+              item.status === "NCR2_IN_PROGRESS" ||
+              item.status === "NCR2_COMPLETED" ||
+              item.requires8D === true;
 
             return (
               <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -1316,7 +1416,6 @@ export default function AuditorDashboard() {
   const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  // ✅ 8D Forum state
   const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
   const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
   const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
@@ -1356,7 +1455,6 @@ export default function AuditorDashboard() {
   const [showExtensionModal, setShowExtensionModal] = useState(false);
   const [selectedAudit, setSelectedAudit] = useState<any>(null);
   const [selectedForm, setSelectedForm] = useState<any>(null);
-  const [activeReportId, setActiveReportId] = useState<string | null>(null);
   const [activeNcrConfig, setActiveNcrConfig] = useState<any>(null);
   const [stats, setStats] = useState({
     upcoming: 0,
@@ -1380,10 +1478,10 @@ export default function AuditorDashboard() {
       awaiting: raisedNCRs.filter((n: any) => n.status === "AWAITING_AUDITEE")
         .length,
       pending: raisedNCRs.filter((n: any) => n.status === "OPEN").length,
-      inProgress: raisedNCRs.filter((n: any) => 
+      inProgress: raisedNCRs.filter((n: any) =>
         ["IN_PROGRESS", "SENT_TO_8D", "IN_8D_PROCESS", "NCR2_IN_PROGRESS"].includes(n.status)
       ).length,
-      closed: raisedNCRs.filter((n: any) => 
+      closed: raisedNCRs.filter((n: any) =>
         ["CLOSED", "NCR2_COMPLETED"].includes(n.status)
       ).length,
       rejected: raisedNCRs.filter((n: any) => n.status === "REJECTED").length,
@@ -1421,7 +1519,6 @@ export default function AuditorDashboard() {
       const eightDEventId = `8D-${ncr.ncrNumber || ncr.id}`;
       const membersSet = new Set<string>();
 
-      // Fetch existing 8D team members
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
@@ -1442,31 +1539,19 @@ export default function AuditorDashboard() {
         console.log('Could not fetch existing 8D members:', err);
       }
 
-      // Add current user
       if (user?.email) membersSet.add(user.email);
 
-      // Add Audit Manager
       const auditManager = allUsers.find(
         (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
       );
       if (auditManager?.email) membersSet.add(auditManager.email);
 
-      // Add HOD
       if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
-
-      // Add Auditor
       if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
-      if (ncr.auditorName?.includes('@')) {
-        membersSet.add(ncr.auditorName);
-      }
-
-      // Add Auditee
+      if (ncr.auditorName?.includes('@')) membersSet.add(ncr.auditorName);
       if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
-      if (ncr.auditeeName?.includes('@')) {
-        membersSet.add(ncr.auditeeName);
-      }
+      if (ncr.auditeeName?.includes('@')) membersSet.add(ncr.auditeeName);
 
-      // Add 8D Team members
       const eightDTeam = allUsers.filter(
         (u: any) =>
           u.role === "8D_TEAM" ||
@@ -1483,7 +1568,6 @@ export default function AuditorDashboard() {
 
     } catch (error) {
       console.error('❌ Failed to fetch 8D team members:', error);
-      // Fallback: Add essential members
       const fallbackMembers = [
         user?.email,
         ncr.hodEmail,
@@ -1498,20 +1582,18 @@ export default function AuditorDashboard() {
   };
 
   // ============================================================================
-  // ✅ FORUM HANDLER - Supports both regular audit forums and NCR forums
+  // ✅ FORUM HANDLER
   // ============================================================================
   const handleOpenForum = (audit: any, form: any = null) => {
     console.log("🔍 Opening forum for audit:", audit);
 
-    // Check if it's an NCR item
     const isNcrItem = audit?.ncrNumber || audit?.isNcr || audit?.status?.includes('NCR');
-    
-    // Check if it's an 8D related NCR
-    const is8D = audit?.status === "SENT_TO_8D" || 
-                 audit?.status === "IN_8D_PROCESS" || 
-                 audit?.status === "NCR2_IN_PROGRESS" ||
-                 audit?.status === "NCR2_COMPLETED" ||
-                 audit?.requires8D === true;
+
+    const is8D = audit?.status === "SENT_TO_8D" ||
+      audit?.status === "IN_8D_PROCESS" ||
+      audit?.status === "NCR2_IN_PROGRESS" ||
+      audit?.status === "NCR2_COMPLETED" ||
+      audit?.requires8D === true;
 
     if (isNcrItem && is8D) {
       open8DForum(audit);
@@ -1523,7 +1605,6 @@ export default function AuditorDashboard() {
       return;
     }
 
-    // For audit forums - find co-auditor emails from allUsers
     const coAuditorEmails: string[] = [];
     if (audit.coAuditorIdList && Array.isArray(audit.coAuditorIdList)) {
       audit.coAuditorIdList.forEach((coId: any) => {
@@ -1532,7 +1613,6 @@ export default function AuditorDashboard() {
       });
     }
 
-    // Merge with existing memberEmails
     const allMemberEmails = [
       ...(audit.memberEmails || []),
       ...coAuditorEmails,
@@ -1824,8 +1904,13 @@ export default function AuditorDashboard() {
           schedule.status === "CLOSED";
 
         const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
-        const finalTimeStatus = allFormsCompleted ? "COMPLETED" : item.timeStatus;
-        const finalCanStart = !allFormsCompleted && item.canStart;
+
+        // ✅ FIXED: Use getAuditStatus for accurate time-based status
+        let finalStatus = getAuditStatus(schedule);
+        // Override with allFormsCompleted if applicable
+        if (allFormsCompleted) {
+          finalStatus = { status: "COMPLETED", canStart: false };
+        }
 
         return {
           ...item,
@@ -1841,29 +1926,54 @@ export default function AuditorDashboard() {
             extensionRequested: pendingExtensionIds.has(scheduleId),
             coAuditorNames: schedule.coAuditorNames || [],
           },
-          timeStatus: finalTimeStatus,
-          canStart: finalCanStart,
+          timeStatus: finalStatus.status,
+          canStart: finalStatus.canStart,
         };
       }));
 
       setSchedules(enhancedData);
 
-      // ✅ FIXED: Stats using the updated isAuditExpired
+      // ✅ FIXED: Stats using the accurate timeStatus
+      const now = new Date();
+      const todayStr = getTodayLocalStr();
+      const currentMinutes = getCurrentTimeMinutes();
+
       setStats({
-        upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
-          .length,
-        active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
-          .length,
-        inProgress: enhancedData.filter(
-          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
-        ).length,
-        expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
-          .length,
-        partiallyCompleted: enhancedData.filter(
-          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
-        ).length,
-        completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
-          .length,
+        upcoming: enhancedData.filter((s: any) => {
+          const schedule = s.schedule;
+          if (s.timeStatus === "UPCOMING") return true;
+          // Also check if it's not started and date is in future
+          if (!schedule.hasFormData) {
+            if (schedule.fromDate && schedule.toDate) {
+              const fromDateStr = getLocalDateStr(schedule.fromDate);
+              return todayStr < fromDateStr;
+            }
+            if (schedule.scheduledDate) {
+              const scheduleDateStr = getLocalDateStr(schedule.scheduledDate);
+              return todayStr < scheduleDateStr;
+            }
+          }
+          return false;
+        }).length,
+        active: enhancedData.filter((s: any) => {
+          if (s.timeStatus === "ACTIVE") return true;
+          // Also check if it's in progress and not expired
+          if (s.schedule.hasFormData && !s.schedule.allFormsCompleted) {
+            return !isAuditExpired(s.schedule);
+          }
+          return false;
+        }).length,
+        inProgress: enhancedData.filter((s: any) => {
+          return s.schedule.hasFormData && !s.schedule.allFormsCompleted;
+        }).length,
+        expired: enhancedData.filter((s: any) => {
+          if (s.timeStatus === "EXPIRED") return true;
+          return isAuditExpired(s.schedule);
+        }).length,
+        partiallyCompleted: enhancedData.filter((s: any) => {
+          return s.schedule.hasFormData && !s.schedule.allFormsCompleted;
+        }).length,
+        completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted).length,
         overdueNoWork: enhancedData.filter((s: any) => {
           const isExpired = s.timeStatus === "EXPIRED" || isAuditExpired(s.schedule);
           const hasStartedWork = s.schedule.hasFormData && s.schedule.completedForms > 0;
@@ -2631,7 +2741,7 @@ const RescheduleRequestModal = ({
     setCheckingConflict(true);
     setTimeConflictError("");
     try {
-      const formattedDate = new Date(date).toISOString().split("T")[0];
+      const formattedDate = getLocalDateStr(date);
       let schedules = existingSchedules;
       if (schedules.length === 0) {
         schedules = await fetchExistingSchedules();
@@ -2641,7 +2751,7 @@ const RescheduleRequestModal = ({
         const sch = schedule.schedule || schedule;
         if (sch?.id === audit.id) return false;
         const scheduleDate = sch?.scheduledDate
-          ? new Date(sch.scheduledDate).toISOString().split("T")[0]
+          ? getLocalDateStr(sch.scheduledDate)
           : null;
         if (scheduleDate !== formattedDate) return false;
         const scheduleStart = sch?.startTime;
@@ -2696,7 +2806,7 @@ const RescheduleRequestModal = ({
     if (audit && isOpen) {
       const defaultDate = new Date();
       defaultDate.setDate(defaultDate.getDate() + 1);
-      setNewDate(defaultDate.toISOString().split("T")[0]);
+      setNewDate(getLocalDateStr(defaultDate));
       setNewStartTime(audit.startTime || "09:00 AM");
       setNewEndTime(audit.endTime || "10:00 AM");
       setReason("");
@@ -2745,7 +2855,7 @@ const RescheduleRequestModal = ({
     try {
       await onSubmit(
         audit.id,
-        new Date(newDate).toISOString().split("T")[0],
+        newDate,
         newStartTime,
         newEndTime,
         reason,
@@ -2886,7 +2996,7 @@ const ExtensionRequestModal = ({
     if (audit && isOpen) {
       const defaultDate = new Date();
       defaultDate.setDate(defaultDate.getDate() + 7);
-      setNewDate(defaultDate.toISOString().split("T")[0]);
+      setNewDate(getLocalDateStr(defaultDate));
       setNewStartTime(audit.startTime || "09:00 AM");
       setNewEndTime(audit.endTime || "10:00 AM");
       setReason("");
@@ -3033,9 +3143,7 @@ const DatePickerField = ({
     if (Platform.OS === "android") {
       setShowPicker(false);
       if (event.type === "set" && selectedDate) {
-        const formattedDate = `${selectedDate.getFullYear()}-${String(
-          selectedDate.getMonth() + 1,
-        ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+        const formattedDate = getLocalDateStr(selectedDate);
         onChange(formattedDate);
       }
     } else {
@@ -3044,9 +3152,7 @@ const DatePickerField = ({
   };
 
   const handleConfirm = () => {
-    const formattedDate = `${tempDate.getFullYear()}-${String(
-      tempDate.getMonth() + 1,
-    ).padStart(2, "0")}-${String(tempDate.getDate()).padStart(2, "0")}`;
+    const formattedDate = getLocalDateStr(tempDate);
     onChange(formattedDate);
     setShowPicker(false);
   };
