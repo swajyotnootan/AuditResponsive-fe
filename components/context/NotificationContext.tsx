@@ -1,5 +1,6 @@
 // context/NotificationContext.tsx
 
+import { API_BASE_URL } from '@/config/apiConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
@@ -35,7 +36,7 @@ import {
   View
 } from 'react-native';
 
-import { notificationAPI, notificationFilter } from '../../services/api';
+import { notificationAPI } from '../../services/api';
 import { useAuth } from './AuthContext';
 
 // Enable LayoutAnimation on Android
@@ -414,9 +415,43 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const userRole = user?.role ?? null;
 
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
+    // ✅ ENHANCED: Check if user has access to notification based on role
   const hasRoleAccess = useCallback((notification: Notification): boolean => {
-    if (!userRole) return false;
-    return notificationFilter.isForRole(notification, userRole);
+    if (!userRole) {
+      console.warn('⚠️ No user role available');
+      return false;
+    }
+    
+    const normalizedUserRole = userRole.toUpperCase().trim();
+    
+    // If no role specified in notification, allow access (backward compatibility)
+    if (!notification.role && !notification.targetRoles) {
+      return true;
+    }
+    
+    // Check single role
+    if (notification.role) {
+      const normalizedNotifRole = notification.role.toUpperCase().trim();
+      const hasAccess = normalizedNotifRole === normalizedUserRole;
+      
+      console.log(`🔍 Role check: ${notification.role} vs ${userRole} = ${hasAccess}`);
+      
+      return hasAccess;
+    }
+    
+    // Check multiple target roles
+    if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
+      const hasAccess = notification.targetRoles.some(targetRole => {
+        const normalizedTargetRole = targetRole.toUpperCase().trim();
+        return normalizedTargetRole === normalizedUserRole;
+      });
+      
+      console.log(`🔍 Multi-role check: ${JSON.stringify(notification.targetRoles)} vs ${userRole} = ${hasAccess}`);
+      
+      return hasAccess;
+    }
+    
+    return true;
   }, [userRole]);
 
   // ✅ Initialize sound system
@@ -529,18 +564,26 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   }, [userId, userRole, hasRoleAccess]);
 
   // ✅ Fetch from API and update cache
+    // ✅ ENHANCED: Fetch from API and update cache with better logging
   const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
     try {
-      console.log(`📡 Fetching fresh notifications for user: ${userIdStr}`);
+      console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
       const data = await notificationAPI.getForUser(userIdStr);
       
       const notificationsData = Array.isArray(data) ? data : [];
       
+      console.log(`📥 Received ${notificationsData.length} total notifications from backend`);
+      
+      // Log each notification for debugging
+      notificationsData.forEach((n: Notification, idx: number) => {
+        console.log(`   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)}`);
+      });
+      
       // Filter by role
       const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
       
-      console.log(`📬 Found ${roleFilteredData.length} notifications for role: ${userRole}`);
-      console.log(`   Total: ${notificationsData.length}, Filtered: ${notificationsData.length - roleFilteredData.length}`);
+      console.log(`✅ Filtered to ${roleFilteredData.length} notifications for role: ${userRole}`);
+      console.log(`   Filtered out: ${notificationsData.length - roleFilteredData.length} notifications`);
 
       // Save to cache
       await saveNotificationsToStorage(userIdStr, roleFilteredData);
@@ -615,6 +658,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   }, [userId, userRole, loadNotifications, fetchAndUpdateNotifications, clearNotificationCache]);
 
   // ✅ FIXED: Add Notification with persistence
+   // ✅ ENHANCED: Add Notification with proper role targeting
   const addNotification = (
     title: string,
     message: string,
@@ -623,6 +667,9 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   ): Notification => {
     const { navigateTo, location, actionText, role, targetRoles, senderRole, ...restMetadata } = metadata;
 
+    // ✅ Determine target roles - if role is specified, use it
+    const finalTargetRoles = targetRoles || (role ? [role] : undefined);
+    
     const newNotification: Notification = {
       id: Date.now(),
       title,
@@ -634,13 +681,22 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       location,
       actionText: actionText || 'Review & Take Action',
       role: role || undefined,
-      targetRoles: targetRoles || undefined,
+      targetRoles: finalTargetRoles,
       senderRole: senderRole || userRole || undefined,
       ...restMetadata,
     };
 
+    console.log('📤 Creating notification:', {
+      title,
+      role: newNotification.role,
+      targetRoles: newNotification.targetRoles,
+      currentUserRole: userRole
+    });
+
     // If this notification is for the current user's role, show it
     if (hasRoleAccess(newNotification)) {
+      console.log('✅ Notification matches current user role, adding to state');
+      
       setNotifications(prev => {
         const updated = [newNotification, ...prev];
         // Save to cache
@@ -653,24 +709,31 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
       const soundType = getNotificationSoundType(title);
       playNotificationSoundWithThrottle(soundType);
+    } else {
+      console.log('❌ Notification does NOT match current user role');
     }
 
     // Always show toast for the action
     showToastNotification(title, message, type);
 
-    // Send to backend with role targeting
-    if (userId && (role || targetRoles)) {
-      const targetRole = role || (targetRoles && targetRoles[0]) || undefined;
-      if (targetRole) {
-        notificationAPI.sendToRole(
-          targetRole,
-          title,
-          message,
-          type,
-          navigateTo || '',
-          location || ''
-        ).catch(console.error);
+    // ✅ Send to backend with role targeting
+    if (userId) {
+      if (finalTargetRoles && finalTargetRoles.length > 0) {
+        // Send to specific roles
+        finalTargetRoles.forEach(targetRole => {
+          console.log(`📡 Sending notification to role: ${targetRole}`);
+          notificationAPI.sendToRole(
+            targetRole,
+            title,
+            message,
+            type,
+            navigateTo || '',
+            location || ''
+          ).catch(err => console.error(`Failed to send to role ${targetRole}:`, err));
+        });
       } else {
+        // Send to current user only
+        console.log(`📡 Sending notification to user: ${userId}`);
         notificationAPI.sendToUser(
           String(userId),
           title,
@@ -678,7 +741,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
           type,
           navigateTo || '',
           location || ''
-        ).catch(console.error);
+        ).catch(err => console.error('Failed to send to user:', err));
       }
     }
 
@@ -913,16 +976,82 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Helper functions
+    // ✅ Detect if we're talking to the production (UTC) backend
+  const isProductionBackend = () => {
+    const url = API_BASE_URL || '';
+    return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
+  };
+
+  // ✅ FIXED: Parse backend date correctly for BOTH local (IST) and prod (UTC)
+  const parseBackendDate = (dateString: string): Date => {
+    let isoString = dateString;
+    if (!isoString.includes('T')) {
+      isoString = isoString.replace(' ', 'T');
+    }
+    
+    // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
+    // ✅ Local returns IST → parse as-is (no 'Z')
+    if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+      isoString += 'Z';
+    }
+    
+    return new Date(isoString);
+  };
+
+  // ✅ FIXED: Format date with timezone handling
   const formatDate = (timestamp: string | undefined): string => {
     if (!timestamp) return 'Just now';
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    
+    try {
+      const date = parseBackendDate(timestamp);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', timestamp);
+        return 'Just now';
+      }
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      // Show relative time for recent messages
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      
+      // Show "Yesterday" with time
+      if (diffDays === 1) {
+        return `Yesterday ${date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })}`;
+      }
+      
+      // Show day name for this week
+      if (diffDays < 7) {
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      
+      // Show full date for older messages
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      
+    } catch (error) {
+      console.error('Date formatting error:', error, timestamp);
+      return 'Just now';
+    }
   };
 
   const getActionText = (title: string | undefined): string => {
