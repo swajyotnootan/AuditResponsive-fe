@@ -1443,10 +1443,11 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
   };
 
   // ✅ RECALCULATE TIME STATUS ON FRONTEND (Fixes timezone issues)
+// ✅ RECALCULATE TIME STATUS - FIXES DATE RANGE (BULK SCHEDULES) + TIME
 const recalculateTimeStatus = (schedule: any): string => {
   if (!schedule) return "UPCOMING";
   
-  // If all forms completed or status is completed, it's done
+  // If completed, return completed
   if (schedule.allFormsCompleted || 
       schedule.status === "COMPLETED" || 
       schedule.status === "APPROVED" ||
@@ -1457,54 +1458,78 @@ const recalculateTimeStatus = (schedule: any): string => {
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   
-  // Get the scheduled date
-  let scheduleDate: Date;
-  if (schedule.scheduledDate) {
-    scheduleDate = parseServerDate(schedule.scheduledDate);
-  } else if (schedule.fromDate) {
-    scheduleDate = parseServerDate(schedule.fromDate);
-  } else {
-    return "UPCOMING";
-  }
-
-  // Compare dates (ignore time for date comparison)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const compareDate = new Date(scheduleDate);
-  compareDate.setHours(0, 0, 0, 0);
 
-  const daysDiff = Math.floor((compareDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  // Parse all possible date fields
+  const hasFromDate = !!schedule.fromDate;
+  const hasToDate = !!schedule.toDate;
+  const hasScheduledDate = !!schedule.scheduledDate;
+  
+  const fromDate = hasFromDate ? parseServerDate(schedule.fromDate) : null;
+  const toDate = hasToDate ? parseServerDate(schedule.toDate) : null;
+  const scheduledDate = hasScheduledDate ? parseServerDate(schedule.scheduledDate) : null;
 
-  // Future date = UPCOMING
-  if (daysDiff > 0) {
-    return "UPCOMING";
-  }
+  // Normalize dates for comparison (strip time)
+  if (fromDate) fromDate.setHours(0, 0, 0, 0);
+  if (toDate) toDate.setHours(0, 0, 0, 0);
+  if (scheduledDate) scheduledDate.setHours(0, 0, 0, 0);
 
-  // Past date = EXPIRED
-  if (daysDiff < 0) {
-    return "EXPIRED";
-  }
+  // ✅ Detect if this is a DATE RANGE (bulk schedule: fromDate + toDate, different dates)
+  const isDateRange = hasFromDate && hasToDate && 
+                      fromDate && toDate && 
+                      fromDate.getTime() !== toDate.getTime();
 
-  // Same day - check time
-  const startTimeMinutes = parseTimeToMinutesRobust(schedule.startTime);
-  const endTimeMinutes = parseTimeToMinutesRobust(schedule.endTime);
-
-  // If no time specified, consider it active all day
-  if (!schedule.startTime || !schedule.endTime) {
+  // ============ DATE RANGE LOGIC (Bulk Schedules) ============
+  if (isDateRange && fromDate && toDate) {
+    // ✅ BEFORE the range starts → UPCOMING
+    if (today.getTime() < fromDate.getTime()) {
+      return "UPCOMING";
+    }
+    
+    // ✅ AFTER the range ends → EXPIRED
+    if (today.getTime() > toDate.getTime()) {
+      return "EXPIRED";
+    }
+    
+    // ✅ WITHIN the range (today is between fromDate and toDate)
+    
+    // On the FIRST day of range → check start time
+    if (today.getTime() === fromDate.getTime() && schedule.startTime) {
+      const startMinutes = parseTimeToMinutesRobust(schedule.startTime);
+      if (nowMinutes < startMinutes) return "UPCOMING";
+    }
+    
+    // On the LAST day of range → check end time
+    if (today.getTime() === toDate.getTime() && schedule.endTime) {
+      const endMinutes = parseTimeToMinutesRobust(schedule.endTime);
+      if (nowMinutes > endMinutes) return "EXPIRED";
+    }
+    
+    // Middle days OR within valid times on first/last day → ACTIVE
     return "ACTIVE";
   }
 
-  // Before start time = UPCOMING
-  if (nowMinutes < startTimeMinutes) {
-    return "UPCOMING";
-  }
+  // ============ SINGLE DATE LOGIC ============
+  const singleDate = scheduledDate || fromDate;
+  if (!singleDate) return "UPCOMING";
 
-  // After end time = EXPIRED
-  if (nowMinutes > endTimeMinutes) {
-    return "EXPIRED";
-  }
+  const daysDiff = Math.floor((singleDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Between start and end time = ACTIVE
+  // ✅ Future date → UPCOMING
+  if (daysDiff > 0) return "UPCOMING";
+  
+  // ✅ Past date → EXPIRED
+  if (daysDiff < 0) return "EXPIRED";
+
+  // ✅ Same day → check time window
+  if (!schedule.startTime || !schedule.endTime) return "ACTIVE";
+
+  const startTimeMinutes = parseTimeToMinutesRobust(schedule.startTime);
+  const endTimeMinutes = parseTimeToMinutesRobust(schedule.endTime);
+
+  if (nowMinutes < startTimeMinutes) return "UPCOMING";
+  if (nowMinutes > endTimeMinutes) return "EXPIRED";
   return "ACTIVE";
 };
 
