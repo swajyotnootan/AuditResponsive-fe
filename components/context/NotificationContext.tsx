@@ -565,59 +565,90 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
   // ✅ Fetch from API and update cache
     // ✅ ENHANCED: Fetch from API and update cache with better logging
-  const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
-    try {
-      console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
-      const data = await notificationAPI.getForUser(userIdStr);
-      
-      const notificationsData = Array.isArray(data) ? data : [];
-      
-      console.log(`📥 Received ${notificationsData.length} total notifications from backend`);
-      
-      // Log each notification for debugging
-      notificationsData.forEach((n: Notification, idx: number) => {
-        console.log(`   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)}`);
-      });
-      
-      // Filter by role
-      const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
-      
-      console.log(`✅ Filtered to ${roleFilteredData.length} notifications for role: ${userRole}`);
-      console.log(`   Filtered out: ${notificationsData.length - roleFilteredData.length} notifications`);
+  // ✅ Fetch from API and update cache - ENHANCED for sound
+const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
+  try {
+    console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
+    const data = await notificationAPI.getForUser(userIdStr);
+    
+    const notificationsData = Array.isArray(data) ? data : [];
+    
+    console.log(`📥 Received ${notificationsData.length} total notifications from backend`);
+    
+    // Log each notification for debugging
+    notificationsData.forEach((n: Notification, idx: number) => {
+      console.log(`   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)} | read: ${n.read}`);
+    });
+    
+    // Filter by role
+    const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
+    
+    console.log(`✅ Filtered to ${roleFilteredData.length} notifications for role: ${userRole}`);
+    console.log(`   Filtered out: ${notificationsData.length - roleFilteredData.length} notifications`);
 
-      // Save to cache
-      await saveNotificationsToStorage(userIdStr, roleFilteredData);
+    // ✅ Find NEW unread notifications (notifications we haven't seen before)
+    const previousIds = new Set(lastNotificationsRef.current.map(n => n.id));
+    const newNotifications = roleFilteredData.filter((n: Notification) => 
+      !previousIds.has(n.id) && !n.read
+    );
 
-      // Update state
-      setNotifications(roleFilteredData);
-      lastNotificationsRef.current = roleFilteredData;
+    console.log(`🆕 Found ${newNotifications.length} NEW unread notifications`);
 
-      const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+    // Save to cache
+    await saveNotificationsToStorage(userIdStr, roleFilteredData);
+
+    // Update state
+    setNotifications(roleFilteredData);
+    lastNotificationsRef.current = roleFilteredData;
+
+    const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+    
+    // ✅ Play sound for NEW unread notifications (improved logic)
+    if (newNotifications.length > 0 && soundEnabled) {
+      console.log(`🔔 NEW notifications detected: ${newNotifications.length}`);
       
-      // Play sound for NEW unread notifications
-      if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
-        const newNotifications = roleFilteredData.filter((n: Notification) => !n.read);
-        if (newNotifications.length > 0) {
-          const latestNotification = newNotifications[0];
-          const notificationType = getNotificationSoundType(latestNotification.title);
-          
-          console.log(`🔊 Playing ${notificationType} sound for new notification`);
-          
-          if (notificationSound.current && isSoundReady) {
-            await notificationSound.current.playNotificationSound(notificationType);
-          } else if (notificationSound.current) {
-            notificationSound.current.queueSound(notificationType);
-          }
+      const latestNotification = newNotifications[0];
+      const notificationType = getNotificationSoundType(latestNotification.title);
+      
+      console.log(`🔊 Playing ${notificationType} sound for: ${latestNotification.title}`);
+      
+      // ✅ Ensure sound system is ready before playing
+      if (notificationSound.current) {
+        if (!notificationSound.current.isInitialized) {
+          console.log('⚡ Initializing sound system...');
+          await notificationSound.current.init();
+        }
+        
+        if (isSoundReady || notificationSound.current.isInitialized) {
+          await notificationSound.current.playNotificationSound(notificationType);
+          console.log('✅ Sound played successfully');
+        } else {
+          console.log('⏳ Sound not ready, queuing...');
+          notificationSound.current.queueSound(notificationType);
         }
       }
-
-      setUnreadCount(newUnreadCount);
-      previousUnreadCount.current = newUnreadCount;
+    } else if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+      // Fallback: if unread count increased but no new IDs detected
+      console.log(`📈 Unread count increased: ${previousUnreadCount.current} → ${newUnreadCount}`);
       
-    } catch (error) {
-      console.error('Error fetching notifications from API:', error);
+      const unreadNotifications = roleFilteredData.filter((n: Notification) => !n.read);
+      if (unreadNotifications.length > 0) {
+        const latestNotification = unreadNotifications[0];
+        const notificationType = getNotificationSoundType(latestNotification.title);
+        
+        if (notificationSound.current && (isSoundReady || notificationSound.current.isInitialized)) {
+          await notificationSound.current.playNotificationSound(notificationType);
+        }
+      }
     }
-  }, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
+
+    setUnreadCount(newUnreadCount);
+    previousUnreadCount.current = newUnreadCount;
+    
+  } catch (error) {
+    console.error('Error fetching notifications from API:', error);
+  }
+}, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
 
   // ✅ Clear cache on logout
   const clearNotificationCache = useCallback(async () => {
@@ -975,84 +1006,92 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }, 1000);
   };
 
-  // Helper functions
-    // ✅ Detect if we're talking to the production (UTC) backend
-  const isProductionBackend = () => {
-    const url = API_BASE_URL || '';
-    return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
-  };
+  // Helper functions - Replace the existing formatDate section with this:
 
-  // ✅ FIXED: Parse backend date correctly for BOTH local (IST) and prod (UTC)
-  const parseBackendDate = (dateString: string): Date => {
-    let isoString = dateString;
-    if (!isoString.includes('T')) {
-      isoString = isoString.replace(' ', 'T');
+// ✅ Detect if we're talking to the production (UTC) backend
+const isProductionBackend = () => {
+  const url = API_BASE_URL || '';
+  return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
+};
+
+// ✅ FIXED: Parse backend date correctly for BOTH local (IST) and prod (UTC)
+const parseBackendDate = (dateString: string): Date => {
+  let isoString = dateString;
+  if (!isoString.includes('T')) {
+    isoString = isoString.replace(' ', 'T');
+  }
+  
+  // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
+  // ✅ Local returns IST → parse as-is (no 'Z')
+  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+    isoString += 'Z';
+  }
+  
+  return new Date(isoString);
+};
+
+// ✅ FIXED: Format date with better time display (no more "19h ago")
+const formatDate = (timestamp: string | undefined): string => {
+  if (!timestamp) return 'Just now';
+  
+  try {
+    const date = parseBackendDate(timestamp);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date:', timestamp);
+      return 'Just now';
     }
     
-    // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
-    // ✅ Local returns IST → parse as-is (no 'Z')
-    if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
-      isoString += 'Z';
-    }
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
     
-    return new Date(isoString);
-  };
-
-  // ✅ FIXED: Format date with timezone handling
-  const formatDate = (timestamp: string | undefined): string => {
-    if (!timestamp) return 'Just now';
+    // ✅ Show relative time ONLY for very recent messages (< 1 hour)
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
     
-    try {
-      const date = parseBackendDate(timestamp);
-      if (isNaN(date.getTime())) {
-        console.warn('Invalid date:', timestamp);
-        return 'Just now';
-      }
-      
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-      
-      // Show relative time for recent messages
-      if (diffMins < 1) return 'Just now';
-      if (diffMins < 60) return `${diffMins}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      
-      // Show "Yesterday" with time
-      if (diffDays === 1) {
-        return `Yesterday ${date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        })}`;
-      }
-      
-      // Show day name for this week
-      if (diffDays < 7) {
-        return date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        });
-      }
-      
-      // Show full date for older messages
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
+    // ✅ For messages within 24 hours, show the actual TIME
+    if (diffHours < 24) {
+      return date.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
       });
-      
-    } catch (error) {
-      console.error('Date formatting error:', error, timestamp);
-      return 'Just now';
     }
-  };
+    
+    // ✅ Show "Yesterday" with time
+    if (diffDays === 1) {
+      return `Yesterday ${date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })}`;
+    }
+    
+    // ✅ Show day name for this week with time
+    if (diffDays < 7) {
+      return `${date.toLocaleDateString('en-US', { weekday: 'short' })} ${date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })}`;
+    }
+    
+    // ✅ Show full date for older messages
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    
+  } catch (error) {
+    console.error('Date formatting error:', error, timestamp);
+    return 'Just now';
+  }
+};
 
   const getActionText = (title: string | undefined): string => {
     if (title?.includes('Approval')) return 'Review & Approve';
@@ -1111,6 +1150,25 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     <View style={{ padding: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8 }}>
       <Text style={{ marginBottom: 12, fontSize: 14, fontWeight: '600', color: '#111827' }}>🔔 Notification Sounds</Text>
       <View style={{ gap: 12 }}>
+      <TouchableOpacity
+        onPress={() => {
+          console.log('🧪 Testing notification sound...');
+          addNotification(
+            'Test Notification',
+            'This is a test notification to verify sound is working',
+            'info',
+            { navigateTo: '/dashboard' }
+          );
+        }}
+        style={{ 
+          padding: 12, 
+          backgroundColor: '#10b981', 
+          borderRadius: 8,
+          alignItems: 'center'
+        }}
+      >
+        <Text style={{ color: 'white', fontWeight: '600' }}>🔔 Test Notification Sound</Text>
+      </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontSize: 14, color: '#374151' }}>Enable Sounds</Text>
           <TouchableOpacity
