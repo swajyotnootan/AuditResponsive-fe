@@ -112,59 +112,53 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
 };
 
 // ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
-// ✅ FIXED: Show absolute time like WhatsApp
+// ✅ Detect if we're talking to the production (UTC) backend
+const isProductionBackend = () => {
+  const url = API_BASE_URL || '';
+  return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
+};
+
+// ✅ Parse backend date correctly for BOTH local (IST) and prod (UTC)
+const parseBackendDate = (dateString: string): Date => {
+  let isoString = dateString;
+  if (!isoString.includes('T')) {
+    isoString = isoString.replace(' ', 'T');
+  }
+  
+  // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
+  // ✅ Local returns IST → parse as-is (no 'Z')
+  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+    isoString += 'Z';
+  }
+  
+  return new Date(isoString);
+};
+
+// ✅ FIXED: Shows absolute time like WhatsApp
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
   
   try {
-    // Parse the date
-    let isoString = dateString;
-    
-    // Replace space with T if needed
-    if (!isoString.includes('T')) {
-      isoString = isoString.replace(' ', 'T');
-    }
-    
-    // Parse the date (let JS handle timezone naturally)
-    const date = new Date(isoString);
-    
-    if (isNaN(date.getTime())) {
-      return "Invalid date";
-    }
+    const date = parseBackendDate(dateString);
+    if (isNaN(date.getTime())) return "";
     
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000);
+    const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
-    // Today: Show time only
     if (diffDays === 0) {
-      return date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     }
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
     
-    // Yesterday: Show "Yesterday"
-    if (diffDays === 1) {
-      return "Yesterday";
-    }
-    
-    // This week: Show day name
-    if (diffDays < 7) {
-      return date.toLocaleDateString('en-US', { weekday: 'long' });
-    }
-    
-    // Older: Show date
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     });
-    
   } catch (error) {
-    console.error('Date error:', error);
     return "";
   }
 };
