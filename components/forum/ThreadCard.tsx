@@ -124,17 +124,22 @@ const parseBackendDate = (dateString: string): Date => {
   if (!isoString.includes('T')) {
     isoString = isoString.replace(' ', 'T');
   }
-  
-  // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
-  // ✅ Local returns IST → parse as-is (no 'Z')
   if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
     isoString += 'Z';
   }
-  
   return new Date(isoString);
 };
 
-// ✅ FIXED: Shows absolute time like WhatsApp
+// ✅ Get just the time (e.g., "2:30 PM")
+const getTimeOnly = (date: Date) => {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+// ✅ FIXED: Always show the TIME for every message
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
   
@@ -147,17 +152,28 @@ const formatDateAndTime = (dateString?: string) => {
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
+    // Today: Show time only (e.g., "10:06 AM")
     if (diffDays === 0) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      return getTimeOnly(date);
     }
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
     
-    return date.toLocaleDateString('en-US', {
+    // Yesterday: Show "Yesterday, 2:30 PM"
+    if (diffDays === 1) {
+      return `Yesterday, ${getTimeOnly(date)}`;
+    }
+    
+    // This week: Show "Monday, 2:30 PM"
+    if (diffDays < 7) {
+      return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
+    }
+    
+    // Older: Show "Jan 15, 2:30 PM"
+    return `${date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-    });
+    })}, ${getTimeOnly(date)}`;
+    
   } catch (error) {
     return "";
   }
