@@ -1,11 +1,16 @@
-﻿import ForumThreadView from "@/components/forum/ForumThreadView";
+﻿// AuditorDashboard.tsx - Updated version with fixes
+
+import { useAuth } from "@/components/context/AuthContext";
+import { useToast } from "@/components/context/ToastContext";
+import ForumThreadView from "@/components/forum/ForumThreadView";
 import { API_BASE_URL } from "@/config/apiConfig";
+import { ncrAPI } from "@/services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   AlertCircle,
-  AlertTriangle, // ✅ Added
+  AlertTriangle,
   Calendar,
   CheckCircle,
   ChevronDown,
@@ -15,7 +20,7 @@ import {
   Eye,
   FileText,
   Grid3x3,
-  Layers, // ✅ Added
+  Layers,
   List,
   MessageCircle,
   Play,
@@ -43,42 +48,18 @@ import {
 import YearFilter from "../common/YearFilter";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import FiveSAuditForm from "./auditor/FiveSAuditForm";
-import ManufacturingProcessAuditForm from "./auditor/ManufacturingProcessAuditForm";
-// ============================================================================
-// ⚠️ STEP 1: UNCOMMENT YOUR REAL IMPORTS & DELETE THE FALLBACKS BELOW
-// ============================================================================
-
-import { useAuth } from "@/components/context/AuthContext";
-import { useToast } from "@/components/context/ToastContext"; // or your actual path
-import { ncrAPI } from "@/services/api";
+import Form7View from "./auditor/Form7View";
 import IATFInternalAuditForm from "./auditor/IATFInternalAuditForm";
-// Adjust the path if your file is named differently (e.g., fives-view.tsx)
+import ManufacturingProcessAuditForm from "./auditor/ManufacturingProcessAuditForm";
 import FiveSView from "./auditor/view/FiveSView";
+import Form7DetailView from "./auditor/view/Form7DetailView";
 import IATFInternalView from "./auditor/view/IATFInternalView";
 import ManufacturingProcessView from "./auditor/view/ManufacturingProcessView";
-// ============================================================================
-import Form7View from "./auditor/Form7View";
-import Form7DetailView from "./auditor/view/Form7DetailView";
-
 
 const TIME_OPTIONS = [
-  "09:00 AM",
-  "09:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "12:00 PM",
-  "12:30 PM",
-  "01:00 PM",
-  "01:30 PM",
-  "02:00 PM",
-  "02:30 PM",
-  "03:00 PM",
-  "03:30 PM",
-  "04:00 PM",
-  "04:30 PM",
-  "05:00 PM",
+  "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+  "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+  "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM", "05:00 PM",
 ];
 
 const NAVBAR_COLORS = {
@@ -89,6 +70,95 @@ const NAVBAR_COLORS = {
   lighter: "#93c5fd",
   bg: "#eff6ff",
   white: "#ffffff",
+};
+
+// ============================================================================
+// ✅ TIMEZONE-SAFE HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get date string in YYYY-MM-DD format without timezone issues
+ */
+const getDateStr = (date: any): string => {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Parse time string to minutes for comparison
+ */
+const parseTimeToMinutes = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return 0;
+  let hours = parseInt(match[1]);
+  const minutes = parseInt(match[2]);
+  const meridian = match[3].toUpperCase();
+  if (meridian === "PM" && hours !== 12) hours += 12;
+  if (meridian === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+/**
+ * Get today's date at midnight (UTC-safe)
+ */
+const getTodayMidnight = (): Date => {
+  const today = new Date();
+  return new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+};
+
+/**
+ * Check if an audit is expired - FIXED for timezone issues
+ */
+const isAuditExpired = (audit: any): boolean => {
+  if (!audit || audit.status === "COMPLETED" || audit.status === "CLOSED") return false;
+
+  const today = getTodayMidnight();
+  const todayStr = getDateStr(today);
+
+  // Case 1: Date range audit
+  if (audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate) {
+    const fromDateStr = getDateStr(audit.fromDate);
+    const toDateStr = getDateStr(audit.toDate);
+
+    // If today is BEFORE the range starts → NOT EXPIRED
+    if (todayStr < fromDateStr) return false;
+
+    // If today is AFTER the range ends → EXPIRED
+    if (todayStr > toDateStr) return true;
+
+    // If today is WITHIN the range → Check end time
+    if (todayStr === toDateStr && audit.endTime) {
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const endMinutes = parseTimeToMinutes(audit.endTime);
+      return nowMinutes > endMinutes;
+    }
+    return false;
+  }
+
+  // Case 2: Single date audit
+  if (!audit?.scheduledDate) return false;
+  
+  const scheduleDateStr = getDateStr(audit.scheduledDate);
+  
+  // If scheduled date is before today → EXPIRED
+  if (scheduleDateStr < todayStr) return true;
+  
+  // If scheduled date is today → Check end time
+  if (scheduleDateStr === todayStr && audit.endTime) {
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const endMinutes = parseTimeToMinutes(audit.endTime);
+    return nowMinutes > endMinutes;
+  }
+  
+  return false;
 };
 
 // ============================================================================
@@ -127,40 +197,30 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
 // ============================================================================
 const getFormRoute = (audit: any) => {
   const t = (audit.auditType || "").toLowerCase().trim();
-
-  // 1. 5S Audit
   if (t.includes("5s") || t.includes("five_s") || t.includes("five s")) {
-    return "AuditFiveS"; // ⚠️ CHANGE THIS to match your EXACT file name (e.g., "AuditFiveS" or "FiveSAuditForm")
+    return "AuditFiveS";
   }
-  // 2. System / IATF / Internal Audit
   if (
     t.includes("iatf") ||
     t.includes("system") ||
     t.includes("internal") ||
     t.includes("16949")
   ) {
-    return "AuditIATFInternal"; // ⚠️ CHANGE THIS to match your file name
+    return "AuditIATFInternal";
   }
-  // 3. Process / Manufacturing Audit
   if (t.includes("process") || t.includes("manufacturing")) {
-    return "AuditManufacturingProcess"; // ⚠️ CHANGE THIS to match your file name
+    return "AuditManufacturingProcess";
   }
-
-  // Default fallback
   return "AuditFiveS";
 };
 
 const getViewRoute = (audit: any) => {
   const auditType = (audit.auditType || "").toLowerCase().trim();
-  console.log("📂 [DEBUG] Determining route for auditType:", auditType);
-
-  // ⚠️ VERIFY THESE PATHS MATCH YOUR EXACT FILE NAMES IN THE `app` FOLDER
   if (
     auditType.includes("5s") ||
     auditType.includes("five_s") ||
     auditType.includes("five s")
   ) {
-    // If your file is named FiveSView.tsx, change this to "/auditor/five-s-view"
     return "/auditor/fives-view";
   }
   if (auditType.includes("process") || auditType.includes("manufacturing")) {
@@ -173,86 +233,7 @@ const getViewRoute = (audit: any) => {
   ) {
     return "/auditor/iatf-view";
   }
-
-  console.warn(
-    "⚠️ [DEBUG] Unknown audit type, defaulting to /auditor/fives-view",
-  );
   return "/auditor/fives-view";
-};
-
-const isAuditExpired = (audit: any) => {
-  if (!audit || audit.status === "COMPLETED") return false;
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // ✅ FIXED: Check if audit has a date range
-  const isDateRange = audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate;
-  
-  if (isDateRange) {
-    // ✅ DATE RANGE LOGIC
-    const fromDate = new Date(audit.fromDate);
-    const toDate = new Date(audit.toDate);
-    fromDate.setHours(0, 0, 0, 0);
-    toDate.setHours(23, 59, 59, 999);
-    
-    // If today is BEFORE the range starts → NOT EXPIRED
-    if (today < fromDate) return false;
-    
-    // If today is AFTER the range ends → EXPIRED
-    if (today > toDate) return true;
-    
-    // If today is WITHIN the range → Check time
-    if (today >= fromDate && today <= toDate) {
-      // If today is the end date, check if end time has passed
-      if (today.toDateString() === toDate.toDateString() && audit.endTime) {
-        const now = new Date();
-        const parseTime = (timeStr: string) => {
-          const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-          if (!match) return { hours: 23, minutes: 59 };
-          let hours = parseInt(match[1]);
-          const minutes = parseInt(match[2]);
-          const meridian = match[3].toUpperCase();
-          if (meridian === "PM" && hours !== 12) hours += 12;
-          if (meridian === "AM" && hours === 12) hours = 0;
-          return { hours, minutes };
-        };
-        const endTime = parseTime(audit.endTime);
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const endMinutes = endTime.hours * 60 + endTime.minutes;
-        return nowMinutes > endMinutes;
-      }
-      return false; // Within range, not expired
-    }
-    return false;
-  }
-  
-  // ✅ SINGLE DATE LOGIC (original behavior)
-  if (!audit?.scheduledDate) return false;
-  const scheduleDate = new Date(audit.scheduledDate);
-  scheduleDate.setHours(0, 0, 0, 0);
-  
-  if (scheduleDate < today) return true;
-  if (scheduleDate.getTime() === today.getTime() && audit.endTime) {
-    const now = new Date();
-    const parseTime = (timeStr: string) => {
-      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!match) return { hours: 23, minutes: 59 };
-      let hours = parseInt(match[1]);
-      const minutes = parseInt(match[2]);
-      const meridian = match[3].toUpperCase();
-      if (meridian === "PM" && hours !== 12) hours += 12;
-      if (meridian === "AM" && hours === 12) hours = 0;
-      return { hours, minutes };
-    };
-    const endTime = parseTime(audit.endTime);
-    if (
-      now.getHours() * 60 + now.getMinutes() >
-      endTime.hours * 60 + endTime.minutes
-    )
-      return true;
-  }
-  return false;
 };
 
 const parseResponseAnswers = (r: any) => {
@@ -321,18 +302,6 @@ const buildPendingNcrQuery = (item: any) => {
       .join("\n"),
   );
   return p.toString();
-};
-
-const parseTimeToMinutes = (timeStr: string) => {
-  if (!timeStr) return 0;
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return 0;
-  let hours = parseInt(match[1]);
-  const minutes = parseInt(match[2]);
-  const meridian = match[3].toUpperCase();
-  if (meridian === "PM" && hours !== 12) hours += 12;
-  if (meridian === "AM" && hours === 12) hours = 0;
-  return hours * 60 + minutes;
 };
 
 // ============================================================================
@@ -417,6 +386,7 @@ const StatCard = ({ title, value, icon: Icon }: any) => (
     </Text>
   </View>
 );
+
 const StatCardsContainer = ({ stats, isNcr = false }: any) => {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
@@ -446,7 +416,6 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
 
   const statsData = isNcr ? ncrStatsData : auditStats;
 
-  // ✅ MOBILE: Horizontal ScrollView (Fixed width per card so it doesn't squish)
   if (isMobile) {
     return (
       <ScrollView
@@ -464,8 +433,6 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
     );
   }
 
-  // ✅ TABLET & DESKTOP: Force ALL cards into a SINGLE row
-  // Using flex: 1 ensures they divide the available width equally (whether 6 or 7 cards)
   return (
     <View className="flex-row">
       {statsData.map((stat, index) => (
@@ -477,7 +444,9 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
   );
 };
 
-// ✅ NEW: COMPACT LIST ITEM COMPONENT FOR LIST VIEW
+// ============================================================================
+// AUDIT LIST ITEM COMPONENT FOR LIST VIEW
+// ============================================================================
 const AuditListItem = ({
   item,
   handleViewForm,
@@ -645,7 +614,7 @@ const AuditListItem = ({
           !allFormsCompleted &&
           hasPendingForms &&
           nextPendingForm &&
-          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
+          (timeStatus === "ACTIVE" || canStart) ? (
           <TouchableOpacity
             onPress={() => handleViewForm(audit, nextPendingForm)}
             className="px-3 py-2 border border-blue-200 rounded-lg bg-blue-50"
@@ -658,14 +627,14 @@ const AuditListItem = ({
           !hasPendingExtension &&
           !hasStartedWork &&
           !isExpired &&
-          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
+          (timeStatus === "ACTIVE" || canStart) ? (
           <TouchableOpacity
             onPress={() => handleViewForm(audit, audit.formDetails?.[0])}
             className="px-3 py-2 bg-blue-600 rounded-lg"
           >
             <Text className="text-xs font-semibold text-white">Start</Text>
           </TouchableOpacity>
-        ) : audit.formDetails?.[0]?.responseId && allFormsCompleted ? ( // ✅ Added && allFormsCompleted
+        ) : audit.formDetails?.[0]?.responseId && allFormsCompleted ? (
           <TouchableOpacity
             onPress={() =>
               handleViewReport(
@@ -686,6 +655,9 @@ const AuditListItem = ({
   );
 };
 
+// ============================================================================
+// AUDIT CARD COMPONENT
+// ============================================================================
 const AuditCard = ({
   audit,
   timeStatus,
@@ -704,7 +676,7 @@ const AuditCard = ({
   onOpenForum,
 }: any) => {
   const [expanded, setExpanded] = useState(false);
-  
+
   const isExpired = timeStatus === "EXPIRED" || isAuditExpired(audit);
   const isMultiForm = totalForms > 1;
   const allFormsCompleted = completedForms === totalForms && totalForms > 0;
@@ -827,10 +799,7 @@ const AuditCard = ({
       className={`flex-1 border shadow-sm rounded-2xl border-slate-200 ${getCardBgColor()}`}
     >
       <View className="flex-1 p-4">
-        {/* ✅ ROW 1: Status badges at the TOP (full width, wrap safely) */}
-        {/* ✅ HEADER: Status badges (LEFT) + Date (RIGHT) on the SAME line */}
         <View className="flex-row items-center justify-between gap-2 mb-3">
-          {/* LEFT: badges — can wrap/shrink, so they never collide with the date */}
           <View
             className="flex-row flex-wrap items-center gap-2"
             style={{ flexShrink: 1 }}
@@ -852,7 +821,6 @@ const AuditCard = ({
             )}
           </View>
 
-          {/* RIGHT: date chip — same line, capped at 55% so it can't overlap the badges */}
           <View
             className={`flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg border ${
               audit.originalScheduledDate
@@ -880,7 +848,6 @@ const AuditCard = ({
           </View>
         </View>
 
-        {/* ✅ ROW 2: Title */}
         <Text
           className="mb-3 text-sm font-bold text-slate-800"
           numberOfLines={2}
@@ -888,17 +855,13 @@ const AuditCard = ({
           {audit.auditType || "Audit"} - {audit.department || "General"}
         </Text>
 
-        {/* ✅ ROW 3: ALL meta chips together — Date + Time + Auditee (wrap naturally, overlap impossible) */}
         <View className="flex-row flex-wrap gap-2 mb-3">
-          {/* 🕐 Time chip */}
           <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
             <Clock size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
               {audit.startTime} - {audit.endTime}
             </Text>
           </View>
-
-          {/* 👤 Auditee chip */}
           <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
             <UserCheck size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
@@ -907,7 +870,6 @@ const AuditCard = ({
           </View>
         </View>
 
-        {/* ✅ Overdue warnings (keep as-is) */}
         {isOverdueNoWork && !hasPendingReschedule && (
           <View className="flex-row items-center gap-2 p-3 mb-3 border text-rose-700 bg-rose-50 rounded-xl border-rose-200">
             <AlertCircle size={14} color="#be123c" />
@@ -1056,9 +1018,8 @@ const AuditCard = ({
             </TouchableOpacity>
           )}
 
-          {/* ✅ View Report Button */}
           {formDetails?.[0]?.responseId &&
-            allFormsCompleted && ( // ✅ Added && allFormsCompleted
+            allFormsCompleted && (
               <TouchableOpacity
                 onPress={() =>
                   onViewReport(formDetails[0].responseId, audit, formDetails[0])
@@ -1067,17 +1028,16 @@ const AuditCard = ({
               >
                 <Eye size={14} color="#047857" />
                 <Text className="text-xs font-semibold text-emerald-700">
-                  View Report {/* ✅ Removed ternary, strictly "View Report" */}
+                  View Report
                 </Text>
               </TouchableOpacity>
             )}
-          {/* ✅ Continue Button */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
             hasFormData &&
             !allFormsCompleted &&
             !isExpired &&
-            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
+            (timeStatus === "ACTIVE" || canStart) && (
               <TouchableOpacity
                 onPress={() => {
                   const nextForm =
@@ -1094,12 +1054,11 @@ const AuditCard = ({
               </TouchableOpacity>
             )}
 
-          {/* ✅ Start Audit Button */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
             !hasFormData &&
             !isExpired &&
-            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
+            (timeStatus === "ACTIVE" || canStart) && (
               <TouchableOpacity
                 onPress={() => {
                   const first = formDetails?.[0];
@@ -1118,6 +1077,9 @@ const AuditCard = ({
   );
 };
 
+// ============================================================================
+// NCR PENDING LIST
+// ============================================================================
 const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
@@ -1137,7 +1099,6 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
 
   return (
     <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
-      {/* HEADER WITH COUNT BADGE */}
       <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
         <View className="flex-row items-center gap-2">
           <AlertCircle size={20} color="#e11d48" />
@@ -1188,7 +1149,6 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
               </View>
             </View>
             <View className="flex-row gap-2">
-              {/* ✅ ADD FORUM BUTTON */}
               {onOpenForum && (
                 <TouchableOpacity
                   onPress={() => onOpenForum(item)}
@@ -1213,11 +1173,16 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
     </View>
   );
 };
+
+// ============================================================================
+// NCR LIST TAB
+// ============================================================================
 const NcrListTab = ({
   raisedNCRs,
   ncrLoading,
   onViewNcr,
   onOpenForum,
+  open8DForum,
 }: any) => {
   if (ncrLoading)
     return (
@@ -1266,10 +1231,21 @@ const NcrListTab = ({
               IN_PROGRESS: "bg-indigo-50 text-indigo-700 border-indigo-200",
               REJECTED: "bg-rose-50 text-rose-700 border-rose-200",
               CLOSED: "bg-slate-50 text-slate-700 border-slate-200",
+              SENT_TO_8D: "bg-purple-50 text-purple-700 border-purple-200",
+              IN_8D_PROCESS: "bg-violet-50 text-violet-700 border-violet-200",
+              NCR2_IN_PROGRESS: "bg-pink-50 text-pink-700 border-pink-200",
+              NCR2_COMPLETED: "bg-indigo-50 text-indigo-700 border-indigo-200",
             };
             const className =
               statusConfig[item.status] ||
               "bg-slate-50 text-slate-700 border-slate-200";
+            
+            const is8D = item.status === "SENT_TO_8D" || 
+                         item.status === "IN_8D_PROCESS" || 
+                         item.status === "NCR2_IN_PROGRESS" ||
+                         item.status === "NCR2_COMPLETED" ||
+                         item.requires8D === true;
+
             return (
               <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
                 <View className="flex-1">
@@ -1294,7 +1270,13 @@ const NcrListTab = ({
                 </View>
                 <View className="flex-row gap-2">
                   <TouchableOpacity
-                    onPress={() => onOpenForum(item)}
+                    onPress={() => {
+                      if (is8D) {
+                        open8DForum(item);
+                      } else {
+                        onOpenForum(item);
+                      }
+                    }}
                     className="p-2 rounded-lg bg-slate-50"
                   >
                     <MessageCircle size={18} color="#475569" />
@@ -1315,6 +1297,9 @@ const NcrListTab = ({
   );
 };
 
+// ============================================================================
+// MAIN DASHBOARD COMPONENT
+// ============================================================================
 export default function AuditorDashboard() {
   const router = useRouter();
   const pathname = usePathname();
@@ -1323,19 +1308,20 @@ export default function AuditorDashboard() {
 
   const isMobile = width < 768;
 
-  // ✅ FIX 1: These MUST be on separate lines
   const { user, loading: authLoading } = useAuth();
   const { addToast } = useToast();
 
-  // ✅ FIXED: Single source of truth for tab routing (matches Audit Manager & Top Management)
   const [activeTab, setActiveTab] = useState("my-audits");
-  // Add these state variables
-const [forumModalVisible, setForumModalVisible] = useState(false);
-const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
-const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [forumModalVisible, setForumModalVisible] = useState(false);
+  const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  
-  // ✅ FIXED: Listen for param changes and update activeTab
+  // ✅ 8D Forum state
+  const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
+  const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
+  const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+
   useEffect(() => {
     if (params?.tab) {
       const tabValue = Array.isArray(params.tab)
@@ -1351,18 +1337,15 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
       const normalizedTab = tabMap[tabValue] || "my-audits";
       setActiveTab(normalizedTab);
     } else {
-      setActiveTab("my-audits"); // Default fallback
+      setActiveTab("my-audits");
     }
   }, [params?.tab]);
 
   const [activeReportConfig, setActiveReportConfig] = useState<any>(null);
   const [activeFormConfig, setActiveFormConfig] = useState<any>(null);
-    const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
 
-
-  // ✅ 1. Add new state for viewing NCR details
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
-  // ✅ FIX 2: These MUST be on separate lines
   const [isFetching, setIsFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1390,27 +1373,199 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   const [raisedNCRs, setRaisedNCRs] = useState<any[]>([]);
   const [ncrLoading, setNcrLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
-const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
-const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
-const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
 
-  // ✅ ADD THIS: Calculate NCR Stats dynamically
   const ncrStats = useMemo(
     () => ({
       total: raisedNCRs.length,
       awaiting: raisedNCRs.filter((n: any) => n.status === "AWAITING_AUDITEE")
         .length,
       pending: raisedNCRs.filter((n: any) => n.status === "OPEN").length,
-      inProgress: raisedNCRs.filter((n: any) => n.status === "IN_PROGRESS")
-        .length,
-      closed: raisedNCRs.filter((n: any) => n.status === "CLOSED").length,
+      inProgress: raisedNCRs.filter((n: any) => 
+        ["IN_PROGRESS", "SENT_TO_8D", "IN_8D_PROCESS", "NCR2_IN_PROGRESS"].includes(n.status)
+      ).length,
+      closed: raisedNCRs.filter((n: any) => 
+        ["CLOSED", "NCR2_COMPLETED"].includes(n.status)
+      ).length,
       rejected: raisedNCRs.filter((n: any) => n.status === "REJECTED").length,
     }),
     [raisedNCRs],
   );
 
-  // ... (keep the rest of your code exactly as it is below this point)
+  // ============================================================================
+  // ✅ 8D FORUM FUNCTIONS
+  // ============================================================================
+  const fetchAllUsers = async () => {
+    try {
+      const users = await apiFetch("/users");
+      setAllUsers(users || []);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      setAllUsers([]);
+    }
+  };
+
+  const open8DForum = async (ncr: any) => {
+    console.log('🔍 [8D FORUM] Opening 8D forum for NCR:', ncr);
+
+    if (!ncr) {
+      addToast("No NCR data available for 8D forum", "error");
+      return;
+    }
+
+    setSelected8DNCR(ncr);
+    setEightDTeamMembers([]);
+    setShow8DForumDrawer(true);
+    setLoadingTeamMembers(true);
+
+    try {
+      const eightDEventId = `8D-${ncr.ncrNumber || ncr.id}`;
+      const membersSet = new Set<string>();
+
+      // Fetch existing 8D team members
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
+          { credentials: "include" }
+        );
+
+        if (response.ok) {
+          const responseData = await response.json();
+          if (responseData?.success && responseData.data) {
+            const d0Data = responseData.data.content?.d0?.[0] || {};
+            const emails = Array.isArray(d0Data.additionalEmails)
+              ? d0Data.additionalEmails
+              : [];
+            emails.forEach((email: string) => membersSet.add(email));
+          }
+        }
+      } catch (err) {
+        console.log('Could not fetch existing 8D members:', err);
+      }
+
+      // Add current user
+      if (user?.email) membersSet.add(user.email);
+
+      // Add Audit Manager
+      const auditManager = allUsers.find(
+        (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
+      );
+      if (auditManager?.email) membersSet.add(auditManager.email);
+
+      // Add HOD
+      if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
+
+      // Add Auditor
+      if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
+      if (ncr.auditorName?.includes('@')) {
+        membersSet.add(ncr.auditorName);
+      }
+
+      // Add Auditee
+      if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
+      if (ncr.auditeeName?.includes('@')) {
+        membersSet.add(ncr.auditeeName);
+      }
+
+      // Add 8D Team members
+      const eightDTeam = allUsers.filter(
+        (u: any) =>
+          u.role === "8D_TEAM" ||
+          u.role === "EIGHT_D_TEAM" ||
+          u.role === "INITIATOR"
+      );
+      eightDTeam.forEach((member: any) => {
+        if (member.email) membersSet.add(member.email);
+      });
+
+      const finalMembers = [...membersSet];
+      console.log('✅ [8D FORUM] Members:', finalMembers);
+      setEightDTeamMembers(finalMembers);
+
+    } catch (error) {
+      console.error('❌ Failed to fetch 8D team members:', error);
+      // Fallback: Add essential members
+      const fallbackMembers = [
+        user?.email,
+        ncr.hodEmail,
+        ncr.auditorEmail,
+        ncr.auditeeEmail,
+        allUsers.find((u: any) => u.role === "AUDIT_MANAGER")?.email,
+      ].filter(Boolean);
+      setEightDTeamMembers([...new Set(fallbackMembers)]);
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  };
+
+  // ============================================================================
+  // ✅ FORUM HANDLER - Supports both regular audit forums and NCR forums
+  // ============================================================================
+  const handleOpenForum = (audit: any, form: any = null) => {
+    console.log("🔍 Opening forum for audit:", audit);
+
+    // Check if it's an NCR item
+    const isNcrItem = audit?.ncrNumber || audit?.isNcr || audit?.status?.includes('NCR');
+    
+    // Check if it's an 8D related NCR
+    const is8D = audit?.status === "SENT_TO_8D" || 
+                 audit?.status === "IN_8D_PROCESS" || 
+                 audit?.status === "NCR2_IN_PROGRESS" ||
+                 audit?.status === "NCR2_COMPLETED" ||
+                 audit?.requires8D === true;
+
+    if (isNcrItem && is8D) {
+      open8DForum(audit);
+      return;
+    }
+
+    if (!audit) {
+      addToast("No data available for forum", "error");
+      return;
+    }
+
+    // For audit forums - find co-auditor emails from allUsers
+    const coAuditorEmails: string[] = [];
+    if (audit.coAuditorIdList && Array.isArray(audit.coAuditorIdList)) {
+      audit.coAuditorIdList.forEach((coId: any) => {
+        const coUser = allUsers.find((u: any) => String(u.id) === String(coId));
+        if (coUser?.email) coAuditorEmails.push(coUser.email);
+      });
+    }
+
+    // Merge with existing memberEmails
+    const allMemberEmails = [
+      ...(audit.memberEmails || []),
+      ...coAuditorEmails,
+    ];
+
+    setSelectedAuditForForum({
+      id: audit.id || audit.scheduleId,
+      auditNumber: audit.auditNumber || audit.id?.toString() || "",
+      auditType: audit.auditType || "Audit",
+      department: audit.department || "",
+      status: audit.status || "ACTIVE",
+      auditorId: audit.auditorId || audit.leadAuditorId || user?.id,
+      auditorName: audit.auditorName || audit.leadAuditorName || user?.name || "",
+      auditeeId: audit.auditeeId || user?.id,
+      auditeeName: audit.auditeeName || user?.name || "",
+      checkSheetId: form?.id || audit.checkSheetId,
+      checkSheetName: form?.name || audit.checkSheetName,
+      scheduledDate: audit.scheduledDate,
+      fromDate: audit.fromDate,
+      toDate: audit.toDate,
+      startTime: audit.startTime,
+      endTime: audit.endTime,
+      hodEmail: audit.hodEmail,
+      hodName: audit.hodName,
+      memberEmails: allMemberEmails,
+      coAuditorEmails: coAuditorEmails,
+    });
+    setForumModalVisible(true);
+  };
+
+  // ============================================================================
+  // ✅ FETCH FUNCTIONS
+  // ============================================================================
   useEffect(() => {
     const loadYear = async () => {
       try {
@@ -1419,6 +1574,7 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
       } catch (e) {}
     };
     loadYear();
+    fetchAllUsers();
   }, []);
 
   useEffect(() => {
@@ -1437,24 +1593,13 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
           const ncrYear = ncrDate
             ? new Date(ncrDate).getFullYear()
             : new Date().getFullYear();
-          const matchesYear = ncrYear === year;
-
-          if (!matchesYear) {
-            console.log(
-              `⚠️ [NCR DEBUG] Filtered out NCR ${ncr.id}: Year ${ncrYear} !== Selected Year ${year}`,
-            );
-          }
-          return matchesYear;
+          return ncrYear === year;
         },
       );
 
-      console.log(
-        "✅ [NCR DEBUG] Final filtered raised NCRs count:",
-        filteredNCRs.length,
-      );
       setRaisedNCRs(filteredNCRs);
     } catch (error) {
-      console.error("❌ [NCR DEBUG] Error fetching raised NCRs:", error);
+      console.error("❌ Error fetching raised NCRs:", error);
       addToast("Failed to load NCR list", "error");
       setRaisedNCRs([]);
     } finally {
@@ -1462,29 +1607,6 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
     }
   };
 
-   // ============================================================
-  // ✅ CRITICAL FIX: Timezone-safe date helpers
-  // ============================================================
-  const toDateString = (date: any) => {
-    if (!date) return null;
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
-  };
-
-  const parseTimeToMinutes = (timeStr: string) => {
-    if (!timeStr) return 0;
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match) return 0;
-    let hours = parseInt(match[1]);
-    const minutes = parseInt(match[2]);
-    const meridian = match[3].toUpperCase();
-    if (meridian === "PM" && hours !== 12) hours += 12;
-    if (meridian === "AM" && hours === 12) hours = 0;
-    return hours * 60 + minutes;
-  };
-
-  // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
   const fetchAvailableFormsForDepartment = async (
     department: string,
     auditType: string,
@@ -1492,7 +1614,6 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
     if (!department) return [];
     const deptUpper = department.toUpperCase().trim();
 
-    // Only fetch multiple forms for IATF/System audits (Adjust if 5S/Process also have multiple forms)
     const isIATF =
       auditType.toLowerCase().includes("iatf") ||
       auditType.toLowerCase().includes("16949") ||
@@ -1524,257 +1645,245 @@ const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
     }
   };
 
-  // ============================================================
-  // ✅ FIXED: Full fetchSchedulesWithStatus
-  // ============================================================
- const fetchSchedulesWithStatus = async (year = selectedYear) => {
-  try {
-    setIsFetching(true);
-    setRefreshing(true);
-    const [
-      responsesData,
-      ncrData,
-      rescheduleData,
-      extensionData,
-      schedulesData,
-    ] = await Promise.all([
-      apiFetch("/templates/responses/all").catch(() => []),
-      apiFetch("/ncr/all").catch(() => []),
-      apiFetch(
-        `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
-      ).catch(() => []),
-      apiFetch(
-        `/audit-schedule/extension-requests/auditor/${user?.id}`,
-      ).catch(() => []),
-      apiFetch(
-        `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
-      ).catch(() => []),
-    ]);
+  const fetchSchedulesWithStatus = async (year = selectedYear) => {
+    try {
+      setIsFetching(true);
+      setRefreshing(true);
+      const [
+        responsesData,
+        ncrData,
+        rescheduleData,
+        extensionData,
+        schedulesData,
+      ] = await Promise.all([
+        apiFetch("/templates/responses/all").catch(() => []),
+        apiFetch("/ncr/all").catch(() => []),
+        apiFetch(
+          `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
+        ).catch(() => []),
+        apiFetch(
+          `/audit-schedule/extension-requests/auditor/${user?.id}`,
+        ).catch(() => []),
+        apiFetch(
+          `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
+        ).catch(() => []),
+      ]);
 
-    const pendingRescheduleIds = new Set();
-    (rescheduleData || []).forEach((req: any) => {
-      if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
-    });
-    const pendingExtensionIds = new Set();
-    (extensionData || []).forEach((req: any) => {
-      if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
-    });
-
-    const allResponses: any[] = responsesData || [];
-    const existingNcrAuditIds = new Set(
-      (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
-    );
-
-    const pendingNcrItems = allResponses
-      .filter((r: any) => {
-        const isMyAudit = Number(r.auditorId) === Number(user?.id);
-        if (!isMyAudit) {
-          console.log(
-            `⚠️ [NCR DEBUG] Skipped response ${r.id}: auditorId (${r.auditorId}) !== userId (${user?.id})`,
-          );
-        }
-        return isMyAudit;
-      })
-      .map((r: any) => {
-        const answers = parseResponseAnswers(r);
-        return {
-          responseId: r.id,
-          auditReportNumber: getAuditReportNumber(answers, r),
-          formName: answers.formName || r.checkSheet?.name || "Audit Form",
-          department: r.department || answers.department || "Production",
-          auditeeId: r.auditeeId || answers.auditeeId || "",
-          auditeeName: r.auditeeName || answers.auditeeName || "",
-          shift: r.shift || answers.shift || "Day",
-          findings: getNcrFindingEntries(answers),
-          createdAt: r.createdAt,
-        };
-      })
-      .filter((item: any) => {
-        const itemYear = item.createdAt
-          ? new Date(item.createdAt).getFullYear()
-          : new Date().getFullYear();
-        const hasFindings = item.findings.length > 0;
-        const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
-        const isCurrentYear = itemYear === year;
-
-        return hasFindings && notRaised && isCurrentYear;
+      const pendingRescheduleIds = new Set();
+      (rescheduleData || []).forEach((req: any) => {
+        if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
+      });
+      const pendingExtensionIds = new Set();
+      (extensionData || []).forEach((req: any) => {
+        if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
       });
 
-    setPendingNcrAudits(pendingNcrItems);
+      const allResponses: any[] = responsesData || [];
+      const existingNcrAuditIds = new Set(
+        (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
+      );
 
-    let filteredSchedules = schedulesData || [];
-    if (year) {
-      filteredSchedules = filteredSchedules.filter((item: any) => {
+      const pendingNcrItems = allResponses
+        .filter((r: any) => Number(r.auditorId) === Number(user?.id))
+        .map((r: any) => {
+          const answers = parseResponseAnswers(r);
+          return {
+            responseId: r.id,
+            auditReportNumber: getAuditReportNumber(answers, r),
+            formName: answers.formName || r.checkSheet?.name || "Audit Form",
+            department: r.department || answers.department || "Production",
+            auditeeId: r.auditeeId || answers.auditeeId || "",
+            auditeeName: r.auditeeName || answers.auditeeName || "",
+            shift: r.shift || answers.shift || "Day",
+            findings: getNcrFindingEntries(answers),
+            createdAt: r.createdAt,
+          };
+        })
+        .filter((item: any) => {
+          const itemYear = item.createdAt
+            ? new Date(item.createdAt).getFullYear()
+            : new Date().getFullYear();
+          const hasFindings = item.findings.length > 0;
+          const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
+          const isCurrentYear = itemYear === year;
+
+          return hasFindings && notRaised && isCurrentYear;
+        });
+
+      setPendingNcrAudits(pendingNcrItems);
+
+      let filteredSchedules = schedulesData || [];
+      if (year) {
+        filteredSchedules = filteredSchedules.filter((item: any) => {
+          const schedule = item.schedule || item;
+          if (!schedule) return false;
+          if (
+            schedule.scheduledDate &&
+            new Date(schedule.scheduledDate).getFullYear() === year
+          )
+            return true;
+          if (schedule.fromDate && schedule.toDate) {
+            const fromYear = new Date(schedule.fromDate).getFullYear();
+            const toYear = new Date(schedule.toDate).getFullYear();
+            if (fromYear <= year && toYear >= year) return true;
+          }
+          return false;
+        });
+      }
+
+      const enhancedData = await Promise.all(filteredSchedules.map(async (item: any) => {
         const schedule = item.schedule || item;
-        if (!schedule) return false;
-        if (
-          schedule.scheduledDate &&
-          new Date(schedule.scheduledDate).getFullYear() === year
-        )
-          return true;
-        if (schedule.fromDate && schedule.toDate) {
-          const fromYear = new Date(schedule.fromDate).getFullYear();
-          const toYear = new Date(schedule.toDate).getFullYear();
-          if (fromYear <= year && toYear >= year) return true;
-        }
-        return false;
-      });
-    }
+        const scheduleId = schedule.id;
+        const department = schedule.department || "";
+        const auditType = schedule.auditType || "";
 
-    const todayStr = toDateString(new Date()) || '';
+        const scheduleResponses = allResponses.filter(
+          (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
+        );
 
-    // ✅ REPLACE YOUR ENTIRE enhancedData MAPPING BLOCK WITH THIS:
-const enhancedData = await Promise.all(filteredSchedules.map(async (item: any) => {
-    const schedule = item.schedule || item;
-    const scheduleId = schedule.id;
-    const department = schedule.department || "";
-    const auditType = schedule.auditType || "";
-
-    // 1. Find all saved responses for this specific schedule
-    const scheduleResponses = allResponses.filter(
-        (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
-    );
-
-    // Create a map for quick lookup: checkSheetId -> response
-    const responseMap = new Map();
-    scheduleResponses.forEach((r: any) => {
-        if (r.checkSheet?.id) {
+        const responseMap = new Map();
+        scheduleResponses.forEach((r: any) => {
+          if (r.checkSheet?.id) {
             responseMap.set(String(r.checkSheet.id), r);
-        }
-    });
+          }
+        });
 
-    // 2. Determine the list of ALL assigned forms
-    let formDetails: any[] = [];
-    
-    // Check if backend already returns the full list of forms in the schedule object
-    const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
-    
-    if (Array.isArray(assignedForms) && assignedForms.length > 0) {
-        // Map over ALL assigned forms from backend
-        formDetails = assignedForms.map((form: any) => {
+        let formDetails: any[] = [];
+        const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
+
+        if (Array.isArray(assignedForms) && assignedForms.length > 0) {
+          formDetails = assignedForms.map((form: any) => {
             const existingResponse = responseMap.get(String(form.id));
             return {
+              id: form.id,
+              name: form.name || form.processName || "Audit Form",
+              processName: form.processName || form.name || "Audit",
+              completed: !!existingResponse && (
+                existingResponse.status === "COMPLETED" ||
+                existingResponse.status === "APPROVED" ||
+                existingResponse.status === "SUBMITTED" ||
+                existingResponse.submittedAt !== null
+              ),
+              responseId: existingResponse?.id,
+              status: existingResponse?.status,
+            };
+          });
+        } else {
+          const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
+
+          if (availableForms.length > 0) {
+            formDetails = availableForms.map((form: any) => {
+              const existingResponse = responseMap.get(String(form.id));
+              return {
                 id: form.id,
                 name: form.name || form.processName || "Audit Form",
                 processName: form.processName || form.name || "Audit",
                 completed: !!existingResponse && (
-                    existingResponse.status === "COMPLETED" ||
-                    existingResponse.status === "APPROVED" ||
-                    existingResponse.status === "SUBMITTED" ||
-                    existingResponse.submittedAt !== null
+                  existingResponse.status === "COMPLETED" ||
+                  existingResponse.status === "APPROVED" ||
+                  existingResponse.status === "SUBMITTED" ||
+                  existingResponse.submittedAt !== null
                 ),
                 responseId: existingResponse?.id,
                 status: existingResponse?.status,
-            };
-        });
-    } else {
-        // Fallback: Fetch available forms from API (Exactly like your React web code)
-        const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
-        
-        if (availableForms.length > 0) {
-            formDetails = availableForms.map((form: any) => {
-                const existingResponse = responseMap.get(String(form.id));
-                return {
-                    id: form.id,
-                    name: form.name || form.processName || "Audit Form",
-                    processName: form.processName || form.name || "Audit",
-                    completed: !!existingResponse && (
-                        existingResponse.status === "COMPLETED" ||
-                        existingResponse.status === "APPROVED" ||
-                        existingResponse.status === "SUBMITTED" ||
-                        existingResponse.submittedAt !== null
-                    ),
-                    responseId: existingResponse?.id,
-                    status: existingResponse?.status,
-                };
+              };
             });
-        } else {
-            // Ultimate fallback: Single form audit or backend didn't provide forms
+          } else {
             formDetails = scheduleResponses.length > 0
-                ? scheduleResponses.map((r: any) => ({
-                    id: r.checkSheet?.id || 1,
-                    name: r.checkSheet?.name || auditType || "Audit Form",
-                    processName: r.checkSheet?.processName || auditType || "Audit",
-                    completed:
-                        r.status === "COMPLETED" ||
-                        r.status === "APPROVED" ||
-                        r.status === "SUBMITTED" ||
-                        r.submittedAt !== null,
-                    responseId: r.id,
-                    status: r.status,
+              ? scheduleResponses.map((r: any) => ({
+                  id: r.checkSheet?.id || 1,
+                  name: r.checkSheet?.name || auditType || "Audit Form",
+                  processName: r.checkSheet?.processName || auditType || "Audit",
+                  completed:
+                    r.status === "COMPLETED" ||
+                    r.status === "APPROVED" ||
+                    r.status === "SUBMITTED" ||
+                    r.submittedAt !== null,
+                  responseId: r.id,
+                  status: r.status,
                 }))
-                : [
-                    {
-                        id: schedule.checkSheet?.id || 1,
-                        name: auditType || "Audit Form",
-                        processName: auditType || "Audit",
-                        completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
-                    },
+              : [
+                  {
+                    id: schedule.checkSheet?.id || 1,
+                    name: auditType || "Audit Form",
+                    processName: auditType || "Audit",
+                    completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
+                  },
                 ];
+          }
         }
-    }
 
-    // 3. Calculate accurate stats based on ALL forms
-    const totalForms = formDetails.length;
-    const completedForms = formDetails.filter((f: any) => f.completed).length;
-    const hasFormData = completedForms > 0;
-    const isAllFormsCompleted = totalForms > 0 && completedForms === totalForms;
+        const totalForms = formDetails.length;
+        const completedForms = formDetails.filter((f: any) => f.completed).length;
+        const hasFormData = completedForms > 0;
+        const isAllFormsCompleted = totalForms > 0 && completedForms === totalForms;
 
-    const isAuditCompleted =
-        schedule.status === "COMPLETED" ||
-        schedule.status === "APPROVED" ||
-        schedule.status === "CLOSED";
+        const isAuditCompleted =
+          schedule.status === "COMPLETED" ||
+          schedule.status === "APPROVED" ||
+          schedule.status === "CLOSED";
 
-    const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
-    const finalTimeStatus = allFormsCompleted ? "COMPLETED" : item.timeStatus;
-    const finalCanStart = !allFormsCompleted && item.canStart;
+        const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
+        const finalTimeStatus = allFormsCompleted ? "COMPLETED" : item.timeStatus;
+        const finalCanStart = !allFormsCompleted && item.canStart;
 
-    return {
-        ...item,
-        schedule: {
+        return {
+          ...item,
+          schedule: {
             ...schedule,
             hasFormData,
             totalForms,
             completedForms: allFormsCompleted ? totalForms : completedForms,
             pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
             allFormsCompleted,
-            formDetails, // ✅ Now contains ALL forms, not just completed ones!
+            formDetails,
             rescheduleRequested: pendingRescheduleIds.has(scheduleId),
             extensionRequested: pendingExtensionIds.has(scheduleId),
             coAuditorNames: schedule.coAuditorNames || [],
-        },
-        timeStatus: finalTimeStatus,
-        canStart: finalCanStart,
-    };
-}));
+          },
+          timeStatus: finalTimeStatus,
+          canStart: finalCanStart,
+        };
+      }));
 
-    setSchedules(enhancedData);
+      setSchedules(enhancedData);
 
-    // ✅ FIXED: Stats using the correct timeStatus
-    setStats({
-      upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
-        .length,
-      active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
-        .length,
-      inProgress: enhancedData.filter(
-        (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
-      ).length,
-      expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
-        .length,
-      partiallyCompleted: 0,
-      completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
-        .length,
-      overdueNoWork: 0,
-      overduePartialWork: 0,
-    });
-  } catch (error) {
-    console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
-    addToast("Failed to load schedules", "error");
-  } finally {
-    setIsFetching(false);
-    setRefreshing(false);
-  }
-};
+      // ✅ FIXED: Stats using the updated isAuditExpired
+      setStats({
+        upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
+          .length,
+        active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
+          .length,
+        inProgress: enhancedData.filter(
+          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
+        ).length,
+        expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
+          .length,
+        partiallyCompleted: enhancedData.filter(
+          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
+        ).length,
+        completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
+          .length,
+        overdueNoWork: enhancedData.filter((s: any) => {
+          const isExpired = s.timeStatus === "EXPIRED" || isAuditExpired(s.schedule);
+          const hasStartedWork = s.schedule.hasFormData && s.schedule.completedForms > 0;
+          return isExpired && !hasStartedWork;
+        }).length,
+        overduePartialWork: enhancedData.filter((s: any) => {
+          const isExpired = s.timeStatus === "EXPIRED" || isAuditExpired(s.schedule);
+          const hasStartedWork = s.schedule.hasFormData && s.schedule.completedForms > 0;
+          const hasPending = s.schedule.pendingForms > 0;
+          return isExpired && hasStartedWork && hasPending;
+        }).length,
+      });
+    } catch (error) {
+      console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
+      addToast("Failed to load schedules", "error");
+    } finally {
+      setIsFetching(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
@@ -1783,29 +1892,14 @@ const enhancedData = await Promise.all(filteredSchedules.map(async (item: any) =
     }
   }, [user?.id, selectedYear]);
 
-  // Fetch all users for forum member selection
-useEffect(() => {
-  const fetchUsers = async () => {
-    try {
-      const users = await apiFetch("/users");
-      setAllUsers(users || []);
-    } catch (error) {
-      console.error("Failed to fetch users for forum:", error);
-    }
-  };
-  fetchUsers();
-}, []);
-
-useEffect(() => {
+  useEffect(() => {
     const currentYear = new Date().getFullYear();
     const startYear = 2020;
     const endYear = currentYear + 5;
     const allYears: number[] = [];
 
-    // Add default range
     for (let i = startYear; i <= endYear; i++) allYears.push(i);
 
-    // Add years found in actual schedule data
     if (schedules.length > 0) {
       schedules.forEach((item) => {
         const schedule = item.schedule;
@@ -1824,7 +1918,6 @@ useEffect(() => {
       });
     }
 
-    // Sort descending (newest first) and update state
     setAvailableYears(allYears.sort((a, b) => b - a));
   }, [schedules]);
 
@@ -1836,40 +1929,39 @@ useEffect(() => {
   };
 
   const handleViewForm = (audit: any, form: any) => {
-  setActiveFormConfig({
-    scheduleId: audit.id,
-    department: audit.department,
-    auditeeId: audit.auditeeId,
-    auditeeName: audit.auditeeName,
-    location: audit.location,
-    auditType: audit.auditType,
-    formId: form?.id,
-    processName: form?.processName || form?.name,
-    // Pass these for forum
-    auditorId: user?.id,
-    auditorName: user?.name,
-    hodEmail: audit.hodEmail,
-    hodName: audit.hodName,
-    memberEmails: audit.memberEmails || [],
-  });
-};
+    setActiveFormConfig({
+      scheduleId: audit.id,
+      department: audit.department,
+      auditeeId: audit.auditeeId,
+      auditeeName: audit.auditeeName,
+      location: audit.location,
+      auditType: audit.auditType,
+      formId: form?.id,
+      processName: form?.processName || form?.name,
+      auditorId: user?.id,
+      auditorName: user?.name,
+      hodEmail: audit.hodEmail,
+      hodName: audit.hodName,
+      memberEmails: audit.memberEmails || [],
+    });
+  };
 
   const handleViewReport = (responseId: any, audit: any, form: any) => {
-    console.log("🔍 [DEBUG] handleViewReport called with:", {
-      responseId,
-      auditType: audit?.auditType,
-    });
-
     if (!responseId) {
-      console.warn("⚠️ [DEBUG] responseId is missing!");
       addToast("Report not found (No response ID)", "error");
       return;
     }
 
-    // ✅ Set state to render the report inline
     setActiveReportConfig({
       id: String(responseId),
-      audit,
+      audit: {
+        ...audit,
+        auditorId: audit.auditorId || user?.id,
+        auditorName: audit.auditorName || user?.name,
+        hodEmail: audit.hodEmail,
+        hodName: audit.hodName,
+        memberEmails: audit.memberEmails || [],
+      },
       form,
     });
   };
@@ -1926,152 +2018,30 @@ useEffect(() => {
     }
   };
 
-    // Add this function in both dashboards
-// Add this function in AuditorDashboard (already added, but ensure it's complete)
-const handleOpenForum = (audit: any, form: any = null) => {
-  console.log("🔍 Opening forum for audit:", audit);
-  
-  // Check if it's an NCR item (has id and ncrNumber or isNcr flag)
-  const isNcrItem = audit?.ncrNumber || audit?.isNcr || audit?.status?.includes('NCR');
-  
-  if (!audit) {
-    addToast("No data available for forum", "error");
-    return;
-  }
-  
-  setSelectedAuditForForum(audit);
-  setForumModalVisible(true);
-};
-
-// Add this function after handleOpenForum
-const open8DForum = async (ncr: any) => {
-  console.log('🔍 [8D FORUM] Opening 8D forum for NCR:', ncr);
-  
-  if (!ncr) {
-    addToast("No NCR data available for 8D forum", "error");
-    return;
-  }
-
-  setSelected8DNCR(ncr);
-  setEightDTeamMembers([]);
-  setShow8DForumDrawer(true);
-  setLoadingTeamMembers(true);
-
-  try {
-    const eightDEventId = `8D-${ncr.ncrNumber}`;
-    const membersSet = new Set<string>();
-
-    // Fetch existing 8D team members
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
-        { credentials: "include" }
-      );
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        if (responseData?.success && responseData.data) {
-          const d0Data = responseData.data.content?.d0?.[0] || {};
-          const emails = Array.isArray(d0Data.additionalEmails)
-            ? d0Data.additionalEmails
-            : [];
-          emails.forEach((email: string) => membersSet.add(email));
-        }
-      }
-    } catch (err) {
-      console.log('Could not fetch existing 8D members:', err);
-    }
-
-    // Add current user
-    if (user?.email) membersSet.add(user.email);
-
-    // Add Audit Manager
-    const auditManager = allUsers.find(
-      (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
-    );
-    if (auditManager?.email) membersSet.add(auditManager.email);
-
-    // Add HOD
-    if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
-
-    // Add Auditor
-    if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
-    if (ncr.auditorName?.includes('@')) {
-      membersSet.add(ncr.auditorName);
-    }
-
-    // Add Auditee
-    if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
-    if (ncr.auditeeName?.includes('@')) {
-      membersSet.add(ncr.auditeeName);
-    }
-
-    // Add 8D Team members
-    const eightDTeam = allUsers.filter(
-      (u: any) => 
-        u.role === "8D_TEAM" || 
-        u.role === "EIGHT_D_TEAM" ||
-        u.role === "INITIATOR"
-    );
-    eightDTeam.forEach((member: any) => {
-      if (member.email) membersSet.add(member.email);
-    });
-
-    const finalMembers = [...membersSet];
-    console.log('✅ [8D FORUM] Members:', finalMembers);
-    setEightDTeamMembers(finalMembers);
-
-  } catch (error) {
-    console.error('❌ Failed to fetch 8D team members:', error);
-    // Fallback: Add essential members
-    const fallbackMembers = [
-      user?.email,
-      ncr.hodEmail,
-      ncr.auditorEmail,
-      ncr.auditeeEmail,
-      allUsers.find((u: any) => u.role === "AUDIT_MANAGER")?.email,
-    ].filter(Boolean);
-    setEightDTeamMembers([...new Set(fallbackMembers)]);
-  } finally {
-    setLoadingTeamMembers(false);
-  }
-};
-  
-
+  // ============================================================================
+  // ✅ RENDER FUNCTIONS
+  // ============================================================================
   const renderActiveReport = () => {
     if (!activeReportConfig) return null;
 
     const audit = activeReportConfig.audit || {};
     const form = activeReportConfig.form || {};
 
-    // 🔍 DEBUG: Log the exact objects to see what data we actually have
-    console.log("🔍 [DEBUG] renderActiveReport - audit object:", audit);
-    console.log("🔍 [DEBUG] renderActiveReport - form object:", form);
-
-    // ✅ Combine ALL possible fields that might contain the audit type
     const typeString = `
-      ${audit.auditType || ""} 
-      ${audit.auditName || ""} 
-      ${audit.processName || ""} 
+      ${audit.auditType || ""}
+      ${audit.auditName || ""}
+      ${audit.processName || ""}
       ${audit.checkSheetName || ""}
-      ${form.processName || ""} 
+      ${form.processName || ""}
       ${form.name || ""}
     `.toLowerCase();
 
-    console.log("🔍 [DEBUG] Evaluating combined typeString:", typeString);
-
-    // ✅ 1. IATF / System / Internal Audit Report
     if (
       typeString.includes("iatf") ||
       typeString.includes("system") ||
       typeString.includes("internal") ||
-      typeString.includes("16949") ||
-      typeString.includes("qms") ||
-      typeString.includes("ems") ||
-      typeString.includes("vda") ||
-      typeString.includes("iso")
+      typeString.includes("16949")
     ) {
-      console.log("✅ Matched IATF / System / Internal Audit");
       return (
         <IATFInternalView
           initialId={activeReportConfig.id}
@@ -2083,12 +2053,10 @@ const open8DForum = async (ncr: any) => {
       );
     }
 
-    // ✅ 2. Process / Manufacturing Audit Report
     if (
       typeString.includes("process") ||
       typeString.includes("manufacturing")
     ) {
-      console.log("✅ Matched Process / Manufacturing Audit");
       return (
         <ManufacturingProcessView
           initialId={activeReportConfig.id}
@@ -2100,11 +2068,6 @@ const open8DForum = async (ncr: any) => {
       );
     }
 
-    // ✅ 3. 5S Audit Report (Default Fallback)
-    console.log(
-      "⚠️ No specific match found, defaulting to FiveSView. typeString was:",
-      typeString,
-    );
     return (
       <FiveSView
         initialId={activeReportConfig.id}
@@ -2115,11 +2078,10 @@ const open8DForum = async (ncr: any) => {
       />
     );
   };
-  // ✅ ADD THIS NEW FUNCTION RIGHT HERE
+
   const renderActiveForm = () => {
     if (!activeFormConfig) return null;
 
-    // Common props shared by all audit forms
     const commonProps = {
       ...activeFormConfig,
       onClose: () => {
@@ -2133,7 +2095,6 @@ const open8DForum = async (ncr: any) => {
 
     const type = (activeFormConfig.auditType || "").toLowerCase();
 
-    // ✅ 1. 5S Audit
     if (
       type.includes("5s") ||
       type.includes("five_s") ||
@@ -2142,7 +2103,6 @@ const open8DForum = async (ncr: any) => {
       return <FiveSAuditForm {...commonProps} />;
     }
 
-    // ✅ 2. IATF / System / Internal Audit
     if (
       type.includes("iatf") ||
       type.includes("system") ||
@@ -2152,16 +2112,13 @@ const open8DForum = async (ncr: any) => {
       return <IATFInternalAuditForm {...commonProps} />;
     }
 
-    // // ✅ 3. Process / Manufacturing Audit
     if (type.includes("process") || type.includes("manufacturing")) {
       return <ManufacturingProcessAuditForm {...commonProps} />;
     }
 
-    // ✅ Fallback (defaults to 5S if type is unrecognized)
     return <FiveSAuditForm {...commonProps} />;
   };
 
-  // ✅ ADD THIS NEW FUNCTION
   const renderActiveNcrForm = () => {
     if (!activeNcrConfig) return null;
 
@@ -2169,8 +2126,8 @@ const open8DForum = async (ncr: any) => {
       <Form7View
         initialParams={activeNcrConfig}
         onClose={() => {
-          setActiveNcrConfig(null); // Closes the form
-          handleRefresh(); // Refreshes dashboard to update NCR stats/lists
+          setActiveNcrConfig(null);
+          handleRefresh();
         }}
       />
     );
@@ -2182,8 +2139,8 @@ const open8DForum = async (ncr: any) => {
       <Form7DetailView
         initialParams={activeNcrViewConfig}
         onClose={() => {
-          setActiveNcrViewConfig(null); // Closes the view
-          handleRefresh(); // Refreshes dashboard to update NCR stats/lists
+          setActiveNcrViewConfig(null);
+          handleRefresh();
         }}
       />
     );
@@ -2218,12 +2175,8 @@ const open8DForum = async (ncr: any) => {
         .includes(searchQuery.toLowerCase()),
   );
 
-  // ✅ NEW: how many columns the grid currently shows (must match the flex layout)
-  // 3 cols need: 3×300 (minWidth) + 2×16 (gap-4) = 932px | 2 cols need: 616px
   const containerWidth = Math.min(width - 32, 1200);
   const cols = containerWidth >= 932 ? 3 : containerWidth >= 616 ? 2 : 1;
-
-  // ✅ NEW: how many invisible placeholders are needed to complete the last row
   const remainder = filteredAudits.length % cols;
   const placeholders = remainder === 0 ? 0 : cols - remainder;
 
@@ -2232,7 +2185,6 @@ const open8DForum = async (ncr: any) => {
       className="flex-1"
       style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}
     >
-      {/* ✅ UPDATE THIS: Add activeNcrConfig check at the very top */}
       {activeNcrViewConfig ? (
         renderActiveNcrView()
       ) : activeNcrConfig ? (
@@ -2261,8 +2213,6 @@ const open8DForum = async (ncr: any) => {
             }}
           >
             {/* Header */}
-             {/* Header */}
-            {/* Replace the existing Header section (around line 850-880) with this: */}
             <View className="flex-row flex-wrap items-start justify-between gap-4 mb-6">
               <View className="flex-1 min-w-[200px]">
                 <Text className="text-2xl font-bold text-slate-800">
@@ -2281,9 +2231,7 @@ const open8DForum = async (ncr: any) => {
                 </Text>
               </View>
 
-              {/* Wrap buttons in a responsive container */}
               <View className="flex-row flex-wrap items-center gap-3">
-                {/* Year Filter - make it more compact on mobile */}
                 <View className="flex-shrink-0">
                   <YearFilter
                     selectedYear={selectedYear}
@@ -2292,7 +2240,6 @@ const open8DForum = async (ncr: any) => {
                   />
                 </View>
 
-                {/* Refresh Button - smaller on mobile */}
                 <TouchableOpacity
                   onPress={handleRefresh}
                   disabled={refreshing}
@@ -2306,12 +2253,6 @@ const open8DForum = async (ncr: any) => {
                   ) : (
                     <RefreshCw size={16} color="#475569" />
                   )}
-                  {/* <Text className="text-xs font-semibold md:text-sm text-slate-700">
-                    {isMobile ? "" : "Refresh"}
-                    {isMobile && (
-                      <RefreshCw size={16} color="#475569" className="ml-1" />
-                    )}
-                  </Text> */}
                 </TouchableOpacity>
               </View>
             </View>
@@ -2332,7 +2273,7 @@ const open8DForum = async (ncr: any) => {
                 <StatCardsContainer stats={stats} isNcr={false} />
               </View>
             )}
-            {/* Search & View Mode Toggle */}
+
             {activeTab === "my-audits" && (
               <View className="flex-row flex-wrap items-center justify-between gap-3 mb-6">
                 <View className="relative flex-1">
@@ -2370,7 +2311,6 @@ const open8DForum = async (ncr: any) => {
               </View>
             )}
 
-            {/* Content: Grid vs List View */}
             {activeTab === "my-audits" &&
               (filteredAudits.length === 0 ? (
                 <View className="items-center py-16 text-center bg-white border shadow-sm rounded-2xl border-slate-200">
@@ -2420,11 +2360,10 @@ const open8DForum = async (ncr: any) => {
                         }}
                         onViewForm={handleViewForm}
                         onViewReport={handleViewReport}
-                        onOpenForum={handleOpenForum}  // ✅ Change this
+                        onOpenForum={handleOpenForum}
                       />
                     </View>
                   ))}
-                  {/* ✅ NEW: invisible fillers so the last card doesn't stretch */}
                   {Array.from({ length: placeholders }).map((_, i) => (
                     <View
                       key={`placeholder-${i}`}
@@ -2456,7 +2395,7 @@ const open8DForum = async (ncr: any) => {
                         setSelectedForm(form);
                         setShowExtensionModal(true);
                       }}
-                      onOpenForum={() => addToast("Forum opened", "success")}
+                      onOpenForum={handleOpenForum}
                     />
                   ))}
                 </View>
@@ -2478,60 +2417,52 @@ const open8DForum = async (ncr: any) => {
                 <StatCardsContainer stats={ncrStats} isNcr={true} />
               </View>
             )}
-            {/* NCR Tabs */}
+
             {activeTab === "ncr-pending" && (
-  <NcrPendingList
-    pendingNcrAudits={pendingNcrAudits}
-    onRaise={(item: any) => {
-      const routeParams = {
-        auditId: String(item.responseId),
-        auditReportNumber: item.auditReportNumber || "",
-        department: item.department || "",
-        shift: item.shift || "Day",
-        auditeeId: item.auditeeId ? String(item.auditeeId) : "",
-        auditeeName: item.auditeeName || "",
-        clause: item.findings.map((f: any) => f.clause).join("\n"),
-        evidence: item.findings
-          .map(
-            (f: any) =>
-              `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
-          )
-          .join("\n"),
-        statement: item.findings
-          .map(
-            (f: any) =>
-              `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
-          )
-          .join("\n"),
-      };
-      setActiveNcrConfig(routeParams);
-    }}
-    onOpenForum={handleOpenForum}  // ✅ ADD THIS
-  />
-)}
+              <NcrPendingList
+                pendingNcrAudits={pendingNcrAudits}
+                onRaise={(item: any) => {
+                  const routeParams = {
+                    auditId: String(item.responseId),
+                    auditReportNumber: item.auditReportNumber || "",
+                    department: item.department || "",
+                    shift: item.shift || "Day",
+                    auditeeId: item.auditeeId ? String(item.auditeeId) : "",
+                    auditeeName: item.auditeeName || "",
+                    clause: item.findings.map((f: any) => f.clause).join("\n"),
+                    evidence: item.findings
+                      .map(
+                        (f: any) =>
+                          `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
+                      )
+                      .join("\n"),
+                    statement: item.findings
+                      .map(
+                        (f: any) =>
+                          `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
+                      )
+                      .join("\n"),
+                  };
+                  setActiveNcrConfig(routeParams);
+                }}
+                onOpenForum={handleOpenForum}
+              />
+            )}
+
             {activeTab === "ncr-list" && (
-  <NcrListTab
-    raisedNCRs={raisedNCRs}
-    ncrLoading={ncrLoading}
-    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={(ncr: any) => {
-      // Check if it's an 8D related NCR
-      const is8D = ncr?.status === "SENT_TO_8D" || 
-                   ncr?.status === "IN_8D_PROCESS" || 
-                   ncr?.requires8D === true;
-      if (is8D) {
-        open8DForum(ncr);
-      } else {
-        handleOpenForum(ncr, null);
-      }
-    }}
-  />
-)}
+              <NcrListTab
+                raisedNCRs={raisedNCRs}
+                ncrLoading={ncrLoading}
+                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+                onOpenForum={handleOpenForum}
+                open8DForum={open8DForum}
+              />
+            )}
           </View>
         </ScrollView>
       )}
 
-      {/* Modals rendered outside the ternary, but inside SafeAreaView */}
+      {/* Modals */}
       <RescheduleRequestModal
         audit={selectedAudit}
         isOpen={showRescheduleModal}
@@ -2554,197 +2485,89 @@ const open8DForum = async (ncr: any) => {
         }}
         onSubmit={handleRequestExtension}
       />
-      {/* Forum Modal */}
-{selectedAuditForForum && (
-  <AuditCheckSheetNCRForumModal
-    auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
-    auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
-    auditTitle={selectedAuditForForum.auditType || "Audit"}
-    auditStatus={selectedAuditForForum.status || "ACTIVE"}
-    auditType={selectedAuditForForum.auditType || ""}
-    department={selectedAuditForForum.department || ""}
-    auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
-    auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
-    auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
-    auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
-    hodEmail={selectedAuditForForum.hodEmail || null}
-    hodName={selectedAuditForForum.hodName || null}
-    memberEmails={selectedAuditForForum.memberEmails || []}
-    isOpen={forumModalVisible}
-    onClose={() => {
-      setForumModalVisible(false);
-      setSelectedAuditForForum(null);
-    }}
-    currentUser={user}
-    allUsers={allUsers}
-    onNCRCreated={() => {
-      handleRefresh();
-    }}
-    onNCRUpdated={() => {
-      handleRefresh();
-    }}
-  />
-)}
 
-{/* 8D Forum Drawer */}
-<Modal visible={show8DForumDrawer} transparent animationType="slide">
-  <View className="flex-1 bg-black/30">
-    <TouchableOpacity
-      className="flex-1"
-      activeOpacity={1}
-      onPress={() => {
-        setShow8DForumDrawer(false);
-        setSelected8DNCR(null);
-        setEightDTeamMembers([]);
-      }}
-    />
-    <View className="w-full sm:w-1/2 h-full bg-white border-l border-gray-200 shadow-2xl">
-      {selected8DNCR && (
-        <View className="flex-1">
-          {loadingTeamMembers ? (
-            <View className="items-center justify-center flex-1">
-              <ActivityIndicator size="large" color="#00529B" />
-              <Text className="mt-3 text-sm text-gray-500">
-                Loading team members...
-              </Text>
-            </View>
-          ) : (
-            <ForumThreadView
-              groupId={`8D-${selected8DNCR.ncrNumber}`}
-              groupName={`8D-${selected8DNCR.ncrNumber}`}
-              isInDrawer={true}
-              setForumDrawerOpen={setShow8DForumDrawer}
-              username={user?.email || user?.username || "Unknown"}
-              currentUser={user}
-              allUsers={allUsers}
-              memberEmails={eightDTeamMembers}
-              onBack={() => {
-                setShow8DForumDrawer(false);
-                setSelected8DNCR(null);
-                setEightDTeamMembers([]);
-              }}
-            />
-          )}
-        </View>
+      {/* Forum Modal */}
+      {selectedAuditForForum && (
+        <AuditCheckSheetNCRForumModal
+          auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
+          auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
+          auditTitle={selectedAuditForForum.auditType || "Audit"}
+          auditStatus={selectedAuditForForum.status || "ACTIVE"}
+          auditType={selectedAuditForForum.auditType || ""}
+          department={selectedAuditForForum.department || ""}
+          auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
+          auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
+          auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
+          auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
+          hodEmail={selectedAuditForForum.hodEmail || null}
+          hodName={selectedAuditForForum.hodName || null}
+          memberEmails={selectedAuditForForum.memberEmails || []}
+          isOpen={forumModalVisible}
+          onClose={() => {
+            setForumModalVisible(false);
+            setSelectedAuditForForum(null);
+          }}
+          currentUser={user}
+          allUsers={allUsers}
+          onNCRCreated={() => {
+            handleRefresh();
+          }}
+          onNCRUpdated={() => {
+            handleRefresh();
+          }}
+        />
       )}
-    </View>
-  </View>
-</Modal>
+
+      {/* 8D Forum Drawer */}
+      <Modal visible={show8DForumDrawer} transparent animationType="slide">
+        <View className="flex-1 bg-black/30">
+          <TouchableOpacity
+            className="flex-1"
+            activeOpacity={1}
+            onPress={() => {
+              setShow8DForumDrawer(false);
+              setSelected8DNCR(null);
+              setEightDTeamMembers([]);
+            }}
+          />
+          <View className="w-full sm:w-1/2 h-full bg-white border-l border-gray-200 shadow-2xl">
+            {selected8DNCR && (
+              <View className="flex-1">
+                {loadingTeamMembers ? (
+                  <View className="items-center justify-center flex-1">
+                    <ActivityIndicator size="large" color="#00529B" />
+                    <Text className="mt-3 text-sm text-gray-500">
+                      Loading team members...
+                    </Text>
+                  </View>
+                ) : (
+                  <ForumThreadView
+                    groupId={`8D-${selected8DNCR.ncrNumber || selected8DNCR.id}`}
+                    groupName={`8D-${selected8DNCR.ncrNumber || selected8DNCR.id}`}
+                    isInDrawer={true}
+                    setForumDrawerOpen={setShow8DForumDrawer}
+                    username={user?.email || user?.username || "Unknown"}
+                    currentUser={user}
+                    allUsers={allUsers}
+                    memberEmails={eightDTeamMembers}
+                    onBack={() => {
+                      setShow8DForumDrawer(false);
+                      setSelected8DNCR(null);
+                      setEightDTeamMembers([]);
+                    }}
+                  />
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 // ============================================================================
-// REUSABLE DATE PICKER COMPONENT
-// ============================================================================
-const DatePickerField = ({ 
-  label, 
-  value, 
-  onChange, 
-  error 
-}: { 
-  label: string, 
-  value: string, 
-  onChange: (val: string) => void, 
-  error?: string 
-}) => {
-  const [showPicker, setShowPicker] = useState(false);
-  
-  const parseDateSafe = (dateStr: string) => {
-    if (!dateStr) return new Date();
-    const parts = dateStr.split("-");
-    if (parts.length === 3) {
-      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    }
-    return new Date(dateStr);
-  };
-
-  const [tempDate, setTempDate] = useState(parseDateSafe(value));
-
-  useEffect(() => {
-    if (value) setTempDate(parseDateSafe(value));
-  }, [value]);
-
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowPicker(false);
-      if (event.type === "set" && selectedDate) {
-        const formattedDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
-        onChange(formattedDate);
-      }
-    } else {
-      if (selectedDate) setTempDate(selectedDate);
-    }
-  };
-
-  const handleConfirm = () => {
-    const formattedDate = `${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, "0")}-${String(tempDate.getDate()).padStart(2, "0")}`;
-    onChange(formattedDate);
-    setShowPicker(false);
-  };
-
-  return (
-    <View>
-      <Text className="mb-1.5 text-sm font-semibold text-slate-700">{label}</Text>
-      
-      {Platform.OS === "web" ? (
-        <View className={`w-full flex-row items-center px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}>
-          <Calendar size={18} color="#64748b" />
-          {/* @ts-ignore */}
-          <input
-            type="date"
-            value={value}
-            onChange={(e: any) => onChange(e.target.value)}
-            style={{
-              flex: 1, border: "none", outline: "none", backgroundColor: "transparent",
-              color: value ? "#1e293b" : "#94a3b8", fontSize: 14, padding: 0,
-              marginLeft: 8, fontFamily: "inherit", cursor: "pointer", width: "100%",
-            }}
-          />
-        </View>
-      ) : (
-        <>
-          <TouchableOpacity
-            onPress={() => setShowPicker(true)}
-            className={`w-full flex-row items-center justify-between px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
-          >
-            <Text className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}>
-              {value || "Select Date"}
-            </Text>
-            <Calendar size={18} color="#64748b" />
-          </TouchableOpacity>
-
-          {Platform.OS === "ios" && showPicker && (
-            <Modal transparent animationType="slide" visible={showPicker}>
-              <View className="justify-end flex-1 bg-slate-900/60">
-                <View className="p-4 pb-8 bg-white rounded-t-3xl">
-                  <View className="flex-row items-center justify-between mb-3">
-                    <TouchableOpacity onPress={() => setShowPicker(false)}>
-                      <Text className="text-base font-medium text-rose-500">Cancel</Text>
-                    </TouchableOpacity>
-                    <Text className="text-base font-semibold text-slate-800">Select Date</Text>
-                    <TouchableOpacity onPress={handleConfirm}>
-                      <Text className="text-base font-bold text-blue-600">Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <DateTimePicker value={tempDate} mode="date" display="spinner" onChange={onDateChange} textColor="#000000" />
-                </View>
-              </View>
-            </Modal>
-          )}
-
-          {Platform.OS === "android" && showPicker && (
-            <DateTimePicker value={tempDate} mode="date" display="default" onChange={onDateChange} />
-          )}
-        </>
-      )}
-      {error ? <Text className="mt-1 text-xs text-rose-600">{error}</Text> : null}
-    </View>
-  );
-};
-
-// ============================================================================
-// MODALS (Unchanged, fully functional)
+// RESCHEDULE REQUEST MODAL
 // ============================================================================
 const RescheduleRequestModal = ({
   audit,
@@ -2951,7 +2774,7 @@ const RescheduleRequestModal = ({
             <Text className="font-bold">{audit?.department}</Text>
           </Text>
           <View className="gap-4">
-                        <DatePickerField
+            <DatePickerField
               label="New Date *"
               value={newDate}
               onChange={(text) => {
@@ -3035,6 +2858,9 @@ const RescheduleRequestModal = ({
   );
 };
 
+// ============================================================================
+// EXTENSION REQUEST MODAL
+// ============================================================================
 const ExtensionRequestModal = ({
   audit,
   form,
@@ -3047,7 +2873,7 @@ const ExtensionRequestModal = ({
   const [newEndTime, setNewEndTime] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  
+
   const { addToast } = useToast();
   const validEndTimes = newStartTime
     ? TIME_OPTIONS.filter(
@@ -3066,8 +2892,6 @@ const ExtensionRequestModal = ({
       setReason("");
     }
   }, [audit, isOpen]);
-
-  
 
   const handleSubmit = async () => {
     if (
@@ -3091,8 +2915,6 @@ const ExtensionRequestModal = ({
     }
   };
 
-
-
   if (!isOpen) return null;
   return (
     <Modal visible={isOpen} transparent animationType="fade">
@@ -3109,7 +2931,7 @@ const ExtensionRequestModal = ({
             <Text className="font-bold">{audit?.auditType}</Text>
           </Text>
           <View className="gap-4">
-                        <DatePickerField
+            <DatePickerField
               label="New Due Date *"
               value={newDate}
               onChange={setNewDate}
@@ -3169,8 +2991,159 @@ const ExtensionRequestModal = ({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+};
 
-    
-    
+// ============================================================================
+// DATE PICKER FIELD
+// ============================================================================
+const DatePickerField = ({
+  label,
+  value,
+  onChange,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  error?: string;
+}) => {
+  const [showPicker, setShowPicker] = useState(false);
+
+  const parseDateSafe = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return new Date(
+        parseInt(parts[0]),
+        parseInt(parts[1]) - 1,
+        parseInt(parts[2]),
+      );
+    }
+    return new Date(dateStr);
+  };
+
+  const [tempDate, setTempDate] = useState(parseDateSafe(value));
+
+  useEffect(() => {
+    if (value) setTempDate(parseDateSafe(value));
+  }, [value]);
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowPicker(false);
+      if (event.type === "set" && selectedDate) {
+        const formattedDate = `${selectedDate.getFullYear()}-${String(
+          selectedDate.getMonth() + 1,
+        ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+        onChange(formattedDate);
+      }
+    } else {
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const handleConfirm = () => {
+    const formattedDate = `${tempDate.getFullYear()}-${String(
+      tempDate.getMonth() + 1,
+    ).padStart(2, "0")}-${String(tempDate.getDate()).padStart(2, "0")}`;
+    onChange(formattedDate);
+    setShowPicker(false);
+  };
+
+  return (
+    <View>
+      <Text className="mb-1.5 text-sm font-semibold text-slate-700">
+        {label}
+      </Text>
+
+      {Platform.OS === "web" ? (
+        <View
+          className={`w-full flex-row items-center px-3 h-12 bg-white border rounded-xl ${
+            error ? "border-rose-500 bg-rose-50" : "border-slate-200"
+          }`}
+        >
+          <Calendar size={18} color="#64748b" />
+          {/* @ts-ignore */}
+          <input
+            type="date"
+            value={value}
+            onChange={(e: any) => onChange(e.target.value)}
+            style={{
+              flex: 1,
+              border: "none",
+              outline: "none",
+              backgroundColor: "transparent",
+              color: value ? "#1e293b" : "#94a3b8",
+              fontSize: 14,
+              padding: 0,
+              marginLeft: 8,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              width: "100%",
+            }}
+          />
+        </View>
+      ) : (
+        <>
+          <TouchableOpacity
+            onPress={() => setShowPicker(true)}
+            className={`w-full flex-row items-center justify-between px-3 h-12 bg-white border rounded-xl ${
+              error ? "border-rose-500 bg-rose-50" : "border-slate-200"
+            }`}
+          >
+            <Text
+              className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}
+            >
+              {value || "Select Date"}
+            </Text>
+            <Calendar size={18} color="#64748b" />
+          </TouchableOpacity>
+
+          {Platform.OS === "ios" && showPicker && (
+            <Modal transparent animationType="slide" visible={showPicker}>
+              <View className="justify-end flex-1 bg-slate-900/60">
+                <View className="p-4 pb-8 bg-white rounded-t-3xl">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <TouchableOpacity onPress={() => setShowPicker(false)}>
+                      <Text className="text-base font-medium text-rose-500">
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <Text className="text-base font-semibold text-slate-800">
+                      Select Date
+                    </Text>
+                    <TouchableOpacity onPress={handleConfirm}>
+                      <Text className="text-base font-bold text-blue-600">
+                        Done
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={onDateChange}
+                    textColor="#000000"
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {Platform.OS === "android" && showPicker && (
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+            />
+          )}
+        </>
+      )}
+      {error ? (
+        <Text className="mt-1 text-xs text-rose-600">{error}</Text>
+      ) : null}
+    </View>
   );
 };
