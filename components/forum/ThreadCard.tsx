@@ -112,22 +112,59 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
 };
 
 // ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
+// ✅ FIXED: Show absolute time like WhatsApp
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
+  
   try {
-    let isoString = dateString.replace(' ', 'T');
-    // Let JS parse it as local time naturally
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "";
+    // Parse the date
+    let isoString = dateString;
     
-    return date.toLocaleString('en-US', {
+    // Replace space with T if needed
+    if (!isoString.includes('T')) {
+      isoString = isoString.replace(' ', 'T');
+    }
+    
+    // Parse the date (let JS handle timezone naturally)
+    const date = new Date(isoString);
+    
+    if (isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000);
+    
+    // Today: Show time only
+    if (diffDays === 0) {
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    }
+    
+    // Yesterday: Show "Yesterday"
+    if (diffDays === 1) {
+      return "Yesterday";
+    }
+    
+    // This week: Show day name
+    if (diffDays < 7) {
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+    
+    // Older: Show date
+    return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     });
+    
   } catch (error) {
+    console.error('Date error:', error);
     return "";
   }
 };
