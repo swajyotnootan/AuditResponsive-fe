@@ -39,6 +39,8 @@ import {
 import { notificationAPI } from '../../services/api';
 import { useAuth } from './AuthContext';
 
+const SOUND_GRACE_PERIOD_MS = 10000; // 10 seconds
+
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental && UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -344,6 +346,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const initAttempted = useRef<boolean>(false);
   const lastNotificationsRef = useRef<Notification[]>([]);
   const currentUserIdRef = useRef<string | null>(null);
+  const soundGraceUntilRef = useRef<number>(0); // ✅ Sound disabled until this timestamp
 
   // Safe access to user properties
   const userId = user?.id ?? null;
@@ -410,23 +413,23 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     initSoundSystem();
   }, [initSoundSystem]);
 
-  useEffect(() => {
-    if (userId) {
-      console.log('👤 User logged in:', {
-        id: userId,
-        role: userRole,
-      });
+ useEffect(() => {
+  if (userId) {
+    console.log('👤 User logged in:', { id: userId, role: userRole });
 
-      if (notificationSound.current) {
-        notificationSound.current.init();
-      } else {
-        initSoundSystem();
-      }
+    // ✅ START GRACE PERIOD: no sound until user reaches their page
+    soundGraceUntilRef.current = Date.now() + SOUND_GRACE_PERIOD_MS;
+    console.log(`⏳ Sound will activate in ${SOUND_GRACE_PERIOD_MS / 1000}s (after user reaches dashboard)`);
 
-      // Update current user ID ref
-      currentUserIdRef.current = String(userId);
+    if (notificationSound.current) {
+      notificationSound.current.init();
+    } else {
+      initSoundSystem();
     }
-  }, [userId, userRole, initSoundSystem]);
+
+    currentUserIdRef.current = String(userId);
+  }
+}, [userId, userRole, initSoundSystem]);
 
   // Get sound type based on notification title
   const getNotificationSoundType = (title: string | undefined): string => {
@@ -501,6 +504,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   // ✅ Fetch from API and update cache
     // ✅ ENHANCED: Fetch from API and update cache with better logging
   // ✅ Fetch from API and update cache - ENHANCED for sound
+// ✅ Fetch from API and update cache - FIXED: Wait for user to reach dashboard
 const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   try {
     console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
@@ -538,9 +542,12 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
 
     const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
     
-    // ✅ Play sound for NEW unread notifications (improved logic)
-    if (newNotifications.length > 0 && soundEnabled) {
-      console.log(`🔔 NEW notifications detected: ${newNotifications.length}`);
+    // ✅ Check if grace period has passed (user reached their page)
+    const graceElapsed = Date.now() >= soundGraceUntilRef.current;
+    
+    // ✅ FIXED: Only play sound if NOT initial load AND grace period passed
+    if (!isInitialLoad && graceElapsed && newNotifications.length > 0 && soundEnabled) {
+      console.log(`🔔 NEW notifications detected AFTER user reached page: ${newNotifications.length}`);
       
       const latestNotification = newNotifications[0];
       const notificationType = getNotificationSoundType(latestNotification.title);
@@ -562,7 +569,12 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
           notificationSound.current.queueSound(notificationType);
         }
       }
-    } else if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+    } else if (!graceElapsed && newNotifications.length > 0) {
+      // ✅ User still navigating to dashboard → stay silent
+      console.log(`⏳ Grace period active - loaded ${newNotifications.length} notifications silently`);
+    } else if (isInitialLoad) {
+      console.log(`🔕 Initial load → silent (${newNotifications.length} existing unread)`);
+    } else if (newUnreadCount > previousUnreadCount.current && soundEnabled && graceElapsed) {
       // Fallback: if unread count increased but no new IDs detected
       console.log(`📈 Unread count increased: ${previousUnreadCount.current} → ${newUnreadCount}`);
       
@@ -583,8 +595,7 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   } catch (error) {
     console.error('Error fetching notifications from API:', error);
   }
-}, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
-
+}, [userRole, hasRoleAccess, soundEnabled, isSoundReady, isInitialLoad]);
   // ✅ Clear cache on logout
   const clearNotificationCache = useCallback(async () => {
     if (userId) {
