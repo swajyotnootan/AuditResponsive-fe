@@ -2067,24 +2067,39 @@ const handleOpenForum = (audit: any, form: any = null) => {
   setForumModalVisible(true);
 };
 
-  const openNCRForum = (ncr: any) => {
+    const openNCRForum = (ncr: any) => {
     if (!ncr) {
       addToast("No NCR data available for forum", "error");
       return;
     }
-    
-    // Find Audit Manager to include in forum
-    const auditManager = allUsers.find(
-      (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
-    );
-    const memberEmails = [
-      user?.email,
-      ncr.hodEmail,
-      ncr.auditorEmail,
-      ncr.auditeeEmail,
-      auditManager?.email
-    ].filter(Boolean);
 
+    // 1. Find all Audit Managers and Masters from the fetched user list
+    const managersAndMasters = allUsers.filter((u: any) => {
+      const role = (u.role || "").toUpperCase();
+      return role.includes("AUDIT_MANAGER") || role.includes("MASTER");
+    });
+
+    // 2. Build a unique list of member emails
+    const memberEmails: string[] = [];
+    
+    // Add Managers & Masters
+    managersAndMasters.forEach((m: any) => {
+      if (m.email && !memberEmails.includes(m.email)) {
+        memberEmails.push(m.email);
+      }
+    });
+
+    // Add NCR specific members (HOD, Auditor, Auditee)
+    if (ncr.hodEmail && !memberEmails.includes(ncr.hodEmail)) memberEmails.push(ncr.hodEmail);
+    if (ncr.auditorEmail && !memberEmails.includes(ncr.auditorEmail)) memberEmails.push(ncr.auditorEmail);
+    if (ncr.auditeeEmail && !memberEmails.includes(ncr.auditeeEmail)) memberEmails.push(ncr.auditeeEmail);
+
+    // Ensure current logged-in user is included just in case
+    if (user?.email && !memberEmails.includes(user.email)) {
+      memberEmails.push(user.email);
+    }
+
+    // 3. Set the forum data to open the modal
     setSelectedAuditForForum({
       id: ncr.id,
       auditNumber: ncr.ncrNumber || `NCR-${ncr.id}`,
@@ -2096,8 +2111,11 @@ const handleOpenForum = (audit: any, form: any = null) => {
       auditorName: ncr.auditorName || user?.name,
       auditeeId: ncr.auditeeId,
       auditeeName: ncr.auditeeName,
-      memberEmails: [...new Set(memberEmails)],
+      hodEmail: ncr.hodEmail || null,
+      hodName: ncr.hodName || null,
+      memberEmails: memberEmails, // ✅ Now correctly includes MASTER, AUDIT_MANAGER, HOD, Auditor, and Auditee
     });
+    
     setForumModalVisible(true);
   };
 
