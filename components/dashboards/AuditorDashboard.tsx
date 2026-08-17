@@ -1038,12 +1038,14 @@ const AuditCard = ({
               </TouchableOpacity>
             )}
           {/* ✅ Continue Button */}
+                    {/* ✅ Continue Button - Only for multi-form audits */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
+            isMultiForm && // ✅ Only show for multi-form audits
             hasFormData &&
             !allFormsCompleted &&
             !isExpired &&
-            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
+            (timeStatus === "ACTIVE" || canStart) && (
               <TouchableOpacity
                 onPress={() => {
                   const nextForm =
@@ -1704,6 +1706,7 @@ const fetchSchedulesWithStatus = async (year = selectedYear) => {
       });
 
       // 2. Determine the list of ALL assigned forms
+            // 2. Determine the list of ALL assigned forms
       let formDetails: any[] = [];
       
       const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
@@ -1746,27 +1749,39 @@ const fetchSchedulesWithStatus = async (year = selectedYear) => {
             };
           });
         } else {
-          formDetails = scheduleResponses.length > 0
-            ? scheduleResponses.map((r: any) => ({
-                id: r.checkSheet?.id || 1,
-                name: r.checkSheet?.name || auditType || "Audit Form",
-                processName: r.checkSheet?.processName || auditType || "Audit",
-                completed:
-                  r.status === "COMPLETED" ||
-                  r.status === "APPROVED" ||
-                  r.status === "SUBMITTED" ||
-                  r.submittedAt !== null,
-                responseId: r.id,
-                status: r.status,
-              }))
-            : [
-                {
-                  id: schedule.checkSheet?.id || 1,
-                  name: auditType || "Audit Form",
-                  processName: auditType || "Audit",
-                  completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
-                },
-              ];
+          // ✅ FIX: For single-form audits, only use the latest response
+          if (scheduleResponses.length > 0) {
+            // Sort by createdAt to get the most recent response
+            const sortedResponses = [...scheduleResponses].sort((a, b) => {
+              const dateA = new Date(a.createdAt || 0).getTime();
+              const dateB = new Date(b.createdAt || 0).getTime();
+              return dateB - dateA; // Descending order (newest first)
+            });
+            
+            // Only take the first (most recent) response for single-form audits
+            const latestResponse = sortedResponses[0];
+            formDetails = [{
+              id: latestResponse.checkSheet?.id || 1,
+              name: latestResponse.checkSheet?.name || auditType || "Audit Form",
+              processName: latestResponse.checkSheet?.processName || auditType || "Audit",
+              completed:
+                latestResponse.status === "COMPLETED" ||
+                latestResponse.status === "APPROVED" ||
+                latestResponse.status === "SUBMITTED" ||
+                latestResponse.submittedAt !== null,
+              responseId: latestResponse.id,
+              status: latestResponse.status,
+            }];
+          } else {
+            formDetails = [
+              {
+                id: schedule.checkSheet?.id || 1,
+                name: auditType || "Audit Form",
+                processName: auditType || "Audit",
+                completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
+              },
+            ];
+          }
         }
       }
 
