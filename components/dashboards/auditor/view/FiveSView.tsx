@@ -470,7 +470,7 @@ export default function FiveSView({
 
       setAudit(auditData);
 
-      if (auditData.id) {
+     if (auditData.id) {
   try {
     const evidenceResponse = await auditScheduleApi.getEvidenceForResponse(auditData.id);
     const existingEvidences = evidenceResponse?.data || evidenceResponse || [];
@@ -481,7 +481,6 @@ export default function FiveSView({
         const slNo = ev.questionSlNo;
         if (!mappedEvidences[slNo]) mappedEvidences[slNo] = [];
 
-        // ✅ Get the best available URL
         let mediaUrl = ev.uri || ev.filePath || "";
         
         // ✅ If it's a blob URL, use filePath instead
@@ -490,25 +489,30 @@ export default function FiveSView({
         }
         
         // ✅ CRITICAL FIX: Don't use Windows file paths as URLs
-        // If it contains "\" or starts with a drive letter, it's a file system path
         if (mediaUrl && (mediaUrl.includes(":\\") || mediaUrl.match(/^[A-Za-z]:/))) {
-          // Extract just the filename from the Windows path
           const fileName = mediaUrl.split(/[\\/]/).pop() || ev.fileName || `evidence_${ev.id}`;
-          
-          // Try to build a proper URL - check if the backend has an endpoint for serving files
           const baseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-          // Use a relative path if the backend serves files from a specific directory
-          // This assumes your backend serves uploaded files from /uploads/ or similar
           mediaUrl = `${baseUrl}/uploads/evidences/${fileName}`;
-          
           console.log(`📸 Converted Windows path to URL: ${mediaUrl}`);
+        }
+        
+        // ✅ CRITICAL FIX: Remove /app/ prefix if it exists (backend stores internal paths)
+        if (mediaUrl && mediaUrl.includes("/app/")) {
+          mediaUrl = mediaUrl.replace("/app/", "/");
+          console.log(`📸 Removed /app/ prefix: ${mediaUrl}`);
         }
         
         // ✅ Build full URL if relative path
         if (mediaUrl && !mediaUrl.startsWith("http") && !mediaUrl.startsWith("data:") && !mediaUrl.startsWith("file:")) {
           const baseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-          mediaUrl = mediaUrl.startsWith("/") ? `${baseUrl}${mediaUrl}` : `${baseUrl}/${mediaUrl}`;
+          
+          // Remove leading slash if baseUrl already has trailing slash
+          const cleanPath = mediaUrl.startsWith("/") ? mediaUrl : `/${mediaUrl}`;
+          mediaUrl = `${baseUrl}${cleanPath}`;
         }
+        
+        // ✅ Debug log to see what URL we're trying to load
+        console.log(`📸 Evidence URL for question ${slNo}:`, mediaUrl);
 
         mappedEvidences[slNo].push({
           id: ev.id,
