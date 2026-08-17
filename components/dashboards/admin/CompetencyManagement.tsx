@@ -17,9 +17,8 @@ import {
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "@/config/apiConfig";
-import React, { useEffect, useState } from "react";
-
 import DateTimePicker from "@react-native-community/datetimepicker";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -31,6 +30,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { auditScheduleApi } from "../../../services/auditScheduleApi";
 
 interface DatePickerFieldProps {
   label: string;
@@ -118,14 +118,14 @@ const DatePickerField = ({ label, value, onChange }: DatePickerFieldProps) => {
               animationType="slide"
               visible={showPicker}
             >
-              <View className="flex-1 justify-end bg-black/30">
-                <View className="bg-white p-4 rounded-t-2xl">
+              <View className="justify-end flex-1 bg-black/30">
+                <View className="p-4 bg-white rounded-t-2xl">
                   <View className="flex-row justify-between mb-3">
                     <TouchableOpacity onPress={() => setShowPicker(false)}>
-                      <Text className="text-red-500 text-base">Cancel</Text>
+                      <Text className="text-base text-red-500">Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={handleDone}>
-                      <Text className="text-blue-900 text-base font-bold">
+                      <Text className="text-base font-bold text-blue-900">
                         Done
                       </Text>
                     </TouchableOpacity>
@@ -180,10 +180,15 @@ export default function CompetencyManagement() {
 
   const [error, setError] = useState("");
 
+  const [usedCompetencies, setUsedCompetencies] = useState<
+    Record<string, boolean>
+  >({});
+
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
     name: string;
     auditorName: string;
+    auditorId?: string; // ADDED: We need the auditor's ID to check their audits
   } | null>(null);
 
   const [formData, setFormData] = useState({
@@ -202,7 +207,58 @@ export default function CompetencyManagement() {
   useEffect(() => {
     fetchAuditors();
     fetchAuditTypes();
+    fetchCompetencyUsage();
   }, []);
+
+  // Parse "[60,61]" or [60,61] into number[]
+  const parseIdList = (val: any): number[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map(Number);
+    if (typeof val === "string") {
+      try {
+        const p = JSON.parse(val);
+        return Array.isArray(p) ? p.map(Number) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  // Parse '["5S Audit"]' or ["5S Audit"] into string[]
+  const parseElements = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === "string") {
+      try {
+        const p = JSON.parse(val);
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const getCompElementName = (comp: any): string => {
+    if (typeof comp?.auditType === "string") return comp.auditType;
+    if (comp?.auditType?.name) return comp.auditType.name;
+    return "";
+  };
+
+  const isCompetencyInUse = (auditorId: any, comp: any) => {
+    const name = getCompElementName(comp);
+    if (!name) return false;
+
+    const key = `${auditorId}_${name}`;
+    const inUse = Boolean(usedCompetencies[key]);
+
+    // 🕵️ DEBUG: Look at this in your F12 console!
+    console.log(
+      `[CHECK] Auditor: ${auditorId} | Name: "${name}" | Key: "${key}" | Blocked?: ${inUse}`,
+    );
+    return inUse;
+  };
 
   const fetchAuditors = async () => {
     setLoading(true);
@@ -232,6 +288,84 @@ export default function CompetencyManagement() {
       setAuditTypes(Array.isArray(data) ? data : []);
     } catch (err) {
       /* use defaults */
+    }
+  };
+
+  const fetchCompetencyUsage = async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+
+      // Fetch schedules for current year and next year to cover all active schedules
+      const resCurrent = await auditScheduleApi
+        .getByYear(currentYear)
+        .catch(() => ({ data: [] }));
+      const resNext = await auditScheduleApi
+        .getByYear(currentYear + 1)
+        .catch(() => ({ data: [] }));
+
+      const schedules = [
+        ...(Array.isArray(resCurrent.data) ? resCurrent.data : []),
+        ...(Array.isArray(resNext.data) ? resNext.data : []),
+      ];
+
+      console.log(`[DEBUG] Fetched ${schedules.length} schedules from API`);
+      const map: Record<string, boolean> = {};
+
+      schedules.forEach((s: any) => {
+        const status = String(s.status || s.approvalStatus || "").toUpperCase();
+        // Ignore cancelled or rejected audits
+        if (status === "CANCELLED" || status === "REJECTED") return;
+
+        // 1. Parse auditElements (could be array or stringified JSON like '["5S Audit"]')
+        let elements: string[] = [];
+        if (Array.isArray(s.auditElements)) {
+          elements = s.auditElements;
+        } else if (typeof s.auditElements === "string") {
+          try {
+            elements = JSON.parse(s.auditElements);
+          } catch {
+            elements = [];
+          }
+        }
+        // Fallback to single auditType if auditElements is missing
+        if (elements.length === 0 && s.auditType) elements = [s.auditType];
+        if (elements.length === 0) return;
+
+        // 2. Get all Auditor IDs involved in this schedule
+        const auditorIds = new Set<number>();
+        if (s.leadAuditorId) auditorIds.add(Number(s.leadAuditorId));
+        else if (s.auditorId) auditorIds.add(Number(s.auditorId));
+
+        // Helper to parse stringified arrays like "[60,61]"
+        const parseIdList = (val: any): number[] => {
+          if (!val) return [];
+          if (Array.isArray(val)) return val.map(Number);
+          if (typeof val === "string") {
+            try {
+              const p = JSON.parse(val);
+              return Array.isArray(p) ? p.map(Number) : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        };
+
+        parseIdList(s.coAuditorIdList).forEach((id) => auditorIds.add(id));
+        parseIdList(s.teamAuditorIds).forEach((id) => auditorIds.add(id));
+
+        // 3. Mark every (Auditor ID + Element Name) as blocked
+        auditorIds.forEach((aid) => {
+          elements.forEach((el) => {
+            map[`${aid}_${el}`] = true;
+          });
+        });
+      });
+
+      console.log("✅ BLOCKED MAP:", map); // Open F12 Console to see this!
+      setUsedCompetencies(map);
+    } catch (err) {
+      console.log("Failed to fetch schedule usage", err);
     }
   };
 
@@ -276,6 +410,8 @@ export default function CompetencyManagement() {
     setShowModal(true);
   };
 
+  // In CompetencyManagement.tsx - handleAutoFillAll()
+
   const handleAutoFillAll = async () => {
     if (auditors.length === 0) {
       setError("No auditors available to fill");
@@ -293,70 +429,116 @@ export default function CompetencyManagement() {
     try {
       const today = new Date();
       const certificationDate = today.toISOString().split("T")[0];
-
       const expiryDateObj = new Date(today);
       expiryDateObj.setFullYear(today.getFullYear() + 3);
       const expiryDate = expiryDateObj.toISOString().split("T")[0];
 
-      // 1. Define the core competencies we want EVERYONE to have
-      const requiredKeywords = ["Process", "System", "5S"];
+      // 1. Define ALL required audit types
+      const requiredAuditTypes = [
+        {
+          keyword: "IATF 16949 System Audit",
+          code: "IATF_SYS",
+          processes: ["APQP", "FMEA", "PPAP", "SPC", "MSA"],
+          products: ["Automotive Components", "Critical Parts"],
+        },
+        {
+          keyword: "ISO 9001 System Audit",
+          code: "ISO_SYS",
+          processes: ["QMS", "Document Control", "Internal Audit"],
+          products: ["General Products"],
+        },
+        {
+          keyword: "Process Audit",
+          code: "PROC_A",
+          processes: [
+            "Manufacturing",
+            "Assembly Line",
+            "Quality Control",
+            "Process Validation",
+          ],
+          products: ["Machined Parts", "Assemblies"],
+        },
+        {
+          keyword: "5S Audit",
+          code: "5S_A",
+          processes: ["Sort & Set in Order", "Shine & Standardize", "Sustain"],
+          products: ["All Areas"],
+        },
+      ];
 
-      // 2. Find matching audit types from your loaded list (case-insensitive)
-      const coreAuditTypes = requiredKeywords
-        .map((keyword) => {
-          return auditTypes.find((t) =>
-            t.name?.toLowerCase().includes(keyword.toLowerCase()),
+      // 2. Find matching audit types from the database
+      const coreAuditTypes = requiredAuditTypes
+        .map((required) => {
+          return auditTypes.find(
+            (t) =>
+              t.name?.toLowerCase().includes(required.keyword.toLowerCase()) ||
+              t.code?.toLowerCase().includes(required.code.toLowerCase()),
           );
         })
-        .filter(Boolean) as any[]; // Filter out undefined if a keyword wasn't found
+        .filter(Boolean) as any[];
 
       if (coreAuditTypes.length === 0) {
         setError(
-          "Could not find Process, System, or 5S in your audit types list.",
+          "Could not find required audit types. Please ensure IATF, ISO, Process, and 5S audit types exist.",
         );
         setLoading(false);
         return;
       }
 
+      console.log(`✅ Found ${coreAuditTypes.length} audit types to assign`);
+
       let totalAssignments = 0;
+      let skippedCount = 0;
 
       // 3. Loop through EVERY auditor
       for (let i = 0; i < auditors.length; i++) {
         const auditor = auditors[i];
 
-        // 4. Ensure they get all 3 core competencies
         for (let j = 0; j < coreAuditTypes.length; j++) {
           const auditType = coreAuditTypes[j];
 
-          // Check if auditor already has this specific core competency to prevent duplicates
+          // Find the corresponding required config
+          const requiredConfig = requiredAuditTypes.find(
+            (r) =>
+              r.code === auditType.code ||
+              auditType.name?.toLowerCase().includes(r.keyword.toLowerCase()),
+          );
+
+          // Check if auditor already has this competency
           const alreadyHas = auditor.auditCompetencies?.some(
             (c: any) =>
               c.auditTypeId === auditType.id ||
-              c.auditType?.id === auditType.id,
+              c.auditType?.id === auditType.id ||
+              c.auditType
+                ?.toLowerCase()
+                .includes(auditType.name?.toLowerCase()),
           );
 
-          if (alreadyHas) continue;
+          if (alreadyHas) {
+            skippedCount++;
+            continue;
+          }
 
           const params = new URLSearchParams({
             auditorId: String(auditor.id),
             auditTypeId: String(auditType.id),
-            certificationDate,
-            expiryDate,
+            certificationDate: certificationDate,
+            expiryDate: expiryDate,
             certificationBody: "Internal Audit Team",
             certificationNumber: `CORE-${today.getFullYear()}-${String(totalAssignments + 1).padStart(4, "0")}`,
           });
 
-          // Add specific relevant processes based on the competency type
-          if (auditType.name?.toLowerCase().includes("process")) {
-            params.append("certifiedProcesses", "Manufacturing");
-            params.append("certifiedProcesses", "Assembly Line");
-          } else if (auditType.name?.toLowerCase().includes("system")) {
-            params.append("certifiedProcesses", "QMS (ISO 9001)");
-            params.append("certifiedProcesses", "EMS (ISO 14001)");
-          } else if (auditType.name?.toLowerCase().includes("5s")) {
-            params.append("certifiedProcesses", "Sort & Set in Order");
-            params.append("certifiedProcesses", "Shine & Standardize");
+          // Add specific processes based on audit type
+          if (requiredConfig) {
+            requiredConfig.processes.forEach((p) => {
+              params.append("certifiedProcesses", p);
+            });
+            requiredConfig.products.forEach((p) => {
+              params.append("certifiedProducts", p);
+            });
           }
+
+          console.log(`📝 Assigning ${auditType.name} to ${auditor.name}`);
 
           const res = await fetch(
             `${API_BASE_URL}/api/competency/assign?${params}`,
@@ -366,23 +548,34 @@ export default function CompetencyManagement() {
             },
           );
 
-          if (res.ok) totalAssignments++;
+          if (res.ok) {
+            totalAssignments++;
+            console.log(`✅ Assigned ${auditType.name} to ${auditor.name}`);
+          } else {
+            const errorText = await res.text();
+            console.error(
+              `❌ Failed to assign ${auditType.name} to ${auditor.name}: ${errorText}`,
+            );
+          }
         }
       }
 
       if (totalAssignments > 0) {
         setSuccess(
-          `Successfully assigned Process, System, and 5S competencies to all auditors!`,
+          `✅ Successfully assigned ${totalAssignments} core competencies to auditors! ` +
+            `(${skippedCount} already had them)`,
         );
         await fetchAuditors();
         setTimeout(() => setSuccess(""), 4000);
       } else {
         setSuccess(
-          `All auditors already have the core Process, System, and 5S competencies.`,
+          `✅ All auditors already have the core IATF, ISO, Process, and 5S competencies. ` +
+            `(${skippedCount} competencies already present)`,
         );
         setTimeout(() => setSuccess(""), 4000);
       }
     } catch (err: any) {
+      console.error("❌ Error in auto-fill:", err);
       setError(err.message || "Failed to auto-fill core competencies");
     } finally {
       setLoading(false);
@@ -456,7 +649,22 @@ export default function CompetencyManagement() {
   const executeDelete = async () => {
     if (!deleteConfirm) return;
 
-    const { id, name, auditorName } = deleteConfirm;
+    const { id, name, auditorName, auditorId } = deleteConfirm;
+
+    // Safety check (find the competency object first)
+    const auditor = auditors.find((x) => String(x.id) === String(auditorId));
+    const comp = auditor?.auditCompetencies?.find(
+      (c: any) => String(c.id) === String(id),
+    );
+
+    if (comp && isCompetencyInUse(auditorId, comp)) {
+      setDeleteConfirm(null);
+      setError(
+        "This competency is used in an audit schedule and cannot be deleted.",
+      );
+      setTimeout(() => setError(""), 4000);
+      return;
+    }
 
     setDeleteConfirm(null);
     setLoading(true);
@@ -466,24 +674,36 @@ export default function CompetencyManagement() {
         method: "DELETE",
       });
 
-      if (res.ok || res.status === 204) {
-        setAuditors((prev) =>
-          prev.map((a) => ({
-            ...a,
-            auditCompetencies: (a.auditCompetencies || []).filter(
-              (c: any) => String(c.id) !== id,
-            ),
-          })),
-        );
+      if (!res.ok) {
+        let errorMessage = "Delete failed";
 
-        setSuccess(`"${name}" removed from ${auditorName}!`);
+        try {
+          const errorData = await res.json();
+          errorMessage =
+            errorData.message ||
+            errorData.error ||
+            `Delete failed (${res.status})`;
+        } catch (e) {}
 
-        fetchAuditors();
-      } else {
-        setError(`Delete failed (${res.status})`);
+        throw new Error(errorMessage);
       }
+
+      setAuditors((prev) =>
+        prev.map((a) => ({
+          ...a,
+          auditCompetencies: (a.auditCompetencies || []).filter(
+            (c: any) => String(c.id) !== id,
+          ),
+        })),
+      );
+
+      setSuccess(`"${name}" removed from ${auditorName}!`);
+
+      fetchAuditors();
+      fetchCompetencyUsage();
     } catch (err: any) {
       setError(err.message || "Failed to delete");
+      setTimeout(() => setError(""), 3000);
     } finally {
       setLoading(false);
       setTimeout(() => setSuccess(""), 3000);
@@ -772,65 +992,91 @@ export default function CompetencyManagement() {
                         </View>
 
                         {isExpanded &&
-                          a.auditCompetencies?.map((comp: any, idx: number) => (
-                            <View
-                              key={idx}
-                              className="pt-3 mt-3 ml-10 border-t border-gray-100 bg-blue-50/30"
-                            >
-                              <View className="flex-row items-center">
-                                <View className="flex-1">
-                                  <Text className="text-xs font-semibold text-blue-900">
-                                    {comp.auditType ||
-                                      comp.auditType?.name ||
-                                      `#${idx + 1}`}
-                                  </Text>
-                                  <View className="flex-row flex-wrap gap-1 mt-1">
-                                    {comp.certifiedProcesses
-                                      ?.slice(0, 3)
-                                      .map((p: string, i: number) => (
-                                        <View
-                                          key={i}
-                                          className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
-                                        >
-                                          <Text className="text-xs text-blue-700">
-                                            {p}
-                                          </Text>
-                                        </View>
-                                      ))}
-                                    {comp.certifiedProcesses?.length > 3 && (
-                                      <Text className="text-xs text-blue-400">
-                                        +{comp.certifiedProcesses.length - 3}
-                                      </Text>
-                                    )}
-                                  </View>
-                                  <Text className="mt-1 text-xs text-gray-400">
-                                    Expires: {comp.expiryDate || "N/A"}
-                                  </Text>
-                                </View>
-                                <TouchableOpacity
-                                  onPress={() => handleEditCompetency(a, comp)}
-                                  className="p-2 mr-1 rounded-lg bg-blue-50"
-                                >
-                                  <Edit size={14} color="#00529B" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    setDeleteConfirm({
-                                      id: String(comp.id),
-                                      name:
-                                        comp.auditType ||
+                          a.auditCompetencies?.map((comp: any, idx: number) => {
+                            const deleteDisabled =
+                              Boolean(comp.isUsed) ||
+                              isCompetencyInUse(a.id, comp);
+                            return (
+                              <View
+                                key={idx}
+                                className="pt-3 mt-3 ml-10 border-t border-gray-100 bg-blue-50/30"
+                              >
+                                <View className="flex-row items-center">
+                                  <View className="flex-1">
+                                    <Text className="text-xs font-semibold text-blue-900">
+                                      {comp.auditType ||
                                         comp.auditType?.name ||
-                                        "Competency",
-                                      auditorName: a.name,
-                                    })
-                                  }
-                                  className="p-2 rounded-lg bg-red-50"
-                                >
-                                  <Trash2 size={14} color="#ef4444" />
-                                </TouchableOpacity>
+                                        `#${idx + 1}`}
+                                    </Text>
+
+                                    <View className="flex-row flex-wrap gap-1 mt-1">
+                                      {comp.certifiedProcesses
+                                        ?.slice(0, 3)
+                                        .map((p: string, i: number) => (
+                                          <View
+                                            key={i}
+                                            className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
+                                          >
+                                            <Text className="text-xs text-blue-700">
+                                              {p}
+                                            </Text>
+                                          </View>
+                                        ))}
+
+                                      {comp.certifiedProcesses?.length > 3 && (
+                                        <Text className="text-xs text-blue-400">
+                                          +{comp.certifiedProcesses.length - 3}
+                                        </Text>
+                                      )}
+                                    </View>
+
+                                    <Text className="mt-1 text-xs text-gray-400">
+                                      Expires: {comp.expiryDate || "N/A"}
+                                    </Text>
+                                  </View>
+
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleEditCompetency(a, comp)
+                                    }
+                                    className="p-2 mr-1 rounded-lg bg-blue-50"
+                                  >
+                                    <Edit size={14} color="#00529B" />
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    disabled={deleteDisabled}
+                                    onPress={() =>
+                                      setDeleteConfirm({
+                                        id: String(comp.id),
+                                        name:
+                                          comp.auditType ||
+                                          comp.auditType?.name ||
+                                          "Competency",
+                                        auditorName: a.name,
+                                        auditorId: String(a.id),
+                                      })
+                                    }
+                                    className={`p-2 rounded-lg ${
+                                      deleteDisabled
+                                        ? "bg-gray-100"
+                                        : "bg-red-50"
+                                    }`}
+                                    style={{
+                                      opacity: deleteDisabled ? 0.4 : 1,
+                                    }}
+                                  >
+                                    <Trash2
+                                      size={14}
+                                      color={
+                                        deleteDisabled ? "#9ca3af" : "#ef4444"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                       </View>
                     </View>
                   );
@@ -929,60 +1175,85 @@ export default function CompetencyManagement() {
                         </View>
 
                         {isExpanded &&
-                          a.auditCompetencies?.map((comp: any, idx: number) => (
-                            <View
-                              key={idx}
-                              className="flex-row items-center px-4 py-2 pl-16 border-b border-gray-100 bg-blue-50/30"
-                            >
-                              <View className="flex-1">
-                                <Text className="text-xs font-semibold text-blue-900">
-                                  {comp.auditType ||
-                                    comp.auditType?.name ||
-                                    `#${idx + 1}`}
-                                </Text>
-                                <View className="flex-row flex-wrap gap-1 mt-1">
-                                  {comp.certifiedProcesses
-                                    ?.slice(0, 3)
-                                    .map((p: string, i: number) => (
-                                      <View
-                                        key={i}
-                                        className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
-                                      >
-                                        <Text className="text-xs text-blue-700">
-                                          {p}
-                                        </Text>
-                                      </View>
-                                    ))}
+                          a.auditCompetencies?.map((comp: any, idx: number) => {
+                            const deleteDisabled =
+                              Boolean(comp.isUsed) ||
+                              isCompetencyInUse(a.id, comp); // ✅ CORRECT: Pass the whole object
+                            return (
+                              <View
+                                key={idx}
+                                className="flex-row items-center px-4 py-2 pl-16 border-b border-gray-100 bg-blue-50/30"
+                              >
+                                <View className="flex-1">
+                                  <Text className="text-xs font-semibold text-blue-900">
+                                    {comp.auditType ||
+                                      comp.auditType?.name ||
+                                      `#${idx + 1}`}
+                                  </Text>
+
+                                  <View className="flex-row flex-wrap gap-1 mt-1">
+                                    {comp.certifiedProcesses
+                                      ?.slice(0, 3)
+                                      .map((p: string, i: number) => (
+                                        <View
+                                          key={i}
+                                          className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
+                                        >
+                                          <Text className="text-xs text-blue-700">
+                                            {p}
+                                          </Text>
+                                        </View>
+                                      ))}
+                                  </View>
+
+                                  <Text className="text-xs text-gray-400 mt-0.5">
+                                    Expires: {comp.expiryDate || "N/A"}
+                                  </Text>
                                 </View>
-                                <Text className="text-xs text-gray-400 mt-0.5">
-                                  Expires: {comp.expiryDate || "N/A"}
-                                </Text>
+
+                                <View className="flex-row">
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      handleEditCompetency(a, comp)
+                                    }
+                                    className="p-1.5 bg-blue-50 rounded-lg mr-1"
+                                  >
+                                    <Edit size={14} color="#00529B" />
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    disabled={deleteDisabled}
+                                    onPress={() =>
+                                      setDeleteConfirm({
+                                        id: String(comp.id),
+                                        name:
+                                          comp.auditType ||
+                                          comp.auditType?.name ||
+                                          "Competency",
+                                        auditorName: a.name,
+                                        auditorId: String(a.id),
+                                      })
+                                    }
+                                    className={`p-1.5 rounded-lg ${
+                                      deleteDisabled
+                                        ? "bg-gray-100"
+                                        : "bg-red-50"
+                                    }`}
+                                    style={{
+                                      opacity: deleteDisabled ? 0.4 : 1,
+                                    }}
+                                  >
+                                    <Trash2
+                                      size={14}
+                                      color={
+                                        deleteDisabled ? "#9ca3af" : "#ef4444"
+                                      }
+                                    />
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                              <View className="flex-row">
-                                <TouchableOpacity
-                                  onPress={() => handleEditCompetency(a, comp)}
-                                  className="p-1.5 bg-blue-50 rounded-lg mr-1"
-                                >
-                                  <Edit size={14} color="#00529B" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    setDeleteConfirm({
-                                      id: String(comp.id),
-                                      name:
-                                        comp.auditType ||
-                                        comp.auditType?.name ||
-                                        "Competency",
-                                      auditorName: a.name,
-                                    })
-                                  }
-                                  className="p-1.5 bg-red-50 rounded-lg"
-                                >
-                                  <Trash2 size={14} color="#ef4444" />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                       </View>
                     );
                   })}
@@ -1154,13 +1425,15 @@ export default function CompetencyManagement() {
         </View>
       </Modal>
 
-      {/* Delete Confirmation Modal - Same as EnterpriseManagement */}
+      {/* Delete Confirmation Modal */}
       <Modal visible={!!deleteConfirm} transparent animationType="fade">
         <View className="items-center justify-center flex-1 p-4 bg-black/50">
           <View className="p-6 bg-white shadow-lg rounded-xl w-80">
-            <Text className="mb-2 text-lg font-bold text-gray-900">Delete</Text>
+            <Text className="mb-2 text-lg font-bold text-gray-900">
+              Confirm
+            </Text>
             <Text className="mb-6 text-sm text-gray-600">
-              Delete "{deleteConfirm?.name}"? This cannot be undone.
+              Are you sure you want to delete this competency?
             </Text>
             <View className="flex-row justify-end gap-3">
               <TouchableOpacity
