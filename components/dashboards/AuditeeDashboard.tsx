@@ -1478,6 +1478,57 @@ const handleOpenForum = (audit: any, form: any = null) => {
   setForumModalVisible(true);
 };
 
+  const openNCRForum = (ncr: any) => {
+    if (!ncr) {
+      addToast("No NCR data available for forum", "error");
+      return;
+    }
+
+    // 1. Find all Audit Managers and Masters from the user list
+    const managersAndMasters = allUsers.filter((u: any) => {
+      const role = (u.role || "").toUpperCase();
+      return role.includes("AUDIT_MANAGER") || role.includes("MASTER");
+    });
+
+    // 2. Build a unique list of member emails
+    const memberEmails: string[] = [];
+    
+    managersAndMasters.forEach((m: any) => {
+      if (m.email && !memberEmails.includes(m.email)) {
+        memberEmails.push(m.email);
+      }
+    });
+
+    // Add NCR specific stakeholders
+    if (ncr.hodEmail && !memberEmails.includes(ncr.hodEmail)) memberEmails.push(ncr.hodEmail);
+    if (ncr.auditorEmail && !memberEmails.includes(ncr.auditorEmail)) memberEmails.push(ncr.auditorEmail);
+    if (ncr.auditeeEmail && !memberEmails.includes(ncr.auditeeEmail)) memberEmails.push(ncr.auditeeEmail);
+
+    // Ensure current logged-in user is included
+    if (user?.email && !memberEmails.includes(user.email)) {
+      memberEmails.push(user.email);
+    }
+
+    // 3. Map NCR data to the Forum Modal structure
+    setSelectedAuditForForum({
+      id: ncr.id,
+      auditNumber: ncr.ncrNumber || `NCR-${ncr.id}`,
+      auditType: "NCR Resolution",
+      auditTitle: `NCR #${ncr.ncrNumber} Discussion`,
+      status: ncr.status || "OPEN",
+      department: ncr.department || "",
+      auditorId: ncr.auditorId || null,
+      auditorName: ncr.auditorName || "Unknown Auditor",
+      auditeeId: ncr.auditeeId || user?.id,
+      auditeeName: ncr.auditeeName || user?.name,
+      hodEmail: ncr.hodEmail || null,
+      hodName: ncr.hodName || null,
+      memberEmails: memberEmails, // ✅ Now correctly includes MASTER, AUDIT_MANAGER, HOD, etc.
+    });
+    
+    setForumModalVisible(true);
+  };
+
   const submitNcrReview = async () => {
     if (!reviewApproved && !reviewComment.trim()) {
       addToast("Please enter rejection reason", "error");
@@ -1772,18 +1823,19 @@ const handleOpenForum = (audit: any, form: any = null) => {
             )}
             {/* NCR Tabs */}
             {/* NCR Tabs */}
-            {activeTab === "ncr-pending" && (
+            {/* NCR Tabs */}
+{activeTab === "ncr-pending" && (
   <NcrPendingList
     pendingNcrAudits={pendingNcrReviews}
     onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={handleOpenForum}  // ✅ ADD THIS
+    onOpenForum={openNCRForum}  // ✅ CHANGE THIS from handleOpenForum
   />
 )}
-            {activeTab === "my-ncrs" && (
+{activeTab === "my-ncrs" && (
   <NcrListTab
     assignedNCRs={assignedNCRs}
     onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={handleOpenForum}  // ✅ UPDATE THIS
+    onOpenForum={openNCRForum}  // ✅ CHANGE THIS from handleOpenForum
   />
 )}
           </View>

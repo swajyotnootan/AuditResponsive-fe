@@ -2074,16 +2074,16 @@ const handleOpenForum = (audit: any, form: any = null) => {
     }
 
     // 1. Find all Audit Managers and Masters from the fetched user list
-    const managersAndMasters = allUsers.filter((u: any) => {
+    const managers = allUsers.filter((u: any) => {
       const role = (u.role || "").toUpperCase();
-      return role.includes("AUDIT_MANAGER") || role.includes("MASTER");
+      return role.includes("AUDIT_MANAGER");
     });
 
     // 2. Build a unique list of member emails
     const memberEmails: string[] = [];
     
     // Add Managers & Masters
-    managersAndMasters.forEach((m: any) => {
+    managers.forEach((m: any) => {
       if (m.email && !memberEmails.includes(m.email)) {
         memberEmails.push(m.email);
       }
