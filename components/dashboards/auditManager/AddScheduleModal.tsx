@@ -5,13 +5,13 @@ import { Picker } from "@react-native-picker/picker";
 import { AlertCircle, Calendar, Check, Save, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 // ═════ CONSTANTS ═════
@@ -19,9 +19,12 @@ const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
   border: "#E2E8F0",
-  text: "#000000",
-  textValue: "#1F2937",
-  textMuted: "#6B7280",
+  borderStrong: "#CBD5E1",
+  inputBg: "#FFFFFF",
+  inputHover: "#F8FAFC",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
   accent: "#00529B",
   accentLight: "#EFF6FF",
   accentBorder: "#DBEAFE",
@@ -37,6 +40,34 @@ const COLORS = {
   purple: "#8B5CF6",
   purpleLight: "#F5F3FF",
   purpleBorder: "#DDD6FE",
+};
+
+/**
+ * Borderless Picker styling.
+ * On React Native Web, the native <select> can keep a browser
+ * focus/selection outline unless these properties are explicitly reset.
+ */
+const BORDERLESS_PICKER_STYLE: any = {
+  height: 48,
+  width: "100%",
+  borderWidth: 0,
+  borderColor: "transparent",
+  outlineWidth: 0,
+  outlineColor: "transparent",
+  backgroundColor: "transparent",
+  color: COLORS.textValue,
+  ...(Platform.OS === "web"
+    ? {
+        outline: "none",
+        border: "none",
+        boxShadow: "none",
+        appearance: "none",
+        WebkitAppearance: "none",
+        paddingLeft: 16,
+        paddingRight: 16,
+        cursor: "pointer",
+      }
+    : {}),
 };
 
 const timeOptions = (() => {
@@ -227,12 +258,14 @@ const DatePickerField = ({
     return (
       <View className={`relative ${className}`}>
         <View
-          className="flex-row items-center justify-between px-3 bg-white border border-gray-200 rounded-lg h-11"
+          className="flex-row items-center justify-between h-12 px-4 bg-white rounded-xl"
           style={{
             position: "relative",
             overflow: "hidden",
-            opacity: disabled ? 0.6 : 1,
-            backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            backgroundColor: disabled ? "#F8FAFC" : COLORS.inputBg,
+            opacity: disabled ? 0.7 : 1,
           }}
         >
           <Text
@@ -285,9 +318,11 @@ const DatePickerField = ({
           if (!disabled) setShowPicker(true);
         }}
         disabled={disabled}
-        className={`flex-row items-center justify-between px-3 border border-gray-200 rounded-lg h-11 ${className}`}
+        className={`flex-row items-center justify-between px-4 rounded-xl h-12 ${className}`}
         style={{
-          backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: disabled ? "#F1F5F9" : "#F8FAFC",
           opacity: disabled ? 0.7 : 1,
         }}
       >
@@ -379,10 +414,17 @@ export default function AddScheduleModal({
             alignSelf: "center",
             margin: isDesktop ? 40 : 0,
             width: isDesktop ? "90%" : "100%",
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.12,
+            shadowRadius: 28,
+            elevation: 10,
           }}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between p-6 border-b border-gray-200">
+          <View className="flex-row items-center justify-between px-6 py-5 border-b border-slate-100">
             <View>
               <Text className="text-lg font-bold text-gray-900">
                 {formData.id ? "Edit Schedule" : "Add Schedule"}
@@ -393,7 +435,11 @@ export default function AddScheduleModal({
             </View>
             <TouchableOpacity
               onPress={onClose}
-              className="items-center justify-center border border-gray-200 rounded-lg w-9 h-9"
+              className="items-center justify-center rounded-lg bg-slate-50 w-9 h-9"
+              style={{
+                borderWidth: 0,
+                backgroundColor: "#F1F5F9",
+              }}
             >
               <X size={20} color="#64748B" />
             </TouchableOpacity>
@@ -425,10 +471,18 @@ export default function AddScheduleModal({
 
             {/* Department Selector */}
             <View className="mb-4">
-              <Text className="mb-2 text-sm font-semibold text-gray-900">
+              <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Department to Audit *
               </Text>
-              <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+              <View
+                className="overflow-hidden rounded-xl"
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  // paddingHorizontal: 4,
+                }}
+              >
                 <Picker
                   selectedValue={selectedAuditDepartment}
                   onValueChange={(itemValue: string) => {
@@ -462,7 +516,7 @@ export default function AddScheduleModal({
                       }));
                     }
                   }}
-                  style={{ height: 50, width: "100%" }}
+                  style={BORDERLESS_PICKER_STYLE}
                 >
                   <Picker.Item label="Select Department" value="" />
                   {getAvailableDepartmentsForDate(formData.date).map(
@@ -480,7 +534,7 @@ export default function AddScheduleModal({
 
             {/* Date */}
             <View className="mb-4">
-              <Text className="mb-2 text-sm font-semibold text-gray-900">
+              <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Date *
               </Text>
               <DatePickerField
@@ -495,10 +549,17 @@ export default function AddScheduleModal({
             {/* Time Pickers */}
             <View className="flex-row gap-4 mb-4">
               <View className="flex-1">
-                <Text className="mb-2 text-sm font-semibold text-gray-900">
+                <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                   Start Time *
                 </Text>
-                <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                <View
+                  className="overflow-hidden rounded-xl"
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                >
                   <Picker
                     selectedValue={formData.startTime}
                     onValueChange={(itemValue: string) => {
@@ -515,7 +576,7 @@ export default function AddScheduleModal({
                         endTime: newEndTime,
                       });
                     }}
-                    style={{ height: 50 }}
+                    style={BORDERLESS_PICKER_STYLE}
                   >
                     {timeOptions.map((time) => (
                       <Picker.Item key={time} label={time} value={time} />
@@ -524,16 +585,23 @@ export default function AddScheduleModal({
                 </View>
               </View>
               <View className="flex-1">
-                <Text className="mb-2 text-sm font-semibold text-gray-900">
+                <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                   End Time *
                 </Text>
-                <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                <View
+                  className="overflow-hidden rounded-xl"
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                  }}
+                >
                   <Picker
                     selectedValue={formData.endTime}
                     onValueChange={(itemValue: string) =>
                       setFormData({ ...formData, endTime: itemValue })
                     }
-                    style={{ height: 50 }}
+                    style={BORDERLESS_PICKER_STYLE}
                   >
                     {timeOptions
                       .filter(
@@ -559,8 +627,12 @@ export default function AddScheduleModal({
                     specialEventType: "",
                   })
                 }
-                className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
+                className="items-center justify-center w-5 h-5 rounded-md"
                 style={{
+                  borderWidth: 1,
+                  borderColor: formData.isSpecialEvent
+                    ? COLORS.accent
+                    : COLORS.borderStrong,
                   backgroundColor: formData.isSpecialEvent
                     ? COLORS.accent
                     : "transparent",
@@ -577,10 +649,17 @@ export default function AddScheduleModal({
               <>
                 {/* Event Type Picker */}
                 <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
+                  <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                     Event Type *
                   </Text>
-                  <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                  <View
+                    className="overflow-hidden rounded-xl"
+                    style={{
+                      backgroundColor: "#F8FAFC",
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                    }}
+                  >
                     <Picker
                       selectedValue={formData.specialEventType}
                       onValueChange={(itemValue: string) =>
@@ -589,7 +668,7 @@ export default function AddScheduleModal({
                           specialEventType: itemValue,
                         })
                       }
-                      style={{ height: 50 }}
+                      style={BORDERLESS_PICKER_STYLE}
                     >
                       <Picker.Item label="Select Event Type" value="" />
                       <Picker.Item label="Opening Meeting" value="OPENING" />
@@ -603,10 +682,17 @@ export default function AddScheduleModal({
                 {formData.specialEventType !== "LUNCH" && (
                   <View className="flex-row gap-4 mb-4">
                     <View className="flex-1">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
+                      <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                         Auditor *
                       </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                      <View
+                        className="overflow-hidden rounded-xl"
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                        }}
+                      >
                         <Picker
                           selectedValue={formData.auditorId}
                           onValueChange={(itemValue: string) =>
@@ -615,7 +701,7 @@ export default function AddScheduleModal({
                               auditorId: itemValue,
                             })
                           }
-                          style={{ height: 50 }}
+                          style={BORDERLESS_PICKER_STYLE}
                         >
                           <Picker.Item label="Select Auditor" value="" />
                           {departmentTeamInfo.teamAuditorIds.length > 0 ? (
@@ -643,10 +729,17 @@ export default function AddScheduleModal({
                       </View>
                     </View>
                     <View className="flex-1">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
+                      <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                         Auditee *
                       </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                      <View
+                        className="overflow-hidden rounded-xl"
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          borderWidth: 1,
+                          borderColor: COLORS.border,
+                        }}
+                      >
                         <Picker
                           selectedValue={formData.auditeeId}
                           onValueChange={(itemValue: string) =>
@@ -655,7 +748,7 @@ export default function AddScheduleModal({
                               auditeeId: itemValue,
                             })
                           }
-                          style={{ height: 50 }}
+                          style={BORDERLESS_PICKER_STYLE}
                         >
                           <Picker.Item label="Select Auditee" value="" />
                           {departmentTeamInfo.auditeeIds.length > 0 ? (
@@ -689,154 +782,194 @@ export default function AddScheduleModal({
               <>
                 {/* Departments & Elements Selection */}
                 <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
+                  <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                     Select Departments & Audit Elements *
                   </Text>
-                  <View className="p-4 border border-gray-200 rounded-lg max-h-60">
-                    {getAvailableDepartmentsForDate(formData.date)
-                      .filter(
-                        (deptInfo) =>
-                          !selectedAuditDepartment ||
-                          deptInfo.department === selectedAuditDepartment,
-                      )
-                      .map((deptInfo) => {
-                        const departmentName = deptInfo.department;
-                        const availableElements = deptInfo.auditElements || [];
-                        const selectedDept = formData.selectedDepartments?.find(
-                          (d) => d.department === departmentName,
-                        );
-                        const selectedElements =
-                          selectedDept?.selectedElements || [];
-                        return (
-                          <View
-                            key={departmentName}
-                            className="pb-3 mb-3 border-b border-gray-200"
-                          >
-                            <TouchableOpacity
-                              onPress={() => {
-                                let updated = [
-                                  ...(formData.selectedDepartments || []),
-                                ];
-                                const existingIndex = updated.findIndex(
-                                  (d) => d.department === departmentName,
-                                );
-                                if (existingIndex >= 0) {
-                                  updated[existingIndex].selectedElements = [
-                                    ...availableElements,
-                                  ];
-                                } else {
-                                  updated.push({
-                                    department: departmentName,
-                                    selectedElements: [...availableElements],
-                                  });
-                                }
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  selectedDepartments: updated,
-                                }));
-                                if (departmentName === selectedAuditDepartment)
-                                  setSelectedAuditDepartment("");
-                              }}
-                              className="flex-row items-center gap-3 mb-2"
+                  <View
+                    className="rounded-xl"
+                    style={{
+                      height: 240,
+                      overflow: "hidden",
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      backgroundColor: "#F8FAFC",
+                    }}
+                  >
+                    <ScrollView
+                      nestedScrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                      contentContainerStyle={{
+                        padding: 16,
+                      }}
+                    >
+                      {getAvailableDepartmentsForDate(formData.date)
+                        .filter(
+                          (deptInfo) =>
+                            !selectedAuditDepartment ||
+                            deptInfo.department === selectedAuditDepartment,
+                        )
+                        .map((deptInfo) => {
+                          const departmentName = deptInfo.department;
+                          const availableElements =
+                            deptInfo.auditElements || [];
+                          const selectedDept =
+                            formData.selectedDepartments?.find(
+                              (d) => d.department === departmentName,
+                            );
+                          const selectedElements =
+                            selectedDept?.selectedElements || [];
+                          return (
+                            <View
+                              key={departmentName}
+                              className="pb-3 mb-3 border-b border-gray-200"
                             >
-                              <View
-                                className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
-                                style={{
-                                  backgroundColor:
-                                    availableElements.length > 0 &&
-                                    selectedElements.length ===
-                                      availableElements.length
-                                      ? COLORS.accent
-                                      : "transparent",
-                                }}
-                              >
-                                {availableElements.length > 0 &&
-                                  selectedElements.length ===
-                                    availableElements.length && (
-                                    <Check size={14} color="#FFF" />
-                                  )}
-                              </View>
-                              <Text className="font-semibold text-gray-900">
-                                {departmentName}
-                              </Text>
-                            </TouchableOpacity>
-                            <View className="flex-row flex-wrap gap-2 ml-8">
-                              {availableElements.map((element) => (
-                                <TouchableOpacity
-                                  key={element}
-                                  onPress={() => {
-                                    let updated = [
-                                      ...(formData.selectedDepartments || []),
+                              <TouchableOpacity
+                                onPress={() => {
+                                  let updated = [
+                                    ...(formData.selectedDepartments || []),
+                                  ];
+                                  const existingIndex = updated.findIndex(
+                                    (d) => d.department === departmentName,
+                                  );
+                                  if (existingIndex >= 0) {
+                                    updated[existingIndex].selectedElements = [
+                                      ...availableElements,
                                     ];
-                                    let deptIndex = updated.findIndex(
-                                      (d) => d.department === departmentName,
-                                    );
-                                    if (deptIndex === -1) {
-                                      updated.push({
-                                        department: departmentName,
-                                        selectedElements: [],
-                                      });
-                                      deptIndex = updated.length - 1;
-                                    }
-                                    const isSelected =
-                                      updated[
-                                        deptIndex
-                                      ].selectedElements.includes(element);
-                                    if (isSelected) {
-                                      updated[deptIndex].selectedElements =
+                                  } else {
+                                    updated.push({
+                                      department: departmentName,
+                                      selectedElements: [...availableElements],
+                                    });
+                                  }
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    selectedDepartments: updated,
+                                  }));
+                                  if (
+                                    departmentName === selectedAuditDepartment
+                                  )
+                                    setSelectedAuditDepartment("");
+                                }}
+                                className="flex-row items-center gap-3 mb-2"
+                              >
+                                <View
+                                  className="items-center justify-center w-5 h-5 rounded-md"
+                                  style={{
+                                    borderWidth: 1,
+                                    borderColor:
+                                      availableElements.length > 0 &&
+                                      selectedElements.length ===
+                                        availableElements.length
+                                        ? COLORS.accent
+                                        : COLORS.borderStrong,
+                                    backgroundColor:
+                                      availableElements.length > 0 &&
+                                      selectedElements.length ===
+                                        availableElements.length
+                                        ? COLORS.accent
+                                        : "transparent",
+                                  }}
+                                >
+                                  {availableElements.length > 0 &&
+                                    selectedElements.length ===
+                                      availableElements.length && (
+                                      <Check size={14} color="#FFF" />
+                                    )}
+                                </View>
+                                <Text className="font-semibold text-gray-900">
+                                  {departmentName}
+                                </Text>
+                              </TouchableOpacity>
+                              <View className="flex-row flex-wrap gap-2 ml-8">
+                                {availableElements.map((element) => (
+                                  <TouchableOpacity
+                                    key={element}
+                                    onPress={() => {
+                                      let updated = [
+                                        ...(formData.selectedDepartments || []),
+                                      ];
+                                      let deptIndex = updated.findIndex(
+                                        (d) => d.department === departmentName,
+                                      );
+                                      if (deptIndex === -1) {
+                                        updated.push({
+                                          department: departmentName,
+                                          selectedElements: [],
+                                        });
+                                        deptIndex = updated.length - 1;
+                                      }
+                                      const isSelected =
                                         updated[
                                           deptIndex
-                                        ].selectedElements.filter(
-                                          (el) => el !== element,
-                                        );
-                                    } else {
-                                      updated[deptIndex].selectedElements = [
-                                        ...updated[deptIndex].selectedElements,
-                                        element,
-                                      ];
-                                    }
-                                    if (
-                                      updated[deptIndex].selectedElements
-                                        .length === 0
-                                    )
-                                      updated.splice(deptIndex, 1);
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      selectedDepartments: updated,
-                                    }));
-                                  }}
-                                  className={`px-3 py-1.5 rounded-full border flex-row items-center gap-2 ${selectedElements.includes(element) ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}
-                                >
-                                  {selectedElements.includes(element) && (
-                                    <Check size={12} color={COLORS.accent} />
-                                  )}
-                                  <Text
-                                    className={`text-xs font-medium ${selectedElements.includes(element) ? "text-blue-700" : "text-gray-700"}`}
+                                        ].selectedElements.includes(element);
+                                      if (isSelected) {
+                                        updated[deptIndex].selectedElements =
+                                          updated[
+                                            deptIndex
+                                          ].selectedElements.filter(
+                                            (el) => el !== element,
+                                          );
+                                      } else {
+                                        updated[deptIndex].selectedElements = [
+                                          ...updated[deptIndex]
+                                            .selectedElements,
+                                          element,
+                                        ];
+                                      }
+                                      if (
+                                        updated[deptIndex].selectedElements
+                                          .length === 0
+                                      )
+                                        updated.splice(deptIndex, 1);
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        selectedDepartments: updated,
+                                      }));
+                                    }}
+                                    className={`px-3 py-1.5 rounded-full border flex-row items-center gap-2 ${
+                                      selectedElements.includes(element)
+                                        ? "bg-blue-50 border-blue-200"
+                                        : "bg-slate-50 border-slate-200"
+                                    }`}
                                   >
-                                    {element}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
+                                    {selectedElements.includes(element) && (
+                                      <Check size={12} color={COLORS.accent} />
+                                    )}
+                                    <Text
+                                      className={`text-xs font-medium ${selectedElements.includes(element) ? "text-blue-700" : "text-gray-700"}`}
+                                    >
+                                      {element}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
                             </View>
-                          </View>
-                        );
-                      })}
+                          );
+                        })}
+                    </ScrollView>
                   </View>
                 </View>
 
                 {/* Regular Auditor/Auditee Pickers */}
                 <View className="flex-row gap-4 mb-4">
                   <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
+                    <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                       Auditor *
                     </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                    <View
+                      className="overflow-hidden rounded-xl"
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                      }}
+                    >
                       <Picker
                         selectedValue={formData.auditorId}
                         onValueChange={(itemValue: string) =>
                           setFormData({ ...formData, auditorId: itemValue })
                         }
-                        style={{ height: 50 }}
+                        style={BORDERLESS_PICKER_STYLE}
                       >
                         <Picker.Item label="Select Auditor" value="" />
                         {departmentTeamInfo.teamAuditorIds.length > 0 ? (
@@ -864,16 +997,23 @@ export default function AddScheduleModal({
                     </View>
                   </View>
                   <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
+                    <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                       Auditee *
                     </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                    <View
+                      className="overflow-hidden rounded-xl"
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                      }}
+                    >
                       <Picker
                         selectedValue={formData.auditeeId}
                         onValueChange={(itemValue: string) =>
                           setFormData({ ...formData, auditeeId: itemValue })
                         }
-                        style={{ height: 50 }}
+                        style={BORDERLESS_PICKER_STYLE}
                       >
                         <Picker.Item label="Select Auditee" value="" />
                         {departmentTeamInfo.auditeeIds.length > 0 ? (
@@ -906,16 +1046,23 @@ export default function AddScheduleModal({
 
             {/* Status Picker */}
             <View className="mb-4">
-              <Text className="mb-2 text-sm font-semibold text-gray-900">
+              <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Status
               </Text>
-              <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+              <View
+                className="overflow-hidden rounded-xl"
+                style={{
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                }}
+              >
                 <Picker
                   selectedValue={formData.status}
                   onValueChange={(itemValue: string) =>
                     setFormData({ ...formData, status: itemValue })
                   }
-                  style={{ height: 50 }}
+                  style={BORDERLESS_PICKER_STYLE}
                 >
                   <Picker.Item label="Scheduled" value="SCHEDULED" />
                   <Picker.Item label="In Progress" value="IN_PROGRESS" />
@@ -927,10 +1074,13 @@ export default function AddScheduleModal({
           </ScrollView>
 
           {/* Footer Buttons */}
-          <View className="flex-row justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+          <View className="flex-row justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
             <TouchableOpacity
               onPress={onClose}
-              className="justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
+              className="justify-center h-10 px-5 bg-slate-50 rounded-xl"
+              style={{
+                borderWidth: 0,
+              }}
             >
               <Text className="text-sm font-semibold text-gray-700">
                 Cancel
@@ -944,7 +1094,7 @@ export default function AddScheduleModal({
                 !formData.auditorId ||
                 !formData.auditeeId
               }
-              className="flex-row items-center h-10 gap-2 px-5 rounded-lg"
+              className="flex-row items-center h-10 gap-2 px-5 rounded-xl"
               style={{
                 backgroundColor:
                   saving ||
