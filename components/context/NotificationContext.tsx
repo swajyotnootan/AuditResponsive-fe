@@ -2,10 +2,10 @@
 
 import { API_BASE_URL } from '@/config/apiConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 import {
   AlertCircle,
   ArrowRight,
@@ -327,8 +327,7 @@ private async playNotifyFile(): Promise<void> {
 
 export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const navigation = useNavigation<any>();
-
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -349,6 +348,50 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   // Safe access to user properties
   const userId = user?.id ?? null;
   const userRole = user?.role ?? null;
+
+    // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths
+  const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
+    if (!backendRoute) return '/(app)/(tabs)';
+    
+    // If it's already an expo-router path, just return it
+    if (backendRoute.startsWith('/(app)/')) return backendRoute;
+
+    const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
+    const roleUpper = (role || '').toUpperCase();
+
+    // 1. Top Management / Planning Routes
+    if (cleanRoute === '/top-management') return '/(app)/(tabs)/top-management?tab=overview';
+    if (cleanRoute === '/form3') return '/(app)/(tabs)/top-management?tab=annual';
+    if (cleanRoute === '/form4') return '/(app)/(tabs)/top-management?tab=dept';
+    if (cleanRoute === '/form5-dashboard') return '/(app)/(tabs)/top-management?tab=week';
+    if (cleanRoute === '/form5-detailed') return '/(app)/(tabs)/top-management?tab=daily';
+
+    // 2. Auditor / Auditee Routes
+    if (cleanRoute === '/auditor') {
+      if (roleUpper === 'AUDITEE') return '/(app)/(tabs)/auditee?tab=my-audits';
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    }
+    if (cleanRoute === '/auditee') return '/(app)/(tabs)/auditee?tab=my-audits';
+
+    // 3. Audit Manager Routes
+    if (cleanRoute === '/audit-manager' || cleanRoute.includes('/audit-manager')) {
+      if (backendRoute.includes('requests')) return '/(app)/(tabs)/audit-manager?tab=requests';
+      if (backendRoute.includes('ncr')) return '/(app)/(tabs)/audit-manager?tab=ncr';
+      if (backendRoute.includes('schedules')) return '/(app)/(tabs)/audit-manager?tab=schedules';
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    }
+
+    // 4. Form 7 / NCR View Routes
+    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view')) {
+      if (roleUpper === 'AUDITEE') return '/(app)/(tabs)/auditee?tab=my-ncrs';
+      if (roleUpper === 'AUDIT_MANAGER') return '/(app)/(tabs)/audit-manager?tab=ncr';
+      return '/(app)/(tabs)/auditor?tab=ncr-list';
+    }
+
+    // Fallback
+    console.warn('⚠️ Unknown backend route, defaulting to dashboard:', backendRoute);
+    return '/(app)/(tabs)';
+  };
 
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
     // ✅ ENHANCED: Check if user has access to notification based on role
@@ -746,6 +789,7 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   }, []);
 
   // ✅ Mark as Read with persistence
+    // ✅ Mark as Read with persistence & Expo Router Navigation
   const markAsReadAndNavigate = async (notification: Notification) => {
     if (!notification.read) {
       try {
@@ -771,9 +815,16 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
     if (notification.navigateTo) {
       setTimeout(() => {
         try {
-          navigation.navigate(notification.navigateTo);
+          // ✅ Translate the backend route using our mapper
+          const targetRoute = mapBackendRouteToExpoRouter(notification.navigateTo, userRole);
+          console.log('🧭 Navigating from backend route:', notification.navigateTo, '-> expo route:', targetRoute);
+          
+          // ✅ Use Expo Router's push instead of React Navigation
+          router.push(targetRoute as any);
         } catch (error) {
           console.error('Navigation error:', error);
+          // Fallback to main dashboard if something fails
+          router.push('/(app)/(tabs)' as any);
         }
       }, 150);
     }
