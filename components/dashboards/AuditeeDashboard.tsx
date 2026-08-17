@@ -37,6 +37,7 @@ import {
   View,
 } from "react-native";
 import YearFilter from "../common/YearFilter";
+import ForumThreadView from "../forum/ForumThreadView";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 
 // ⚠️ Adjust these paths to match your actual project structure
@@ -837,7 +838,7 @@ const AuditListItem = ({
 // ============================================================================
 // NCR PENDING LIST
 // ============================================================================
-const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum }: any) => {
+const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForum }: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
       <View className="flex-col items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
@@ -902,8 +903,8 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum }: any) => {
                 )}
               </View>
             </View>
-            <View className="flex-row items-center gap-2">
-              {/* ✅ ADD FORUM BUTTON */}
+                        <View className="flex-row items-center gap-2">
+              {/* 1. Standard NCR Forum */}
               {onOpenForum && (
                 <TouchableOpacity
                   onPress={() => onOpenForum(item)}
@@ -912,6 +913,19 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum }: any) => {
                   <MessageCircle size={18} color="#9333ea" />
                 </TouchableOpacity>
               )}
+              
+              {/* 2. 8D Forum Button (Only shows if 8D related) */}
+              {onOpen8DForum && is8DRelated(item) && (
+                <TouchableOpacity
+                  onPress={() => onOpen8DForum(item)}
+                  className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
+                >
+                  <MessageCircle size={12} color="#4338ca" />
+                  <Text className="text-[10px] font-semibold text-indigo-700">8D</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* 3. View NCR Details (Eye Icon) - PRESERVED */}
               <TouchableOpacity
                 onPress={() => onViewNcr(item.id)}
                 className="p-2 rounded-lg bg-slate-50"
@@ -929,7 +943,7 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum }: any) => {
 // ============================================================================
 // NCR LIST TAB
 // ============================================================================
-const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum }: any) => {
+const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any) => {
   return (
     <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
       <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
@@ -981,7 +995,8 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum }: any) => {
                 </Text>
               </View>
               <NcrStatusBadge status={item.status} />
-              <View className="flex-row gap-2">
+                            <View className="flex-row gap-2">
+                {/* 1. Standard NCR Forum */}
                 {onOpenForum && (
                   <TouchableOpacity
                     onPress={() => onOpenForum(item)}
@@ -990,6 +1005,19 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum }: any) => {
                     <MessageCircle size={18} color="#9333ea" />
                   </TouchableOpacity>
                 )}
+                
+              
+                {onOpen8DForum && is8DRelated(item) && (
+                  <TouchableOpacity
+                    onPress={() => onOpen8DForum(item)}
+                    className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
+                  >
+                    <MessageCircle size={12} color="#4338ca" />
+                    <Text className="text-[10px] font-semibold text-indigo-700">8D</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* 3. View NCR Details (Eye Icon) - PRESERVED */}
                 <TouchableOpacity
                   onPress={() => onViewNcr(item.id)}
                   className="p-2 rounded-lg bg-slate-50"
@@ -1088,6 +1116,11 @@ useEffect(() => {
   const [reviewComment, setReviewComment] = useState("");
   // Add these state variables
 const [forumModalVisible, setForumModalVisible] = useState(false);
+  
+    const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
+  const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
+  const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
 const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
 const [allUsers, setAllUsers] = useState<any[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
@@ -1529,6 +1562,33 @@ const handleOpenForum = (audit: any, form: any = null) => {
     setForumModalVisible(true);
   };
 
+    const open8DForum = async (ncr: any) => {
+    if (!ncr) return;
+    setSelected8DNCR(ncr);
+    setEightDTeamMembers([]);
+    setShow8DForumDrawer(true);
+    setLoadingTeamMembers(true);
+    try {
+      const eightDEventId = `8D-${ncr.ncrNumber}`;
+      const responseData = await apiFetch(`/eightd/data/${eightDEventId}`).catch(() => null);
+      
+      if (responseData?.success && responseData.data) {
+        const d0Data = responseData.data.content?.d0?.[0] || {};
+        const emails = Array.isArray(d0Data.additionalEmails) ? d0Data.additionalEmails : [];
+        setEightDTeamMembers(emails);
+      } else {
+        const fallback = [user?.email, ncr.hodEmail, ncr.auditorEmail, ncr.auditeeEmail].filter(Boolean);
+        setEightDTeamMembers(fallback);
+      }
+    } catch (err) {
+      console.error('Failed to fetch 8D team members:', err);
+      const fallback = [user?.email, ncr.hodEmail, ncr.auditorEmail, ncr.auditeeEmail].filter(Boolean);
+      setEightDTeamMembers(fallback);
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  };
+
   const submitNcrReview = async () => {
     if (!reviewApproved && !reviewComment.trim()) {
       addToast("Please enter rejection reason", "error");
@@ -1828,14 +1888,16 @@ const handleOpenForum = (audit: any, form: any = null) => {
   <NcrPendingList
     pendingNcrAudits={pendingNcrReviews}
     onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={openNCRForum}  // ✅ CHANGE THIS from handleOpenForum
+    onOpenForum={openNCRForum}
+    onOpen8DForum={open8DForum} // ✅ ADD THIS
   />
 )}
 {activeTab === "my-ncrs" && (
   <NcrListTab
     assignedNCRs={assignedNCRs}
     onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={openNCRForum}  // ✅ CHANGE THIS from handleOpenForum
+    onOpenForum={openNCRForum}
+    onOpen8DForum={open8DForum} // ✅ ADD THIS
   />
 )}
           </View>
@@ -1953,6 +2015,51 @@ const handleOpenForum = (audit: any, form: any = null) => {
     }}
   />
 )}
+
+      {/* 8D Forum Drawer */}
+      <Modal visible={show8DForumDrawer} transparent animationType="slide">
+        <View className="flex-1 bg-black/30">
+          <TouchableOpacity
+            className="flex-1"
+            activeOpacity={1}
+            onPress={() => {
+              setShow8DForumDrawer(false);
+              setSelected8DNCR(null);
+              setEightDTeamMembers([]);
+            }}
+          />
+          <View className="w-full sm:w-1/2 h-full bg-white border-l border-gray-200 shadow-2xl absolute right-0">
+            {selected8DNCR && (
+              <View className="flex-1">
+                {loadingTeamMembers ? (
+                  <View className="items-center justify-center flex-1">
+                    <ActivityIndicator size="large" color="#00529B" />
+                    <Text className="mt-3 text-sm text-gray-500">
+                      Loading team members...
+                    </Text>
+                  </View>
+                ) : (
+                  <ForumThreadView
+                    groupId={`8D-${selected8DNCR.ncrNumber}`}
+                    groupName={`8D-${selected8DNCR.ncrNumber}`}
+                    isInDrawer={true}
+                    setForumDrawerOpen={setShow8DForumDrawer}
+                    username={user?.email || user?.username || "Unknown"}
+                    currentUser={user}
+                    allUsers={allUsers}
+                    memberEmails={eightDTeamMembers}
+                    onBack={() => {
+                      setShow8DForumDrawer(false);
+                      setSelected8DNCR(null);
+                      setEightDTeamMembers([]);
+                    }}
+                  />
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
