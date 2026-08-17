@@ -1289,8 +1289,7 @@ const NCRDashboard = ({
                 setEightDTeamMembers([]);
               }}
             />
-            <View className="w-full sm:w-1/2 h-full bg-[#F8FAFC] border-l border-[#E2E8F0] shadow-2xl">
-              {selected8DNCR && (
+            <View className="w-full sm:w-1/2 h-full bg-[#F8FAFC] border-l border-[#E2E8F0] shadow-2xl absolute right-0 top-0">              {selected8DNCR && (
                 <View className="flex-1">
                   {loadingTeamMembers ? (
                     <View className="items-center justify-center flex-1">
