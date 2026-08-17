@@ -567,57 +567,34 @@ const ScheduleModal = ({
     selectedLeadAuditor,
   ]);
 
-  // In your audit scheduling logic
-
-  // ✅ ADD THIS PROPERLY DEFINED FUNCTION
   const checkAuditorCompetency = useCallback(
-    (auditorId: string) => {
-      if (!auditorId) {
+    async (auditorId: string) => {
+      if (
+        !auditorId ||
+        !formData.department ||
+        !formData.auditElements ||
+        formData.auditElements.length === 0
+      ) {
         setCompetencyStatus(null);
         return;
       }
-
-      // Find the selected auditor
-      const auditor = fullyCompetentLeadAuditors.find(
-        (a: any) => String(a.id) === String(auditorId),
-      );
-
-      if (auditor) {
-        setCompetencyStatus({
-          isFullyCompetent: true,
-          message: "✅ Auditor is fully competent for all selected elements",
-        });
-      } else {
-        // Check if auditor exists but not fully competent
-        const existsInDepartment = departmentLeadAuditors.some(
-          (a: any) => String(a.id) === String(auditorId),
+      try {
+        const enumValue =
+          departmentDisplayToEnum[formData.department] ||
+          formData.department.toUpperCase().replace(/[&\s/]+/g, "_");
+        const response = await auditScheduleApi.getAuditorCompetencyStatus(
+          auditorId,
+          enumValue,
+          formData.auditElements,
         );
-
-        if (existsInDepartment) {
-          setCompetencyStatus({
-            isFullyCompetent: false,
-            message:
-              "⚠️ Auditor exists but is NOT fully competent for all selected elements",
-          });
-        } else {
-          setCompetencyStatus({
-            isFullyCompetent: false,
-            message: "❌ Auditor not found in this department",
-          });
-        }
+        setCompetencyStatus(extractData(response));
+      } catch (error: any) {
+        console.error("❌ Error checking competency:", error.message || error);
+        setCompetencyStatus(null);
       }
     },
-    [fullyCompetentLeadAuditors, departmentLeadAuditors],
+    [formData.department, formData.auditElements],
   );
-
-  // ✅ FIXED: useEffect with proper dependencies
-  useEffect(() => {
-    if (selectedLeadAuditor) {
-      checkAuditorCompetency(selectedLeadAuditor);
-    } else {
-      setCompetencyStatus(null);
-    }
-  }, [selectedLeadAuditor, checkAuditorCompetency]);
 
   useEffect(() => {
     if (
@@ -1118,10 +1095,10 @@ const ScheduleModal = ({
     }
   }, [isOpen, editingSchedule]);
 
-  // useEffect(() => {
-  //   if (selectedLeadAuditor) checkAuditorCompetency(selectedLeadAuditor);
-  //   else setCompetencyStatus(null);
-  // }, [selectedLeadAuditor, checkAuditorCompetency]);
+  useEffect(() => {
+    if (selectedLeadAuditor) checkAuditorCompetency(selectedLeadAuditor);
+    else setCompetencyStatus(null);
+  }, [selectedLeadAuditor, checkAuditorCompetency]);
 
   const canAutoFill = useMemo(() => {
     if (!ENABLE_DEMO_AUTO_FILL) return false;
