@@ -921,7 +921,7 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
                   className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
                 >
                   <MessageCircle size={12} color="#4338ca" />
-                  <Text className="text-[10px] font-semibold text-indigo-700">8D</Text>
+                  <Text className="text-[10px] font-semibold text-indigo-700">8D Forum</Text>
                 </TouchableOpacity>
               )}
 
@@ -1013,7 +1013,7 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any
                     className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
                   >
                     <MessageCircle size={12} color="#4338ca" />
-                    <Text className="text-[10px] font-semibold text-indigo-700">8D</Text>
+                    <Text className="text-[10px] font-semibold text-indigo-700">8D Forum</Text>
                   </TouchableOpacity>
                 )}
 
@@ -1518,15 +1518,15 @@ const handleOpenForum = (audit: any, form: any = null) => {
     }
 
     // 1. Find all Audit Managers and Masters from the user list
-    const managersAndMasters = allUsers.filter((u: any) => {
+    const managers = allUsers.filter((u: any) => {
       const role = (u.role || "").toUpperCase();
-      return role.includes("AUDIT_MANAGER") || role.includes("MASTER");
+      return role.includes("AUDIT_MANAGER");
     });
 
     // 2. Build a unique list of member emails
     const memberEmails: string[] = [];
     
-    managersAndMasters.forEach((m: any) => {
+    managers.forEach((m: any) => {
       if (m.email && !memberEmails.includes(m.email)) {
         memberEmails.push(m.email);
       }
