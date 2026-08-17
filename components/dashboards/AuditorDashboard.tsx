@@ -1,5 +1,4 @@
-﻿import ForumThreadView from "@/components/forum/ForumThreadView";
-import { API_BASE_URL } from "@/config/apiConfig";
+﻿import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
@@ -1362,10 +1361,7 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   const [raisedNCRs, setRaisedNCRs] = useState<any[]>([]);
   const [ncrLoading, setNcrLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
-const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
-const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
-const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+  
 
   // ✅ ADD THIS: Calculate NCR Stats dynamically
   const ncrStats = useMemo(
@@ -2071,100 +2067,39 @@ const handleOpenForum = (audit: any, form: any = null) => {
   setForumModalVisible(true);
 };
 
-// Add this function after handleOpenForum
-const open8DForum = async (ncr: any) => {
-  console.log('🔍 [8D FORUM] Opening 8D forum for NCR:', ncr);
-  
-  if (!ncr) {
-    addToast("No NCR data available for 8D forum", "error");
-    return;
-  }
-
-  setSelected8DNCR(ncr);
-  setEightDTeamMembers([]);
-  setShow8DForumDrawer(true);
-  setLoadingTeamMembers(true);
-
-  try {
-    const eightDEventId = `8D-${ncr.ncrNumber}`;
-    const membersSet = new Set<string>();
-
-    // Fetch existing 8D team members
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/eightd/data/${eightDEventId}`,
-        { credentials: "include" }
-      );
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        if (responseData?.success && responseData.data) {
-          const d0Data = responseData.data.content?.d0?.[0] || {};
-          const emails = Array.isArray(d0Data.additionalEmails)
-            ? d0Data.additionalEmails
-            : [];
-          emails.forEach((email: string) => membersSet.add(email));
-        }
-      }
-    } catch (err) {
-      console.log('Could not fetch existing 8D members:', err);
+  const openNCRForum = (ncr: any) => {
+    if (!ncr) {
+      addToast("No NCR data available for forum", "error");
+      return;
     }
-
-    // Add current user
-    if (user?.email) membersSet.add(user.email);
-
-    // Add Audit Manager
+    
+    // Find Audit Manager to include in forum
     const auditManager = allUsers.find(
       (u: any) => u.role === "AUDIT_MANAGER" || u.role === "MASTER"
     );
-    if (auditManager?.email) membersSet.add(auditManager.email);
-
-    // Add HOD
-    if (ncr.hodEmail) membersSet.add(ncr.hodEmail);
-
-    // Add Auditor
-    if (ncr.auditorEmail) membersSet.add(ncr.auditorEmail);
-    if (ncr.auditorName?.includes('@')) {
-      membersSet.add(ncr.auditorName);
-    }
-
-    // Add Auditee
-    if (ncr.auditeeEmail) membersSet.add(ncr.auditeeEmail);
-    if (ncr.auditeeName?.includes('@')) {
-      membersSet.add(ncr.auditeeName);
-    }
-
-    // Add 8D Team members
-    const eightDTeam = allUsers.filter(
-      (u: any) => 
-        u.role === "8D_TEAM" || 
-        u.role === "EIGHT_D_TEAM" ||
-        u.role === "INITIATOR"
-    );
-    eightDTeam.forEach((member: any) => {
-      if (member.email) membersSet.add(member.email);
-    });
-
-    const finalMembers = [...membersSet];
-    console.log('✅ [8D FORUM] Members:', finalMembers);
-    setEightDTeamMembers(finalMembers);
-
-  } catch (error) {
-    console.error('❌ Failed to fetch 8D team members:', error);
-    // Fallback: Add essential members
-    const fallbackMembers = [
+    const memberEmails = [
       user?.email,
       ncr.hodEmail,
       ncr.auditorEmail,
       ncr.auditeeEmail,
-      allUsers.find((u: any) => u.role === "AUDIT_MANAGER")?.email,
+      auditManager?.email
     ].filter(Boolean);
-    setEightDTeamMembers([...new Set(fallbackMembers)]);
-  } finally {
-    setLoadingTeamMembers(false);
-  }
-};
-  
+
+    setSelectedAuditForForum({
+      id: ncr.id,
+      auditNumber: ncr.ncrNumber || `NCR-${ncr.id}`,
+      auditType: "NCR Resolution",
+      auditTitle: `NCR #${ncr.ncrNumber} Discussion`,
+      status: ncr.status || "OPEN",
+      department: ncr.department || "",
+      auditorId: ncr.auditorId || user?.id,
+      auditorName: ncr.auditorName || user?.name,
+      auditeeId: ncr.auditeeId,
+      auditeeName: ncr.auditeeName,
+      memberEmails: [...new Set(memberEmails)],
+    });
+    setForumModalVisible(true);
+  };
 
   const renderActiveReport = () => {
     if (!activeReportConfig) return null;
@@ -2643,20 +2578,8 @@ const open8DForum = async (ncr: any) => {
   <NcrListTab
     raisedNCRs={raisedNCRs}
     ncrLoading={ncrLoading}
-// ✅ Pass both id and type to the state
-                onViewNcr={(id: string) =>
-                  setActiveNcrViewConfig({ id, type: "form7" })
-                }    onOpenForum={(ncr: any) => {
-      // Check if it's an 8D related NCR
-      const is8D = ncr?.status === "SENT_TO_8D" || 
-                   ncr?.status === "IN_8D_PROCESS" || 
-                   ncr?.requires8D === true;
-      if (is8D) {
-        open8DForum(ncr);
-      } else {
-        handleOpenForum(ncr, null);
-      }
-    }}
+    onViewNcr={(id: string) => setActiveNcrViewConfig({ id, type: "form7" })}
+    onOpenForum={openNCRForum}
   />
 )}
           </View>
@@ -2721,49 +2644,7 @@ const open8DForum = async (ncr: any) => {
 )}
 
 {/* 8D Forum Drawer */}
-<Modal visible={show8DForumDrawer} transparent animationType="slide">
-  <View className="flex-1 bg-black/30">
-    <TouchableOpacity
-      className="flex-1"
-      activeOpacity={1}
-      onPress={() => {
-        setShow8DForumDrawer(false);
-        setSelected8DNCR(null);
-        setEightDTeamMembers([]);
-      }}
-    />
-    <View className="w-full sm:w-1/2 h-full bg-white border-l border-gray-200 shadow-2xl">
-      {selected8DNCR && (
-        <View className="flex-1">
-          {loadingTeamMembers ? (
-            <View className="items-center justify-center flex-1">
-              <ActivityIndicator size="large" color="#00529B" />
-              <Text className="mt-3 text-sm text-gray-500">
-                Loading team members...
-              </Text>
-            </View>
-          ) : (
-            <ForumThreadView
-              groupId={`8D-${selected8DNCR.ncrNumber}`}
-              groupName={`8D-${selected8DNCR.ncrNumber}`}
-              isInDrawer={true}
-              setForumDrawerOpen={setShow8DForumDrawer}
-              username={user?.email || user?.username || "Unknown"}
-              currentUser={user}
-              allUsers={allUsers}
-              memberEmails={eightDTeamMembers}
-              onBack={() => {
-                setShow8DForumDrawer(false);
-                setSelected8DNCR(null);
-                setEightDTeamMembers([]);
-              }}
-            />
-          )}
-        </View>
-      )}
-    </View>
-  </View>
-</Modal>
+
     </SafeAreaView>
   );
 }
