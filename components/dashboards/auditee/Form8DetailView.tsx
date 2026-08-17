@@ -423,7 +423,7 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     setLoading(false);
   };
 
-  const downloadPDF = async () => {
+    const downloadPDF = async () => {
     if (!ncr?.id) {
       Alert.alert("Error", "NCR ID not found");
       return;
@@ -436,32 +436,56 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
         ? `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
         : `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf`;
 
-      // FIX: Cast FileSystem to 'any' to bypass strict TS documentDirectory errors
-      const fileSystem = FileSystem as any;
-      const fileUri = `${fileSystem.documentDirectory}${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`;
+      const fileName = `${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`;
 
-      const downloadResumable = fileSystem.createDownloadResumable(
-        endpoint,
-        fileUri,
-        { headers: { Authorization: token ? `Bearer ${token}` : "" } },
-      );
+      // ✅ WEB DOWNLOAD: Use standard browser fetch and blob
+      if (Platform.OS === "web") {
+        const response = await fetch(endpoint, {
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+        });
+        
+        if (!response.ok) throw new Error("Failed to fetch PDF from server");
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } 
+      // ✅ NATIVE DOWNLOAD (iOS/Android): Use expo-file-system
+      else {
+        const fileSystem = FileSystem as any;
+        const fileUri = `${fileSystem.documentDirectory}${fileName}`;
 
-      const downloadResult = await downloadResumable.downloadAsync();
-      if (!downloadResult) throw new Error("Download failed");
+        const downloadResumable = fileSystem.createDownloadResumable(
+          endpoint,
+          fileUri,
+          { headers: { Authorization: token ? `Bearer ${token}` : "" } },
+        );
 
-      const { uri } = downloadResult;
+        const downloadResult = await downloadResumable.downloadAsync();
+        if (!downloadResult) throw new Error("Download failed");
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
-      } else {
-        Alert.alert("Success", "PDF saved to device.");
+        const { uri } = downloadResult;
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri);
+        } else {
+          Alert.alert("Success", "PDF saved to device.");
+        }
       }
 
       const modalMsg = isNCR2Mode
         ? `NCR2 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`
         : `Form 8 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`;
+        
       setModalMessage(modalMsg);
       setShowSuccessModal(true);
+      
     } catch (err) {
       console.error("PDF download error:", err);
       Alert.alert(

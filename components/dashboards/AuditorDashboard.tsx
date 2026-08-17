@@ -1705,13 +1705,42 @@ const fetchSchedulesWithStatus = async (year = selectedYear) => {
         }
       });
 
-      // 2. Determine the list of ALL assigned forms
             // 2. Determine the list of ALL assigned forms
       let formDetails: any[] = [];
       
+      // ✅ FIX: For IATF/System audits, ALWAYS fetch all available forms for the department
+      // because schedule.forms might only contain 1 form while the department actually has more (like SQA).
+      const isIATFOrSystem = 
+        auditType.toLowerCase().includes("iatf") ||
+        auditType.toLowerCase().includes("16949") ||
+        auditType.toLowerCase().includes("system");
+
+      if (isIATFOrSystem) {
+        const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
+        if (availableForms.length > 0) {
+          formDetails = availableForms.map((form: any) => {
+            const existingResponse = responseMap.get(String(form.id));
+            return {
+              id: form.id,
+              name: form.name || form.processName || "Audit Form",
+              processName: form.processName || form.name || "Audit",
+              completed: !!existingResponse && (
+                existingResponse.status === "COMPLETED" ||
+                existingResponse.status === "APPROVED" ||
+                existingResponse.status === "SUBMITTED" ||
+                existingResponse.submittedAt !== null
+              ),
+              responseId: existingResponse?.id,
+              status: existingResponse?.status,
+            };
+          });
+        }
+      }
+
+      // Fallback to assignedForms if not IATF or if fetch returned empty
       const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
       
-      if (Array.isArray(assignedForms) && assignedForms.length > 0) {
+      if (formDetails.length === 0 && Array.isArray(assignedForms) && assignedForms.length > 0) {
         formDetails = assignedForms.map((form: any) => {
           const existingResponse = responseMap.get(String(form.id));
           return {
@@ -1728,9 +1757,10 @@ const fetchSchedulesWithStatus = async (year = selectedYear) => {
             status: existingResponse?.status,
           };
         });
-      } else {
+      }
+      
+      if (formDetails.length === 0) {
         const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
-        
         if (availableForms.length > 0) {
           formDetails = availableForms.map((form: any) => {
             const existingResponse = responseMap.get(String(form.id));
@@ -1784,6 +1814,7 @@ const fetchSchedulesWithStatus = async (year = selectedYear) => {
           }
         }
       }
+
 
       // 3. Calculate accurate stats based on ALL forms
       const totalForms = formDetails.length;
