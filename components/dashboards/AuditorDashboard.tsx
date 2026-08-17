@@ -584,14 +584,12 @@ const AuditListItem = ({
       </View>
 
       <View className="flex-row items-center gap-2">
-        {onOpenForum && (
-                <TouchableOpacity
-                  onPress={() => onOpenForum(item)}
-                  className="p-2 rounded-lg bg-purple-50"
-                >
-                  <MessageCircle size={18} color="#9333ea" />
-                </TouchableOpacity>
-              )}
+        <TouchableOpacity
+          onPress={() => onOpenForum(audit, null)}
+          className="p-2 border rounded-lg bg-slate-50 border-slate-200"
+        >
+          <MessageCircle size={16} color="#334155" />
+        </TouchableOpacity>
 
         {isOverdueNoWork && !hasPendingReschedule ? (
           <TouchableOpacity
@@ -2546,7 +2544,7 @@ const open8DForum = async (ncr: any) => {
                         setSelectedForm(form);
                         setShowExtensionModal(true);
                       }}
-                      onOpenForum={() => addToast("Forum opened", "success")}
+                        onOpenForum={handleOpenForum}  // ✅ Change this
                     />
                   ))}
                 </View>
