@@ -1548,6 +1548,7 @@ const recalculateTimeStatus = (schedule: any): string => {
   };
 
   // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
+    // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
   const fetchAvailableFormsForDepartment = async (
     department: string,
     auditType: string,
@@ -1555,7 +1556,7 @@ const recalculateTimeStatus = (schedule: any): string => {
     if (!department) return [];
     const deptUpper = department.toUpperCase().trim();
 
-    // Only fetch multiple forms for IATF/System audits (Adjust if 5S/Process also have multiple forms)
+    // Only fetch multiple forms for IATF/System audits
     const isIATF =
       auditType.toLowerCase().includes("iatf") ||
       auditType.toLowerCase().includes("16949") ||
@@ -1564,7 +1565,10 @@ const recalculateTimeStatus = (schedule: any): string => {
 
     try {
       let endpoint = "";
+      let isGenericQualityEndpoint = false;
+
       if (deptUpper === "SQA") {
+        // ✅ SQA has its own specific endpoint
         endpoint = `/templates/iatf/by-department/SQA`;
       } else {
         const isQualityDept =
@@ -1572,14 +1576,21 @@ const recalculateTimeStatus = (schedule: any): string => {
         if (!isQualityDept) {
           endpoint = `/templates/iatf/by-department/${encodeURIComponent(department)}`;
         } else {
+          // Generic endpoint for standard QA/QC departments
           endpoint = `/templates/type/IATF_16949`;
+          isGenericQualityEndpoint = true;
         }
       }
 
       const forms = await apiFetch(endpoint);
-      if (deptUpper.includes("QA") || deptUpper.includes("QC")) {
-        return (forms || []).filter((f: any) => f.department === "QA");
+      
+      // ✅ CRITICAL FIX: Only filter if we used the generic endpoint.
+      // If we used the specific /by-department/SQA endpoint, the backend already filtered it!
+      // Previously, filtering SQA forms by department === "QA" was causing them to be dropped (returning []).
+      if (isGenericQualityEndpoint) {
+        return (forms || []).filter((f: any) => f.department === "QA" || f.department === "SQA");
       }
+      
       return forms || [];
     } catch (error) {
       console.error("❌ Error fetching forms for department:", error);
