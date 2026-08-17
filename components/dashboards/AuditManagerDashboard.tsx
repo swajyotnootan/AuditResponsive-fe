@@ -46,12 +46,23 @@ import Form9View from "@/components/dashboards/auditManager/Form9View";
 import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
 import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
 import { apiClient, ncrAPI, userAPI } from "@/services/api";
-import NCRViewManager from "./auditor/view/NCRViewManager";
-
+import { Picker } from "@react-native-picker/picker";
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import NCRPendingDashboard from "./auditManager/NCRPendingDashboard";
+import NCRViewManager from "./auditor/view/NCRViewManager";
+
+const APPROVAL_PICKER_STYLE: any = {
+  height: 48,
+  width: "100%",
+  borderWidth: 0,
+  borderColor: "transparent",
+  backgroundColor: "transparent",
+  color: "#334155",
+  paddingHorizontal: 16,
+  outline: "none",
+};
 
 // ============================================================================
 // GLASSMORPHIC PALETTE & CONSTANTS
@@ -558,6 +569,10 @@ export default function AuditManagerDashboard() {
     any[]
   >([]);
   const [loadingCompetent, setLoadingCompetent] = useState(false);
+   const [approvalAuditors, setApprovalAuditors] = useState<any[]>([]);
+  const [approvalTeamInfo, setApprovalTeamInfo] = useState<{
+    teamAuditorIds: number[];
+  }>({ teamAuditorIds: [] });
   const [showReassignOptions, setShowReassignOptions] = useState(false);
   const [showAddAnotherAuditor, setShowAddAnotherAuditor] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<any>(null);
@@ -678,152 +693,173 @@ export default function AuditManagerDashboard() {
     }
   };
 
-  const fetchDepartmentTeamMembers = async (
+    const fetchDepartmentTeamMembers = async (
     departmentName: string,
-    auditElements?: any,
+    request?: any,
   ) => {
     if (!departmentName) return;
     setLoadingTeamMembers(true);
-    setLoadingCompetent(true);
 
     try {
       const enumValue =
         departmentDisplayToEnum[departmentName] ||
         departmentName.toUpperCase().replace(/[&\s\/]+/g, "_");
 
-      // 1. Fetch regular team members (for lead auditor name, team names, etc.)
-      const auditorsRes = await apiClient
-        .get(
-          `/api/audit-schedule/regular-auditors/by-department/${encodeURIComponent(enumValue)}`,
-        )
-        .catch(() => []);
-      const auditors = Array.isArray(auditorsRes)
-        ? auditorsRes
-        : (auditorsRes as any)?.data || [];
-
-      let leadAuditorName = null;
-      try {
-        const leadInfo = await apiClient.get(
-          `/api/audit-schedule/lead-auditors/by-department/${encodeURIComponent(enumValue)}`,
-        );
-        const leadData = Array.isArray(leadInfo)
-          ? leadInfo
-          : (leadInfo as any)?.data || [];
-        if (leadData.length > 0) {
-          leadAuditorName = `${leadData[0].firstName} ${leadData[0].lastName}`;
-        }
-      } catch (e) {}
-
-      const schedRes = await apiClient
-        .get(
-          `/api/audit-schedule/year/${selectedYear}/department/${encodeURIComponent(enumValue)}`,
-        )
-        .catch(() => []);
-      const deptSchedules = Array.isArray(schedRes)
-        ? schedRes
-        : (schedRes as any)?.data || [];
-      const deptSchedule =
-        deptSchedules.find((s: any) => s.approvalStatus === "APPROVED") ||
-        deptSchedules[0];
-
-      let teamIds: any[] = [];
-      let teamNames: string[] = [];
-      if (deptSchedule?.teamAuditorIds) {
-        teamIds =
-          typeof deptSchedule.teamAuditorIds === "string"
-            ? JSON.parse(deptSchedule.teamAuditorIds)
-            : deptSchedule.teamAuditorIds;
-      }
-      if (deptSchedule?.teamAuditorNames) {
-        teamNames =
-          typeof deptSchedule.teamAuditorNames === "string"
-            ? JSON.parse(deptSchedule.teamAuditorNames)
-            : deptSchedule.teamAuditorNames;
-      }
-
-      setDepartmentTeamMembers({
-        auditors,
-        teamAuditorIds: teamIds,
-        leadAuditorName,
-        teamAuditorNames: teamNames,
-      });
-
-      // 2. Safely parse auditElements
-      let parsedElements: string[] = [];
-      if (auditElements) {
-        if (Array.isArray(auditElements)) {
-          parsedElements = auditElements;
-        } else if (typeof auditElements === "string") {
+      // ---------- Helpers ----------
+      const parseArr = (val: any): any[] => {
+        if (!val || val === "null") return [];
+        if (Array.isArray(val)) return val;
+        if (typeof val === "string") {
           try {
-            parsedElements = JSON.parse(auditElements);
+            const p = JSON.parse(val);
+            return Array.isArray(p) ? p : [];
           } catch (e) {
-            parsedElements = [auditElements];
+            return [];
           }
         }
+        return [];
+      };
+
+      const getIds = (s: any): number[] => {
+        const ids =
+          parseArr(s?.coAuditorIds).length > 0
+            ? parseArr(s?.coAuditorIds)
+            : parseArr(s?.teamAuditorIds);
+        return ids.map((x: any) => Number(x)).filter((n) => !isNaN(n));
+      };
+      const getNames = (s: any): string[] => {
+        const names =
+          parseArr(s?.coAuditorNames).length > 0
+            ? parseArr(s?.coAuditorNames)
+            : parseArr(s?.teamAuditorNames);
+        return names.map(String);
+      };
+      const hasTeam = (s: any) =>
+        getIds(s).length > 0 || getNames(s).length > 0;
+
+      // ---------- STEP 1: exact schedule by ID ----------
+      let target: any = schedules.find(
+        (s: any) => String(s.id) === String(request?.scheduleId),
+      );
+
+      // ---------- STEP 2: sibling schedule with team (same dept) ----------
+      if (!target || !hasTeam(target)) {
+        const reqLower = String(departmentName).trim().toLowerCase();
+        const siblings = schedules.filter((s: any) => {
+          const d = String(s.department || "")
+            .trim()
+            .toLowerCase();
+          return d === reqLower || d === String(enumValue).toLowerCase();
+        });
+        target = siblings.find(hasTeam) || target;
       }
 
-      // 3. Fetch Fully Competent Auditors using apiClient.get directly (Matching React Web)
-      if (parsedElements.length > 0) {
-        try {
-          const reqMonth = selectedRequest?.currentDate
-            ? new Date(selectedRequest.currentDate).toLocaleString("default", {
-                month: "short",
-              })
-            : "";
+      // ---------- STEP 3: department API ----------
+      if (!target || !hasTeam(target)) {
+        const res = await apiClient
+          .get(
+            `/api/audit-schedule/year/${selectedYear}/department/${encodeURIComponent(enumValue)}`,
+          )
+          .catch(() => []);
+        const list = Array.isArray(res) ? res : (res as any)?.data || [];
+        target = list.find((s: any) => hasTeam(s)) || target;
+      }
 
-          console.log("🔍 Fetching competent auditors with:", {
-            department: enumValue,
-            auditElements: JSON.stringify(parsedElements),
-            planYear: selectedYear,
-            month: reqMonth,
-          });
+      // ---------- STEP 4: build the pool (ONLY team auditors, EXCLUDE lead auditor) ----------
+      let teamIds: number[] = target ? getIds(target) : [];
+      let teamNames: string[] = target ? getNames(target) : [];
 
-          // ✅ USE apiClient.get directly to match the working React Web endpoint
-          const competentRes = await apiClient.get(
-            "/api/audit-schedule/fully-competent-auditors/for-schedule",
-            {
-              params: {
-                department: enumValue,
-                auditElements: JSON.stringify(parsedElements),
-                planYear: selectedYear,
-                month: reqMonth,
-              },
-            },
+      // Keep lead info for the UI display section (⭐ Lead: ...)
+      const leadId = target?.leadAuditorId || target?.auditorId;
+      const leadName = target?.leadAuditorName || target?.auditorName || null;
+
+      // ❌ FIX: Remove Lead Auditor from the dropdown pool
+      if (leadId) {
+        teamIds = teamIds.filter((id) => Number(id) !== Number(leadId));
+      }
+      if (leadName) {
+        teamNames = teamNames.filter(
+          (name) => String(name) !== String(leadName),
+        );
+      }
+
+      console.log(
+        "✅ [MATRIX-SOURCE] scheduleId:",
+        target?.id,
+        "| team ids (no lead):",
+        teamIds,
+        "| lead:",
+        leadName,
+      );
+
+      let assignedAuditors: any[] = teamIds.map((id, i) => {
+        const u = allUsersList.find((x: any) => Number(x.id) === Number(id));
+        if (u) return u;
+        const parts = (teamNames[i] || "Unknown").split(" ");
+        return {
+          id: Number(id),
+          firstName: parts[0],
+          lastName: parts.slice(1).join(" "),
+          role: "AUDITOR",
+        };
+      });
+
+      // Names-only fallback
+      if (assignedAuditors.length === 0 && teamNames.length > 0) {
+        assignedAuditors = teamNames.map((name) => {
+          const u = allUsersList.find(
+            (x: any) =>
+              `${x.firstName} ${x.lastName}`.toLowerCase() ===
+              name.toLowerCase(),
           );
-
-          const competentAuditors = Array.isArray(competentRes)
-            ? competentRes
-            : (competentRes as any)?.data || [];
-
-          console.log("✅ Competent Auditors Fetched:", competentAuditors);
-
-          setFullyCompetentLeadAuditors(
-            competentAuditors.filter((a: any) => a.role === "LEAD_AUDITOR"),
+          return (
+            u || {
+              id: -1,
+              firstName: name.split(" ")[0],
+              lastName: name.split(" ").slice(1).join(" "),
+              role: "AUDITOR",
+            }
           );
-          setFullyCompetentTeamAuditors(
-            competentAuditors.filter((a: any) => a.role === "AUDITOR"),
+        });
+      }
+
+      // LAST RESORT only
+      if (assignedAuditors.length === 0) {
+        const auditorsRes = await apiClient
+          .get(
+            `/api/audit-schedule/regular-auditors/by-department/${encodeURIComponent(enumValue)}`,
+          )
+          .catch(() => []);
+        assignedAuditors = Array.isArray(auditorsRes)
+          ? auditorsRes
+          : (auditorsRes as any)?.data || [];
+
+        // Filter out lead from last resort too
+        if (leadId) {
+          assignedAuditors = assignedAuditors.filter(
+            (a: any) => Number(a.id) !== Number(leadId),
           );
-        } catch (e) {
-          console.error("❌ Error fetching competent auditors:", e);
-          setFullyCompetentLeadAuditors([]);
-          setFullyCompetentTeamAuditors([]);
         }
-      } else {
-        console.log(
-          "⚠️ No audit elements provided, falling back to regular department auditors",
-        );
-        setFullyCompetentLeadAuditors(
-          auditors.filter((a: any) => a.role === "LEAD_AUDITOR"),
-        );
-        setFullyCompetentTeamAuditors(
-          auditors.filter((a: any) => a.role === "AUDITOR" || !a.role),
-        );
       }
+
+      const validIds = assignedAuditors
+        .map((a: any) => Number(a.id))
+        .filter((n) => !isNaN(n) && n > 0);
+
+      setApprovalAuditors(assignedAuditors);
+      setApprovalTeamInfo({ teamAuditorIds: validIds });
+      setDepartmentTeamMembers({
+        auditors: assignedAuditors,
+        teamAuditorIds: validIds,
+        leadAuditorName: leadName, // Still keep this for the UI display text
+        teamAuditorNames: assignedAuditors.map(
+          (a: any) => `${a.firstName} ${a.lastName}`,
+        ),
+      });
     } catch (error) {
-      console.error("❌ Error fetching team:", error);
+      console.error("❌ Error fetching department team:", error);
     } finally {
       setLoadingTeamMembers(false);
-      setLoadingCompetent(false);
     }
   };
 
@@ -887,10 +923,14 @@ export default function AuditManagerDashboard() {
     setRefreshing(false);
   };
 
-  const handleViewRequest = (request: any) => {
+   const handleViewRequest = (request: any) => {
+    console.log(
+      "🚀 [DEBUG 0] handleViewRequest triggered. Full request object:",
+      request,
+    );
     setSelectedRequest(request);
-    // ✅ Pass auditElements to fetch competent auditors
-    fetchDepartmentTeamMembers(request.department, request.auditElements);
+    // ✅ Pass the FULL request object so we can access auditElements, currentDate, etc.
+    fetchDepartmentTeamMembers(request.department, request);
     setShowRequestModal(true);
   };
 
@@ -2045,7 +2085,7 @@ export default function AuditManagerDashboard() {
         </View>
       </Modal>
 
-      <Modal
+        <Modal
         visible={showApproveModal}
         transparent
         animationType="fade"
@@ -2191,7 +2231,8 @@ export default function AuditManagerDashboard() {
                       <Text style={styles.reassignLabel}>
                         Select Primary Auditor *
                       </Text>
-                      {loadingCompetent ? (
+
+                      {loadingTeamMembers ? (
                         <Text
                           style={{
                             color: COLORS.textSub,
@@ -2199,73 +2240,58 @@ export default function AuditManagerDashboard() {
                             padding: 8,
                           }}
                         >
-                          Checking competency...
-                        </Text>
-                      ) : fullyCompetentTeamAuditors.length === 0 ? (
-                        <Text
-                          style={{
-                            color: COLORS.dark,
-                            backgroundColor: COLORS.bg,
-                            padding: 8,
-                            borderRadius: 8,
-                          }}
-                        >
-                          No fully competent auditors for these elements
+                          Loading auditors...
                         </Text>
                       ) : (
-                        <ScrollView
-                          style={{ maxHeight: 150 }}
-                          showsVerticalScrollIndicator
+                        <View
+                          style={{
+                            backgroundColor: "#F8FAFC",
+                            borderWidth: 1,
+                            borderColor: "#E2E8F0",
+                            borderRadius: 12,
+                            overflow: "hidden",
+                          }}
                         >
-                          {fullyCompetentTeamAuditors
-                            .filter((a) => {
-                              // 1. Check by ID (if available in the payload)
-                              const matchesId =
-                                selectedRequest?.auditorId &&
-                                String(a.id) ===
-                                  String(selectedRequest.auditorId);
-
-                              // 2. Check by Name (fallback if auditorId is missing, which is common)
-                              const matchesName =
-                                selectedRequest?.auditorName &&
-                                `${a.firstName} ${a.lastName}`.toLowerCase() ===
-                                  selectedRequest.auditorName.toLowerCase();
-
-                              // If it matches either, hide it from the reassign list
-                              if (matchesId || matchesName) {
-                                return false;
-                              }
-                              return true;
-                            })
-                            .map((auditor) => {
-                              const isSelected =
-                                selectedReassignAuditorId ===
-                                String(auditor.id);
-                              return (
-                                <TouchableOpacity
+                          <Picker
+                            selectedValue={selectedReassignAuditorId}
+                            onValueChange={(itemValue: string) => {
+                              setSelectedReassignAuditorId(itemValue);
+                              checkConflictsForAuditor(itemValue, true);
+                            }}
+                            style={APPROVAL_PICKER_STYLE}
+                          >
+                            <Picker.Item label="Select Auditor" value="" />
+                            {approvalAuditors
+                              .filter((a) => {
+                                // 1. Filter by assigned team (Fallback to all if teamAuditorIds is empty)
+                                if (
+                                  approvalTeamInfo.teamAuditorIds.length > 0 &&
+                                  !approvalTeamInfo.teamAuditorIds.includes(
+                                    Number(a.id),
+                                  )
+                                ) {
+                                  return false;
+                                }
+                                // 2. Hide the current auditor from the reassign list
+                                const isCurrent =
+                                  String(a.id) ===
+                                    String(selectedRequest?.auditorId) ||
+                                  `${a.firstName} ${a.lastName}`.toLowerCase() ===
+                                    selectedRequest?.auditorName?.toLowerCase();
+                                return !isCurrent;
+                              })
+                              .map((auditor) => (
+                                <Picker.Item
                                   key={auditor.id}
-                                  style={[
-                                    styles.auditorOption,
-                                    isSelected && styles.auditorOptionSelected,
-                                  ]}
-                                  onPress={() => {
-                                    setSelectedReassignAuditorId(
-                                      String(auditor.id),
-                                    );
-                                    checkConflictsForAuditor(auditor.id, true);
-                                  }}
-                                >
-                                  <Text style={styles.auditorOptionText}>
-                                    ✅ {auditor.firstName} {auditor.lastName}
-                                  </Text>
-                                  {isSelected && (
-                                    <Check size={16} color={COLORS.primary} />
-                                  )}
-                                </TouchableOpacity>
-                              );
-                            })}
-                        </ScrollView>
+                                  label={`${auditor.firstName} ${auditor.lastName}`}
+                                  value={auditor.id.toString()}
+                                />
+                              ))}
+                          </Picker>
+                        </View>
                       )}
+
+                      {/* Keep your existing checkingAvailability and conflictWarning UI here */}
                       {checkingAvailability && (
                         <Text
                           style={{
@@ -2277,7 +2303,6 @@ export default function AuditManagerDashboard() {
                           Checking auditor availability...
                         </Text>
                       )}
-
                       {conflictWarning &&
                         conflictWarning.type === "reassign" && (
                           <View style={styles.warningBoxV2}>
@@ -2292,14 +2317,12 @@ export default function AuditManagerDashboard() {
                               }}
                             >
                               Auditor {conflictWarning.auditorName} is already
-                              scheduled at this time. Please select a different
-                              auditor.
+                              scheduled at this time.
                             </Text>
                           </View>
                         )}
                     </View>
                   )}
-
                   {/* Add Co-auditor Checkbox */}
                   <View style={styles.checkboxRowV2}>
                     <TouchableOpacity
@@ -2325,14 +2348,13 @@ export default function AuditManagerDashboard() {
                       </Text>
                     </View>
                   </View>
-
                   {showAddAnotherAuditor && (
                     <View style={styles.coAuditorSection}>
                       <Text style={styles.reassignLabel}>
                         Select Additional Auditor(s)
                       </Text>
 
-                      {loadingCompetent ? (
+                      {loadingTeamMembers ? (
                         <Text
                           style={{
                             color: COLORS.textSub,
@@ -2340,57 +2362,44 @@ export default function AuditManagerDashboard() {
                             padding: 8,
                           }}
                         >
-                          Checking competency...
-                        </Text>
-                      ) : fullyCompetentTeamAuditors.length === 0 ? (
-                        <Text
-                          style={{
-                            color: COLORS.dark,
-                            backgroundColor: COLORS.bg,
-                            padding: 8,
-                            borderRadius: 8,
-                          }}
-                        >
-                          No fully competent team auditors for these elements
+                          Loading auditors...
                         </Text>
                       ) : (
                         <ScrollView
                           style={{ maxHeight: 150 }}
                           showsVerticalScrollIndicator
                         >
-                          {fullyCompetentTeamAuditors
+                          {approvalAuditors
                             .filter((a) => {
-                              // 1. Check by ID or Name to identify the current auditor
-                              const matchesId =
-                                selectedRequest?.auditorId &&
-                                String(a.id) ===
-                                  String(selectedRequest.auditorId);
-                              const matchesName =
-                                selectedRequest?.auditorName &&
-                                `${a.firstName} ${a.lastName}`.toLowerCase() ===
-                                  selectedRequest.auditorName.toLowerCase();
-
-                              const isCurrentAuditor = matchesId || matchesName;
-
-                              // 2. If we are NOT reassigning, hide the current auditor from the co-auditor list
-                              if (!showReassignOptions && isCurrentAuditor) {
+                              // 1. Filter by assigned team
+                              if (
+                                approvalTeamInfo.teamAuditorIds.length > 0 &&
+                                !approvalTeamInfo.teamAuditorIds.includes(
+                                  Number(a.id),
+                                )
+                              )
                                 return false;
-                              }
 
-                              // 3. Hide the newly selected primary auditor to avoid duplication
+                              // 2. Hide current auditor
+                              const isCurrent =
+                                String(a.id) ===
+                                  String(selectedRequest?.auditorId) ||
+                                `${a.firstName} ${a.lastName}`.toLowerCase() ===
+                                  selectedRequest?.auditorName?.toLowerCase();
+                              if (isCurrent) return false;
+
+                              // 3. Hide newly selected primary auditor (if reassign is active)
                               if (
                                 showReassignOptions &&
                                 selectedReassignAuditorId &&
                                 String(a.id) ===
                                   String(selectedReassignAuditorId)
-                              ) {
+                              )
                                 return false;
-                              }
 
                               // 4. Hide already selected co-auditors
-                              if (additionalAuditorIds.includes(String(a.id))) {
+                              if (additionalAuditorIds.includes(String(a.id)))
                                 return false;
-                              }
 
                               return true;
                             })
@@ -2421,6 +2430,7 @@ export default function AuditManagerDashboard() {
                         </ScrollView>
                       )}
 
+                      {/* Keep checkingAvailability and conflictWarning UI exactly as is */}
                       {checkingAvailability && (
                         <Text
                           style={{
@@ -2432,7 +2442,6 @@ export default function AuditManagerDashboard() {
                           Checking auditor availability...
                         </Text>
                       )}
-
                       {conflictWarning &&
                         conflictWarning.type === "coauditor" && (
                           <View
@@ -2460,12 +2469,12 @@ export default function AuditManagerDashboard() {
                               }}
                             >
                               Auditor {conflictWarning.auditorName} is already
-                              scheduled. You can still add them, but they will
-                              have overlapping schedules.
+                              scheduled.
                             </Text>
                           </View>
                         )}
 
+                      {/* SELECTED TAGS */}
                       {additionalAuditorIds.length > 0 && (
                         <View style={{ marginTop: 8 }}>
                           <Text style={styles.reassignLabel}>
@@ -2473,13 +2482,9 @@ export default function AuditManagerDashboard() {
                           </Text>
                           <View style={styles.selectedAuditors}>
                             {additionalAuditorIds.map((id) => {
-                              const auditor =
-                                fullyCompetentTeamAuditors.find(
-                                  (a) => String(a.id) === id,
-                                ) ||
-                                departmentTeamMembers.auditors.find(
-                                  (a) => String(a.id) === id,
-                                );
+                              const auditor = approvalAuditors.find(
+                                (a) => String(a.id) === id,
+                              );
                               return auditor ? (
                                 <View
                                   key={id}
