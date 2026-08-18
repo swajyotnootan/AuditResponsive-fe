@@ -9,8 +9,8 @@ import {
   Building2,
   Calendar,
   Check,
-  CheckCheck,
-  Clock,
+  CheckCheck, // ✅ WhatsApp double check
+  Clock, // ✅ WhatsApp sending status
   Download,
   Edit,
   Eye,
@@ -30,7 +30,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
+  Animated, // ✅ For blink animation
   Dimensions,
   Image,
   Linking,
@@ -72,7 +72,7 @@ interface Thread {
   attachments?: Attachment[];
   isEdited?: boolean;
   deliveryStatus?: 'SENDING' | 'SENT' | 'DELIVERED' | 'SEEN' | 'FAILED';
-  seenBy?: string[];
+  seenBy?: string[]; // ✅ ADD THIS for real read receipts
 }
 
 interface ThreadCardProps {
@@ -111,11 +111,14 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
   return null;
 };
 
+// ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
+// ✅ Detect if we're talking to the production (UTC) backend
 const isProductionBackend = () => {
   const url = API_BASE_URL || '';
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
+// ✅ Parse backend date correctly for BOTH local (IST) and prod (UTC)
 const parseBackendDate = (dateString: string): Date => {
   let isoString = dateString;
   if (!isoString.includes('T')) {
@@ -127,6 +130,7 @@ const parseBackendDate = (dateString: string): Date => {
   return new Date(isoString);
 };
 
+// ✅ Get just the time (e.g., "2:30 PM")
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -135,6 +139,7 @@ const getTimeOnly = (date: Date) => {
   });
 };
 
+// ✅ FIXED: Always show the TIME for every message
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
   
@@ -147,18 +152,22 @@ const formatDateAndTime = (dateString?: string) => {
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
+    // Today: Show time only (e.g., "10:06 AM")
     if (diffDays === 0) {
       return getTimeOnly(date);
     }
     
+    // Yesterday: Show "Yesterday, 2:30 PM"
     if (diffDays === 1) {
       return `Yesterday, ${getTimeOnly(date)}`;
     }
     
+    // This week: Show "Monday, 2:30 PM"
     if (diffDays < 7) {
       return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
     }
     
+    // Older: Show "Jan 15, 2:30 PM"
     return `${date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -394,6 +403,7 @@ export default function ThreadCard({
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
 
+  // ✅ WhatsApp Blink Animation
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const prevStatusRef = useRef(thread.deliveryStatus);
 
@@ -409,6 +419,8 @@ export default function ThreadCard({
     prevStatusRef.current = thread.deliveryStatus;
   }, [thread.deliveryStatus]);
 
+  // ✅ WhatsApp Status Icons
+    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
   const getStatusIcon = () => {
     if (thread.failed || thread.deliveryStatus === 'FAILED') {
       return (
@@ -418,10 +430,12 @@ export default function ThreadCard({
       );
     }
 
+    // ✅ REAL WHATSAPP LOGIC: Check if anyone ELSE has seen it
     const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && 
       thread.seenBy.some((email: string) => email !== currentEmail);
 
     if (seenByOthers) {
+      // 🔵 BLUE TICK (Seen by recipient)
       return (
         <Animated.View style={{ opacity: blinkAnim }}>
           <CheckCheck size={13} color="#3b82f6" />
@@ -429,6 +443,7 @@ export default function ThreadCard({
       );
     }
 
+    // ⚪ GRAY TICKS (Not seen yet)
     switch (thread.deliveryStatus) {
       case 'SENDING': return <Clock size={13} color="#9ca3af" />;
       case 'SENT': return <Check size={13} color="#9ca3af" />;
@@ -456,14 +471,21 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  const handleReactionSelect = (emoji: string) => {
-    if (onReact && thread.id) {
-      const threadId = String(thread.id);
-      onReact(threadId, emoji);
-    }
-    setShowReactionBar(false);
-  };
+  // components/forum/ThreadCard.tsx
+// Replace ONLY the handleReactToPost function and related reaction logic
 
+// ========== REACTION HANDLER (FIXED) ==========
+const handleReactionSelect = (emoji: string) => {
+  // ✅ Pass the emoji directly to parent handler
+  if (onReact && thread.id) {
+    // Ensure thread.id is properly converted to string
+    const threadId = String(thread.id);
+    onReact(threadId, emoji);
+  }
+  setShowReactionBar(false);
+};
+
+  // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
     setShowMenu(false);
     const executeDelete = () => {
@@ -681,142 +703,120 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
-      {/* ✅ WRAPPER with position relative for absolute children */}
-      <View style={{ position: 'relative', zIndex: 1 }}>
+      <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         
-        {/* ✅ REACTION BAR - Outside messageRow */}
         {showReactionBar && (
-          <View style={[
-            styles.reactionBarContainer, 
-            isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft,
-          ]}>
+          <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
             <View style={styles.reactionBar}>
               {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity 
-                  key={emoji} 
-                  onPress={() => handleReactionSelect(emoji)} 
-                  style={styles.reactionBarItem}
-                >
-                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                </TouchableOpacity>
+                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
               ))}
-              <TouchableOpacity 
-                onPress={() => setShowReactionBar(false)} 
-                style={styles.reactionBarItem}
-              >
-                <X size={16} color="#666" />
-              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* ✅ MESSAGE ROW */}
-        <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
-          
-          <View style={styles.avatarContainer}>
-            <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
-              {avatar && !avatarError ? (
-                <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
-              ) : (
-                <View style={styles.defaultAvatar}><User size={16} color="#666" /></View>
-              )}
-            </Pressable>
-          </View>
-          
-          {/* ✅ MESSAGE BUBBLE - No popups inside */}
-          <View style={[styles.messageBubble, isOwnMessage ? styles.myMessage : styles.otherMessage]}>
-            {!isOwnMessage && (
-              <Pressable onPress={() => handleProfileClick(thread.createdBy)}>
-                <Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>
-              </Pressable>
+        <View style={styles.avatarContainer}>
+          <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
+            {avatar && !avatarError ? (
+              <Image source={{ uri: avatar }} style={styles.avatar} onError={() => setAvatarError(true)} />
+            ) : (
+              <View style={styles.defaultAvatar}><User size={16} color="#666" /></View>
             )}
-            
-            {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
-            {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
-            
-            <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
-              <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
-              {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
-              
-              {isOwnMessage && (
-                <View style={styles.statusIcon}>{getStatusIcon()}</View>
-              )}
-              
-              {/* Reaction Trigger Button */}
-              <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
-                <Smile size={14} color="#9ca3af" />
-              </TouchableOpacity>
-
-              {/* 3-Dot Menu Trigger Button */}
-              {isOwnMessage && (
-                <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
-                  <MoreVertical size={14} color="#9ca3af" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Reactions display - Inside bubble is fine */}
-            {Object.keys(groupedReactions).length > 0 && (
-              <View style={{ 
-                marginTop: 6, 
-                flexDirection: 'row', 
-                flexWrap: 'wrap', 
-                gap: 4, 
-                justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-              }}>
-                {Object.entries(groupedReactions).map(([emoji, data]) => (
-                  <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-                    <TouchableOpacity
-                      onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-                      style={[
-                        styles.reactionBadge, 
-                        data.hasReacted && styles.reactionBadgeActive
-                      ]}
-                    >
-                      <Text style={{ fontSize: 14 }}>{emoji}</Text>
-                      <Text style={[
-                        styles.reactionCount, 
-                        data.hasReacted && styles.reactionCountActive
-                      ]}>
-                        {data.count}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {showReactionDetail === emoji && (
-                      <View style={styles.reactionDetailPopup}>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
-                          Reacted by:
-                        </Text>
-                        {data.users.map((userName: string, idx: number) => (
-                          <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                            • {userName}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+          </Pressable>
         </View>
+        
+        <View style={[styles.messageBubble, isOwnMessage ? styles.myMessage : styles.otherMessage]}>
+          {!isOwnMessage && (
+            <Pressable onPress={() => handleProfileClick(thread.createdBy)}>
+              <Text style={styles.senderName}>{thread.createdByName || thread.createdBy || "User"}</Text>
+            </Pressable>
+          )}
+          
+          {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
+          {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
+          
+          <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
+            <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
+            {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
+            
+            {/* ✅ WhatsApp Status Icons */}
+            {isOwnMessage && (
+              <View style={styles.statusIcon}>{getStatusIcon()}</View>
+            )}
+            
+            {/* ✅ Reaction Trigger (Visible on ALL messages) */}
+            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
+              <Smile size={14} color="#9ca3af" />
+            </TouchableOpacity>
 
-        {/* ✅ MENU POPUP - Outside messageRow, below it */}
-        {showMenu && isOwnMessage && (
-          <View style={[
-            styles.menuPopup, 
-            isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft,
+            {/* ✅ 3-Dot Menu (Only on own messages) */}
+            {isOwnMessage && (
+              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
+                <MoreVertical size={14} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {showMenu && isOwnMessage && (
+            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
+              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+                <Edit size={14} color="#374151" />
+                <Text style={styles.menuText}>Edit Message</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
+                <Trash2 size={14} color="#ef4444" />
+                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
+
+{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+{Object.keys(groupedReactions).length > 0 && (
+  <View style={{ 
+    marginTop: 6, 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 4, 
+    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+  }}>
+    {Object.entries(groupedReactions).map(([emoji, data]) => (
+      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+        <TouchableOpacity
+          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+          style={[
+            styles.reactionBadge, 
+            data.hasReacted && styles.reactionBadgeActive
+          ]}
+        >
+          <Text style={{ fontSize: 14 }}>{emoji}</Text>
+          <Text style={[
+            styles.reactionCount, 
+            data.hasReacted && styles.reactionCountActive
           ]}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-              <Edit size={14} color="#374151" />
-              <Text style={styles.menuText}>Edit Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-              <Trash2 size={14} color="#ef4444" />
-              <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
-            </TouchableOpacity>
+            {data.count}
+          </Text>
+        </TouchableOpacity>
+
+        {showReactionDetail === emoji && (
+          <View style={styles.reactionDetailPopup}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+              Reacted by:
+            </Text>
+            {data.users.map((userName: string, idx: number) => (
+              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                • {userName}
+              </Text>
+            ))}
           </View>
         )}
+      </View>
+    ))}
+  </View>
+)}
+        </View>
       </View>
     </>
   );
@@ -906,55 +906,19 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  
-  // ✅ FIXED: Reaction bar - Outside bubble
-  reactionBarContainer: { 
-    position: 'absolute', 
-    top: -45, 
-    zIndex: 9999, 
-    elevation: 9999,
-    paddingHorizontal: 12 
-  },
-  reactionBarLeft: { left: 40 },
-  reactionBarRight: { right: 10 },
-  reactionBar: { 
-    flexDirection: 'row', 
-    backgroundColor: 'white', 
-    borderRadius: 24, 
-    padding: 6, 
-    shadowColor: '#000', 
-    shadowOffset: {width:0, height:2}, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 4, 
-    elevation: 9999, 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb' 
-  },
+  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
+  reactionBarLeft: { left: 0 },
+  reactionBarRight: { right: 0 },
+  reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBarItem: { paddingHorizontal: 8, paddingVertical: 4 },
   reactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  
-  // ✅ FIXED: Menu popup - Outside bubble, positioned below
-  menuPopup: { 
-    position: 'absolute', 
-    bottom: -80,  // Changed from bottom: 35 to bottom: -80
-    backgroundColor: 'white', 
-    borderRadius: 8, 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb', 
-    shadowColor: '#000', 
-    shadowOffset: {width:0, height:2}, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    elevation: 9999, 
-    zIndex: 9999, 
-    minWidth: 150 
-  },
+  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
   menuPopupRight: { right: 10 },
-  menuPopupLeft: { left: 40 },
+  menuPopupLeft: { left: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   menuText: { fontSize: 14, fontWeight: '500', color: '#374151' },
 });
