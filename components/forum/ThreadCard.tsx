@@ -1,17 +1,17 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - Full Screen Previews & Bottom Sheet Menus
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete, Inline Audio/Video
 
 import { API_BASE_URL } from "@/config/apiConfig";
-import { Audio, ResizeMode, Video } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { Audio, ResizeMode, Video } from 'expo-av'; // ✅ ADDED FOR INLINE AUDIO/VIDEO
+import * as FileSystem from 'expo-file-system/legacy';
 import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
   Building2,
   Calendar,
   Check,
-  CheckCheck,
-  Clock,
+  CheckCheck, // ✅ WhatsApp double check
+  Clock, // ✅ WhatsApp sending status
   Download,
   Edit,
   Eye,
@@ -31,7 +31,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated,
+  Animated, // ✅ For blink animation
+  Dimensions,
   Image,
   Linking,
   Modal,
@@ -41,12 +42,13 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 
 // =====================================================
 // Types
 // =====================================================
+
 type AttachmentType = "IMAGE" | "VIDEO" | "AUDIO" | "LOCATION" | "EVENT" | "DOCUMENT";
 
 interface Attachment {
@@ -77,7 +79,11 @@ interface Thread {
 interface ThreadCardProps {
   thread: Thread;
   currentUsername?: string;
-  currentUser?: { id?: string | number; email?: string; profileImage?: string; };
+  currentUser?: {
+    id?: string | number; 
+    email?: string;
+    profileImage?: string;
+  };
   allUsers?: any[];
   onRetry?: (thread: Thread) => void;
   reactions?: any[];
@@ -87,13 +93,19 @@ interface ThreadCardProps {
 }
 
 interface UserProfile {
-  id?: string | number; name?: string; email?: string; username?: string;
-  role?: string; department?: string; profilePhoto?: string;
+  id?: string | number;
+  name?: string;
+  email?: string;
+  username?: string;
+  role?: string;
+  department?: string;
+  profilePhoto?: string;
 }
 
 // =====================================================
 // Helpers
 // =====================================================
+
 const getProfileImageUrl = (userId?: string | number | null, existingImage?: string) => {
   if (existingImage && (existingImage.startsWith('http') || existingImage.startsWith('data:'))) return existingImage;
   if (userId) return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
@@ -107,27 +119,48 @@ const isProductionBackend = () => {
 
 const parseBackendDate = (dateString: string): Date => {
   let isoString = dateString;
-  if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) isoString += 'Z';
+  if (!isoString.includes('T')) {
+    isoString = isoString.replace(' ', 'T');
+  }
+  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+    isoString += 'Z';
+  }
   return new Date(isoString);
 };
 
-const getTimeOnly = (date: Date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+const getTimeOnly = (date: Date) => {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
 
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
+  
   try {
     const date = parseBackendDate(dateString);
     if (isNaN(date.getTime())) return "";
+    
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
+    
     if (diffDays === 0) return getTimeOnly(date);
     if (diffDays === 1) return `Yesterday, ${getTimeOnly(date)}`;
     if (diffDays < 7) return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
-    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })}, ${getTimeOnly(date)}`;
-  } catch (error) { return ""; }
+    
+    return `${date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    })}, ${getTimeOnly(date)}`;
+    
+  } catch (error) {
+    return "";
+  }
 };
 
 const formatFileSize = (bytes?: number) => {
@@ -144,69 +177,64 @@ const base64ToUri = (base64: string, mime: string) => {
 };
 
 // =====================================================
-// NATIVE AUDIO PLAYER (INLINE WHATSAPP STYLE)
+// WEB VIDEO PLAYER
 // =====================================================
-const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
+const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  const formatDuration = (seconds: number) => {
-    if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
-    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const handleLoadedData = () => { setIsLoading(false); setError(null); };
+      const handleError = (e: any) => { setError("Failed to load video"); setIsLoading(false); };
+      const handlePlay = () => setIsPlaying(true);
+      const handlePause = () => setIsPlaying(false);
+      video.addEventListener("loadeddata", handleLoadedData);
+      video.addEventListener("error", handleError);
+      video.addEventListener("play", handlePlay);
+      video.addEventListener("pause", handlePause);
+      return () => {
+        video.removeEventListener("loadeddata", handleLoadedData);
+        video.removeEventListener("error", handleError);
+        video.removeEventListener("play", handlePlay);
+        video.removeEventListener("pause", handlePause);
+        video.pause(); video.src = ""; video.load();
+      };
+    }
+  }, [url]);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) videoRef.current.pause();
+    else videoRef.current.play().catch(() => setError("Cannot play video"));
   };
-
-  const handlePlayPause = async () => {
-    if (!uri) { setError("Audio not available"); return; }
-    if (isPlaying && sound) { await sound.pauseAsync(); setIsPlaying(false); return; }
-    try {
-      setIsLoading(true);
-      let currentSound = sound;
-      if (!currentSound) {
-        const { sound: newSound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: false });
-        currentSound = newSound;
-        setSound(newSound);
-        newSound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded) {
-            setDuration(status.durationMillis ? status.durationMillis / 1000 : 0);
-            setCurrentTime(status.positionMillis ? status.positionMillis / 1000 : 0);
-            setIsPlaying(status.isPlaying);
-            if (status.didJustFinish) { setIsPlaying(false); setCurrentTime(0); }
-          }
-        });
-      }
-      await currentSound.playAsync();
-      setIsPlaying(true);
-      setError(null);
-    } catch (err) { setError("Cannot play audio"); } 
-    finally { setIsLoading(false); }
-  };
-
-  useEffect(() => { return () => { if (sound) sound.unloadAsync(); }; }, [sound]);
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <View style={styles.audioContainer}>
-      <View style={styles.audioRow}>
-        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error || isLoading}>
-          {isLoading ? <ActivityIndicator size="small" color="#fff" /> : isPlaying ? <Pause size={20} color="#fff" /> : <Play size={20} color="#fff" />}
-        </TouchableOpacity>
-        <View style={styles.audioInfo}>
-          <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
-          <View style={styles.audioProgressContainer}>
-            <View style={styles.audioProgressTrack}><View style={[styles.audioProgressFill, { width: `${progress}%` }]} /></View>
-            <Text style={styles.audioTime}>{formatDuration(currentTime)} / {formatDuration(duration)}</Text>
-          </View>
-        </View>
+    <View style={styles.videoModalContainer}>
+      <View style={styles.videoModalHeader}>
+        <TouchableOpacity onPress={onClose} style={styles.videoModalClose}><X size={28} color="white" /></TouchableOpacity>
+        <Text style={styles.videoModalTitle}>Video</Text>
+        <View style={{ width: 40 }} />
       </View>
-      {error && <Text style={styles.audioError}>{error}</Text>}
+      <View style={styles.videoPlayerContainer}>
+        {isLoading && (<View style={styles.videoLoadingOverlay}><ActivityIndicator size="large" color="#fff" /><Text style={styles.videoLoadingText}>Loading video...</Text></View>)}
+        {error && (<View style={styles.videoErrorOverlay}><Text style={styles.videoErrorText}>⚠️ {error}</Text><TouchableOpacity onPress={() => { setError(null); setIsLoading(true); if (videoRef.current) videoRef.current.load(); }} style={styles.videoRetryBtn}><Text style={styles.videoRetryText}>Retry</Text></TouchableOpacity></View>)}
+        <video ref={videoRef} src={url} controls playsInline style={{ width: "100%", height: "100%", backgroundColor: "#000", objectFit: "contain", display: error ? "none" : "block" }} />
+      </View>
+      <View style={styles.videoModalControls}>
+        <TouchableOpacity onPress={togglePlay} style={styles.videoModalPlayBtn}>{isPlaying ? <Pause size={24} color="white" /> : <Play size={24} color="white" />}</TouchableOpacity>
+        <Text style={styles.videoModalStatus}>{isPlaying ? "Playing" : "Paused"}</Text>
+      </View>
     </View>
   );
 };
 
+// =====================================================
+// WEB AUDIO PLAYER
+// =====================================================
 const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -220,10 +248,11 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
     return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   };
 
-  useEffect(() => {
+    useEffect(() => {
     if (Platform.OS === "web" && uri) {
       try {
-        const audio = new (window as any).Audio(uri);
+        // ✅ FIX: Use window.Audio to bypass the expo-av import shadowing
+        const audio = new (window as any).Audio(uri); 
         audio.preload = "metadata";
         audio.addEventListener("loadedmetadata", () => { setDuration(audio.duration); setIsLoading(false); });
         audio.addEventListener("timeupdate", () => setCurrentTime(audio.currentTime));
@@ -242,6 +271,96 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  if (!uri) return ( <View style={styles.audioContainer}><Text style={styles.audioFileName}>{fileName || "Audio"}</Text><Text style={styles.audioError}>No audio data</Text></View> );
+
+  return (
+    <View style={styles.audioContainer}>
+      <View style={styles.audioRow}>
+        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error || isLoading}>
+          {isLoading ? <ActivityIndicator size="small" color="#fff" /> : isPlaying ? <Pause size={20} color="#fff" /> : <Play size={20} color="#fff" />}
+        </TouchableOpacity>
+        <View style={styles.audioInfo}>
+          <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
+          <View style={styles.audioProgressContainer}>
+            <View style={styles.audioProgressTrack}><View style={[styles.audioProgressFill, { width: `${progress}%` }]} /></View>
+            <Text style={styles.audioTime}>{formatDuration(currentTime)} / {formatDuration(duration)}</Text>
+          </View>
+        </View>
+        <Text style={styles.audioFileSize}>{formatFileSize(0)}</Text>
+      </View>
+      {error && <Text style={styles.audioError}>{error}</Text>}
+    </View>
+  );
+};
+
+// =====================================================
+// ✅ NATIVE AUDIO PLAYER (INLINE WHATSAPP STYLE)
+// =====================================================
+const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  };
+
+  const handlePlayPause = async () => {
+    if (!uri) { setError("Audio not available"); return; }
+    
+    if (isPlaying && sound) {
+      await sound.pauseAsync();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      let currentSound = sound;
+      if (!currentSound) {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false }
+        );
+        currentSound = newSound;
+        setSound(newSound);
+        
+        newSound.setOnPlaybackStatusUpdate((status: any) => {
+          if (status.isLoaded) {
+            setDuration(status.durationMillis ? status.durationMillis / 1000 : 0);
+            setCurrentTime(status.positionMillis ? status.positionMillis / 1000 : 0);
+            setIsPlaying(status.isPlaying);
+            if (status.didJustFinish) {
+              setIsPlaying(false);
+              setCurrentTime(0);
+            }
+          }
+        });
+      }
+      await currentSound.playAsync();
+      setIsPlaying(true);
+      setError(null);
+    } catch (err) {
+      setError("Cannot play audio");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
     <View style={styles.audioContainer}>
       <View style={styles.audioRow}>
@@ -268,17 +387,47 @@ const AudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
 };
 
 // =====================================================
+// PDF VIEWER
+// =====================================================
+const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () => void; fileName?: string }) => {
+  return (
+    <View style={{ flex: 1, backgroundColor: "white" }}>
+      <View style={styles.pdfHeader}>
+        <Text style={styles.pdfTitle}>{fileName || "PDF Document"}</Text>
+        <TouchableOpacity onPress={onClose} style={styles.pdfCloseButton}><X size={24} color="#000" /></TouchableOpacity>
+      </View>
+      {Platform.OS === "web" ? (
+        <iframe src={url} style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }} title="PDF Viewer" />
+      ) : (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <Text style={{ fontSize: 16, marginBottom: 16 }}>Opening PDF...</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(url)} style={{ backgroundColor: "#2563eb", padding: 12, borderRadius: 8 }}>
+            <Text style={{ color: "white", fontWeight: "600" }}>Open PDF</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// =====================================================
 // COMPONENT
 // =====================================================
 export default function ThreadCard({ 
-  thread, currentUsername, currentUser, allUsers, onRetry,
-  reactions = [], onReact, onEdit, onDelete
+  thread, 
+  currentUsername, 
+  currentUser, 
+  allUsers, 
+  onRetry,
+  reactions = [],
+  onReact,
+  onEdit,
+  onDelete
 }: ThreadCardProps) {  
   if (!thread) return null;
 
-  // ✅ UPDATED: Added attachment and fileName to preview states
-  const [imageModal, setImageModal] = useState({ open: false, url: "", fileName: "", attachment: null as any });
-  const [videoModal, setVideoModal] = useState({ open: false, url: "", fileName: "", attachment: null as any });
+  const [imageModal, setImageModal] = useState({ open: false, url: "" });
+  const [videoModal, setVideoModal] = useState({ open: false, url: "" });
   const [pdfModal, setPdfModal] = useState({ open: false, url: "", fileName: "" });
   const [loading, setLoading] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -290,6 +439,7 @@ export default function ThreadCard({
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [fetchedProfile, setFetchedProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const [showReactionBar, setShowReactionBar] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -322,15 +472,28 @@ export default function ThreadCard({
         </Pressable>
       );
     }
-    const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && thread.seenBy.some((email: string) => email !== currentEmail);
+
+    const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && 
+      thread.seenBy.some((email: string) => email !== currentEmail);
+
     if (seenByOthers) {
-      return ( <Animated.View style={{ opacity: blinkAnim }}><CheckCheck size={13} color="#3b82f6" /></Animated.View> );
+      return (
+        <Animated.View style={{ opacity: blinkAnim }}>
+          <CheckCheck size={13} color="#3b82f6" />
+        </Animated.View>
+      );
     }
+
     switch (thread.deliveryStatus) {
       case 'SENDING': return <Clock size={13} color="#9ca3af" />;
       case 'SENT': return <Check size={13} color="#9ca3af" />;
       case 'DELIVERED': return <CheckCheck size={13} color="#9ca3af" />;
-      case 'SEEN': return ( <Animated.View style={{ opacity: blinkAnim }}><CheckCheck size={13} color="#3b82f6" /></Animated.View> );
+      case 'SEEN':
+        return (
+          <Animated.View style={{ opacity: blinkAnim }}>
+            <CheckCheck size={13} color="#3b82f6" />
+          </Animated.View>
+        );
       default: return <CheckCheck size={13} color="#9ca3af" />;
     }
   };
@@ -341,34 +504,61 @@ export default function ThreadCard({
       if (!groups[r.content]) groups[r.content] = { count: 0, users: [], hasReacted: false };
       groups[r.content].count++;
       groups[r.content].users.push(r.createdByName || r.createdBy);
-      if (r.createdBy === currentUsername || r.createdBy === currentUser?.email) groups[r.content].hasReacted = true;
+      if (r.createdBy === currentUsername || r.createdBy === currentUser?.email) {
+        groups[r.content].hasReacted = true;
+      }
     });
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
   const handleReactionSelect = (emoji: string) => {
-    if (onReact && thread.id) onReact(String(thread.id), emoji);
+    if (onReact && thread.id) {
+      const threadId = String(thread.id);
+      onReact(threadId, emoji);
+    }
     setShowReactionBar(false);
   };
 
   const confirmDelete = () => {
     setShowMenu(false);
-    const executeDelete = () => onDelete?.(String(thread.id));
-    if (Platform.OS === 'web') { if (window.confirm("Are you sure you want to delete this message?")) executeDelete(); } 
-    else { Alert.alert("Delete Message", "Are you sure you want to delete this?", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: executeDelete }]); }
+    const executeDelete = () => {
+      console.log("🗑️ Executing delete for thread ID:", thread.id);
+      onDelete?.(String(thread.id));
+    };
+
+    if (Platform.OS === 'web') {
+      const isConfirmed = window.confirm("Are you sure you want to delete this message?");
+      if (isConfirmed) executeDelete();
+    } else {
+      Alert.alert(
+        "Delete Message", 
+        "Are you sure you want to delete this?", 
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: executeDelete }
+        ]
+      );
+    }
   };
 
   const processedAttachments = useMemo(() => {
     if (!thread.attachments || thread.attachments.length === 0) return [];
     return thread.attachments.filter(att => att != null).map((attachment) => {
-      let uri = ""; let isValidData = false;
-      if (attachment.fileData && attachment.fileData.length > 100) {
-        isValidData = true;
-        const mimeType = attachment.fileType || (attachment.attachmentType === "IMAGE" ? "image/jpeg" : attachment.attachmentType === "VIDEO" ? "video/mp4" : attachment.attachmentType === "AUDIO" ? "audio/mpeg" : "application/octet-stream");
-        uri = base64ToUri(attachment.fileData, mimeType);
+      let uri = "";
+      let isValidData = false;
+      if (attachment.fileData && attachment.fileData.length > 0) {
+        if (attachment.fileData.length > 100) {
+          isValidData = true;
+          const mimeType = attachment.fileType || (attachment.attachmentType === "IMAGE" ? "image/jpeg" : attachment.attachmentType === "VIDEO" ? "video/mp4" : attachment.attachmentType === "AUDIO" ? "audio/mpeg" : "application/octet-stream");
+          uri = base64ToUri(attachment.fileData, mimeType);
+        }
       }
-      if (!uri && attachment.attachmentType === "IMAGE" && attachment.id && imageDataCache[attachment.id]) uri = imageDataCache[attachment.id];
-      if (!uri && attachment.id) uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+      if (!uri && attachment.attachmentType === "IMAGE" && attachment.id && imageDataCache[attachment.id]) {
+        uri = imageDataCache[attachment.id];
+      }
+      if (!uri && attachment.id) {
+        uri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+      }
       return { ...attachment, uri, hasValidFileData: isValidData };
     });
   }, [thread.attachments, imageDataCache]);
@@ -390,20 +580,22 @@ export default function ThreadCard({
       const reader = new FileReader();
       const dataUri = await new Promise<string>((resolve, reject) => {
         reader.onloadend = () => { const result = reader.result as string; let dataUriResult = result; if (!result.startsWith("data:")) dataUriResult = `data:${contentType};base64,${result}`; resolve(dataUriResult); };
-        reader.onerror = reject; reader.readAsDataURL(blob);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
       setImageDataCache(prev => ({ ...prev, [attachment.id!]: dataUri }));
     } catch (error) { setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }
     finally { setLoadingImages(prev => ({ ...prev, [attachment.id!]: false })); }
   };
 
-  // ✅ UPDATED: Pass attachment object to modals
-  const openImagePreview = (url: string, attachment: any) => setImageModal({ open: true, url, fileName: attachment?.fileName || "Image", attachment });
-  const closeImagePreview = () => setImageModal({ open: false, url: "", fileName: "", attachment: null });
+  const openImagePreview = (url: string) => setImageModal({ open: true, url });
+  const closeImagePreview = () => setImageModal({ open: false, url: "" });
   
-  const openVideoPreview = (url: string, attachment: any) => setVideoModal({ open: true, url, fileName: attachment?.fileName || "Video", attachment });
-  const closeVideoPreview = () => setVideoModal({ open: false, url: "", fileName: "", attachment: null });
-  
+  // ✅ FIXED: Opens Modal for both Web and Native
+  const openVideoPreview = (url: string) => { 
+    setVideoModal({ open: true, url }); 
+  };
+  const closeVideoPreview = () => setVideoModal({ open: false, url: "" });
   const openPdfPreview = (url: string, fileName: string) => setPdfModal({ open: true, url, fileName });
   const closePdfPreview = () => setPdfModal({ open: false, url: "", fileName: "" });
 
@@ -413,7 +605,8 @@ export default function ThreadCard({
       const fileName = attachment.fileName || `file_${attachment.id}`;
       const url = attachment.uri || `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       if (Platform.OS === "web") {
-        const link = document.createElement("a"); link.href = url; link.download = fileName;
+        const link = document.createElement("a");
+        link.href = url; link.download = fileName;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
         setLoading(false); return;
       }
@@ -427,7 +620,7 @@ export default function ThreadCard({
 
   const handleProfileClick = async (userIdentifier?: string | number | null) => {
     if (!userIdentifier) return;
-    setProfileModalOpen(true); setProfileLoading(true); setFetchedProfile(null);
+    setProfileModalOpen(true); setProfileLoading(true); setProfileError(null); setFetchedProfile(null);
     if (allUsers && allUsers.length > 0) {
       const localUser = allUsers.find((u: any) => String(u.id) === String(userIdentifier) || String(u.email).toLowerCase() === String(userIdentifier).toLowerCase());
       if (localUser) {
@@ -440,7 +633,7 @@ export default function ThreadCard({
       let response = await fetch(url);
       if (!response.ok && typeof userIdentifier === 'string' && userIdentifier.includes('@')) response = await fetch(`${API_BASE_URL}/api/users/by-email/${encodeURIComponent(userIdentifier)}`);
       if (response.ok) { const data = await response.json(); setFetchedProfile(data); }
-      else setFetchedProfile({ id: userIdentifier, name: thread.createdByName || "User" });
+      else setFetchedProfile({ id: userIdentifier, name: thread.createdByName || (typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier.split('@')[0] : "User"), email: typeof userIdentifier === 'string' && userIdentifier.includes('@') ? userIdentifier : undefined });
     } catch (error) { setFetchedProfile({ id: userIdentifier, name: thread.createdByName || "User" }); }
     finally { setProfileLoading(false); }
   };
@@ -453,34 +646,14 @@ export default function ThreadCard({
       else if (attachment.id && imageDataCache[attachment.id]) imageUri = imageDataCache[attachment.id];
       else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) loadImageData(attachment);
       if (loadingImages[attachment.id] && !imageUri) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#4a90d9" /><Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text></View></View>);
-      if (!imageUri || imageErrors[attachment.id]) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text></View></View>);
-      return (
-        <View key={index} style={styles.attachmentContainer}>
-          {/* ✅ Pass attachment to preview */}
-          <Pressable onPress={() => openImagePreview(imageUri, attachment)}>
-            <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} />
-          </Pressable>
-          <View style={styles.fileInfo}>
-            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text>
-            <Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable>
-          </View>
-        </View>
-      );
+      if (!imageUri || imageErrors[attachment.id]) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>{imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}</View></View>);
+      return (<View key={index} style={styles.attachmentContainer}><Pressable onPress={() => openImagePreview(imageUri)}><Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} /></Pressable><View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text><Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable></View></View>);
     }
     if (attachment.attachmentType === "VIDEO") {
       let videoUri = attachment.uri || "";
       if (attachment.fileData && attachment.fileData.length > 100) videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
       else if (Platform.OS === "web" && attachment.id) videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      return (
-        <View key={index} style={styles.attachmentContainer}>
-          {/* ✅ Pass attachment to preview */}
-          <Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri, attachment); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, attachment); }}>
-            <View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View>
-            <Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>
-            {attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}
-          </Pressable>
-        </View>
-      );
+      return (<View key={index} style={styles.attachmentContainer}><Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`); }}><View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View><Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>{attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}</Pressable></View>);
     }
     if (attachment.attachmentType === "AUDIO") {
       let audioUri = attachment.uri || "";
@@ -528,72 +701,29 @@ export default function ThreadCard({
     <>
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
 
-      {/* ✅ UNIFIED FULL-SCREEN IMAGE PREVIEW (Matches FinalPreview.tsx) */}
-      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}>
-        <View style={styles.fullScreenPreviewContainer}>
-          <View style={styles.previewHeader}>
-            <Text style={styles.previewFileName} numberOfLines={1}>{imageModal.fileName}</Text>
-            <View style={styles.previewHeaderActions}>
-              {imageModal.attachment && (
-                <TouchableOpacity onPress={() => downloadFile(imageModal.attachment)} style={styles.previewActionBtn}>
-                  <Download size={22} color="white" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={closeImagePreview} style={styles.previewActionBtn}>
-                <X size={26} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <View style={styles.previewMediaContainer}>
-            {imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullScreenImage} resizeMode="contain" />}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ✅ UNIFIED FULL-SCREEN VIDEO PREVIEW (Matches FinalPreview.tsx) */}
+      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}><View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View></Modal>
+      
+      {/* ✅ UNIFIED VIDEO MODAL (Native & Web) */}
       <Modal visible={videoModal.open} transparent animationType="fade" onRequestClose={closeVideoPreview}>
-        <View style={styles.fullScreenPreviewContainer}>
-          <View style={styles.previewHeader}>
-            <Text style={styles.previewFileName} numberOfLines={1}>{videoModal.fileName}</Text>
-            <View style={styles.previewHeaderActions}>
-              {videoModal.attachment && (
-                <TouchableOpacity onPress={() => downloadFile(videoModal.attachment)} style={styles.previewActionBtn}>
-                  <Download size={22} color="white" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={closeVideoPreview} style={styles.previewActionBtn}>
-                <X size={26} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <View style={styles.previewMediaContainer}>
-            {Platform.OS === "web" ? (
-              <video src={videoModal.url} controls autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }} />
-            ) : (
-              <Video source={{ uri: videoModal.url }} style={styles.fullScreenVideo} useNativeControls resizeMode={ResizeMode.CONTAIN} shouldPlay />
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}>
-        <View style={{ flex: 1, backgroundColor: "white" }}>
-          <View style={styles.pdfHeader}>
-            <Text style={styles.pdfTitle}>{pdfModal.fileName || "PDF Document"}</Text>
-            <TouchableOpacity onPress={closePdfPreview} style={styles.pdfCloseButton}><X size={24} color="#000" /></TouchableOpacity>
-          </View>
+        <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 }} onPress={closeVideoPreview}>
+            <X size={28} color="white" />
+          </Pressable>
           {Platform.OS === "web" ? (
-            <iframe src={pdfModal.url} style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }} title="PDF Viewer" />
+            <WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} />
           ) : (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-              <Text style={{ fontSize: 16, marginBottom: 16 }}>Opening PDF...</Text>
-              <TouchableOpacity onPress={() => Linking.openURL(pdfModal.url)} style={{ backgroundColor: "#2563eb", padding: 12, borderRadius: 8 }}>
-                <Text style={{ color: "white", fontWeight: "600" }}>Open PDF</Text>
-              </TouchableOpacity>
-            </View>
+            <Video
+              source={{ uri: videoModal.url }}
+              style={{ width: '100%', height: '85%' }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+            />
           )}
         </View>
       </Modal>
+
+      <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
 
       <Modal visible={profileModalOpen} transparent animationType="fade" onRequestClose={() => setProfileModalOpen(false)}>
         <Pressable style={styles.profileModalBackdrop} onPress={() => setProfileModalOpen(false)}>
@@ -630,43 +760,37 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
-      {/* ✅ BOTTOM SHEET: Reaction Picker (Proper Chat UI) */}
-      <Modal visible={showReactionBar} transparent animationType="slide" onRequestClose={() => setShowReactionBar(false)}>
-        <TouchableOpacity style={styles.actionSheetBackdrop} activeOpacity={1} onPress={() => setShowReactionBar(false)}>
-          <View style={styles.actionSheetContent}>
-            <View style={styles.actionSheetHandle} />
-            <View style={styles.reactionGrid}>
-              {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionItem}>
-                  <Text style={{ fontSize: 28 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+      {/* ✅ FIXED: Reaction Picker Modal (Prevents clipping on first message) */}
+      <Modal visible={showReactionBar} transparent animationType="fade" onRequestClose={() => setShowReactionBar(false)}>
+        <Pressable style={styles.menuModalBackdrop} onPress={() => setShowReactionBar(false)}>
+          <View style={[styles.menuModalContent, { flexDirection: 'row', padding: 10, width: 'auto', justifyContent: 'center', alignItems: 'center' }]}>
+            {QUICK_REACTIONS.map((emoji) => (
+              <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 26 }}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
-      {/* ✅ BOTTOM SHEET: Edit/Delete Menu (Proper Chat UI) */}
-      <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
-        <TouchableOpacity style={styles.actionSheetBackdrop} activeOpacity={1} onPress={() => setShowMenu(false)}>
-          <View style={styles.actionSheetContent}>
-            <View style={styles.actionSheetHandle} />
-            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-              <Edit size={20} color="#374151" />
-              <Text style={styles.actionSheetText}>Edit Message</Text>
+      {/* ✅ FIXED: Edit/Delete Menu Modal (Prevents clipping on first message) */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable style={styles.menuModalBackdrop} onPress={() => setShowMenu(false)}>
+          <View style={styles.menuModalContent}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+              <Edit size={16} color="#374151" />
+              <Text style={styles.menuText}>Edit Message</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { confirmDelete(); setShowMenu(false); }}>
-              <Trash2 size={20} color="#ef4444" />
-              <Text style={[styles.actionSheetText, { color: '#ef4444' }]}>Delete Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionSheetItem, styles.actionSheetCancel]} onPress={() => setShowMenu(false)}>
-              <Text style={[styles.actionSheetText, { color: '#6b7280', textAlign: 'center' }]}>Cancel</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { confirmDelete(); setShowMenu(false); }}>
+              <Trash2 size={16} color="#ef4444" />
+              <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </Modal>
 
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
+        
         <View style={styles.avatarContainer}>
           <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
             {avatar && !avatarError ? (
@@ -690,10 +814,15 @@ export default function ThreadCard({
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
-            {isOwnMessage && (<View style={styles.statusIcon}>{getStatusIcon()}</View>)}
+            
+            {isOwnMessage && (
+              <View style={styles.statusIcon}>{getStatusIcon()}</View>
+            )}
+            
             <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
               <Smile size={14} color="#9ca3af" />
             </TouchableOpacity>
+
             {isOwnMessage && (
               <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
                 <MoreVertical size={14} color="#9ca3af" />
@@ -702,18 +831,40 @@ export default function ThreadCard({
           </View>
 
           {Object.keys(groupedReactions).length > 0 && (
-            <View style={{ marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+            <View style={{ 
+              marginTop: 6, 
+              flexDirection: 'row', 
+              flexWrap: 'wrap', 
+              gap: 4, 
+              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+            }}>
               {Object.entries(groupedReactions).map(([emoji, data]) => (
                 <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-                  <TouchableOpacity onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)} style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[
+                      styles.reactionBadge, 
+                      data.hasReacted && styles.reactionBadgeActive
+                    ]}
+                  >
                     <Text style={{ fontSize: 14 }}>{emoji}</Text>
-                    <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>{data.count}</Text>
+                    <Text style={[
+                      styles.reactionCount, 
+                      data.hasReacted && styles.reactionCountActive
+                    ]}>
+                      {data.count}
+                    </Text>
                   </TouchableOpacity>
+
                   {showReactionDetail === emoji && (
                     <View style={styles.reactionDetailPopup}>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>Reacted by:</Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                        Reacted by:
+                      </Text>
                       {data.users.map((userName: string, idx: number) => (
-                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>• {userName}</Text>
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                          • {userName}
+                        </Text>
                       ))}
                     </View>
                   )}
@@ -758,6 +909,20 @@ const styles = StyleSheet.create({
   videoPlayIconContainer: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
   videoLabel: { color: "white", marginTop: 8, fontSize: 12, fontWeight: "500" },
   videoSize: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 2 },
+  videoModalContainer: { flex: 1, backgroundColor: "black" },
+  videoModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16, backgroundColor: "rgba(0,0,0,0.9)", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.1)" },
+  videoModalClose: { padding: 8 },
+  videoModalTitle: { color: "white", fontSize: 16, fontWeight: "600" },
+  videoPlayerContainer: { flex: 1, backgroundColor: "black", justifyContent: "center", alignItems: "center" },
+  videoLoadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.8)", zIndex: 10 },
+  videoLoadingText: { color: "white", marginTop: 12, fontSize: 14 },
+  videoErrorOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.9)", zIndex: 10, padding: 20 },
+  videoErrorText: { color: "white", fontSize: 16, textAlign: "center", marginBottom: 16 },
+  videoRetryBtn: { backgroundColor: "#2563eb", paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 },
+  videoRetryText: { color: "white", fontWeight: "600", fontSize: 14 },
+  videoModalControls: { flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.9)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" },
+  videoModalPlayBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginRight: 12 },
+  videoModalStatus: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
   audioContainer: { backgroundColor: "#f0f0f0", padding: 12, borderRadius: 12, marginTop: 8, width: 260 },
   audioRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   audioPlayButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#4a90d9", justifyContent: "center", alignItems: "center" },
@@ -767,11 +932,14 @@ const styles = StyleSheet.create({
   audioProgressTrack: { flex: 1, height: 3, backgroundColor: "#ddd", borderRadius: 2, overflow: "hidden" },
   audioProgressFill: { height: "100%", backgroundColor: "#4a90d9", borderRadius: 2 },
   audioTime: { fontSize: 10, color: "#666", minWidth: 50 },
+  audioFileSize: { fontSize: 10, color: "#999" },
   audioError: { fontSize: 11, color: "red", marginTop: 4 },
   documentContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f3f3", padding: 10, borderRadius: 10, marginTop: 8, gap: 10 },
   locationContainer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#e7f0ff", padding: 10, borderRadius: 10, marginTop: 8 },
   eventContainer: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f2e5ff", padding: 12, borderRadius: 10, marginTop: 8 },
   eventTitle: { fontWeight: "700", fontSize: 14 },
+  imageModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" },
+  fullImage: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.85 },
   closeButton: { position: "absolute", top: 50, right: 20, zIndex: 10 },
   pdfHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0", backgroundColor: "#f5f5f5" },
   pdfTitle: { fontSize: 18, fontWeight: "600", color: "#000" },
@@ -789,6 +957,7 @@ const styles = StyleSheet.create({
   profileAvatarInitials: { fontSize: 36, fontWeight: "bold", color: "#00529B" },
   profileModalName: { fontSize: 20, fontWeight: "700", color: "#111", marginTop: 12, textAlign: "center" },
   profileModalRole: { fontSize: 14, color: "#666", marginTop: 4, textAlign: "center" },
+  profileErrorText: { fontSize: 12, color: "#dc2626", marginTop: 8, textAlign: "center" },
   profileDetailsContainer: { padding: 20 },
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
@@ -798,24 +967,10 @@ const styles = StyleSheet.create({
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  menuText: { fontSize: 15, fontWeight: '500', color: '#374151' },
   
-  // ✅ NEW: Full Screen Preview Styles (Matching FinalPreview.tsx)
-  fullScreenPreviewContainer: { flex: 1, backgroundColor: 'black' },
-  previewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 50 : 40, paddingBottom: 16, backgroundColor: 'rgba(0,0,0,0.85)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  previewFileName: { flex: 1, color: 'white', fontSize: 16, fontWeight: '600', marginRight: 16 },
-  previewHeaderActions: { flexDirection: 'row', gap: 16 },
-  previewActionBtn: { padding: 6 },
-  previewMediaContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' },
-  fullScreenImage: { width: '100%', height: '100%' },
-  fullScreenVideo: { width: '100%', height: '100%' },
-
-  // ✅ NEW: Bottom Sheet (Action Sheet) Styles
-  actionSheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  actionSheetContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
-  actionSheetHandle: { width: 40, height: 4, backgroundColor: '#d1d5db', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-  actionSheetItem: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 16, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  actionSheetCancel: { marginTop: 12, borderBottomWidth: 0, backgroundColor: '#f3f4f6', borderRadius: 12, justifyContent: 'center' },
-  actionSheetText: { fontSize: 16, fontWeight: '500', color: '#1f2937' },
-  reactionGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 16, paddingVertical: 12 },
-  reactionItem: { width: 54, height: 54, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb', borderRadius: 27, borderWidth: 1, borderColor: '#e5e7eb' },
+  // ✅ NEW MODAL STYLES (Fixes all clipping issues)
+  menuModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  menuModalContent: { backgroundColor: "white", borderRadius: 12, overflow: "hidden", width: 220, shadowColor: "#000", shadowOffset: {width:0, height:4}, shadowOpacity: 0.3, shadowRadius: 5, elevation: 10 },
 });
