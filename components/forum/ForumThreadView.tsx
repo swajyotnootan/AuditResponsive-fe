@@ -20,8 +20,7 @@ import {
   Settings,
   User,
   Users,
-  Video as VideoIcon,
-  X,
+  X
 } from "lucide-react-native";
 import React, {
   useCallback,
@@ -1347,14 +1346,14 @@ export default function ForumThreadView({
                   <Text className="text-xs text-gray-500">{m.email}</Text>
                 </View>
               </View>
-              <View className="flex-row gap-1">
+              {/* <View className="flex-row gap-1">
                 <TouchableOpacity onPress={() => handleIndividualCall(m, "audio")} className="p-2">
                   <Phone size={16} color="#16a34a" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleIndividualCall(m, "video")} className="p-2">
                   <VideoIcon size={16} color="#00529B" />
                 </TouchableOpacity>
-              </View>
+              </View> */}
             </View>
           ))}
         </ScrollView>
