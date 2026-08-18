@@ -1,6 +1,5 @@
-import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import {
@@ -37,16 +36,12 @@ import {
 import { ncrService } from "@/services/ncrService";
 import { getDashboardPath } from "@/utils/roleUtils";
 import { useAuth } from "../../context/AuthContext";
-// Add this near your other imports at the top of Form8DetailView.tsx
-import Form7DetailView from "../auditor/view/Form7DetailView";
-// =====================================================================
-// TEMPORARY MOCK COMPONENTS
-// (Remove these and uncomment your real imports once converted to RN)
-// =====================================================================
-/*
-import BackButton from "../dashboards/leadAuditor/BackButton";
-import FinalPreview from "../steps/FinalPreview";
-*/
+
+import { API_BASE_URL } from "@/config/apiConfig";
+import { SafeAreaView } from "react-native-safe-area-context";
+import FinalPreview from "../../eightd/steps/FinalPreview"; // 👈 Adjust path if needed
+// Add this near your other imports
+// import BackButton from "../dashboards/leadAuditor/BackButton";
 
 const BackButton = ({
   label,
@@ -66,24 +61,6 @@ const BackButton = ({
   </TouchableOpacity>
 );
 
-const FinalPreview = ({
-  eventId,
-  isHOD,
-}: {
-  eventId: string;
-  isHOD?: boolean;
-}) => (
-  <View className="items-center p-8">
-    <FileBarChart size={48} color="#00529B" />
-    <Text className="mt-4 text-lg font-bold text-gray-800">
-      8D Report Preview
-    </Text>
-    <Text className="text-gray-500">Event ID: {eventId}</Text>
-    {isHOD && (
-      <Text className="text-blue-600 mt-2 font-semibold">HOD View Active</Text>
-    )}
-  </View>
-);
 // =====================================================================
 
 // ─────────────────────────────────────────────────────────────
@@ -373,7 +350,11 @@ const StatementCard: React.FC<StatementCardProps> = ({ data }) => (
 // ─────────────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────────────
-export default function Form8DetailView({ initialParams, onClose }: any) {
+export default function Form8DetailView({
+  initialParams,
+  onClose,
+  onNavigateToForm7,
+}: any) {
   const router = useRouter();
   const urlParams = useLocalSearchParams();
 
@@ -387,13 +368,10 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
   const dashboardPath = getDashboardPath(user) as string;
   const isNCR2Mode = type === "ncr2";
   const [activeForm7Config, setActiveForm7Config] = useState<any>(null);
-  // const { id, type } = route.params || {};
-
-  // const auth = useAuth() as any;
-  // const { user } = auth;
-  // const dashboardPath = getDashboardPath(user) as string;
-
-  // const isNCR2Mode = type === "ncr2";
+  const [show8DReportModal, setShow8DReportModal] = useState(false);
+  const [selected8DEventId, setSelected8DEventId] = useState<string | null>(
+    null,
+  );
 
   const [loading, setLoading] = useState(true);
   const [ncr, setNcr] = useState<any>(null);
@@ -401,10 +379,6 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
-  const [show8DReportModal, setShow8DReportModal] = useState(false);
-  const [selected8DEventId, setSelected8DEventId] = useState<string | null>(
-    null,
-  );
   const [loading8DReport, setLoading8DReport] = useState(false);
 
   useEffect(() => {
@@ -423,7 +397,7 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     setLoading(false);
   };
 
-    const downloadPDF = async () => {
+  const downloadPDF = async () => {
     if (!ncr?.id) {
       Alert.alert("Error", "NCR ID not found");
       return;
@@ -436,56 +410,32 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
         ? `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
         : `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf`;
 
-      const fileName = `${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`;
+      // FIX: Cast FileSystem to 'any' to bypass strict TS documentDirectory errors
+      const fileSystem = FileSystem as any;
+      const fileUri = `${fileSystem.documentDirectory}${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`;
 
-      // ✅ WEB DOWNLOAD: Use standard browser fetch and blob
-      if (Platform.OS === "web") {
-        const response = await fetch(endpoint, {
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
-        });
-        
-        if (!response.ok) throw new Error("Failed to fetch PDF from server");
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } 
-      // ✅ NATIVE DOWNLOAD (iOS/Android): Use expo-file-system
-      else {
-        const fileSystem = FileSystem as any;
-        const fileUri = `${fileSystem.documentDirectory}${fileName}`;
+      const downloadResumable = fileSystem.createDownloadResumable(
+        endpoint,
+        fileUri,
+        { headers: { Authorization: token ? `Bearer ${token}` : "" } },
+      );
 
-        const downloadResumable = fileSystem.createDownloadResumable(
-          endpoint,
-          fileUri,
-          { headers: { Authorization: token ? `Bearer ${token}` : "" } },
-        );
+      const downloadResult = await downloadResumable.downloadAsync();
+      if (!downloadResult) throw new Error("Download failed");
 
-        const downloadResult = await downloadResumable.downloadAsync();
-        if (!downloadResult) throw new Error("Download failed");
+      const { uri } = downloadResult;
 
-        const { uri } = downloadResult;
-
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri);
-        } else {
-          Alert.alert("Success", "PDF saved to device.");
-        }
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert("Success", "PDF saved to device.");
       }
 
       const modalMsg = isNCR2Mode
         ? `NCR2 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`
         : `Form 8 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`;
-        
       setModalMessage(modalMsg);
       setShowSuccessModal(true);
-      
     } catch (err) {
       console.error("PDF download error:", err);
       Alert.alert(
@@ -521,6 +471,8 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
   );
 
   const resolve8DEventId = async () => {
+    // ✅ FIX: Dynamic API base URL for Web vs Mobile
+
     const directCandidates = [
       ncr?.eightDEventId,
       ncr?.eightDEventNo,
@@ -540,9 +492,7 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
       }
     }
 
-    const response = await fetch(
-      `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
-    );
+    const response = await fetch(`${API_BASE_URL}/api/eightd/data?t=${Date.now()}`);
     const data = (await response.json()) as any;
     const events = Array.isArray(data?.data) ? data.data : [];
     const matchedEvent = events.find((event: any) => {
@@ -559,11 +509,11 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
 
     return matchedEvent?.eventNo || null;
   };
-
   const open8DReport = async () => {
     try {
       setLoading8DReport(true);
       const eventId = await resolve8DEventId();
+
       if (!eventId) {
         Alert.alert(
           "Not Found",
@@ -571,6 +521,8 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
         );
         return;
       }
+
+      // ✅ SET STATE TO OPEN DRAWER (Matches Form7DetailView)
       setSelected8DEventId(eventId);
       setShow8DReportModal(true);
     } catch (err) {
@@ -580,7 +532,6 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
       setLoading8DReport(false);
     }
   };
-
   const parseStructuredEvidence = (evidenceText: string) => {
     if (!evidenceText) return [];
     try {
@@ -787,21 +738,21 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
     );
   };
 
-  const renderActiveForm7Detail = () => {
-    if (!activeForm7Config) return null;
-    return (
-      <Form7DetailView
-        initialParams={activeForm7Config}
-        onClose={() => {
-          setActiveForm7Config(null); // Clears the state to go back
-        }}
-      />
-    );
-  };
+  // const renderActiveForm7Detail = () => {
+  //   if (!activeForm7Config) return null;
+  //   return (
+  //     <Form7DetailView
+  //       initialParams={activeForm7Config}
+  //       onClose={() => {
+  //         setActiveForm7Config(null); // Clears the state to go back
+  //       }}
+  //     />
+  //   );
+  // };
 
-  if (activeForm7Config) {
-    return renderActiveForm7Detail();
-  }
+  // if (activeForm7Config) {
+  //   return renderActiveForm7Detail();
+  // }
   if (loading) {
     return (
       <View className="items-center justify-center flex-1 bg-gray-50">
@@ -901,258 +852,337 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
   const hodD0RejectionMessage = isNCR2Mode ? ncr.rejectionReason : "";
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      {isNCR2Mode && (
-        <View className="self-center w-full max-w-5xl px-4 mt-4 mb-4">
-          <View
-            className="flex-row items-center gap-3 p-3 shadow-sm rounded-xl"
-            style={{ backgroundColor: "#0ea5e9" }}
-          >
-            <CheckCircle size={20} color="#fff" style={{ opacity: 0.9 }} />
-            <View className="flex-1">
-              <Text
-                className="text-sm font-bold text-white"
-                style={{ fontFamily }}
-              >
-                NCR2 Mode - Corrective Action After 8D Investigation
-              </Text>
-              <Text
-                className="text-xs text-white"
-                style={{ fontFamily, opacity: 0.9 }}
-              >
-                This corrective action was submitted after 8D investigation
-                completion
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Top Action Bar */}
-      <View className="flex-row flex-wrap items-center self-center justify-between w-full max-w-5xl gap-3 px-4 mt-4 mb-5">
-        <BackButton
-          defaultTab="ncrs"
-          label="Back to NCRs"
-          onPress={() => (onClose ? onClose() : router.back())}
-        />
-        <View className="flex-row items-center gap-3">
-          <StatusBadge status={ncr.status} />
-          <TouchableOpacity
-            onPress={downloadPDF}
-            disabled={pdfDownloading}
-            className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
-            style={{
-              backgroundColor: COLORS.primary,
-              opacity: pdfDownloading ? 0.5 : 1,
-            }}
-          >
-            {pdfDownloading ? (
-              <Loader2 size={18} color="#fff" />
-            ) : (
-              <Download size={18} color="#fff" />
-            )}
-            <Text
-              className="text-sm font-medium text-white"
-              style={{ fontFamily }}
+    <SafeAreaView className="flex-1 bg-gray-50" style={{ flex: 1 }}>
+      <ScrollView
+        className="flex-1 bg-gray-50"
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+      >
+        {isNCR2Mode && (
+          <View className="self-center w-full max-w-5xl px-4 mt-4 mb-4">
+            <View
+              className="flex-row items-center gap-3 p-3 shadow-sm rounded-xl"
+              style={{ backgroundColor: "#0ea5e9" }}
             >
-              Download PDF
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              <CheckCircle size={20} color="#fff" style={{ opacity: 0.9 }} />
+              <View className="flex-1">
+                <Text
+                  className="text-sm font-bold text-white"
+                  style={{ fontFamily }}
+                >
+                  NCR2 Mode - Corrective Action After 8D Investigation
+                </Text>
+                <Text
+                  className="text-xs text-white"
+                  style={{ fontFamily, opacity: 0.9 }}
+                >
+                  This corrective action was submitted after 8D investigation
+                  completion
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
-      {/* Main Form Card */}
-      <View className="self-center w-full max-w-5xl mx-4 mb-8 overflow-hidden bg-white shadow-xl rounded-2xl">
-        {/* Header */}
-        <View className="px-6 py-5" style={{ backgroundColor: COLORS.primary }}>
-          <View className="flex-row flex-wrap items-start justify-between gap-4">
-            <View className="flex-1">
+        {/* Top Action Bar */}
+        <View className="flex-row flex-wrap items-center self-center justify-between w-full max-w-5xl gap-3 px-4 mt-4 mb-5">
+          <BackButton
+            defaultTab="ncrs"
+            label="Back to NCRs"
+            onPress={() => (onClose ? onClose() : router.back())}
+          />
+          <View className="flex-row items-center gap-3">
+            <StatusBadge status={ncr.status} />
+            <TouchableOpacity
+              onPress={downloadPDF}
+              disabled={pdfDownloading}
+              className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
+              style={{
+                backgroundColor: COLORS.primary,
+                opacity: pdfDownloading ? 0.5 : 1,
+              }}
+            >
+              {pdfDownloading ? (
+                <Loader2 size={18} color="#fff" />
+              ) : (
+                <Download size={18} color="#fff" />
+              )}
               <Text
-                className="text-xl font-bold text-white"
+                className="text-sm font-medium text-white"
                 style={{ fontFamily }}
               >
-                {isNCR2Mode
-                  ? "NCR2 - Corrective Action Report"
-                  : "Corrective Action Report (Form 8)"}
+                Download PDF
               </Text>
-              <Text
-                className="mt-1 text-sm text-gray-300"
-                style={{ fontFamily }}
-              >
-                Quality Management System ·{" "}
-                {isNCR2Mode
-                  ? "Post-8D Corrective Action"
-                  : "Corrective Action Report"}
-              </Text>
-            </View>
-            <View className="items-end">
-              <Text
-                className="text-sm font-medium text-white/80"
-                style={{ fontFamily }}
-              >
-                <Text style={{ opacity: 0.7 }}>Audit Report:</Text>{" "}
-                {auditReportNumber}
-              </Text>
-              <Text
-                className="text-lg font-bold text-white"
-                style={{ fontFamily }}
-              >
-                {ncr.ncrNumber || "—"}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Info Cards Row */}
-        {/* Info Cards Row */}
-        <View className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-          {/* First Row - 4 cards on desktop, 2 on mobile */}
-          <View className="flex-row flex-wrap -mx-1.5">
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard icon={Building} label="Department" value={department} />
-            </View>
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard icon={User} label="Auditor" value={auditorName} />
-            </View>
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard icon={Users} label="Auditee" value={auditeeName} />
-            </View>
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard icon={Calendar} label="Audit Date" value={auditDate} />
+        {/* Main Form Card */}
+        <View className="self-center w-full max-w-5xl mx-4 mb-8 overflow-hidden bg-white shadow-xl rounded-2xl">
+          {/* Header */}
+          <View
+            className="px-6 py-5"
+            style={{ backgroundColor: COLORS.primary }}
+          >
+            <View className="flex-row flex-wrap items-start justify-between gap-4">
+              <View className="flex-1">
+                <Text
+                  className="text-xl font-bold text-white"
+                  style={{ fontFamily }}
+                >
+                  {isNCR2Mode
+                    ? "NCR2 - Corrective Action Report"
+                    : "Corrective Action Report (Form 8)"}
+                </Text>
+                <Text
+                  className="mt-1 text-sm text-gray-300"
+                  style={{ fontFamily }}
+                >
+                  Quality Management System ·{" "}
+                  {isNCR2Mode
+                    ? "Post-8D Corrective Action"
+                    : "Corrective Action Report"}
+                </Text>
+              </View>
+              <View className="items-end">
+                <Text
+                  className="text-sm font-medium text-white/80"
+                  style={{ fontFamily }}
+                >
+                  <Text style={{ opacity: 0.7 }}>Audit Report:</Text>{" "}
+                  {auditReportNumber}
+                </Text>
+                <Text
+                  className="text-lg font-bold text-white"
+                  style={{ fontFamily }}
+                >
+                  {ncr.ncrNumber || "—"}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Second Row - 4 cards on desktop, 2 on mobile */}
-          <View className="flex-row flex-wrap -mx-1.5 mt-3">
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard icon={Hash} label="NCR Number" value={ncr.ncrNumber} />
-            </View>
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard
-                icon={FileText}
-                label="Audit Report No."
-                value={auditReportNumber}
-              />
-            </View>
-            <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
-              <InfoCard
-                icon={Calendar}
-                label="Closure Date"
-                value={closedDate}
-              />
-            </View>
-            {isNCR2Mode && (
+          {/* Info Cards Row */}
+          {/* Info Cards Row */}
+          <View className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            {/* First Row - 4 cards on desktop, 2 on mobile */}
+            <View className="flex-row flex-wrap -mx-1.5">
               <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
                 <InfoCard
-                  icon={Target}
-                  label="Status"
-                  value={
-                    ncr.status === "NCR2_COMPLETED"
-                      ? "Completed"
-                      : ncr.status === "NCR2_IN_PROGRESS"
-                        ? "Under Verification"
-                        : "Ready"
-                  }
+                  icon={Building}
+                  label="Department"
+                  value={department}
                 />
               </View>
-            )}
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard icon={User} label="Auditor" value={auditorName} />
+              </View>
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard icon={Users} label="Auditee" value={auditeeName} />
+              </View>
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard
+                  icon={Calendar}
+                  label="Audit Date"
+                  value={auditDate}
+                />
+              </View>
+            </View>
+
+            {/* Second Row - 4 cards on desktop, 2 on mobile */}
+            <View className="flex-row flex-wrap -mx-1.5 mt-3">
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard
+                  icon={Hash}
+                  label="NCR Number"
+                  value={ncr.ncrNumber}
+                />
+              </View>
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard
+                  icon={FileText}
+                  label="Audit Report No."
+                  value={auditReportNumber}
+                />
+              </View>
+              <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                <InfoCard
+                  icon={Calendar}
+                  label="Closure Date"
+                  value={closedDate}
+                />
+              </View>
+              {isNCR2Mode && (
+                <View className="w-full md:w-1/2 lg:w-1/4 px-1.5 mb-3">
+                  <InfoCard
+                    icon={Target}
+                    label="Status"
+                    value={
+                      ncr.status === "NCR2_COMPLETED"
+                        ? "Completed"
+                        : ncr.status === "NCR2_IN_PROGRESS"
+                          ? "Under Verification"
+                          : "Ready"
+                    }
+                  />
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-        {/* Objective Evidence */}
-        <FormSection title="🔍 Objective Evidence / Observations">
-          <BulletPointEvidence items={evidenceItems} />
-        </FormSection>
+          {/* Objective Evidence */}
+          <FormSection title="🔍 Objective Evidence / Observations">
+            <BulletPointEvidence items={evidenceItems} />
+          </FormSection>
 
-        {/* Statement of Nonconformity */}
-        <FormSection title="📋 Statement of Nonconformity">
-          <StatementCard data={statementData} />
-        </FormSection>
+          {/* Statement of Nonconformity */}
+          <FormSection title="📋 Statement of Nonconformity">
+            <StatementCard data={statementData} />
+          </FormSection>
 
-        {/* Root Cause */}
-        <FormSection title="🌱 Root Cause Analysis">
-          <DetailRow
-            label={
+          {/* Root Cause */}
+          <FormSection title="🌱 Root Cause Analysis">
+            <DetailRow
+              label={
+                isNCR2Mode
+                  ? "Based on 8D investigation findings"
+                  : "Why did the nonconformity occur?"
+              }
+              value={rootCause}
+              multiline
+            />
+          </FormSection>
+
+          {/* Correction */}
+          <FormSection
+            title={
               isNCR2Mode
-                ? "Based on 8D investigation findings"
-                : "Why did the nonconformity occur?"
+                ? "✨ NCR2 - Correction of Problem"
+                : "✨ Correction of Problem"
             }
-            value={rootCause}
-            multiline
-          />
-        </FormSection>
+          >
+            <DetailRow
+              label="Action Details"
+              value={correction.action}
+              multiline
+            />
+            <View className="flex-row flex-wrap gap-4 mt-3">
+              <View className="flex-1 min-w-[45%]">
+                <DetailRow
+                  label="Responsible Person/Dept"
+                  value={correction.resp}
+                />
+              </View>
+              <View className="flex-1 min-w-[45%]">
+                <DetailRow
+                  label="Target Completion Date"
+                  value={correction.target}
+                />
+              </View>
+            </View>
+          </FormSection>
 
-        {/* Correction */}
-        <FormSection
-          title={
-            isNCR2Mode
-              ? "✨ NCR2 - Correction of Problem"
-              : "✨ Correction of Problem"
-          }
-        >
-          <DetailRow
-            label="Action Details"
-            value={correction.action}
-            multiline
-          />
-          <View className="flex-row flex-wrap gap-4 mt-3">
-            <View className="flex-1 min-w-[45%]">
-              <DetailRow
-                label="Responsible Person/Dept"
-                value={correction.resp}
-              />
+          {/* Corrective Action */}
+          <FormSection
+            title={
+              isNCR2Mode
+                ? "⚙️ NCR2 - Permanent Corrective Actions"
+                : "⚙️ Corrective Actions"
+            }
+          >
+            <DetailRow
+              label="Action Details"
+              value={correctiveAction.action}
+              multiline
+            />
+            <View className="flex-row flex-wrap gap-4 mt-3">
+              <View className="flex-1 min-w-[45%]">
+                <DetailRow
+                  label="Responsible Person/Dept"
+                  value={correctiveAction.resp}
+                />
+              </View>
+              <View className="flex-1 min-w-[45%]">
+                <DetailRow
+                  label="Target Completion Date"
+                  value={correctiveAction.target}
+                />
+              </View>
             </View>
-            <View className="flex-1 min-w-[45%]">
-              <DetailRow
-                label="Target Completion Date"
-                value={correction.target}
-              />
-            </View>
-          </View>
-        </FormSection>
+          </FormSection>
 
-        {/* Corrective Action */}
-        <FormSection
-          title={
-            isNCR2Mode
-              ? "⚙️ NCR2 - Permanent Corrective Actions"
-              : "⚙️ Corrective Actions"
-          }
-        >
-          <DetailRow
-            label="Action Details"
-            value={correctiveAction.action}
-            multiline
-          />
-          <View className="flex-row flex-wrap gap-4 mt-3">
-            <View className="flex-1 min-w-[45%]">
-              <DetailRow
-                label="Responsible Person/Dept"
-                value={correctiveAction.resp}
-              />
+          {/* Acceptability */}
+          <FormSection title="✅ Acceptability of Corrective Action">
+            <View className="p-4 border border-green-200 rounded-lg bg-green-50">
+              <Text
+                className="text-sm font-medium text-green-800"
+                style={{ fontFamily }}
+              >
+                Proposed Corrective actions are adequate to prevent the
+                recurrence of the non-conformity
+              </Text>
+              <View className="flex-row justify-between pt-3 mt-4 border-t border-green-200">
+                <View>
+                  <Text
+                    className="text-xs text-gray-500"
+                    style={{ fontFamily }}
+                  >
+                    Date
+                  </Text>
+                  <Text
+                    className="text-sm font-medium text-gray-800"
+                    style={{ fontFamily }}
+                  >
+                    {closedDate}
+                  </Text>
+                </View>
+                <View className="items-end">
+                  <Text
+                    className="text-xs text-gray-500"
+                    style={{ fontFamily }}
+                  >
+                    Auditor(s) / MR
+                  </Text>
+                  <Text
+                    className="text-sm font-medium text-gray-800"
+                    style={{ fontFamily }}
+                  >
+                    {auditorName}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View className="flex-1 min-w-[45%]">
-              <DetailRow
-                label="Target Completion Date"
-                value={correctiveAction.target}
-              />
-            </View>
-          </View>
-        </FormSection>
+          </FormSection>
 
-        {/* Acceptability */}
-        <FormSection title="✅ Acceptability of Corrective Action">
-          <View className="p-4 border border-green-200 rounded-lg bg-green-50">
-            <Text
-              className="text-sm font-medium text-green-800"
-              style={{ fontFamily }}
-            >
-              Proposed Corrective actions are adequate to prevent the recurrence
-              of the non-conformity
-            </Text>
-            <View className="flex-row justify-between pt-3 mt-4 border-t border-green-200">
+          {/* Horizontal Deployment */}
+          <FormSection title="🔄 Horizontal Deployment">
+            <DetailRow
+              label="Applying corrective actions to similar processes or areas"
+              value={hdData.action}
+              multiline
+            />
+            <View className="items-end mt-3">
+              <View className="flex-row items-center gap-2 px-4 py-2 border border-blue-200 rounded-full bg-blue-50">
+                <Calendar size={14} color="#2563eb" />
+                <Text
+                  className="text-xs font-semibold text-blue-700"
+                  style={{ fontFamily }}
+                >
+                  Actual Completion Date: {hdData.actual}
+                </Text>
+              </View>
+            </View>
+          </FormSection>
+
+          {/* Verification */}
+          <FormSection title="📋 Verification of Effectiveness">
+            <DetailRow
+              label="Objective evidence collected during follow-up audit"
+              value={verificationComment}
+              multiline
+            />
+            <View className="flex-row justify-between pt-3 mt-3 border-t border-gray-100">
               <View>
                 <Text className="text-xs text-gray-500" style={{ fontFamily }}>
-                  Date
+                  Verification Date
                 </Text>
                 <Text
                   className="text-sm font-medium text-gray-800"
@@ -1173,178 +1203,159 @@ export default function Form8DetailView({ initialParams, onClose }: any) {
                 </Text>
               </View>
             </View>
-          </View>
-        </FormSection>
-
-        {/* Horizontal Deployment */}
-        <FormSection title="🔄 Horizontal Deployment">
-          <DetailRow
-            label="Applying corrective actions to similar processes or areas"
-            value={hdData.action}
-            multiline
-          />
-          <View className="items-end mt-3">
-            <View className="flex-row items-center gap-2 px-4 py-2 border border-blue-200 rounded-full bg-blue-50">
-              <Calendar size={14} color="#2563eb" />
-              <Text
-                className="text-xs font-semibold text-blue-700"
-                style={{ fontFamily }}
-              >
-                Actual Completion Date: {hdData.actual}
-              </Text>
-            </View>
-          </View>
-        </FormSection>
-
-        {/* Verification */}
-        <FormSection title="📋 Verification of Effectiveness">
-          <DetailRow
-            label="Objective evidence collected during follow-up audit"
-            value={verificationComment}
-            multiline
-          />
-          <View className="flex-row justify-between pt-3 mt-3 border-t border-gray-100">
-            <View>
-              <Text className="text-xs text-gray-500" style={{ fontFamily }}>
-                Verification Date
-              </Text>
-              <Text
-                className="text-sm font-medium text-gray-800"
-                style={{ fontFamily }}
-              >
-                {closedDate}
-              </Text>
-            </View>
-            <View className="items-end">
-              <Text className="text-xs text-gray-500" style={{ fontFamily }}>
-                Auditor(s) / MR
-              </Text>
-              <Text
-                className="text-sm font-medium text-gray-800"
-                style={{ fontFamily }}
-              >
-                {auditorName}
-              </Text>
-            </View>
-          </View>
-        </FormSection>
-
-        {/* Remarks */}
-        {managerReviewComment && (
-          <FormSection title="📝 Management Remarks">
-            <DetailRow value={managerReviewComment} multiline />
           </FormSection>
-        )}
 
-        {hodD0RejectionMessage && (
-          <FormSection title="HOD Rejection Message from 8D D0">
-            <View className="p-4 border border-red-200 rounded-lg bg-red-50">
-              <Text
-                className="text-sm leading-5 text-red-800"
-                style={{ fontFamily }}
-              >
-                {hodD0RejectionMessage}
-              </Text>
-            </View>
-          </FormSection>
-        )}
+          {/* Remarks */}
+          {managerReviewComment && (
+            <FormSection title="📝 Management Remarks">
+              <DetailRow value={managerReviewComment} multiline />
+            </FormSection>
+          )}
 
-        {/* Footer */}
-        <View className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <View className="flex-row flex-wrap justify-center gap-4">
-            <View className="flex-row items-center gap-1">
-              <View className="w-2 h-2 bg-green-500 rounded-full" />
-              <Text className="text-xs text-gray-600" style={{ fontFamily }}>
-                (O+)Ve: Conformance
-              </Text>
-            </View>
-            <View className="flex-row items-center gap-1">
-              <View className="w-2 h-2 bg-red-500 rounded-full" />
-              <Text className="text-xs text-gray-600" style={{ fontFamily }}>
-                (O-)Ve: Non Conformance
-              </Text>
-            </View>
-            <View className="flex-row items-center gap-1">
-              <View className="w-2 h-2 rounded-full bg-amber-500" />
-              <Text className="text-xs text-gray-600" style={{ fontFamily }}>
-                (OI): Opportunity for Improvement
-              </Text>
+          {hodD0RejectionMessage && (
+            <FormSection title="HOD Rejection Message from 8D D0">
+              <View className="p-4 border border-red-200 rounded-lg bg-red-50">
+                <Text
+                  className="text-sm leading-5 text-red-800"
+                  style={{ fontFamily }}
+                >
+                  {hodD0RejectionMessage}
+                </Text>
+              </View>
+            </FormSection>
+          )}
+
+          {/* Footer */}
+          <View className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <View className="flex-row flex-wrap justify-center gap-4">
+              <View className="flex-row items-center gap-1">
+                <View className="w-2 h-2 bg-green-500 rounded-full" />
+                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+                  (O+)Ve: Conformance
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-1">
+                <View className="w-2 h-2 bg-red-500 rounded-full" />
+                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+                  (O-)Ve: Non Conformance
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-1">
+                <View className="w-2 h-2 rounded-full bg-amber-500" />
+                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+                  (OI): Opportunity for Improvement
+                </Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Bottom Action Buttons */}
-      <View className="flex-row flex-wrap self-center justify-end w-full max-w-5xl gap-3 px-4 mb-8">
-        <TouchableOpacity
-          onPress={() => {
-            // ✅ SET STATE TO OPEN FORM 7 DETAIL VIEW INLINE
-            setActiveForm7Config({
-              id: ncr.id,
-            });
-          }}
-          className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
-          style={{ backgroundColor: "#0ea5e9" }}
-        >
-          <Eye size={16} color="#fff" />
-          <Text
-            className="text-sm font-medium text-white"
-            style={{ fontFamily }}
-          >
-            View NCR1
-          </Text>
-        </TouchableOpacity>
-
-        {is8DRelated && (
+        {/* Bottom Action Buttons */}
+        <View className="flex-row flex-wrap self-center justify-end w-full max-w-5xl gap-3 px-4 mb-8">
           <TouchableOpacity
-            onPress={open8DReport}
-            disabled={loading8DReport}
-            className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
-            style={{
-              backgroundColor: COLORS.primary,
-              opacity: loading8DReport ? 0.6 : 1,
+            onPress={() => {
+              // ✅ Call the parent callback
+              if (onNavigateToForm7) {
+                onNavigateToForm7({ id: ncr.id });
+              }
             }}
+            className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+            style={{ backgroundColor: "#0ea5e9" }}
           >
-            {loading8DReport ? (
-              <Loader2 size={16} color="#fff" />
-            ) : (
-              <FileBarChart size={16} color="#fff" />
-            )}
+            <Eye size={16} color="#fff" />
             <Text
               className="text-sm font-medium text-white"
               style={{ fontFamily }}
             >
-              View 8D Report
+              View NCR1
             </Text>
           </TouchableOpacity>
-        )}
-      </View>
 
-      <SuccessModal />
-
-      {/* 8D Report Modal */}
-      <Modal visible={show8DReportModal} transparent animationType="slide">
-        <View className="items-center justify-center flex-1 p-4 bg-black/50">
-          <View className="relative w-full max-w-6xl bg-white rounded-2xl overflow-hidden max-h-[90%]">
+          {is8DRelated && (
             <TouchableOpacity
-              onPress={() => {
-                setShow8DReportModal(false);
-                setSelected8DEventId(null);
+              onPress={open8DReport}
+              disabled={loading8DReport}
+              className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+              style={{
+                backgroundColor: COLORS.primary,
+                opacity: loading8DReport ? 0.6 : 1,
               }}
-              className="absolute z-10 p-2 bg-red-500 rounded-full shadow-lg top-4 right-4"
-              style={{ elevation: 5 }}
             >
-              <X size={24} color="#fff" />
+              {loading8DReport ? (
+                <Loader2 size={16} color="#fff" />
+              ) : (
+                <FileBarChart size={16} color="#fff" />
+              )}
+              <Text
+                className="text-sm font-medium text-white"
+                style={{ fontFamily }}
+              >
+                View 8D Report
+              </Text>
             </TouchableOpacity>
-            <ScrollView className="p-4">
-              <FinalPreview
-                eventId={selected8DEventId as string}
-                isHOD={user?.role === "AUDIT_MANAGER" || user?.role === "HOD"}
-              />
-            </ScrollView>
-          </View>
+          )}
         </View>
-      </Modal>
-    </ScrollView>
+
+        <SuccessModal />
+        {/* 🗄️ RIGHT-SIDE DRAWER: 8D Report Preview (Matches Form7DetailView) */}
+        {show8DReportModal && selected8DEventId && (
+          <Modal visible={true} transparent animationType="slide">
+            <View className="flex-1 bg-black/60">
+              <View className="flex-row justify-end flex-1">
+                {/* 1. Backdrop (Click outside the drawer to close) */}
+                <TouchableOpacity
+                  className="flex-1"
+                  activeOpacity={1}
+                  onPress={() => {
+                    setShow8DReportModal(false);
+                    setSelected8DEventId(null);
+                  }}
+                />
+
+                {/* 2. Drawer Panel */}
+                <View className="w-full md:w-[500px] lg:w-[600px] bg-white h-full shadow-2xl border-l border-gray-200">
+                  {/* Drawer Header */}
+                  <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
+                    <View className="flex-row items-center gap-3">
+                      <FileBarChart size={20} color={COLORS.primary} />
+                      <Text
+                        className="text-lg font-bold text-gray-800"
+                        style={{ fontFamily }}
+                      >
+                        8D Report Preview
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShow8DReportModal(false);
+                        setSelected8DEventId(null);
+                      }}
+                      className="p-2 bg-white border border-gray-200 rounded-full shadow-sm active:bg-gray-100"
+                    >
+                      <X size={20} color="#475569" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Drawer Content (FinalPreview Component) */}
+                  <View className="flex-1 bg-gray-50">
+                    <FinalPreview
+                      eventId={selected8DEventId}
+                      isHOD={
+                        user?.role === "AUDIT_MANAGER" || user?.role === "HOD"
+                      }
+                      onRefresh={() => {
+                        setShow8DReportModal(false);
+                        setSelected8DEventId(null);
+                        fetchNcr(); // ✅ Refreshes the Form8DetailView data
+                      }}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }

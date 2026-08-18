@@ -1,4 +1,5 @@
 import { useAuth } from "@/components/context/AuthContext";
+import FinalPreview from "@/components/eightd/steps/FinalPreview";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { ncrService } from "@/services/ncrService";
 import { getDashboardPath } from "@/utils/roleUtils";
@@ -38,7 +39,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Form8DetailView from "../../auditee/Form8DetailView";
 import Form8View from "../../auditee/Form8View";
 // ─────────────────────────────────────────────────────────────
 // COLOR PALETTE & STYLES
@@ -590,7 +590,11 @@ const AuditeeReviewModal = ({
 // ─────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
-export default function Form7DetailView({ initialParams, onClose }: any) {
+export default function Form7DetailView({
+  initialParams,
+  onClose,
+  onNavigateToForm8,
+}: any) {
   const router = useRouter();
   const urlParams = useLocalSearchParams();
 
@@ -624,7 +628,7 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
   const fetchSignature = async (userId: string | number, fullName?: string) => {
     try {
       let url = "";
-      
+    
 
       if (userId) {
         url = `${API_BASE_URL}/api/users/${userId}/signature`;
@@ -991,22 +995,49 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
     );
   };
 
-  const renderActiveForm8Detail = () => {
-    if (!activeForm8DetailConfig) return null;
+  // const renderActiveForm8Detail = () => {
+  //   if (!activeForm8DetailConfig) return null;
+  //   return (
+  //     <Form8DetailView
+  //       initialParams={activeForm8DetailConfig}
+  //       onClose={() => {
+  //         setActiveForm8DetailConfig(null);
+  //         fetchNCRDetail(); // Refresh data when returning from Form 8 Detail
+  //       }}
+  //     />
+  //   );
+  // };
+
+  // ✅ ADD THIS: Render function for 8D Report Preview
+  const render8DPreview = () => {
+    if (!show8DReportModal || !selected8DEventId) return null;
+
     return (
-      <Form8DetailView
-        initialParams={activeForm8DetailConfig}
-        onClose={() => {
-          setActiveForm8DetailConfig(null);
-          fetchNCRDetail(); // Refresh data when returning from Form 8 Detail
+      <FinalPreview
+        eventId={selected8DEventId}
+        isHOD={isHOD || false} // Passed from useAuth()
+        onRefresh={() => {
+          setShow8DReportModal(false);
+          setSelected8DEventId(null);
+          fetchNCRDetail(); // Refresh NCR data after 8D actions (e.g., approval)
         }}
       />
     );
   };
 
-  if (activeForm8DetailConfig) {
-    return renderActiveForm8Detail();
+  // ✅ UPDATE THE EARLY RETURN CHECKS (Place this before the loading/error checks)
+
+  // if (activeForm8DetailConfig) {
+  //   return renderActiveForm8Detail();
+  // }
+
+  if (activeForm8Config) {
+    return renderActiveForm8();
   }
+
+  // if (activeForm8DetailConfig) {
+  //   return renderActiveForm8Detail();
+  // }
 
   if (activeForm8Config) {
     return renderActiveForm8();
@@ -1264,11 +1295,13 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
               ncr?.ncr2CorrectiveAction?.trim()) && (
               <TouchableOpacity
                 onPress={() => {
-                  // ✅ SET STATE TO OPEN FORM 8 DETAIL VIEW INLINE
-                  setActiveForm8DetailConfig({
-                    id: ncr.id,
-                    type: isNcr2Flow ? "ncr2" : "normal",
-                  });
+                  // ✅ Call the parent callback instead of setting local state
+                  if (onNavigateToForm8) {
+                    onNavigateToForm8({
+                      id: ncr.id,
+                      type: isNcr2Flow ? "ncr2" : "normal",
+                    });
+                  }
                 }}
                 className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
                 style={{ backgroundColor: "#f97316" }}
@@ -1404,27 +1437,54 @@ export default function Form7DetailView({ initialParams, onClose }: any) {
         />
       )}
 
+      {/* 🗄️ RIGHT-SIDE DRAWER: 8D Report Preview */}
       {show8DReportModal && selected8DEventId && (
         <Modal visible={true} transparent animationType="slide">
-          <View className="flex-1 bg-black/50">
-            <View className="flex-1 px-4 py-6">
-              <View className="relative flex-1 max-w-6xl mx-auto">
-                <TouchableOpacity
-                  onPress={() => {
-                    setShow8DReportModal(false);
-                    setSelected8DEventId(null);
-                  }}
-                  className="absolute z-10 p-2 bg-red-500 rounded-full shadow-lg -top-2 -right-2"
-                >
-                  <X size={24} color="#fff" />
-                </TouchableOpacity>
-                <ScrollView className="flex-1 bg-white rounded-xl">
-                  <View className="items-center justify-center p-8">
-                    <Text className="font-serif text-gray-500">
-                      8D Report Preview Component Loaded Here
+          <View className="flex-1 bg-black/60">
+            <View className="flex-row justify-end flex-1">
+              {/* 1. Backdrop (Click outside the drawer to close) */}
+              <TouchableOpacity
+                className="flex-1"
+                activeOpacity={1}
+                onPress={() => {
+                  setShow8DReportModal(false);
+                  setSelected8DEventId(null);
+                }}
+              />
+
+              {/* 2. Drawer Panel */}
+              <View className="w-full md:w-[500px] lg:w-[600px] bg-white h-full shadow-2xl border-l border-gray-200">
+                {/* Drawer Header */}
+                <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
+                  <View className="flex-row items-center gap-3">
+                    <FileBarChart size={20} color={COLORS.primary} />
+                    <Text className="font-serif text-lg font-bold text-gray-800">
+                      8D Report Preview
                     </Text>
                   </View>
-                </ScrollView>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShow8DReportModal(false);
+                      setSelected8DEventId(null);
+                    }}
+                    className="p-2 bg-white border border-gray-200 rounded-full shadow-sm active:bg-gray-100"
+                  >
+                    <X size={20} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Drawer Content (FinalPreview Component) */}
+                <View className="flex-1 bg-gray-50">
+                  <FinalPreview
+                    eventId={selected8DEventId}
+                    isHOD={isHOD || false}
+                    onRefresh={() => {
+                      setShow8DReportModal(false);
+                      setSelected8DEventId(null);
+                      fetchNCRDetail(); // Refresh parent NCR data on approval/rejection
+                    }}
+                  />
+                </View>
               </View>
             </View>
           </View>
