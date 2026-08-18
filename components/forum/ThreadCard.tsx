@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete (Teams/Outlook Style)
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -17,7 +17,6 @@ import {
   FileText,
   Mail,
   MapPin,
-  MoreVertical,
   Pause,
   Play,
   RefreshCw,
@@ -396,7 +395,6 @@ export default function ThreadCard({
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [showReactionBar, setShowReactionBar] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [showReactionDetail, setShowReactionDetail] = useState<string | null>(null);
   const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
 
@@ -419,8 +417,7 @@ export default function ThreadCard({
     prevStatusRef.current = thread.deliveryStatus;
   }, [thread.deliveryStatus]);
 
-  // ✅ WhatsApp Status Icons
-    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
+  // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
   const getStatusIcon = () => {
     if (thread.failed || thread.deliveryStatus === 'FAILED') {
       return (
@@ -471,23 +468,17 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  // components/forum/ThreadCard.tsx
-// Replace ONLY the handleReactToPost function and related reaction logic
-
-// ========== REACTION HANDLER (FIXED) ==========
-const handleReactionSelect = (emoji: string) => {
-  // ✅ Pass the emoji directly to parent handler
-  if (onReact && thread.id) {
-    // Ensure thread.id is properly converted to string
-    const threadId = String(thread.id);
-    onReact(threadId, emoji);
-  }
-  setShowReactionBar(false);
-};
+  // ========== REACTION HANDLER ==========
+  const handleReactionSelect = (emoji: string) => {
+    if (onReact && thread.id) {
+      const threadId = String(thread.id);
+      onReact(threadId, emoji);
+    }
+    setShowReactionBar(false);
+  };
 
   // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
-    setShowMenu(false);
     const executeDelete = () => {
       console.log("🗑️ Executing delete for thread ID:", thread.id);
       onDelete?.(String(thread.id));
@@ -736,86 +727,94 @@ const handleReactionSelect = (emoji: string) => {
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
           {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
           
+          {/* ✅ TEAMS/OUTLOOK STYLE DIRECT ACTION ICONS (Not hidden in a menu) */}
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
-            {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
+            {thread.isEdited && <Text style={styles.editedText}>(edited)</Text>}
             
             {/* ✅ WhatsApp Status Icons */}
             {isOwnMessage && (
               <View style={styles.statusIcon}>{getStatusIcon()}</View>
             )}
             
-            {/* ✅ Reaction Trigger (Visible on ALL messages) */}
-            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
-              <Smile size={14} color="#9ca3af" />
-            </TouchableOpacity>
-
-            {/* ✅ 3-Dot Menu (Only on own messages) */}
-            {isOwnMessage && (
-              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
-                <MoreVertical size={14} color="#9ca3af" />
+            {/* ✅ DIRECT ACTION ICONS ROW */}
+            <View style={styles.actionIconsRow}>
+              {/* 1. React (Visible on ALL messages) */}
+              <TouchableOpacity 
+                onPress={() => setShowReactionBar(!showReactionBar)} 
+                style={styles.actionIconBtn}
+                activeOpacity={0.7}
+              >
+                <Smile size={16} color="#6b7280" />
               </TouchableOpacity>
-            )}
+
+              {/* 2. Edit (Visible on OWN messages only) */}
+              {isOwnMessage && (
+                <TouchableOpacity 
+                  onPress={() => onEdit?.(thread)} 
+                  style={styles.actionIconBtn}
+                  activeOpacity={0.7}
+                >
+                  <Edit size={16} color="#6b7280" />
+                </TouchableOpacity>
+              )}
+
+              {/* 3. Delete (Visible on OWN messages only) */}
+              {isOwnMessage && (
+                <TouchableOpacity 
+                  onPress={confirmDelete} 
+                  style={styles.actionIconBtn}
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={16} color="#ef4444" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
-          {showMenu && isOwnMessage && (
-            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
-              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={14} color="#374151" />
-                <Text style={styles.menuText}>Edit Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={14} color="#ef4444" />
-                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
-              </TouchableOpacity>
+          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <View style={{ 
+              marginTop: 6, 
+              flexDirection: 'row', 
+              flexWrap: 'wrap', 
+              gap: 4, 
+              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+            }}>
+              {Object.entries(groupedReactions).map(([emoji, data]) => (
+                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[
+                      styles.reactionBadge, 
+                      data.hasReacted && styles.reactionBadgeActive
+                    ]}
+                  >
+                    <Text style={{ fontSize: 14 }}>{emoji}</Text>
+                    <Text style={[
+                      styles.reactionCount, 
+                      data.hasReacted && styles.reactionCountActive
+                    ]}>
+                      {data.count}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showReactionDetail === emoji && (
+                    <View style={styles.reactionDetailPopup}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                        Reacted by:
+                      </Text>
+                      {data.users.map((userName: string, idx: number) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                          • {userName}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
           )}
-
-          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
-
-{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
-{Object.keys(groupedReactions).length > 0 && (
-  <View style={{ 
-    marginTop: 6, 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 4, 
-    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-  }}>
-    {Object.entries(groupedReactions).map(([emoji, data]) => (
-      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-        <TouchableOpacity
-          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-          style={[
-            styles.reactionBadge, 
-            data.hasReacted && styles.reactionBadgeActive
-          ]}
-        >
-          <Text style={{ fontSize: 14 }}>{emoji}</Text>
-          <Text style={[
-            styles.reactionCount, 
-            data.hasReacted && styles.reactionCountActive
-          ]}>
-            {data.count}
-          </Text>
-        </TouchableOpacity>
-
-        {showReactionDetail === emoji && (
-          <View style={styles.reactionDetailPopup}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
-              Reacted by:
-            </Text>
-            {data.users.map((userName: string, idx: number) => (
-              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                • {userName}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-    ))}
-  </View>
-)}
         </View>
       </View>
     </>
@@ -840,7 +839,19 @@ const styles = StyleSheet.create({
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
   timeText: { fontSize: 10, color: "#777" },
+  editedText: { fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 },
   statusIcon: { marginLeft: 4, alignItems: 'center', justifyContent: 'center', minWidth: 16 },
+  
+  // ✅ NEW TEAMS/OUTLOOK STYLE ACTION ICONS
+  actionIconsRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 },
+  actionIconBtn: { 
+    width: 28, 
+    height: 28, 
+    borderRadius: 14, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+
   avatarContainer: { marginHorizontal: 6 },
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
@@ -916,9 +927,4 @@ const styles = StyleSheet.create({
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
-  menuPopupRight: { right: 10 },
-  menuPopupLeft: { left: 10 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  menuText: { fontSize: 14, fontWeight: '500', color: '#374151' },
 });
