@@ -705,16 +705,33 @@ const handleReactionSelect = (emoji: string) => {
 
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         
-        {showReactionBar && (
-          <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
-            <View style={styles.reactionBar}>
-              {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
-              ))}
-              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
-            </View>
-          </View>
-        )}
+        {/* ✅ FIXED: Reaction Bar - Now visible for first message */}
+{showReactionBar && (
+  <View style={[
+    styles.reactionBarContainer, 
+    isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft,
+    // ✅ Add zIndex to ensure visibility
+    { zIndex: 9999, elevation: 9999 }
+  ]}>
+    <View style={styles.reactionBar}>
+      {QUICK_REACTIONS.map((emoji) => (
+        <TouchableOpacity 
+          key={emoji} 
+          onPress={() => handleReactionSelect(emoji)} 
+          style={styles.reactionBarItem}
+        >
+          <Text style={{ fontSize: 22 }}>{emoji}</Text>
+        </TouchableOpacity>
+      ))}
+      <TouchableOpacity 
+        onPress={() => setShowReactionBar(false)} 
+        style={styles.reactionBarItem}
+      >
+        <X size={16} color="#666" />
+      </TouchableOpacity>
+    </View>
+  </View>
+)}
 
         <View style={styles.avatarContainer}>
           <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
@@ -758,19 +775,24 @@ const handleReactionSelect = (emoji: string) => {
             )}
           </View>
 
-          {showMenu && isOwnMessage && (
-            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
-              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={14} color="#374151" />
-                <Text style={styles.menuText}>Edit Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={14} color="#ef4444" />
-                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
+          {/* ✅ FIXED: Menu Popup - Now positions correctly for ALL messages */}
+{showMenu && isOwnMessage && (
+  <View style={[
+    styles.menuPopup, 
+    isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft,
+    // ✅ Add this to ensure it's visible for first message
+    { zIndex: 9999, elevation: 9999 }
+  ]}>
+    <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+      <Edit size={14} color="#374151" />
+      <Text style={styles.menuText}>Edit Message</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
+      <Trash2 size={14} color="#ef4444" />
+      <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+    </TouchableOpacity>
+  </View>
+)}
           {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
 
 {/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
@@ -906,17 +928,17 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
+  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 9999, elevation: 9999, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
-  reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
+  reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 9999, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBarItem: { paddingHorizontal: 8, paddingVertical: 4 },
   reactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
+  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 9999, zIndex: 9999, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
