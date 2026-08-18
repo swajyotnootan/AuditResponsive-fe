@@ -1,8 +1,9 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete, Inline Audio/Video
 
 import { API_BASE_URL } from "@/config/apiConfig";
-import * as FileSystem from 'expo-file-system';
+import { Audio, ResizeMode, Video } from 'expo-av'; // ✅ ADDED FOR INLINE AUDIO/VIDEO
+import * as FileSystem from 'expo-file-system/legacy';
 import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import {
@@ -72,7 +73,7 @@ interface Thread {
   attachments?: Attachment[];
   isEdited?: boolean;
   deliveryStatus?: 'SENDING' | 'SENT' | 'DELIVERED' | 'SEEN' | 'FAILED';
-  seenBy?: string[]; // ✅ ADD THIS for real read receipts
+  seenBy?: string[]; 
 }
 
 interface ThreadCardProps {
@@ -111,14 +112,11 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
   return null;
 };
 
-// ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
-// ✅ Detect if we're talking to the production (UTC) backend
 const isProductionBackend = () => {
   const url = API_BASE_URL || '';
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
-// ✅ Parse backend date correctly for BOTH local (IST) and prod (UTC)
 const parseBackendDate = (dateString: string): Date => {
   let isoString = dateString;
   if (!isoString.includes('T')) {
@@ -130,7 +128,6 @@ const parseBackendDate = (dateString: string): Date => {
   return new Date(isoString);
 };
 
-// ✅ Get just the time (e.g., "2:30 PM")
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -139,7 +136,6 @@ const getTimeOnly = (date: Date) => {
   });
 };
 
-// ✅ FIXED: Always show the TIME for every message
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
   
@@ -152,22 +148,10 @@ const formatDateAndTime = (dateString?: string) => {
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
-    // Today: Show time only (e.g., "10:06 AM")
-    if (diffDays === 0) {
-      return getTimeOnly(date);
-    }
+    if (diffDays === 0) return getTimeOnly(date);
+    if (diffDays === 1) return `Yesterday, ${getTimeOnly(date)}`;
+    if (diffDays < 7) return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
     
-    // Yesterday: Show "Yesterday, 2:30 PM"
-    if (diffDays === 1) {
-      return `Yesterday, ${getTimeOnly(date)}`;
-    }
-    
-    // This week: Show "Monday, 2:30 PM"
-    if (diffDays < 7) {
-      return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
-    }
-    
-    // Older: Show "Jan 15, 2:30 PM"
     return `${date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -264,10 +248,11 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
     return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   };
 
-  useEffect(() => {
+    useEffect(() => {
     if (Platform.OS === "web" && uri) {
       try {
-        const audio = new Audio(uri);
+        // ✅ FIX: Use window.Audio to bypass the expo-av import shadowing
+        const audio = new (window as any).Audio(uri); 
         audio.preload = "metadata";
         audio.addEventListener("loadedmetadata", () => { setDuration(audio.duration); setIsLoading(false); });
         audio.addEventListener("timeupdate", () => setCurrentTime(audio.currentTime));
@@ -309,25 +294,86 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
 };
 
 // =====================================================
-// NATIVE AUDIO PLAYER
+// ✅ NATIVE AUDIO PLAYER (INLINE WHATSAPP STYLE)
 // =====================================================
 const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const handlePlayPause = () => {
-    if (!uri) { setError("Audio not available"); return; }
-    if (!isPlaying) { Linking.openURL(uri).catch(() => setError("Cannot play audio")); }
-    setIsPlaying(!isPlaying);
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   };
+
+  const handlePlayPause = async () => {
+    if (!uri) { setError("Audio not available"); return; }
+    
+    if (isPlaying && sound) {
+      await sound.pauseAsync();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      let currentSound = sound;
+      if (!currentSound) {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: false }
+        );
+        currentSound = newSound;
+        setSound(newSound);
+        
+        newSound.setOnPlaybackStatusUpdate((status: any) => {
+          if (status.isLoaded) {
+            setDuration(status.durationMillis ? status.durationMillis / 1000 : 0);
+            setCurrentTime(status.positionMillis ? status.positionMillis / 1000 : 0);
+            setIsPlaying(status.isPlaying);
+            if (status.didJustFinish) {
+              setIsPlaying(false);
+              setCurrentTime(0);
+            }
+          }
+        });
+      }
+      await currentSound.playAsync();
+      setIsPlaying(true);
+      setError(null);
+    } catch (err) {
+      setError("Cannot play audio");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   return (
     <View style={styles.audioContainer}>
       <View style={styles.audioRow}>
-        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error}><Play size={20} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error || isLoading}>
+          {isLoading ? <ActivityIndicator size="small" color="#fff" /> : isPlaying ? <Pause size={20} color="#fff" /> : <Play size={20} color="#fff" />}
+        </TouchableOpacity>
         <View style={styles.audioInfo}>
           <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
-          <Text style={styles.audioTime}>{isPlaying ? "Playing..." : "Tap to play"}</Text>
+          <View style={styles.audioProgressContainer}>
+            <View style={styles.audioProgressTrack}><View style={[styles.audioProgressFill, { width: `${progress}%` }]} /></View>
+            <Text style={styles.audioTime}>{formatDuration(currentTime)} / {formatDuration(duration)}</Text>
+          </View>
         </View>
-        <Text style={styles.audioFileSize}>{formatFileSize(0)}</Text>
       </View>
       {error && <Text style={styles.audioError}>{error}</Text>}
     </View>
@@ -403,7 +449,6 @@ export default function ThreadCard({
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
 
-  // ✅ WhatsApp Blink Animation
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const prevStatusRef = useRef(thread.deliveryStatus);
 
@@ -419,8 +464,6 @@ export default function ThreadCard({
     prevStatusRef.current = thread.deliveryStatus;
   }, [thread.deliveryStatus]);
 
-  // ✅ WhatsApp Status Icons
-    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
   const getStatusIcon = () => {
     if (thread.failed || thread.deliveryStatus === 'FAILED') {
       return (
@@ -430,12 +473,10 @@ export default function ThreadCard({
       );
     }
 
-    // ✅ REAL WHATSAPP LOGIC: Check if anyone ELSE has seen it
     const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && 
       thread.seenBy.some((email: string) => email !== currentEmail);
 
     if (seenByOthers) {
-      // 🔵 BLUE TICK (Seen by recipient)
       return (
         <Animated.View style={{ opacity: blinkAnim }}>
           <CheckCheck size={13} color="#3b82f6" />
@@ -443,7 +484,6 @@ export default function ThreadCard({
       );
     }
 
-    // ⚪ GRAY TICKS (Not seen yet)
     switch (thread.deliveryStatus) {
       case 'SENDING': return <Clock size={13} color="#9ca3af" />;
       case 'SENT': return <Check size={13} color="#9ca3af" />;
@@ -471,21 +511,14 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  // components/forum/ThreadCard.tsx
-// Replace ONLY the handleReactToPost function and related reaction logic
+  const handleReactionSelect = (emoji: string) => {
+    if (onReact && thread.id) {
+      const threadId = String(thread.id);
+      onReact(threadId, emoji);
+    }
+    setShowReactionBar(false);
+  };
 
-// ========== REACTION HANDLER (FIXED) ==========
-const handleReactionSelect = (emoji: string) => {
-  // ✅ Pass the emoji directly to parent handler
-  if (onReact && thread.id) {
-    // Ensure thread.id is properly converted to string
-    const threadId = String(thread.id);
-    onReact(threadId, emoji);
-  }
-  setShowReactionBar(false);
-};
-
-  // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
     setShowMenu(false);
     const executeDelete = () => {
@@ -557,7 +590,11 @@ const handleReactionSelect = (emoji: string) => {
 
   const openImagePreview = (url: string) => setImageModal({ open: true, url });
   const closeImagePreview = () => setImageModal({ open: false, url: "" });
-  const openVideoPreview = (url: string) => { if (Platform.OS === "web") setVideoModal({ open: true, url }); else Linking.openURL(url); };
+  
+  // ✅ FIXED: Opens Modal for both Web and Native
+  const openVideoPreview = (url: string) => { 
+    setVideoModal({ open: true, url }); 
+  };
   const closeVideoPreview = () => setVideoModal({ open: false, url: "" });
   const openPdfPreview = (url: string, fileName: string) => setPdfModal({ open: true, url, fileName });
   const closePdfPreview = () => setPdfModal({ open: false, url: "", fileName: "" });
@@ -665,7 +702,27 @@ const handleReactionSelect = (emoji: string) => {
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
 
       <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}><View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View></Modal>
-      {Platform.OS === "web" && (<Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide"><WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} /></Modal>)}
+      
+      {/* ✅ UNIFIED VIDEO MODAL (Native & Web) */}
+      <Modal visible={videoModal.open} transparent animationType="fade" onRequestClose={closeVideoPreview}>
+        <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
+          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 }} onPress={closeVideoPreview}>
+            <X size={28} color="white" />
+          </Pressable>
+          {Platform.OS === "web" ? (
+            <WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} />
+          ) : (
+            <Video
+              source={{ uri: videoModal.url }}
+              style={{ width: '100%', height: '85%' }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+            />
+          )}
+        </View>
+      </Modal>
+
       <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
 
       <Modal visible={profileModalOpen} transparent animationType="fade" onRequestClose={() => setProfileModalOpen(false)}>
@@ -703,19 +760,37 @@ const handleReactionSelect = (emoji: string) => {
         </Pressable>
       </Modal>
 
+      {/* ✅ FIXED: Reaction Picker Modal (Prevents clipping on first message) */}
+      <Modal visible={showReactionBar} transparent animationType="fade" onRequestClose={() => setShowReactionBar(false)}>
+        <Pressable style={styles.menuModalBackdrop} onPress={() => setShowReactionBar(false)}>
+          <View style={[styles.menuModalContent, { flexDirection: 'row', padding: 10, width: 'auto', justifyContent: 'center', alignItems: 'center' }]}>
+            {QUICK_REACTIONS.map((emoji) => (
+              <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 26 }}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ✅ FIXED: Edit/Delete Menu Modal (Prevents clipping on first message) */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable style={styles.menuModalBackdrop} onPress={() => setShowMenu(false)}>
+          <View style={styles.menuModalContent}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+              <Edit size={16} color="#374151" />
+              <Text style={styles.menuText}>Edit Message</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { confirmDelete(); setShowMenu(false); }}>
+              <Trash2 size={16} color="#ef4444" />
+              <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         
-        {showReactionBar && (
-          <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
-            <View style={styles.reactionBar}>
-              {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
-              ))}
-              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         <View style={styles.avatarContainer}>
           <Pressable onPress={() => handleProfileClick(isOwnMessage ? currentUser?.id : thread.createdBy)}>
             {avatar && !avatarError ? (
@@ -740,17 +815,14 @@ const handleReactionSelect = (emoji: string) => {
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
             
-            {/* ✅ WhatsApp Status Icons */}
             {isOwnMessage && (
               <View style={styles.statusIcon}>{getStatusIcon()}</View>
             )}
             
-            {/* ✅ Reaction Trigger (Visible on ALL messages) */}
             <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
               <Smile size={14} color="#9ca3af" />
             </TouchableOpacity>
 
-            {/* ✅ 3-Dot Menu (Only on own messages) */}
             {isOwnMessage && (
               <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
                 <MoreVertical size={14} color="#9ca3af" />
@@ -758,64 +830,48 @@ const handleReactionSelect = (emoji: string) => {
             )}
           </View>
 
-          {showMenu && isOwnMessage && (
-            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
-              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={14} color="#374151" />
-                <Text style={styles.menuText}>Edit Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={14} color="#ef4444" />
-                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
-              </TouchableOpacity>
+          {Object.keys(groupedReactions).length > 0 && (
+            <View style={{ 
+              marginTop: 6, 
+              flexDirection: 'row', 
+              flexWrap: 'wrap', 
+              gap: 4, 
+              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+            }}>
+              {Object.entries(groupedReactions).map(([emoji, data]) => (
+                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[
+                      styles.reactionBadge, 
+                      data.hasReacted && styles.reactionBadgeActive
+                    ]}
+                  >
+                    <Text style={{ fontSize: 14 }}>{emoji}</Text>
+                    <Text style={[
+                      styles.reactionCount, 
+                      data.hasReacted && styles.reactionCountActive
+                    ]}>
+                      {data.count}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showReactionDetail === emoji && (
+                    <View style={styles.reactionDetailPopup}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                        Reacted by:
+                      </Text>
+                      {data.users.map((userName: string, idx: number) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                          • {userName}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))}
             </View>
           )}
-
-          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
-
-{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
-{Object.keys(groupedReactions).length > 0 && (
-  <View style={{ 
-    marginTop: 6, 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 4, 
-    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-  }}>
-    {Object.entries(groupedReactions).map(([emoji, data]) => (
-      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-        <TouchableOpacity
-          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-          style={[
-            styles.reactionBadge, 
-            data.hasReacted && styles.reactionBadgeActive
-          ]}
-        >
-          <Text style={{ fontSize: 14 }}>{emoji}</Text>
-          <Text style={[
-            styles.reactionCount, 
-            data.hasReacted && styles.reactionCountActive
-          ]}>
-            {data.count}
-          </Text>
-        </TouchableOpacity>
-
-        {showReactionDetail === emoji && (
-          <View style={styles.reactionDetailPopup}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
-              Reacted by:
-            </Text>
-            {data.users.map((userName: string, idx: number) => (
-              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                • {userName}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-    ))}
-  </View>
-)}
         </View>
       </View>
     </>
@@ -906,19 +962,15 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
-  reactionBarLeft: { left: 0 },
-  reactionBarRight: { right: 0 },
-  reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
-  reactionBarItem: { paddingHorizontal: 8, paddingVertical: 4 },
   reactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#e5e7eb' },
   reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
-  menuPopupRight: { right: 10 },
-  menuPopupLeft: { left: 10 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  menuText: { fontSize: 14, fontWeight: '500', color: '#374151' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  menuText: { fontSize: 15, fontWeight: '500', color: '#374151' },
+  
+  // ✅ NEW MODAL STYLES (Fixes all clipping issues)
+  menuModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  menuModalContent: { backgroundColor: "white", borderRadius: 12, overflow: "hidden", width: 220, shadowColor: "#000", shadowOffset: {width:0, height:4}, shadowOpacity: 0.3, shadowRadius: 5, elevation: 10 },
 });
