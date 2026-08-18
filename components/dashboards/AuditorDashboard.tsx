@@ -1157,14 +1157,7 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
               </View>
             </View>
             <View className="flex-row gap-2">
-              {onOpenForum && (
-                <TouchableOpacity
-                  onPress={() => onOpenForum(item)}
-                  className="p-2 rounded-lg bg-purple-50"
-                >
-                  <MessageCircle size={18} color="#9333ea" />
-                </TouchableOpacity>
-              )}
+              
               <TouchableOpacity
                 onPress={() => onRaise(item)}
                 className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
