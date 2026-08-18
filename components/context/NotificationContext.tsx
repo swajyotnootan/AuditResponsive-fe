@@ -350,6 +350,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const userRole = user?.role ?? null;
 
     // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths
+    // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
   const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
     if (!backendRoute) return '/(app)/(tabs)';
     
@@ -359,36 +360,89 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
     const roleUpper = (role || '').toUpperCase();
 
-    // 1. Top Management / Planning Routes
+    // ==========================================
+    // 🎯 1. AUDIT MANAGER ROUTES (Highest Priority)
+    // ==========================================
+    if (roleUpper === 'AUDIT_MANAGER') {
+      // Audit Manager specific tabs
+      if (cleanRoute === '/audit-manager' || backendRoute.includes('/audit-manager') || backendRoute.includes('#requests')) {
+        if (backendRoute.includes('requests') || backendRoute.includes('#requests')) return '/(app)/(tabs)/audit-manager?tab=requests';
+        if (backendRoute.includes('ncr')) return '/(app)/(tabs)/audit-manager?tab=ncr';
+        if (backendRoute.includes('schedules')) return '/(app)/(tabs)/audit-manager?tab=schedules';
+        return '/(app)/(tabs)/audit-manager?tab=dashboard';
+      }
+      // When AM receives planning updates (/form3, /form4, etc.), route to their dashboard
+      if (['/form3', '/form4', '/form5-dashboard', '/form5-detailed', '/top-management'].includes(cleanRoute)) {
+        return '/(app)/(tabs)/audit-manager?tab=dashboard';
+      }
+      // NCR routes for AM
+      if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
+        return '/(app)/(tabs)/audit-manager?tab=ncr';
+      }
+    }
+
+    // ==========================================
+    // 🎯 2. TOP MANAGEMENT ROUTES
+    // ==========================================
+    if (roleUpper === 'TOP_MANAGEMENT') {
+      if (cleanRoute === '/top-management') return '/(app)/(tabs)/top-management?tab=overview';
+      if (cleanRoute === '/form3') return '/(app)/(tabs)/top-management?tab=annual';
+      if (cleanRoute === '/form4') return '/(app)/(tabs)/top-management?tab=dept';
+      if (cleanRoute === '/form5-dashboard') return '/(app)/(tabs)/top-management?tab=week';
+      if (cleanRoute === '/form5-detailed') return '/(app)/(tabs)/top-management?tab=daily';
+    }
+
+    // ==========================================
+    // 🎯 3. AUDITOR ROUTES
+    // ==========================================
+    if (roleUpper === 'AUDITOR') {
+      if (cleanRoute === '/auditor') return '/(app)/(tabs)/auditor?tab=my-audits';
+      if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
+        return '/(app)/(tabs)/auditor?tab=ncr-list';
+      }
+    }
+
+    // ==========================================
+    // 🎯 4. AUDITEE ROUTES
+    // ==========================================
+    if (roleUpper === 'AUDITEE') {
+      if (cleanRoute === '/auditee') return '/(app)/(tabs)/auditee?tab=my-audits';
+      if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
+        return '/(app)/(tabs)/auditee?tab=my-ncrs';
+      }
+    }
+
+    // ==========================================
+    // 🔄 FALLBACK ROUTING (If role doesn't match specific paths)
+    // ==========================================
+    
+    // Audit Manager generic paths
+    if (cleanRoute === '/audit-manager' || backendRoute.includes('/audit-manager')) {
+      if (backendRoute.includes('requests') || backendRoute.includes('#requests')) return '/(app)/(tabs)/audit-manager?tab=requests';
+      if (backendRoute.includes('ncr')) return '/(app)/(tabs)/audit-manager?tab=ncr';
+      if (backendRoute.includes('schedules')) return '/(app)/(tabs)/audit-manager?tab=schedules';
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    }
+
+    // Top Management generic paths
     if (cleanRoute === '/top-management') return '/(app)/(tabs)/top-management?tab=overview';
     if (cleanRoute === '/form3') return '/(app)/(tabs)/top-management?tab=annual';
     if (cleanRoute === '/form4') return '/(app)/(tabs)/top-management?tab=dept';
     if (cleanRoute === '/form5-dashboard') return '/(app)/(tabs)/top-management?tab=week';
     if (cleanRoute === '/form5-detailed') return '/(app)/(tabs)/top-management?tab=daily';
 
-    // 2. Auditor / Auditee Routes
-    if (cleanRoute === '/auditor') {
-      if (roleUpper === 'AUDITEE') return '/(app)/(tabs)/auditee?tab=my-audits';
-      return '/(app)/(tabs)/auditor?tab=my-audits';
-    }
+    // Auditor / Auditee generic paths
+    if (cleanRoute === '/auditor') return '/(app)/(tabs)/auditor?tab=my-audits';
     if (cleanRoute === '/auditee') return '/(app)/(tabs)/auditee?tab=my-audits';
 
-    // 3. Audit Manager Routes
-    if (cleanRoute === '/audit-manager' || cleanRoute.includes('/audit-manager')) {
-      if (backendRoute.includes('requests')) return '/(app)/(tabs)/audit-manager?tab=requests';
-      if (backendRoute.includes('ncr')) return '/(app)/(tabs)/audit-manager?tab=ncr';
-      if (backendRoute.includes('schedules')) return '/(app)/(tabs)/audit-manager?tab=schedules';
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    }
-
-    // 4. Form 7 / NCR View Routes
-    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view')) {
+    // NCR generic paths
+    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
       if (roleUpper === 'AUDITEE') return '/(app)/(tabs)/auditee?tab=my-ncrs';
-      if (roleUpper === 'AUDIT_MANAGER') return '/(app)/(tabs)/audit-manager?tab=ncr';
-      return '/(app)/(tabs)/auditor?tab=ncr-list';
+      if (roleUpper === 'AUDITOR') return '/(app)/(tabs)/auditor?tab=ncr-list';
+      return '/(app)/(tabs)/audit-manager?tab=ncr';
     }
 
-    // Fallback
+    // Ultimate Fallback
     console.warn('⚠️ Unknown backend route, defaulting to dashboard:', backendRoute);
     return '/(app)/(tabs)';
   };
