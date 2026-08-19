@@ -56,6 +56,7 @@ const COLORS = {
   danger: "#ef4444",
 };
 
+
 const getIconColor = (textClass: string) => {
   if (textClass.includes("amber")) return "#92400e";
   if (textClass.includes("blue")) return "#1e40af";
@@ -63,6 +64,7 @@ const getIconColor = (textClass: string) => {
   if (textClass.includes("purple")) return "#581c87";
   if (textClass.includes("green")) return "#166534";
   if (textClass.includes("red")) return "#991b1b";
+  if (textClass.includes("cyan")) return "#0e7490"; // ✅ Added for IN_8D_PROCESS
   return "#334155";
 };
 
@@ -124,6 +126,37 @@ const StatusBadge = ({ status }: { status: string }) => {
       text: "text-red-800",
       icon: X,
       label: "Rejected",
+    },
+    // ✅ ADD THESE MISSING STATUSES (Matches NCRDashboard)
+    SENT_TO_8D: {
+      bg: "bg-purple-100",
+      text: "text-purple-800",
+      icon: FileBarChart,
+      label: "Sent to 8D",
+    },
+    IN_8D_PROCESS: {
+      bg: "bg-cyan-100",
+      text: "text-cyan-800",
+      icon: FileBarChart,
+      label: "In 8D Process",
+    },
+    READY_FOR_NCR2: {
+      bg: "bg-blue-100",
+      text: "text-blue-800",
+      icon: FileText,
+      label: "Ready for NCR2",
+    },
+    NCR2_IN_PROGRESS: {
+      bg: "bg-purple-100",
+      text: "text-purple-800",
+      icon: FileText,
+      label: "NCR2 Verification",
+    },
+    NCR2_COMPLETED: {
+      bg: "bg-green-100",
+      text: "text-green-800",
+      icon: CheckCircle,
+      label: "NCR2 Completed",
     },
   };
   const { bg, text, icon: Icon, label } = config[status] || config.OPEN;

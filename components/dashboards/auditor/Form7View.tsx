@@ -112,39 +112,70 @@ const InputField = ({
 // ============================================================================
 // DATE INPUT (Fixed for Web & Mobile)
 // ============================================================================
-const DateInput = ({ value, onChange, placeholder = "Select Date" }: any) => {
+const DateInput = ({
+  value,
+  onChange,
+  placeholder = "Select Date",
+  label,
+}: any) => {
   const [show, setShow] = useState(false);
+  const [tempDate, setTempDate] = useState("");
 
-  // ✅ Safely parse date to prevent "Invalid Date" crashes
   const getDateValue = () => {
     if (!value) return new Date();
     const date = new Date(value);
     return isNaN(date.getTime()) ? new Date() : date;
   };
 
+  const formatDate = (dateStr: string) => {
+    // Convert to dd-mm-yyyy format
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   if (Platform.OS === "web") {
     return (
-      <input
-        type="date"
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white shadow-sm text-slate-800 cursor-pointer"
-      />
+      <View className="w-full">
+        {label && (
+          <Text className="mb-1 text-xs font-medium text-slate-700">
+            {label}
+          </Text>
+        )}
+        <input
+          type="date"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2.5 text-sm border border-slate-100 rounded-lg bg-white shadow-sm text-slate-800 cursor-pointer"
+          style={{ width: "100%", boxSizing: "border-box" }}
+        />
+      </View>
     );
   }
 
   return (
-    <>
+    <View className="w-full">
+      {label && (
+        <Text className="mb-1 text-xs font-medium text-slate-700">{label}</Text>
+      )}
       <TouchableOpacity
         onPress={() => setShow(true)}
         className="w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-white shadow-sm flex-row items-center justify-between"
+        style={{ width: "100%" }}
+        activeOpacity={0.7}
       >
         <Text
-          className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}
+          className="flex-1 text-sm"
+          numberOfLines={1}
+          style={{ color: value ? "#1e293b" : "#94a3b8" }}
         >
-          {value || placeholder}
+          {value ? formatDate(value) : "dd-mm-yyyy"}
         </Text>
-        <Calendar size={16} color="#94a3b8" />
+        <Calendar size={18} color="#64748b" />
       </TouchableOpacity>
 
       {show && (
@@ -153,22 +184,19 @@ const DateInput = ({ value, onChange, placeholder = "Select Date" }: any) => {
           mode="date"
           display={Platform.OS === "ios" ? "spinner" : "default"}
           onChange={(event, selectedDate) => {
-            // ✅ FIX: Properly handle Android picker dismissal
             if (Platform.OS === "android") {
               setShow(false);
             } else {
-              // iOS requires manual dismissal check
               setShow(event.type === "dismissed" ? false : true);
             }
 
-            // ✅ FIX: Only update the form state if the user actually selected a date
             if (selectedDate && event.type === "set") {
               onChange(selectedDate.toISOString().split("T")[0]);
             }
           }}
         />
       )}
-    </>
+    </View>
   );
 };
 // ============================================================================

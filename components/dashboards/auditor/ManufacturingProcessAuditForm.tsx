@@ -392,6 +392,49 @@ export default function ManufacturingProcessAuditForm(props: any) {
     }
   }, [editId, questions]);
 
+   useEffect(() => {
+    // Only enable on web and only on Step 2
+    if (Platform.OS !== "web" || currentStep !== 2) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent navigation if the user is actively typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      // Left Arrow: Go to previous checkpoint
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (currentCheckpointIndex > 0) {
+          setCurrentCheckpointIndex(currentCheckpointIndex - 1);
+          scrollToTop();
+        }
+      }
+      // Right Arrow: Go to next checkpoint
+      else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (currentCheckpointIndex < questions.length - 1) {
+          setCurrentCheckpointIndex(currentCheckpointIndex + 1);
+          scrollToTop();
+        }
+      }
+    };
+
+    // Attach the event listener
+    window.addEventListener("keydown", handleKeyDown);
+
+    // Cleanup the event listener when component unmounts or dependencies change
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [currentStep, currentCheckpointIndex, questions.length]);
+
+
   useEffect(() => {
     if (user?.id && !editId) {
       setFormData((prev) => ({ ...prev, auditorName: user.name || "" }));
@@ -755,38 +798,66 @@ export default function ManufacturingProcessAuditForm(props: any) {
     }
   };
 
-  // ✅ Reusable Date Input
+ // ✅ Reusable Date Input
   const DateInput = ({
     value,
     onChange,
+    onOpen,
     placeholder = "Select Date",
   }: {
     value: string;
     onChange: (val: string) => void;
+    onOpen?: () => void;
     placeholder?: string;
   }) => {
     if (Platform.OS === "web") {
       return (
         <input
           type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onClick={(e) => {
+          value={value || ""}
+          onChange={(e: any) => onChange(e.target.value)}
+          onClick={(e: any) => {
             const target = e.target as HTMLInputElement;
             if (target.showPicker) target.showPicker();
           }}
-          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          style={{ fontFamily: "inherit", fontSize: "inherit" }}
+          style={
+            {
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              display: "block",
+              height: "40px",
+              padding: "0 12px", // ✅ Use standard CSS padding instead of paddingHorizontal
+              backgroundColor: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              fontSize: "14px",
+              color: value ? "#1e293b" : "#94a3b8",
+              fontFamily: "inherit",
+              outline: "none",
+              cursor: "pointer",
+            } as any
+          } // ✅ Cast to any to prevent strict TS CSS errors
         />
       );
     }
+
     return (
       <TouchableOpacity
-        onPress={() => setShowDatePicker(true)}
+        onPress={() => {
+          if (onOpen) {
+            onOpen();
+          } else {
+            // fallback if needed
+          }
+        }}
+        activeOpacity={0.7}
         style={{
           width: "100%",
-          paddingHorizontal: 12,
-          paddingVertical: 10,
+          maxWidth: "100%",
+          height: 44,
+          paddingHorizontal: 12, // ✅ React Native TouchableOpacity accepts this
           backgroundColor: "#ffffff",
           borderWidth: 1,
           borderColor: "#e2e8f0",
@@ -794,8 +865,8 @@ export default function ManufacturingProcessAuditForm(props: any) {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          overflow: "hidden",
         }}
-        activeOpacity={0.7}
       >
         <Text
           style={{
@@ -803,9 +874,11 @@ export default function ManufacturingProcessAuditForm(props: any) {
             fontSize: 14,
             color: value ? "#1e293b" : "#94a3b8",
           }}
+          numberOfLines={1}
         >
           {value || placeholder}
         </Text>
+
         <Calendar size={18} color="#94a3b8" />
       </TouchableOpacity>
     );
@@ -831,8 +904,34 @@ export default function ManufacturingProcessAuditForm(props: any) {
             const target = e.target as HTMLInputElement;
             if (target.showPicker) target.showPicker();
           }}
-          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          style={{ fontFamily: "inherit", fontSize: "inherit" }}
+          style={
+            {
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
+              display: "block",
+              height: "40px",
+              padding: "0 12px", // ✅ Use standard CSS padding instead of paddingHorizontal
+              backgroundColor: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              fontSize: "14px",
+              color: value ? "#1e293b" : "#94a3b8",
+              fontFamily: "inherit",
+              outline: "none",
+              cursor: "pointer",
+            } as any
+          }
+          onFocus={(e) => {
+            (e.target as HTMLInputElement).style.borderColor = "#3b82f6";
+            (e.target as HTMLInputElement).style.boxShadow =
+              "0 0 0 2px rgba(59,130,246,0.3)";
+          }}
+          onBlur={(e) => {
+            (e.target as HTMLInputElement).style.borderColor = "#e2e8f0";
+            (e.target as HTMLInputElement).style.boxShadow = "none";
+          }}
         />
       );
     }
@@ -1259,7 +1358,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            marginBottom: 16,
+                            
                           }}
                         >
                           <Text
@@ -1298,7 +1397,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            marginBottom: 16,
+                           
                           }}
                         >
                           <Text
@@ -1326,7 +1425,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            marginBottom: 16,
+                            
                           }}
                         >
                           <Text
@@ -1366,7 +1465,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            marginBottom: 16,
+                          
                           }}
                         >
                           <Text
@@ -1394,7 +1493,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            marginBottom: 16,
                           }}
                         >
                           <Text
@@ -1444,7 +1542,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1508,7 +1605,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <Text
@@ -1548,7 +1644,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1597,7 +1692,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1646,7 +1740,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1681,7 +1774,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                             zIndex: 10,
                           }}
                         >
@@ -1830,7 +1922,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1865,7 +1956,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -1911,7 +2001,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                                 ? "31%"
                                 : "100%",
                             minWidth: 160,
-                            marginBottom: 16,
                           }}
                         >
                           <View
@@ -2032,7 +2121,6 @@ export default function ManufacturingProcessAuditForm(props: any) {
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      marginBottom: 16,
                     }}
                   >
                     <Text

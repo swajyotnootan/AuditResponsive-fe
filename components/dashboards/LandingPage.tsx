@@ -704,10 +704,15 @@ export default function LandingPage() {
       <View
         className={`bg-white rounded-xl shadow-md border overflow-hidden ${
           isApprovalPending ? "border-2 border-amber-400" : "border-slate-100"
-        } ${isDesktop ? "flex-1" : ""}`}
+        }`}
         style={{
           backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
-          marginBottom: isDesktop ? 12 : 16, // ✅ Smaller bottom margin on desktop
+          marginBottom: 16,
+          // ✅ FIXED: Give it a fixed percentage width for 3-column layout,
+          // and a maxWidth so it never stretches to fill the container if it's alone.
+          width: isDesktop ? "30%" : "100%",
+          maxWidth: 400,
+          alignSelf: "flex-start", // ✅ Prevents FlatList from stretching it
         }}
       >
         {isApprovalPending && (
@@ -719,6 +724,7 @@ export default function LandingPage() {
         )}
 
         <View className={isDesktop ? "p-3" : "p-4"}>
+          {/* ... rest of the card content remains exactly the same ... */}
           <View className="flex-row items-start justify-between mb-3">
             <View className="px-3 py-1.5 rounded-full bg-slate-100">
               <Text
@@ -1494,10 +1500,13 @@ export default function LandingPage() {
                 data={limitedFiltered}
                 renderItem={({ item }) => renderEventCard(item)}
                 keyExtractor={(item) => item.eventNo}
-                key={isDesktop ? "desktop-4-col" : "mobile-1-col"}
-                numColumns={isDesktop ? 4 : 1} // ✅ CHANGED: 4 columns on desktop
-                columnWrapperStyle={isDesktop ? { gap: 12 } : undefined} // ✅ Reduced gap for 4 cards
-                contentContainerStyle={{ paddingBottom: 20 }}
+                key="3-col-grid" // ✅ Updated key to reflect new layout
+                numColumns={3} // ✅ FIXED: Exactly 3 cards in one row
+                columnWrapperStyle={{
+                  justifyContent: "flex-start", // ✅ FIXED: Prevents single card from stretching/centering
+                  gap: 16,
+                }}
+                contentContainerStyle={{ paddingBottom: 20, gap: 16 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
               />

@@ -541,9 +541,17 @@ const TeamMemberField = ({
 
   return (
     <View className="relative p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50">
-      <Pressable
+       <Pressable
         onPress={() => onRemove(index)}
-        className="absolute p-2 rounded-full top-2 right-2 active:bg-red-100"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          zIndex: 999,
+          padding: 4,
+        }}
+        className="rounded-full bg-white/80 active:bg-red-100"
       >
         <X size={18} color="#EF4444" />
       </Pressable>
