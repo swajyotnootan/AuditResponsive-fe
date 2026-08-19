@@ -69,6 +69,8 @@ interface SearchResult {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// ✅ Calculate responsive width to match Tailwind: w-[90vw] md:w-[50vw] lg:w-[40vw]
+const drawerWidth = SCREEN_WIDTH >= 1024 ? SCREEN_WIDTH * 0.4 : SCREEN_WIDTH >= 768 ? SCREEN_WIDTH * 0.5 : SCREEN_WIDTH * 0.9;
 // ========== HELPER: HIGHLIGHT TEXT ==========
 const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -371,10 +373,15 @@ export default function ChatDrawer({ isOpen, onClose, user, username }: ChatDraw
 const styles = StyleSheet.create({
   modalOverlay: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  drawer: { 
-    width: '85%', maxWidth: 500, height: '100%', backgroundColor: '#f9fafb', 
-    elevation: 5, shadowColor: '#000', shadowOffset: { width: -2, height: 0 }, 
-    shadowOpacity: 0.1, shadowRadius: 8 
+   drawer: { 
+    width: drawerWidth, // ✅ Uses the responsive calculation instead of fixed 85%
+    height: '100%', 
+    backgroundColor: '#f9fafb', 
+    elevation: 5, 
+    shadowColor: '#000', 
+    shadowOffset: { width: -2, height: 0 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 8 
   },
   
   // Header
