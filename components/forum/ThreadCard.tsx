@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete (3-Dot Menu Fixed)
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -17,7 +17,7 @@ import {
   FileText,
   Mail,
   MapPin,
-  MoreVertical,
+  MoreVertical, // ✅ Restored 3-dot menu icon
   Pause,
   Play,
   RefreshCw,
@@ -396,7 +396,7 @@ export default function ThreadCard({
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [showReactionBar, setShowReactionBar] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [showMenu, setShowMenu] = useState(false); // ✅ Restored 3-dot menu state
   const [showReactionDetail, setShowReactionDetail] = useState<string | null>(null);
   const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
 
@@ -419,8 +419,7 @@ export default function ThreadCard({
     prevStatusRef.current = thread.deliveryStatus;
   }, [thread.deliveryStatus]);
 
-  // ✅ WhatsApp Status Icons
-    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
+  // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
   const getStatusIcon = () => {
     if (thread.failed || thread.deliveryStatus === 'FAILED') {
       return (
@@ -471,19 +470,14 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  // components/forum/ThreadCard.tsx
-// Replace ONLY the handleReactToPost function and related reaction logic
-
-// ========== REACTION HANDLER (FIXED) ==========
-const handleReactionSelect = (emoji: string) => {
-  // ✅ Pass the emoji directly to parent handler
-  if (onReact && thread.id) {
-    // Ensure thread.id is properly converted to string
-    const threadId = String(thread.id);
-    onReact(threadId, emoji);
-  }
-  setShowReactionBar(false);
-};
+  // ========== REACTION HANDLER ==========
+  const handleReactionSelect = (emoji: string) => {
+    if (onReact && thread.id) {
+      const threadId = String(thread.id);
+      onReact(threadId, emoji);
+    }
+    setShowReactionBar(false);
+  };
 
   // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
@@ -703,6 +697,7 @@ const handleReactionSelect = (emoji: string) => {
         </Pressable>
       </Modal>
 
+      {/* ✅ FIX: Added paddingTop: 50 to messageRow in styles to prevent top clipping of reaction bar on first message */}
       <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         
         {showReactionBar && (
@@ -738,7 +733,7 @@ const handleReactionSelect = (emoji: string) => {
           
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
-            {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
+            {thread.isEdited && <Text style={styles.editedText}>(edited)</Text>}
             
             {/* ✅ WhatsApp Status Icons */}
             {isOwnMessage && (
@@ -746,76 +741,75 @@ const handleReactionSelect = (emoji: string) => {
             )}
             
             {/* ✅ Reaction Trigger (Visible on ALL messages) */}
-            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
-              <Smile size={14} color="#9ca3af" />
+            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={styles.actionIconBtn} activeOpacity={0.7}>
+              <Smile size={16} color="#6b7280" />
             </TouchableOpacity>
 
             {/* ✅ 3-Dot Menu (Only on own messages) */}
             {isOwnMessage && (
-              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
-                <MoreVertical size={14} color="#9ca3af" />
+              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.actionIconBtn} activeOpacity={0.7}>
+                <MoreVertical size={16} color="#6b7280" />
               </TouchableOpacity>
             )}
           </View>
 
+          {/* ✅ 3-Dot Menu Popup */}
           {showMenu && isOwnMessage && (
             <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
               <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={14} color="#374151" />
+                <Edit size={16} color="#374151" />
                 <Text style={styles.menuText}>Edit Message</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={14} color="#ef4444" />
+                <Trash2 size={16} color="#ef4444" />
                 <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
+          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <View style={{ 
+              marginTop: 6, 
+              flexDirection: 'row', 
+              flexWrap: 'wrap', 
+              gap: 4, 
+              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+            }}>
+              {Object.entries(groupedReactions).map(([emoji, data]) => (
+                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[
+                      styles.reactionBadge, 
+                      data.hasReacted && styles.reactionBadgeActive
+                    ]}
+                  >
+                    <Text style={{ fontSize: 14 }}>{emoji}</Text>
+                    <Text style={[
+                      styles.reactionCount, 
+                      data.hasReacted && styles.reactionCountActive
+                    ]}>
+                      {data.count}
+                    </Text>
+                  </TouchableOpacity>
 
-{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
-{Object.keys(groupedReactions).length > 0 && (
-  <View style={{ 
-    marginTop: 6, 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 4, 
-    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-  }}>
-    {Object.entries(groupedReactions).map(([emoji, data]) => (
-      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-        <TouchableOpacity
-          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-          style={[
-            styles.reactionBadge, 
-            data.hasReacted && styles.reactionBadgeActive
-          ]}
-        >
-          <Text style={{ fontSize: 14 }}>{emoji}</Text>
-          <Text style={[
-            styles.reactionCount, 
-            data.hasReacted && styles.reactionCountActive
-          ]}>
-            {data.count}
-          </Text>
-        </TouchableOpacity>
-
-        {showReactionDetail === emoji && (
-          <View style={styles.reactionDetailPopup}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
-              Reacted by:
-            </Text>
-            {data.users.map((userName: string, idx: number) => (
-              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                • {userName}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-    ))}
-  </View>
-)}
+                  {showReactionDetail === emoji && (
+                    <View style={styles.reactionDetailPopup}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                        Reacted by:
+                      </Text>
+                      {data.users.map((userName: string, idx: number) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                          • {userName}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </View>
     </>
@@ -828,7 +822,10 @@ const handleReactionSelect = (emoji: string) => {
 const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", zIndex: 999 },
   loadingText: { color: "#fff", marginTop: 10, fontSize: 14 },
-  messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, alignItems: "flex-end" },
+  
+  // ✅ FIX: Added paddingTop: 50 to give the absolute positioned reaction bar (top: -45) room to render without being clipped by the header above the first message.
+  messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, paddingTop: 50, paddingBottom: 8, alignItems: "flex-end" },
+  
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
   messageBubble: { maxWidth: "75%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
@@ -840,7 +837,12 @@ const styles = StyleSheet.create({
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
   timeText: { fontSize: 10, color: "#777" },
+  editedText: { fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 },
   statusIcon: { marginLeft: 4, alignItems: 'center', justifyContent: 'center', minWidth: 16 },
+  
+  // ✅ Action Icon Buttons (React & 3-Dot Menu)
+  actionIconBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  
   avatarContainer: { marginHorizontal: 6 },
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
@@ -906,7 +908,9 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
+  
+  // ✅ FIX: Added zIndex: 100 to ensure popups render above headers/other elements
+  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 100, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
   reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
@@ -916,7 +920,9 @@ const styles = StyleSheet.create({
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
+  
+  // ✅ FIX: Added zIndex: 100 to menu popup
+  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
