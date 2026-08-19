@@ -1029,12 +1029,12 @@ const styles = StyleSheet.create({
   reactionBadgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
-  reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
+  reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
   
   // ✅ FIX: Tight positioning (bottom: 100%, marginBottom: 4) eliminates extra space while keeping it visible
-  menuPopup: { position: 'absolute', bottom: '100%', marginBottom: 2, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:1}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
+  menuPopup: { position: 'absolute', bottom: '100%', marginBottom: 2, marginTop: 6, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:1}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, borderBottomWidth: 0, borderBottomColor: '#f3f4f6' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 6, borderBottomWidth: 0, borderBottomColor: '#f3f4f6' },
   menuText: { fontSize: 14, fontWeight: '500', color: '#374151' },
 });
