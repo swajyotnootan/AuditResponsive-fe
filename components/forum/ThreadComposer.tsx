@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadComposer.tsx
-// FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), and Edit Mode
+// FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), Edit Mode, and Event Date Picker
 
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, ResizeMode, Video } from 'expo-av';
@@ -24,6 +24,9 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
+// ✅ Import DateTimePicker for proper event date selection
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 // ✅ Import Emoji Picker Library
 // @ts-ignore
@@ -115,6 +118,11 @@ export default function ThreadComposer({
   
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [eventForm, setEventForm] = useState({ open: false, title: '', datetime: '' });
+  
+  // ✅ NEW: Date Picker States
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1038,7 +1046,7 @@ export default function ThreadComposer({
               <Ionicons name="close" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
-                    <ScrollView 
+          <ScrollView 
             style={{ height: 280 }}
             contentContainerStyle={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={true}
@@ -1204,7 +1212,7 @@ export default function ThreadComposer({
         </View>
       </Modal>
 
-      {/* Event Form Modal */}
+      {/* ✅ Event Form Modal WITH DATE PICKER FIX */}
       <Modal visible={eventForm.open} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.eventModalContent}>
@@ -1215,16 +1223,37 @@ export default function ThreadComposer({
               value={eventForm.title}
               onChangeText={(text) => setEventForm({ ...eventForm, title: text })}
             />
-            <TextInput
-              style={styles.eventInput}
-              placeholder="Date & Time"
-              value={eventForm.datetime}
-              onChangeText={(text) => setEventForm({ ...eventForm, datetime: text })}
-            />
+            
+            {/* ✅ Date Picker Button instead of manual text input */}
+            <TouchableOpacity style={styles.eventInput} onPress={() => setShowDatePicker(true)}>
+              <Text style={eventForm.datetime ? styles.eventInputText : styles.eventInputPlaceholder}>
+                {eventForm.datetime ? new Date(eventForm.datetime).toLocaleString() : "Select Date & Time"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* ✅ Native DateTimePicker Component */}
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="datetime"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => {
+                  if (Platform.OS === 'android') setShowDatePicker(false); // Android closes automatically
+                  if (date) {
+                    setSelectedDate(date);
+                    setEventForm({ ...eventForm, datetime: date.toISOString() });
+                  }
+                }}
+              />
+            )}
+
             <View style={styles.eventModalButtons}>
               <TouchableOpacity
                 onPress={() => {
-                  if (!eventForm.title || !eventForm.datetime) return;
+                  if (!eventForm.title || !eventForm.datetime) {
+                    Alert.alert('Error', 'Please fill in both title and date/time');
+                    return;
+                  }
                   const eventData = {
                     title: eventForm.title,
                     datetime: eventForm.datetime,
@@ -1241,13 +1270,17 @@ export default function ThreadComposer({
                     },
                   ]);
                   setEventForm({ open: false, title: '', datetime: '' });
+                  setSelectedDate(new Date());
                 }}
                 style={styles.eventSubmitBtn}
               >
                 <Text style={styles.eventSubmitBtnText}>Add Event</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setEventForm({ open: false, title: '', datetime: '' })}
+                onPress={() => { 
+                  setEventForm({ open: false, title: '', datetime: '' }); 
+                  setShowDatePicker(false); 
+                }}
                 style={styles.eventCancelBtn}
               >
                 <Text style={styles.eventCancelBtnText}>Cancel</Text>
@@ -1686,6 +1719,16 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     fontSize: 14,
+    justifyContent: 'center',
+  },
+  // ✅ NEW: Date Picker Text Styles
+  eventInputText: {
+    fontSize: 14,
+    color: '#111827',
+  },
+  eventInputPlaceholder: {
+    fontSize: 14,
+    color: '#9ca3af',
   },
   eventModalButtons: {
     flexDirection: 'row',
