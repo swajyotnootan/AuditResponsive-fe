@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete (First Message & Attachment Fixes)
+// FINAL VERSION - All Issues Fixed (Location Coordinates, Event Dates, Menu/Reaction Close)
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -157,6 +157,62 @@ const formatDateAndTime = (dateString?: string) => {
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
     return "";
+  }
+};
+
+// ✅ FIX: Enhanced date parser for events - handles multiple formats
+const parseEventDate = (dateInput: any): string => {
+  if (!dateInput) return "No date set";
+  
+  try {
+    let date: Date;
+    
+    // If it's already a Date object
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    }
+    // If it's a timestamp (number)
+    else if (typeof dateInput === 'number') {
+      date = new Date(dateInput);
+    }
+    // If it's a string
+    else if (typeof dateInput === 'string') {
+      // Try parsing as ISO string first
+      date = new Date(dateInput);
+      
+      // If invalid, try common formats
+      if (isNaN(date.getTime())) {
+        // Try DD/MM/YYYY or MM/DD/YYYY format
+        const parts = dateInput.split(/[\/\-]/);
+        if (parts.length === 3) {
+          // Assume DD/MM/YYYY or MM/DD/YYYY
+          const [p1, p2, p3] = parts;
+          // If first part > 12, it's likely DD/MM/YYYY
+          if (parseInt(p1) > 12) {
+            date = new Date(`${p3}-${p2}-${p1}`);
+          } else {
+            date = new Date(dateInput);
+          }
+        }
+      }
+    } else {
+      return "Invalid date format";
+    }
+    
+    if (isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+    
+    // Format: "Monday, Jan 15, 2024 at 2:30 PM"
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    }) + ' at ' + getTimeOnly(date);
+    
+  } catch (error) {
+    return "Invalid date";
   }
 };
 
@@ -572,7 +628,6 @@ export default function ThreadCard({
   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
     
-    // ✅ FIX: Case-insensitive check to catch "location", "LOCATION", "event", "EVENT", etc.
     const type = (attachment.attachmentType || "").toUpperCase();
 
     if (type === "IMAGE") {
@@ -600,45 +655,76 @@ export default function ThreadCard({
       return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
     }
 
-    // ✅ FIX: Robust Location parsing (tries raw JSON first, then base64)
+    // ✅ FIX: Enhanced Location parsing - extracts coordinates and constructs Google Maps URL
     if (type === "LOCATION") {
       let location: any = {};
       try { 
         if (attachment.fileData) {
           if (typeof attachment.fileData === 'string') {
             try { location = JSON.parse(attachment.fileData); } 
-            catch (e) { location = JSON.parse(atob(attachment.fileData)); }
+            catch (e) { 
+              try { location = JSON.parse(atob(attachment.fileData)); }
+              catch (e2) { location = { url: attachment.fileData }; }
+            }
           } else { location = attachment.fileData; }
         }
       } catch (error) { console.warn("Location parse error", error); }
       
-      const mapUrl = location.url || location.mapUrl || location.uri || "https://maps.google.com";
+      // ✅ Construct Google Maps URL from coordinates
+      let mapUrl = location.url || location.mapUrl || location.uri;
+      
+      // If no URL but we have coordinates, construct one
+      if (!mapUrl) {
+        const lat = location.latitude || location.lat || location.coords?.latitude;
+        const lng = location.longitude || location.lng || location.lon || location.coords?.longitude;
+        
+        if (lat && lng) {
+          mapUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        } else {
+          mapUrl = "https://maps.google.com";
+        }
+      }
+      
+      const locationName = location.name || location.title || location.address || "Shared Location";
+      
       return (
         <Pressable key={index} style={styles.locationContainer} onPress={() => Linking.openURL(mapUrl)}>
           <MapPin size={20} color="#ef4444" />
-          <Text style={styles.locationText} numberOfLines={1}>{location.name || "Shared Location"}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.locationText} numberOfLines={1}>{locationName}</Text>
+            <Text style={styles.locationSubtext} numberOfLines={1}>Tap to open in maps</Text>
+          </View>
         </Pressable>
       );
     }
 
-    // ✅ FIX: Robust Event parsing (tries raw JSON first, then base64)
+    // ✅ FIX: Enhanced Event parsing with better date handling
     if (type === "EVENT") {
       let event: any = {};
       try { 
         if (attachment.fileData) {
           if (typeof attachment.fileData === 'string') {
             try { event = JSON.parse(attachment.fileData); } 
-            catch (e) { event = JSON.parse(atob(attachment.fileData)); }
+            catch (e) { 
+              try { event = JSON.parse(atob(attachment.fileData)); }
+              catch (e2) { event = { title: attachment.fileData }; }
+            }
           } else { event = attachment.fileData; }
         }
       } catch (error) { console.warn("Event parse error", error); }
+      
+      // ✅ Use enhanced date parser
+      const dateDisplay = parseEventDate(event.datetime || event.date || event.time);
       
       return (
         <View key={index} style={styles.eventContainer}>
           <Calendar size={22} color="#9333ea" />
           <View style={{ flex: 1 }}>
             <Text style={styles.eventTitle} numberOfLines={1}>{event.title || "Event"}</Text>
-            <Text style={styles.eventDate}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text>
+            <Text style={styles.eventDate} numberOfLines={2}>{dateDisplay}</Text>
+            {event.description && (
+              <Text style={styles.eventDescription} numberOfLines={2}>{event.description}</Text>
+            )}
           </View>
         </View>
       );
@@ -714,22 +800,28 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
-      {/* ✅ FIX: Dynamically add padding ONLY when reaction bar is open. Prevents first-message clipping without permanent ugly gaps. */}
       <View style={[
         styles.messageRow, 
         isOwnMessage ? styles.rightAlign : styles.leftAlign,
         showReactionBar && styles.messageRowPadded 
       ]}>
         
+        {/* ✅ FIX: Reaction bar with backdrop to close when clicking outside */}
         {showReactionBar && (
-          <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
-            <View style={styles.reactionBar}>
-              {QUICK_REACTIONS.map((emoji) => (
-                <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
-              ))}
-              <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
+          <>
+            <Pressable 
+              style={styles.popupBackdrop} 
+              onPress={() => setShowReactionBar(false)}
+            />
+            <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
+              <View style={styles.reactionBar}>
+                {QUICK_REACTIONS.map((emoji) => (
+                  <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
+                ))}
+                <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </>
         )}
 
         <View style={styles.avatarContainer}>
@@ -771,17 +863,24 @@ export default function ThreadCard({
             )}
           </View>
 
+          {/* ✅ FIX: Menu with backdrop to close when clicking outside */}
           {showMenu && isOwnMessage && (
-            <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
-              <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={16} color="#374151" />
-                <Text style={styles.menuText}>Edit Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={16} color="#ef4444" />
-                <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+            <>
+              <Pressable 
+                style={styles.popupBackdrop} 
+                onPress={() => setShowMenu(false)}
+              />
+              <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
+                <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
+                  <Edit size={16} color="#374151" />
+                  <Text style={styles.menuText}>Edit Message</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
+                  <Trash2 size={16} color="#ef4444" />
+                  <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
 
           {Object.keys(groupedReactions).length > 0 && (
@@ -839,9 +938,7 @@ const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", zIndex: 999 },
   loadingText: { color: "#fff", marginTop: 10, fontSize: 14 },
   
-  // ✅ Base row style
   messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, alignItems: "flex-end" },
-  // ✅ FIX: Only applied when reaction bar is open. Gives absolute elements room to render without clipping the header, but leaves NO permanent gap.
   messageRowPadded: { paddingTop: 50 }, 
   
   leftAlign: { justifyContent: "flex-start" },
@@ -899,12 +996,13 @@ const styles = StyleSheet.create({
   audioError: { fontSize: 11, color: "red", marginTop: 4 },
   documentContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f3f3", padding: 10, borderRadius: 10, marginTop: 8, gap: 10 },
   
-  // ✅ Enhanced Location & Event Styles for better visibility
   locationContainer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fef2f2", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#fecaca" },
-  locationText: { fontSize: 14, fontWeight: "500", color: "#991b1b", flex: 1 },
-  eventContainer: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#faf5ff", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#e9d5ff" },
+  locationText: { fontSize: 14, fontWeight: "500", color: "#991b1b" },
+  locationSubtext: { fontSize: 11, color: "#dc2626", marginTop: 2 },
+  eventContainer: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: "#faf5ff", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#e9d5ff" },
   eventTitle: { fontWeight: "600", fontSize: 14, color: "#6b21a8" },
   eventDate: { fontSize: 12, color: "#7e22ce", marginTop: 2 },
+  eventDescription: { fontSize: 11, color: "#9333ea", marginTop: 4, fontStyle: 'italic' },
 
   imageModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" },
   fullImage: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.85 },
@@ -931,7 +1029,9 @@ const styles = StyleSheet.create({
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
   
-  // ✅ FIX: Adjusted top to 5 to work perfectly with the dynamic messageRowPadded
+  // ✅ FIX: Added backdrop style for closing popups
+  popupBackdrop: { position: 'absolute', top: -1000, left: -1000, right: -1000, bottom: -1000, zIndex: 50 },
+  
   reactionBarContainer: { position: 'absolute', top: 5, zIndex: 100, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
