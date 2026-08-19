@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete
+// FINAL VERSION - WhatsApp Status, Timezone Fix, Profile Modal, Reactions, Edit & Delete (First Message & Attachment Fixes)
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -9,8 +9,8 @@ import {
   Building2,
   Calendar,
   Check,
-  CheckCheck, // ✅ WhatsApp double check
-  Clock, // ✅ WhatsApp sending status
+  CheckCheck,
+  Clock,
   Download,
   Edit,
   Eye,
@@ -30,7 +30,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Animated, // ✅ For blink animation
+  Animated,
   Dimensions,
   Image,
   Linking,
@@ -55,8 +55,8 @@ interface Attachment {
   fileName?: string;
   fileSize?: number;
   fileType?: string;
-  fileData?: string;
-  attachmentType: AttachmentType;
+  fileData?: string | any;
+  attachmentType: AttachmentType | string;
   uri?: string;
 }
 
@@ -72,7 +72,7 @@ interface Thread {
   attachments?: Attachment[];
   isEdited?: boolean;
   deliveryStatus?: 'SENDING' | 'SENT' | 'DELIVERED' | 'SEEN' | 'FAILED';
-  seenBy?: string[]; // ✅ ADD THIS for real read receipts
+  seenBy?: string[];
 }
 
 interface ThreadCardProps {
@@ -111,14 +111,11 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
   return null;
 };
 
-// ✅ FIXED TIMEZONE BUG: Removed the 'Z' append logic that was adding +5:30 hours
-// ✅ Detect if we're talking to the production (UTC) backend
 const isProductionBackend = () => {
   const url = API_BASE_URL || '';
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
-// ✅ Parse backend date correctly for BOTH local (IST) and prod (UTC)
 const parseBackendDate = (dateString: string): Date => {
   let isoString = dateString;
   if (!isoString.includes('T')) {
@@ -130,7 +127,6 @@ const parseBackendDate = (dateString: string): Date => {
   return new Date(isoString);
 };
 
-// ✅ Get just the time (e.g., "2:30 PM")
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
@@ -139,10 +135,8 @@ const getTimeOnly = (date: Date) => {
   });
 };
 
-// ✅ FIXED: Always show the TIME for every message
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
-  
   try {
     const date = parseBackendDate(dateString);
     if (isNaN(date.getTime())) return "";
@@ -152,28 +146,15 @@ const formatDateAndTime = (dateString?: string) => {
     const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
-    // Today: Show time only (e.g., "10:06 AM")
-    if (diffDays === 0) {
-      return getTimeOnly(date);
-    }
+    if (diffDays === 0) return getTimeOnly(date);
+    if (diffDays === 1) return `Yesterday, ${getTimeOnly(date)}`;
+    if (diffDays < 7) return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
     
-    // Yesterday: Show "Yesterday, 2:30 PM"
-    if (diffDays === 1) {
-      return `Yesterday, ${getTimeOnly(date)}`;
-    }
-    
-    // This week: Show "Monday, 2:30 PM"
-    if (diffDays < 7) {
-      return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
-    }
-    
-    // Older: Show "Jan 15, 2:30 PM"
     return `${date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
     })}, ${getTimeOnly(date)}`;
-    
   } catch (error) {
     return "";
   }
@@ -205,7 +186,7 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
     if (videoRef.current) {
       const video = videoRef.current;
       const handleLoadedData = () => { setIsLoading(false); setError(null); };
-      const handleError = (e: any) => { setError("Failed to load video"); setIsLoading(false); };
+      const handleError = () => { setError("Failed to load video"); setIsLoading(false); };
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
       video.addEventListener("loadeddata", handleLoadedData);
@@ -403,7 +384,6 @@ export default function ThreadCard({
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
 
-  // ✅ WhatsApp Blink Animation
   const blinkAnim = useRef(new Animated.Value(1)).current;
   const prevStatusRef = useRef(thread.deliveryStatus);
 
@@ -419,8 +399,6 @@ export default function ThreadCard({
     prevStatusRef.current = thread.deliveryStatus;
   }, [thread.deliveryStatus]);
 
-  // ✅ WhatsApp Status Icons
-    // ✅ WhatsApp Status Icons (REAL READ RECEIPTS)
   const getStatusIcon = () => {
     if (thread.failed || thread.deliveryStatus === 'FAILED') {
       return (
@@ -430,12 +408,10 @@ export default function ThreadCard({
       );
     }
 
-    // ✅ REAL WHATSAPP LOGIC: Check if anyone ELSE has seen it
     const seenByOthers = thread.seenBy && thread.seenBy.length > 0 && 
       thread.seenBy.some((email: string) => email !== currentEmail);
 
     if (seenByOthers) {
-      // 🔵 BLUE TICK (Seen by recipient)
       return (
         <Animated.View style={{ opacity: blinkAnim }}>
           <CheckCheck size={13} color="#3b82f6" />
@@ -443,7 +419,6 @@ export default function ThreadCard({
       );
     }
 
-    // ⚪ GRAY TICKS (Not seen yet)
     switch (thread.deliveryStatus) {
       case 'SENDING': return <Clock size={13} color="#9ca3af" />;
       case 'SENT': return <Check size={13} color="#9ca3af" />;
@@ -471,21 +446,14 @@ export default function ThreadCard({
     return groups;
   }, [reactions, currentUsername, currentUser]);
 
-  // components/forum/ThreadCard.tsx
-// Replace ONLY the handleReactToPost function and related reaction logic
+  const handleReactionSelect = (emoji: string) => {
+    if (onReact && thread.id) {
+      const threadId = String(thread.id);
+      onReact(threadId, emoji);
+    }
+    setShowReactionBar(false);
+  };
 
-// ========== REACTION HANDLER (FIXED) ==========
-const handleReactionSelect = (emoji: string) => {
-  // ✅ Pass the emoji directly to parent handler
-  if (onReact && thread.id) {
-    // Ensure thread.id is properly converted to string
-    const threadId = String(thread.id);
-    onReact(threadId, emoji);
-  }
-  setShowReactionBar(false);
-};
-
-  // ✅ Cross-platform delete confirmation
   const confirmDelete = () => {
     setShowMenu(false);
     const executeDelete = () => {
@@ -513,7 +481,7 @@ const handleReactionSelect = (emoji: string) => {
     return thread.attachments.filter(att => att != null).map((attachment) => {
       let uri = "";
       let isValidData = false;
-      if (attachment.fileData && attachment.fileData.length > 0) {
+      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 0) {
         if (attachment.fileData.length > 100) {
           isValidData = true;
           const mimeType = attachment.fileType || (attachment.attachmentType === "IMAGE" ? "image/jpeg" : attachment.attachmentType === "VIDEO" ? "video/mp4" : attachment.attachmentType === "AUDIO" ? "audio/mpeg" : "application/octet-stream");
@@ -531,7 +499,7 @@ const handleReactionSelect = (emoji: string) => {
   }, [thread.attachments, imageDataCache]);
 
   const loadImageData = async (attachment: Attachment & { hasValidFileData?: boolean }) => {
-    if (!attachment.id || attachment.attachmentType !== "IMAGE" || loadingImages[attachment.id] || imageDataCache[attachment.id] || imageErrors[attachment.id]) return;
+    if (!attachment.id || (attachment.attachmentType || "").toUpperCase() !== "IMAGE" || loadingImages[attachment.id] || imageDataCache[attachment.id] || imageErrors[attachment.id]) return;
     if (attachment.hasValidFileData) return;
     const attempts = imageFetchAttempts[attachment.id] || 0;
     if (attempts >= 1) { setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); return; }
@@ -603,44 +571,87 @@ const handleReactionSelect = (emoji: string) => {
 
   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
-    if (attachment.attachmentType === "IMAGE") {
+    
+    // ✅ FIX: Case-insensitive check to catch "location", "LOCATION", "event", "EVENT", etc.
+    const type = (attachment.attachmentType || "").toUpperCase();
+
+    if (type === "IMAGE") {
       let imageUri = attachment.uri || "";
       if (attachment.hasValidFileData && attachment.fileData) imageUri = base64ToUri(attachment.fileData, attachment.fileType || "image/jpeg");
       else if (attachment.id && imageDataCache[attachment.id]) imageUri = imageDataCache[attachment.id];
       else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) loadImageData(attachment);
+      
       if (loadingImages[attachment.id] && !imageUri) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#4a90d9" /><Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text></View></View>);
       if (!imageUri || imageErrors[attachment.id]) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>{imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}</View></View>);
       return (<View key={index} style={styles.attachmentContainer}><Pressable onPress={() => openImagePreview(imageUri)}><Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} /></Pressable><View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text><Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable></View></View>);
     }
-    if (attachment.attachmentType === "VIDEO") {
+    
+    if (type === "VIDEO") {
       let videoUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100) videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
+      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
       else if (Platform.OS === "web" && attachment.id) videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return (<View key={index} style={styles.attachmentContainer}><Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`); }}><View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View><Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>{attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}</Pressable></View>);
     }
-    if (attachment.attachmentType === "AUDIO") {
+    
+    if (type === "AUDIO") {
       let audioUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100) audioUri = base64ToUri(attachment.fileData, attachment.fileType || "audio/mpeg");
+      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) audioUri = base64ToUri(attachment.fileData, attachment.fileType || "audio/mpeg");
       else if (Platform.OS === "web" && attachment.id) audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
     }
-    if (attachment.attachmentType === "LOCATION") {
+
+    // ✅ FIX: Robust Location parsing (tries raw JSON first, then base64)
+    if (type === "LOCATION") {
       let location: any = {};
-      try { if (attachment.fileData) location = JSON.parse(atob(attachment.fileData)); } catch (error) {}
-      return (<Pressable key={index} style={styles.locationContainer} onPress={() => { const map = location.url || location.mapUrl; if (map) Linking.openURL(map); }}><MapPin size={20} color="red" /><Text style={{ fontSize: 14 }}>Open shared location</Text></Pressable>);
+      try { 
+        if (attachment.fileData) {
+          if (typeof attachment.fileData === 'string') {
+            try { location = JSON.parse(attachment.fileData); } 
+            catch (e) { location = JSON.parse(atob(attachment.fileData)); }
+          } else { location = attachment.fileData; }
+        }
+      } catch (error) { console.warn("Location parse error", error); }
+      
+      const mapUrl = location.url || location.mapUrl || location.uri || "https://maps.google.com";
+      return (
+        <Pressable key={index} style={styles.locationContainer} onPress={() => Linking.openURL(mapUrl)}>
+          <MapPin size={20} color="#ef4444" />
+          <Text style={styles.locationText} numberOfLines={1}>{location.name || "Shared Location"}</Text>
+        </Pressable>
+      );
     }
-    if (attachment.attachmentType === "EVENT") {
+
+    // ✅ FIX: Robust Event parsing (tries raw JSON first, then base64)
+    if (type === "EVENT") {
       let event: any = {};
-      try { if (attachment.fileData) event = JSON.parse(atob(attachment.fileData)); } catch (error) {}
-      return (<View key={index} style={styles.eventContainer}><Calendar size={22} color="purple" /><View><Text style={styles.eventTitle}>{event.title || "Event"}</Text><Text style={{ fontSize: 12, color: "#555" }}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text></View></View>);
+      try { 
+        if (attachment.fileData) {
+          if (typeof attachment.fileData === 'string') {
+            try { event = JSON.parse(attachment.fileData); } 
+            catch (e) { event = JSON.parse(atob(attachment.fileData)); }
+          } else { event = attachment.fileData; }
+        }
+      } catch (error) { console.warn("Event parse error", error); }
+      
+      return (
+        <View key={index} style={styles.eventContainer}>
+          <Calendar size={22} color="#9333ea" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eventTitle} numberOfLines={1}>{event.title || "Event"}</Text>
+            <Text style={styles.eventDate}>{event.datetime ? formatDateAndTime(event.datetime) : "No date"}</Text>
+          </View>
+        </View>
+      );
     }
+
     const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     if (isPDF) {
-      if (attachment.fileData && attachment.fileData.length > 100) fileUri = base64ToUri(attachment.fileData, attachment.fileType || "application/pdf");
+      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) fileUri = base64ToUri(attachment.fileData, attachment.fileType || "application/pdf");
       else if (Platform.OS === "web" && attachment.id) fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#dc2626" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => { if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf"); else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf"); }} style={{ padding: 8 }}><Eye size={20} color="#2563eb" /></TouchableOpacity><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
     }
+    
     return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#555" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
   };
 
@@ -703,7 +714,12 @@ const handleReactionSelect = (emoji: string) => {
         </Pressable>
       </Modal>
 
-      <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
+      {/* ✅ FIX: Dynamically add padding ONLY when reaction bar is open. Prevents first-message clipping without permanent ugly gaps. */}
+      <View style={[
+        styles.messageRow, 
+        isOwnMessage ? styles.rightAlign : styles.leftAlign,
+        showReactionBar && styles.messageRowPadded 
+      ]}>
         
         {showReactionBar && (
           <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
@@ -738,22 +754,19 @@ const handleReactionSelect = (emoji: string) => {
           
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
-            {thread.isEdited && <Text style={{ fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>(edited)</Text>}
+            {thread.isEdited && <Text style={styles.editedText}>(edited)</Text>}
             
-            {/* ✅ WhatsApp Status Icons */}
             {isOwnMessage && (
               <View style={styles.statusIcon}>{getStatusIcon()}</View>
             )}
             
-            {/* ✅ Reaction Trigger (Visible on ALL messages) */}
-            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={{ marginLeft: 6, padding: 2 }}>
-              <Smile size={14} color="#9ca3af" />
+            <TouchableOpacity onPress={() => setShowReactionBar(!showReactionBar)} style={styles.actionIconBtn} activeOpacity={0.7}>
+              <Smile size={16} color="#6b7280" />
             </TouchableOpacity>
 
-            {/* ✅ 3-Dot Menu (Only on own messages) */}
             {isOwnMessage && (
-              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={{ marginLeft: 6, padding: 2 }}>
-                <MoreVertical size={14} color="#9ca3af" />
+              <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.actionIconBtn} activeOpacity={0.7}>
+                <MoreVertical size={16} color="#6b7280" />
               </TouchableOpacity>
             )}
           </View>
@@ -761,61 +774,58 @@ const handleReactionSelect = (emoji: string) => {
           {showMenu && isOwnMessage && (
             <View style={[styles.menuPopup, isOwnMessage ? styles.menuPopupRight : styles.menuPopupLeft]}>
               <TouchableOpacity style={styles.menuItem} onPress={() => { onEdit?.(thread); setShowMenu(false); }}>
-                <Edit size={14} color="#374151" />
+                <Edit size={16} color="#374151" />
                 <Text style={styles.menuText}>Edit Message</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={confirmDelete}>
-                <Trash2 size={14} color="#ef4444" />
+                <Trash2 size={16} color="#ef4444" />
                 <Text style={[styles.menuText, { color: '#ef4444' }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {/* ✅ DISPLAY REACTIONS BELOW BUBBLE - WITH VISIBLE NAMES */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <View style={{ 
+              marginTop: 6, 
+              flexDirection: 'row', 
+              flexWrap: 'wrap', 
+              gap: 4, 
+              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
+            }}>
+              {Object.entries(groupedReactions).map(([emoji, data]) => (
+                <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
+                  <TouchableOpacity
+                    onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
+                    style={[
+                      styles.reactionBadge, 
+                      data.hasReacted && styles.reactionBadgeActive
+                    ]}
+                  >
+                    <Text style={{ fontSize: 14 }}>{emoji}</Text>
+                    <Text style={[
+                      styles.reactionCount, 
+                      data.hasReacted && styles.reactionCountActive
+                    ]}>
+                      {data.count}
+                    </Text>
+                  </TouchableOpacity>
 
-{/* ✅ DISPLAY REACTIONS BELOW BUBBLE */}
-{Object.keys(groupedReactions).length > 0 && (
-  <View style={{ 
-    marginTop: 6, 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 4, 
-    justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-  }}>
-    {Object.entries(groupedReactions).map(([emoji, data]) => (
-      <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
-        <TouchableOpacity
-          onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-          style={[
-            styles.reactionBadge, 
-            data.hasReacted && styles.reactionBadgeActive
-          ]}
-        >
-          <Text style={{ fontSize: 14 }}>{emoji}</Text>
-          <Text style={[
-            styles.reactionCount, 
-            data.hasReacted && styles.reactionCountActive
-          ]}>
-            {data.count}
-          </Text>
-        </TouchableOpacity>
-
-        {showReactionDetail === emoji && (
-          <View style={styles.reactionDetailPopup}>
-            <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
-              Reacted by:
-            </Text>
-            {data.users.map((userName: string, idx: number) => (
-              <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
-                • {userName}
-              </Text>
-            ))}
-          </View>
-        )}
-      </View>
-    ))}
-  </View>
-)}
+                  {showReactionDetail === emoji && (
+                    <View style={styles.reactionDetailPopup}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151', marginBottom: 4 }}>
+                        Reacted by:
+                      </Text>
+                      {data.users.map((userName: string, idx: number) => (
+                        <Text key={idx} style={{ fontSize: 11, color: '#6b7280', marginBottom: 2 }}>
+                          • {userName}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </View>
     </>
@@ -828,7 +838,12 @@ const handleReactionSelect = (emoji: string) => {
 const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", zIndex: 999 },
   loadingText: { color: "#fff", marginTop: 10, fontSize: 14 },
+  
+  // ✅ Base row style
   messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, alignItems: "flex-end" },
+  // ✅ FIX: Only applied when reaction bar is open. Gives absolute elements room to render without clipping the header, but leaves NO permanent gap.
+  messageRowPadded: { paddingTop: 50 }, 
+  
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
   messageBubble: { maxWidth: "75%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
@@ -840,7 +855,11 @@ const styles = StyleSheet.create({
   timeLeft: { justifyContent: "flex-start" },
   timeRight: { justifyContent: "flex-end" },
   timeText: { fontSize: 10, color: "#777" },
+  editedText: { fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 },
   statusIcon: { marginLeft: 4, alignItems: 'center', justifyContent: 'center', minWidth: 16 },
+  
+  actionIconBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  
   avatarContainer: { marginHorizontal: 6 },
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
@@ -879,9 +898,14 @@ const styles = StyleSheet.create({
   audioFileSize: { fontSize: 10, color: "#999" },
   audioError: { fontSize: 11, color: "red", marginTop: 4 },
   documentContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f3f3", padding: 10, borderRadius: 10, marginTop: 8, gap: 10 },
-  locationContainer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#e7f0ff", padding: 10, borderRadius: 10, marginTop: 8 },
-  eventContainer: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f2e5ff", padding: 12, borderRadius: 10, marginTop: 8 },
-  eventTitle: { fontWeight: "700", fontSize: 14 },
+  
+  // ✅ Enhanced Location & Event Styles for better visibility
+  locationContainer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fef2f2", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#fecaca" },
+  locationText: { fontSize: 14, fontWeight: "500", color: "#991b1b", flex: 1 },
+  eventContainer: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#faf5ff", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#e9d5ff" },
+  eventTitle: { fontWeight: "600", fontSize: 14, color: "#6b21a8" },
+  eventDate: { fontSize: 12, color: "#7e22ce", marginTop: 2 },
+
   imageModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" },
   fullImage: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.85 },
   closeButton: { position: "absolute", top: 50, right: 20, zIndex: 10 },
@@ -906,7 +930,9 @@ const styles = StyleSheet.create({
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  reactionBarContainer: { position: 'absolute', top: -45, zIndex: 10, paddingHorizontal: 12 },
+  
+  // ✅ FIX: Adjusted top to 5 to work perfectly with the dynamic messageRowPadded
+  reactionBarContainer: { position: 'absolute', top: 5, zIndex: 100, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
   reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
@@ -916,7 +942,8 @@ const styles = StyleSheet.create({
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  menuPopup: { position: 'absolute', bottom: 35, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 20, minWidth: 150 },
+  
+  menuPopup: { position: 'absolute', bottom: 40, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
