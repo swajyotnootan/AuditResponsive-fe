@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadComposer.tsx
-// FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), Edit Mode, and Event Date Picker
+// FINAL FIXED: Android video recording, document handling, Emoji Picker, Edit Mode, and CROSS-PLATFORM Date Picker
 
 import { Ionicons } from '@expo/vector-icons';
 import { Audio, ResizeMode, Video } from 'expo-av';
@@ -25,7 +25,7 @@ import {
   View
 } from 'react-native';
 
-// ✅ Import DateTimePicker for proper event date selection
+// ✅ Import DateTimePicker for native mobile date selection
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 // ✅ Import Emoji Picker Library
@@ -118,16 +118,15 @@ export default function ThreadComposer({
   
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [eventForm, setEventForm] = useState({ open: false, title: '', datetime: '' });
-  
-  // ✅ NEW: Date Picker States
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Document preview state
   const [documentPreview, setDocumentPreview] = useState<{uri: string, type: string, text?: string} | null>(null);
+
+  // ✅ Event states with Date Picker support
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // ---- Refs ----
   const cameraRef = useRef<any>(null);
@@ -1212,11 +1211,12 @@ export default function ThreadComposer({
         </View>
       </Modal>
 
-      {/* ✅ Event Form Modal WITH DATE PICKER FIX */}
+      {/* ✅ FIX: Event Form Modal with bulletproof Cross-Platform Date Picker */}
       <Modal visible={eventForm.open} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.eventModalContent}>
             <Text style={styles.eventModalTitle}>Create Event</Text>
+            
             <TextInput
               style={styles.eventInput}
               placeholder="Event title"
@@ -1224,27 +1224,78 @@ export default function ThreadComposer({
               onChangeText={(text) => setEventForm({ ...eventForm, title: text })}
             />
             
-            {/* ✅ Date Picker Button instead of manual text input */}
-            <TouchableOpacity style={styles.eventInput} onPress={() => setShowDatePicker(true)}>
-              <Text style={eventForm.datetime ? styles.eventInputText : styles.eventInputPlaceholder}>
-                {eventForm.datetime ? new Date(eventForm.datetime).toLocaleString() : "Select Date & Time"}
-              </Text>
-            </TouchableOpacity>
-
-            {/* ✅ Native DateTimePicker Component */}
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="datetime"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(event, date) => {
-                  if (Platform.OS === 'android') setShowDatePicker(false); // Android closes automatically
-                  if (date) {
+            {/* ✅ Web: Use native HTML5 datetime-local input */}
+            {Platform.OS === 'web' ? (
+              <input
+                type="datetime-local"
+                value={eventForm.datetime ? new Date(eventForm.datetime).toISOString().slice(0, 16) : ''}
+                onChange={(e: any) => {
+                  const date = new Date(e.target.value);
+                  if (!isNaN(date.getTime())) {
                     setSelectedDate(date);
                     setEventForm({ ...eventForm, datetime: date.toISOString() });
                   }
                 }}
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 12,
+                  fontSize: 14,
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  color: eventForm.datetime ? '#111827' : '#9ca3af',
+                  fontFamily: 'inherit',
+                }}
               />
+            ) : (
+              /* ✅ Native Mobile: Use @react-native-community/datetimepicker */
+              <>
+                <TouchableOpacity 
+                  style={styles.eventInput} 
+                  onPress={() => {
+                    if (eventForm.datetime) {
+                      setSelectedDate(new Date(eventForm.datetime));
+                    } else {
+                      setSelectedDate(new Date());
+                    }
+                    setShowDatePicker(true);
+                  }}
+                >
+                  <Text style={eventForm.datetime ? styles.eventInputText : styles.eventInputPlaceholder}>
+                    {eventForm.datetime ? new Date(eventForm.datetime).toLocaleString() : "Select Date & Time"}
+                  </Text>
+                </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="datetime"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(event, date) => {
+                      if (date) {
+                        setSelectedDate(date);
+                        setEventForm({ ...eventForm, datetime: date.toISOString() });
+                      }
+                      // Auto-close on Android after selection
+                      if (Platform.OS === 'android' && event.type === 'set') {
+                        setShowDatePicker(false);
+                      }
+                    }}
+                  />
+                )}
+                
+                {/* ✅ iOS: Add a "Done" button to close the inline spinner */}
+                {showDatePicker && Platform.OS === 'ios' && (
+                  <TouchableOpacity 
+                    style={{ alignSelf: 'flex-end', marginBottom: 12, paddingHorizontal: 12, paddingVertical: 8 }}
+                    onPress={() => setShowDatePicker(false)}
+                  >
+                    <Text style={{ color: '#3b82f6', fontWeight: '600', fontSize: 16 }}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
 
             <View style={styles.eventModalButtons}>
@@ -1271,6 +1322,7 @@ export default function ThreadComposer({
                   ]);
                   setEventForm({ open: false, title: '', datetime: '' });
                   setSelectedDate(new Date());
+                  setShowDatePicker(false);
                 }}
                 style={styles.eventSubmitBtn}
               >
@@ -1314,7 +1366,7 @@ export default function ThreadComposer({
               <Ionicons name="location" size={20} color="#6b7280" />
               <Text style={styles.menuItemText}>Location</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEventForm({ open: true, title: '', datetime: '' })} style={styles.menuItem}>
+            <TouchableOpacity onPress={() => { setEventForm({ open: true, title: '', datetime: '' }); setShowAttachmentMenu(false); }} style={styles.menuItem}>
               <Ionicons name="calendar" size={20} color="#6b7280" />
               <Text style={styles.menuItemText}>Event</Text>
             </TouchableOpacity>
@@ -1514,7 +1566,6 @@ const styles = StyleSheet.create({
   editBannerClose: {
     padding: 4,
   },
-  // ✅ FIXED: Emoji Picker Styles
   emojiPickerContainer: {
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
@@ -1721,15 +1772,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     justifyContent: 'center',
   },
-  // ✅ NEW: Date Picker Text Styles
-  eventInputText: {
-    fontSize: 14,
-    color: '#111827',
-  },
-  eventInputPlaceholder: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
+  eventInputText: { fontSize: 14, color: '#111827' },
+  eventInputPlaceholder: { fontSize: 14, color: '#9ca3af' },
   eventModalButtons: {
     flexDirection: 'row',
     gap: 8,
