@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - First Message Menu Fixed, Event Date Picker Support, Location Zoom
+// FINAL VERSION - First Message Menu Fixed, Event Date Picker Support, Location Zoom, No Extra Spacing
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import * as FileSystem from 'expo-file-system';
@@ -160,7 +160,7 @@ const formatDateAndTime = (dateString?: string) => {
   }
 };
 
-// ✅ FIX: Enhanced date parser for events - handles ISO strings from DateTimePicker perfectly
+// ✅ FIX: Ultra-robust date parser for events with debug logging
 const parseEventDate = (dateInput: any): string => {
   if (!dateInput) return "No date set";
   try {
@@ -170,15 +170,16 @@ const parseEventDate = (dateInput: any): string => {
     } else if (typeof dateInput === 'number') {
       date = new Date(dateInput);
     } else if (typeof dateInput === 'string') {
-      date = new Date(dateInput);
+      const cleanStr = dateInput.replace(/^"|"$/g, '').trim();
+      date = new Date(cleanStr);
       if (isNaN(date.getTime())) {
-        const parts = dateInput.split(/[\/\-]/);
+        const parts = cleanStr.split(/[\/\-]/);
         if (parts.length === 3) {
           const [p1, p2, p3] = parts;
           if (parseInt(p1) > 12) {
             date = new Date(`${p3}-${p2}-${p1}`);
           } else {
-            date = new Date(dateInput);
+            date = new Date(cleanStr);
           }
         }
       }
@@ -186,7 +187,10 @@ const parseEventDate = (dateInput: any): string => {
       return "Invalid date format";
     }
     
-    if (isNaN(date.getTime())) return "Invalid date";
+    if (isNaN(date.getTime())) {
+      console.warn("Invalid date parsed from:", dateInput);
+      return "Invalid date";
+    }
     
     return date.toLocaleDateString('en-US', { 
       weekday: 'long',
@@ -199,6 +203,7 @@ const parseEventDate = (dateInput: any): string => {
       hour12: true,
     });
   } catch (error) {
+    console.warn("Date parse error:", error, dateInput);
     return "Invalid date";
   }
 };
@@ -642,7 +647,6 @@ export default function ThreadCard({
       return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
     }
 
-    // ✅ FIX: Location with proper Google Maps Zoom (&z=16)
     if (type === "LOCATION") {
       let location: any = {};
       try { 
@@ -658,13 +662,10 @@ export default function ThreadCard({
       } catch (error) { console.warn("Location parse error", error); }
       
       let mapUrl = location.url || location.mapUrl || location.uri;
-      
       if (!mapUrl) {
         const lat = location.latitude || location.lat || location.coords?.latitude;
         const lng = location.longitude || location.lng || location.lon || location.coords?.longitude;
-        
         if (lat && lng) {
-          // ✅ Added &z=16 for proper street-level zoom
           mapUrl = `https://www.google.com/maps?q=${lat},${lng}&z=16`;
         } else {
           mapUrl = "https://maps.google.com";
@@ -672,7 +673,6 @@ export default function ThreadCard({
       }
       
       const locationName = location.name || location.title || location.address || "Shared Location";
-      
       return (
         <Pressable key={index} style={styles.locationContainer} onPress={() => Linking.openURL(mapUrl)}>
           <MapPin size={20} color="#ef4444" />
@@ -684,22 +684,32 @@ export default function ThreadCard({
       );
     }
 
-    // ✅ FIX: Event parsing with robust date handling
+    // ✅ FIX: Ultra-robust Event parsing checking multiple date keys
     if (type === "EVENT") {
       let event: any = {};
       try { 
         if (attachment.fileData) {
           if (typeof attachment.fileData === 'string') {
-            try { event = JSON.parse(attachment.fileData); } 
-            catch (e) { 
-              try { event = JSON.parse(atob(attachment.fileData)); }
-              catch (e2) { event = { title: attachment.fileData }; }
+            try { 
+              event = JSON.parse(attachment.fileData); 
+            } catch (e) { 
+              try { 
+                event = JSON.parse(atob(attachment.fileData)); 
+              } catch (e2) { 
+                event = { title: attachment.fileData }; 
+              }
             }
-          } else { event = attachment.fileData; }
+          } else { 
+            event = attachment.fileData; 
+          }
         }
-      } catch (error) { console.warn("Event parse error", error); }
+      } catch (error) { 
+        console.warn("Event parse error", error); 
+      }
       
-      const dateDisplay = parseEventDate(event.datetime || event.date || event.time);
+      // Check multiple possible date keys to ensure we find it
+      const dateVal = event.datetime || event.date || event.time || event.timestamp;
+      const dateDisplay = parseEventDate(dateVal);
       
       return (
         <View key={index} style={styles.eventContainer}>
@@ -785,11 +795,10 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
-      {/* ✅ FIX: Dynamically add padding ONLY when reaction bar/menu is open to prevent first-message clipping */}
+      {/* ✅ FIX: Removed messageRowPadded to eliminate "too much space" issue */}
       <View style={[
         styles.messageRow, 
-        isOwnMessage ? styles.rightAlign : styles.leftAlign,
-        (showReactionBar || showMenu) && styles.messageRowPadded 
+        isOwnMessage ? styles.rightAlign : styles.leftAlign
       ]}>
         
         {showReactionBar && (
@@ -845,7 +854,7 @@ export default function ThreadCard({
             )}
           </View>
 
-          {/* ✅ FIX: Menu positioned ABOVE the bubble (bottom: 100%) so it never clips on the first message */}
+          {/* ✅ FIX: Menu positioned tightly above the bubble (bottom: 100%, marginBottom: 4) with no extra row padding */}
           {showMenu && isOwnMessage && (
             <>
               <Pressable style={styles.popupBackdrop} onPress={() => setShowMenu(false)} />
@@ -917,8 +926,8 @@ const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", zIndex: 999 },
   loadingText: { color: "#fff", marginTop: 10, fontSize: 14 },
   
+  // ✅ FIX: Removed messageRowPadded to eliminate the "too much space" gap
   messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, alignItems: "flex-end" },
-  messageRowPadded: { paddingTop: 50 }, // ✅ Gives room for popups on the first message
   
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
@@ -1010,7 +1019,8 @@ const styles = StyleSheet.create({
   
   popupBackdrop: { position: 'absolute', top: -1000, left: -1000, right: -1000, bottom: -1000, zIndex: 50 },
   
-  reactionBarContainer: { position: 'absolute', top: 5, zIndex: 100, paddingHorizontal: 12 },
+  // ✅ FIX: Adjusted to -35 for cleaner floating without overlapping or pushing layout
+  reactionBarContainer: { position: 'absolute', top: -35, zIndex: 100, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
   reactionBar: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 6, shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.15, shadowRadius: 4, elevation: 5, borderWidth: 1, borderColor: '#e5e7eb' },
@@ -1021,8 +1031,8 @@ const styles = StyleSheet.create({
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
   
-  // ✅ FIX: bottom: '100%' ensures menu pops ABOVE the message bubble, preventing first-message clipping
-  menuPopup: { position: 'absolute', bottom: '100%', marginBottom: 8, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
+  // ✅ FIX: Tight positioning (bottom: 100%, marginBottom: 4) eliminates extra space while keeping it visible
+  menuPopup: { position: 'absolute', bottom: '100%', marginBottom: 4, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:2}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
