@@ -1,22 +1,21 @@
 // app/components/dashboards/LeadAuditor/StakeholderManagement.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Modal,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import FiveSView from "../auditor/view/FiveSView";
 import IATFInternalView from "../auditor/view/IATFInternalView";
 import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
-import NCRViewManager from "../auditor/view/NCRViewManager"; // Adjust path if needed
+import NCRViewManager from "../auditor/view/NCRViewManager";
 
 interface User {
   id: string | number;
@@ -67,9 +66,6 @@ interface StakeholderManagementProps {
   leadAuditorDepartment?: string | null;
 }
 
-const { width, height } = Dimensions.get("window");
-const isMobile = width < 768;
-
 const NAVBAR_COLORS = {
   primary: "#00529B",
   secondary: "#3b82f6",
@@ -80,10 +76,47 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
-const Card: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <View style={styles.card}>{children}</View>
-);
+// ============================================
+// RESPONSIVE BADGE
+// ============================================
+const Badge: React.FC<{
+  text: string;
+  bgColor: string;
+  textColor: string;
+  icon?: string;
+  size?: "sm" | "md";
+}> = ({ text, bgColor, textColor, icon, size = "sm" }) => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
 
+  const fontSize = size === "sm" ? (isMobile ? 8 : 9) : (isMobile ? 10 : 11);
+  const paddingH = size === "sm" ? (isMobile ? 4 : 6) : (isMobile ? 6 : 8);
+  const paddingV = size === "sm" ? (isMobile ? 2 : 3) : (isMobile ? 3 : 4);
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: bgColor,
+        paddingHorizontal: paddingH,
+        paddingVertical: paddingV,
+        borderRadius: 4,
+        gap: 2,
+        alignSelf: "flex-start",
+      }}
+    >
+      {icon && <Icon name={icon} size={fontSize + 2} color={textColor} />}
+      <Text style={{ fontSize, fontWeight: "500", color: textColor }}>
+        {text}
+      </Text>
+    </View>
+  );
+};
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   activeTab,
   allAuditors,
@@ -96,25 +129,28 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
+const { width, height } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+
   const [showResponsesModal, setShowResponsesModal] = useState(false);
   const [showNCRsModal, setShowNCRsModal] = useState(false);
   const [selectedStakeholder, setSelectedStakeholder] = useState<User | null>(
-    null,
+    null
   );
   const [modalType, setModalType] = useState<"responses" | "ncrs">("responses");
-
   const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(
-    null,
+    null
   );
-
-  type AuditReportType = "5S" | "IATF" | "MANUFACTURING";
-
   const [reportView, setReportView] = useState<{
-    type: AuditReportType;
+    type: "5S" | "IATF" | "MANUFACTURING";
     id: string | number;
   } | null>(null);
 
-  const safeParseAnswers = (answers: any): any => {
+  // ============================================
+  // HELPER FUNCTIONS
+  // ============================================
+  const safeParseAnswers = useCallback((answers: any): any => {
     if (!answers) return {};
     if (typeof answers === "object") return answers;
     try {
@@ -122,59 +158,47 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     } catch {
       return {};
     }
-  };
+  }, []);
 
-  // ✅ Decides which report view to open for a given audit/response no.
-  const detectReportType = (r: Response): AuditReportType => {
-    const a = safeParseAnswers(r.answers);
+  const detectReportType = useCallback(
+    (r: Response): "5S" | "IATF" | "MANUFACTURING" => {
+      const a = safeParseAnswers(r.answers);
+      const raw = String(
+        (r as any).auditType ||
+          (r as any).templateType ||
+          (r as any).checkSheet?.templateType ||
+          (r as any).checkSheet?.name ||
+          a.auditType ||
+          a.templateType ||
+          a.checkSheetName ||
+          ""
+      ).toUpperCase();
 
-    // 1) If backend sends a type field, use it
-    const raw = String(
-      (r as any).auditType ||
-        (r as any).templateType ||
-        (r as any).checkSheet?.templateType ||
-        (r as any).checkSheet?.name ||
-        a.auditType ||
-        a.templateType ||
-        a.checkSheetName ||
-        "",
-    ).toUpperCase();
+      if (raw.includes("5S") || raw.includes("FIVE")) return "5S";
+      if (raw.includes("MANUFACT") || raw.includes("PROCESS"))
+        return "MANUFACTURING";
+      if (raw.includes("IATF")) return "IATF";
 
-    if (raw.includes("5S") || raw.includes("FIVE")) return "5S";
-    if (raw.includes("MANUFACT") || raw.includes("PROCESS"))
-      return "MANUFACTURING";
-    if (raw.includes("IATF")) return "IATF";
+      if (a.scores) return "5S";
+      if (a.partNumber || a.machine || a.wefDate || a.revNo || a.issueDate)
+        return "MANUFACTURING";
+      if (a.processName || a.responses || a.observations) return "IATF";
 
-    // 2) Fallback: detect from the answers payload shape
-    if (a.scores) return "5S"; // 5S stores numeric scores per question
-    if (a.partNumber || a.machine || a.wefDate || a.revNo || a.issueDate)
-      return "MANUFACTURING"; // manufacturing doc-control fields
-    if (a.processName || a.responses || a.observations) return "IATF";
+      return "5S";
+    },
+    [safeParseAnswers]
+  );
 
-    return "5S"; // default – change to your most common audit type
-  };
-  const getAuditorResponses = (auditorId: string | number) =>
-    allResponses.filter((r) => r.auditorId === auditorId);
-
-  const getAuditorNCRs = (auditorId: string | number) =>
-    allNCRs.filter((n) => n.auditorId === auditorId);
-
-  const getAuditeeResponses = (auditeeId: string | number) =>
-    allResponses.filter((r) => r.auditeeId === auditeeId);
-
-  const getAuditeeNCRs = (auditeeId: string | number) =>
-    allNCRs.filter((n) => n.auditeeId === auditeeId);
-
-  const getSeverityBadge = (severity?: string) => {
+  const getSeverityBadge = useCallback((severity?: string) => {
     const colors: Record<string, any> = {
       CRITICAL: { bg: "#FEE2E2", text: "#DC2626" },
       MAJOR: { bg: "#FFEDD5", text: "#EA580C" },
       MINOR: { bg: "#FEF3C7", text: "#D97706" },
     };
     return colors[severity || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  };
+  }, []);
 
-  const getStatusBadge = (status?: string) => {
+  const getStatusBadge = useCallback((status?: string) => {
     const colors: Record<string, any> = {
       APPROVED: { bg: "#D1FAE5", text: "#059669" },
       REJECTED: { bg: "#FEE2E2", text: "#DC2626" },
@@ -185,275 +209,650 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
       CLOSED: { bg: "#D1FAE5", text: "#059669" },
     };
     return colors[status || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  };
+  }, []);
 
-  const handleViewResponses = (stakeholder: User) => {
+  const getAuditorResponses = useCallback(
+    (auditorId: string | number) =>
+      allResponses.filter((r) => r.auditorId === auditorId),
+    [allResponses]
+  );
+
+  const getAuditorNCRs = useCallback(
+    (auditorId: string | number) =>
+      allNCRs.filter((n) => n.auditorId === auditorId),
+    [allNCRs]
+  );
+
+  const getAuditeeResponses = useCallback(
+    (auditeeId: string | number) =>
+      allResponses.filter((r) => r.auditeeId === auditeeId),
+    [allResponses]
+  );
+
+  const getAuditeeNCRs = useCallback(
+    (auditeeId: string | number) =>
+      allNCRs.filter((n) => n.auditeeId === auditeeId),
+    [allNCRs]
+  );
+
+  const getResponses = useCallback(
+    (id: string | number) => {
+      if (activeTab === "auditors") {
+        return getAuditorResponses(id);
+      }
+      return getAuditeeResponses(id);
+    },
+    [activeTab, getAuditorResponses, getAuditeeResponses]
+  );
+
+  const getNCRs = useCallback(
+    (id: string | number) => {
+      if (activeTab === "auditors") {
+        return getAuditorNCRs(id);
+      }
+      return getAuditeeNCRs(id);
+    },
+    [activeTab, getAuditorNCRs, getAuditeeNCRs]
+  );
+
+  const getSummary = useCallback(
+    (id: string | number) => {
+      const responses = getResponses(id);
+      const total = responses.length;
+      const approved = responses.filter((r) => r.status === "APPROVED").length;
+      const rejected = responses.filter((r) => r.status === "REJECTED").length;
+      const submitted = responses.filter((r) => r.status === "SUBMITTED").length;
+      const avgScore =
+        total > 0
+          ? responses.reduce((sum, r) => sum + (r.percentageScore || 0), 0) /
+            total
+          : 0;
+      return {
+        total,
+        approved,
+        rejected,
+        pending: submitted,
+        approvalRate: total > 0 ? (approved * 100) / total : 0,
+        avgScore: avgScore.toFixed(1),
+      };
+    },
+    [getResponses]
+  );
+
+  // ============================================
+  // HANDLERS
+  // ============================================
+  const handleViewResponses = useCallback((stakeholder: User) => {
     setSelectedStakeholder(stakeholder);
     setModalType("responses");
     setShowResponsesModal(true);
-  };
+  }, []);
 
-  const handleViewNCRs = (stakeholder: User) => {
+  const handleViewNCRs = useCallback((stakeholder: User) => {
     setSelectedStakeholder(stakeholder);
     setModalType("ncrs");
     setShowNCRsModal(true);
-  };
+  }, []);
 
-  const getResponses = (id: string | number) => {
-    if (activeTab === "auditors") {
-      return getAuditorResponses(id);
-    }
-    return getAuditeeResponses(id);
-  };
+  // ============================================
+  // RENDER FUNCTIONS
+  // ============================================
+  const renderStakeholderCard = useCallback(
+    (item: User) => {
+      const responses = getResponses(item.id);
+      const ncrs = getNCRs(item.id);
+      const assignedAudits = allSchedules.filter((s) =>
+        activeTab === "auditors"
+          ? s.auditorId === item.id
+          : s.auditeeId === item.id
+      ).length;
 
-  const getNCRs = (id: string | number) => {
-    if (activeTab === "auditors") {
-      return getAuditorNCRs(id);
-    }
-    return getAuditeeNCRs(id);
-  };
+      const approvedResponses = responses.filter(
+        (r) => r.status === "APPROVED"
+      ).length;
+      const submittedResponses = responses.filter(
+        (r) => r.status === "SUBMITTED"
+      ).length;
+      const openNCRs = ncrs.filter(
+        (n) => n.status === "OPEN" || n.status === "IN_PROGRESS"
+      ).length;
+      const closedNCRs = ncrs.filter((n) => n.status === "CLOSED").length;
 
-  const getSummary = (id: string | number) => {
-    const responses = getResponses(id);
-    const total = responses.length;
-    const approved = responses.filter((r) => r.status === "APPROVED").length;
-    const rejected = responses.filter((r) => r.status === "REJECTED").length;
-    const submitted = responses.filter((r) => r.status === "SUBMITTED").length;
-    const avgScore =
-      total > 0
-        ? responses.reduce((sum, r) => sum + (r.percentageScore || 0), 0) /
-          total
-        : 0;
-    return {
-      total,
-      approved,
-      rejected,
-      pending: submitted,
-      approvalRate: total > 0 ? (approved * 100) / total : 0,
-      avgScore: avgScore.toFixed(1),
-    };
-  };
-
-  const renderStakeholderCard = (item: User) => {
-    const responses = getResponses(item.id);
-    const ncrs = getNCRs(item.id);
-    const assignedAudits = allSchedules.filter((s) =>
-      activeTab === "auditors"
-        ? s.auditorId === item.id
-        : s.auditeeId === item.id,
-    ).length;
-
-    const approvedResponses = responses.filter(
-      (r) => r.status === "APPROVED",
-    ).length;
-    const submittedResponses = responses.filter(
-      (r) => r.status === "SUBMITTED",
-    ).length;
-    const openNCRs = ncrs.filter(
-      (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
-    ).length;
-    const closedNCRs = ncrs.filter((n) => n.status === "CLOSED").length;
-
-    return (
-      <View key={String(item.id)} style={styles.stakeholderCard}>
-        <View style={styles.stakeholderHeader}>
+      return (
+        <View
+          key={String(item.id)}
+          style={{
+            width: isMobile ? "100%" : isTablet ? "48%" : "32%",
+            backgroundColor: "#FFFFFF",
+            borderWidth: 1,
+            borderColor: "#E5E7EB",
+            borderRadius: 16,
+            padding: isMobile ? 12 : 16,
+            marginBottom: 12,
+          }}
+        >
           <View
-            style={[styles.avatar, { backgroundColor: NAVBAR_COLORS.primary }]}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 12,
+            }}
           >
-            <Text style={styles.avatarText}>
-              {(item.firstName?.[0] || item.username?.[0] || "A").toUpperCase()}
-            </Text>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: NAVBAR_COLORS.primary,
+              }}
+            >
+              <Text style={{ color: "#FFFFFF", fontSize: 18, fontWeight: "bold" }}>
+                {(item.firstName?.[0] || item.username?.[0] || "A").toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontSize: isMobile ? 13 : 14,
+                  fontWeight: "600",
+                  color: "#1F2937",
+                }}
+              >
+                {item.firstName} {item.lastName}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isMobile ? 10 : 11,
+                  color: "#6B7280",
+                  marginTop: 2,
+                }}
+              >
+                {item.role || "User"} • {item.email || "No email"}
+              </Text>
+            </View>
           </View>
-          <View style={styles.stakeholderInfo}>
-            <Text style={styles.stakeholderName}>
-              {item.firstName} {item.lastName}
-            </Text>
-            <Text style={styles.stakeholderRole}>
-              {item.role || "User"} • {item.email || "No email"}
-            </Text>
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "#F9FAFB",
+                borderRadius: 8,
+                padding: 10,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 16 : 18,
+                  fontWeight: "bold",
+                  color: "#1F2937",
+                }}
+              >
+                {assignedAudits}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isMobile ? 9 : 10,
+                  color: "#6B7280",
+                  marginTop: 2,
+                }}
+              >
+                Assigned Audits
+              </Text>
+            </View>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: "#F9FAFB",
+                borderRadius: 8,
+                padding: 10,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 16 : 18,
+                  fontWeight: "bold",
+                  color: NAVBAR_COLORS.primary,
+                }}
+              >
+                {responses.length}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isMobile ? 9 : 10,
+                  color: "#6B7280",
+                  marginTop: 2,
+                }}
+              >
+                Responses
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 8,
+                padding: 8,
+                alignItems: "center",
+                backgroundColor: "#D1FAE5",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 13 : 14,
+                  fontWeight: "bold",
+                  color: "#059669",
+                }}
+              >
+                {approvedResponses}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isMobile ? 8 : 9,
+                  color: "#6B7280",
+                  marginTop: 2,
+                }}
+              >
+                Approved
+              </Text>
+            </View>
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 8,
+                padding: 8,
+                alignItems: "center",
+                backgroundColor: "#FEF3C7",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 13 : 14,
+                  fontWeight: "bold",
+                  color: "#D97706",
+                }}
+              >
+                {submittedResponses}
+              </Text>
+              <Text
+                style={{
+                  fontSize: isMobile ? 8 : 9,
+                  color: "#6B7280",
+                  marginTop: 2,
+                }}
+              >
+                Pending
+              </Text>
+            </View>
+          </View>
+
+          {ncrs.length > 0 && (
+            <View
+              style={{
+                backgroundColor: "#FEE2E2",
+                borderRadius: 8,
+                padding: 8,
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 11 : 12,
+                  fontWeight: "600",
+                  color: "#DC2626",
+                }}
+              >
+                {ncrs.length} Total NCRs
+              </Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 12,
+                  marginTop: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: isMobile ? 9 : 10,
+                    color: "#DC2626",
+                  }}
+                >
+                  Open: {openNCRs}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: isMobile ? 9 : 10,
+                    color: "#059669",
+                  }}
+                >
+                  Closed: {closedNCRs}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              paddingTop: 12,
+              borderTopWidth: 1,
+              borderTopColor: "#F3F4F6",
+            }}
+          >
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                paddingVertical: 8,
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
+                borderRadius: 8,
+                backgroundColor: "#FFFFFF",
+              }}
+              onPress={() => handleViewResponses(item)}
+            >
+              <Icon name="file-text" size={14} color="#6B7280" />
+              <Text
+                style={{
+                  fontSize: isMobile ? 10 : 11,
+                  fontWeight: "500",
+                  color: "#6B7280",
+                }}
+              >
+                Responses
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                paddingVertical: 8,
+                borderWidth: 1,
+                borderColor: "#E5E7EB",
+                borderRadius: 8,
+                backgroundColor: "#FFFFFF",
+              }}
+              onPress={() => handleViewNCRs(item)}
+            >
+              <Icon name="alert-triangle" size={14} color="#6B7280" />
+              <Text
+                style={{
+                  fontSize: isMobile ? 10 : 11,
+                  fontWeight: "500",
+                  color: "#6B7280",
+                }}
+              >
+                NCRs
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
+      );
+    },
+    [
+      isMobile,
+      isTablet,
+      getResponses,
+      getNCRs,
+      allSchedules,
+      activeTab,
+      handleViewResponses,
+      handleViewNCRs,
+    ]
+  );
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>{assignedAudits}</Text>
-            <Text style={styles.statBoxLabel}>Assigned Audits</Text>
-          </View>
-          <View style={styles.statBox}>
+  const renderModalItem = useCallback(
+    ({ item }: { item: Response | NCR }) => {
+      if (modalType === "responses") {
+        const r = item as Response;
+        const answers = safeParseAnswers(r.answers);
+        const statusColors = getStatusBadge(r.status);
+        return (
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "#E5E7EB",
+              borderRadius: 8,
+              padding: isMobile ? 10 : 12,
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 10 : 11,
+                  color: "#6B7280",
+                  fontFamily: "monospace",
+                }}
+              >
+                {answers?.documentNumber || `RES-${r.id}`}
+              </Text>
+              <Badge
+                text={r.status || "DRAFT"}
+                bgColor={statusColors.bg}
+                textColor={statusColors.text}
+                size={isMobile ? "sm" : "md"}
+              />
+            </View>
             <Text
-              style={[styles.statBoxValue, { color: NAVBAR_COLORS.primary }]}
-            >
-              {responses.length}
-            </Text>
-            <Text style={styles.statBoxLabel}>Responses</Text>
-          </View>
-        </View>
-
-        <View style={styles.statusRow}>
-          <View style={[styles.statusBox, { backgroundColor: "#D1FAE5" }]}>
-            <Text style={[styles.statusBoxValue, { color: "#059669" }]}>
-              {approvedResponses}
-            </Text>
-            <Text style={styles.statusBoxLabel}>Approved</Text>
-          </View>
-          <View style={[styles.statusBox, { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[styles.statusBoxValue, { color: "#D97706" }]}>
-              {submittedResponses}
-            </Text>
-            <Text style={styles.statusBoxLabel}>Pending</Text>
-          </View>
-        </View>
-
-        {ncrs.length > 0 && (
-          <View style={styles.ncrSummary}>
-            <Text style={styles.ncrSummaryText}>{ncrs.length} Total NCRs</Text>
-            <View style={styles.ncrSummaryRow}>
-              <Text style={styles.ncrOpenText}>Open: {openNCRs}</Text>
-              <Text style={styles.ncrClosedText}>Closed: {closedNCRs}</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleViewResponses(item)}
-          >
-            <Icon name="file-text" size={14} color="#6B7280" />
-            <Text style={styles.actionButtonText}>Responses</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleViewNCRs(item)}
-          >
-            <Icon name="alert-triangle" size={14} color="#6B7280" />
-            <Text style={styles.actionButtonText}>NCRs</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const renderModalItem = ({ item }: { item: Response | NCR }) => {
-    if (modalType === "responses") {
-      const r = item as Response;
-      const answers =
-        typeof r.answers === "string" ? JSON.parse(r.answers) : r.answers;
-      const statusColors = getStatusBadge(r.status);
-      return (
-        <View style={styles.modalItem}>
-          <View style={styles.modalItemHeader}>
-            <Text style={styles.modalItemId}>
-              {answers?.documentNumber || `RES-${r.id}`}
-            </Text>
-            <View
-              style={[
-                styles.modalItemBadge,
-                { backgroundColor: statusColors.bg },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: statusColors.text },
-                ]}
-              >
-                {r.status || "DRAFT"}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.modalItemTitle}>{r.department || "N/A"}</Text>
-          <Text style={styles.modalItemSubtext}>
-            Auditee: {answers?.auditeeName || "N/A"}
-          </Text>
-          <View style={styles.modalItemFooter}>
-            <Text style={styles.modalItemScore}>
-              Score:{" "}
-              <Text style={styles.modalItemScoreValue}>
-                {(r.percentageScore || 0).toFixed(1)}%
-              </Text>
-            </Text>
-            <TouchableOpacity
-              style={styles.modalItemViewButton}
-              onPress={() => {
-                setShowResponsesModal(false);
-                // ✅ Open the correct report for this audit no.
-                setReportView({ type: detectReportType(r), id: r.id });
+              style={{
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: "600",
+                color: "#1F2937",
               }}
             >
-              <Icon name="eye" size={12} color="#6B7280" />
-              <Text style={styles.modalItemViewText}>View Report</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
-    } else {
-      const n = item as NCR;
-      const severityColors = getSeverityBadge(n.severity);
-      const statusColors = getStatusBadge(n.status);
-      return (
-        <View style={styles.modalItem}>
-          <View style={styles.modalItemHeader}>
-            <View
-              style={[
-                styles.modalItemBadge,
-                { backgroundColor: severityColors.bg },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: severityColors.text },
-                ]}
-              >
-                {n.severity || "NCR"}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.modalItemBadge,
-                { backgroundColor: statusColors.bg },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: statusColors.text },
-                ]}
-              >
-                {n.status || "OPEN"}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.modalItemTitle}>
-            {n.ncrNumber || `NCR-${n.id}`}
-          </Text>
-          <View style={styles.modalItemFooter}>
-            <Text style={styles.modalItemSubtext}>
-              Dept: {n.department || "N/A"}
+              {r.department || "N/A"}
             </Text>
-            <TouchableOpacity
-              style={styles.modalItemViewButton}
-              onPress={() => {
-                setShowNCRsModal(false); // 1. Close the NCR list modal
-                setSelectedNcrId(n.id); // 2. Open the detail view for this specific NCR ID
+            <Text
+              style={{
+                fontSize: isMobile ? 10 : 12,
+                color: "#6B7280",
+                marginTop: 2,
               }}
             >
-              <Icon name="eye" size={12} color="#6B7280" />
-              <Text style={styles.modalItemViewText}>View Details</Text>
-            </TouchableOpacity>
+              Auditee: {answers?.auditeeName || "N/A"}
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: 8,
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: "#F3F4F6",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 11 : 12,
+                  color: "#6B7280",
+                }}
+              >
+                Score:{" "}
+                <Text
+                  style={{
+                    fontWeight: "600",
+                    color: "#1F2937",
+                  }}
+                >
+                  {(r.percentageScore || 0).toFixed(1)}%
+                </Text>
+              </Text>
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderWidth: 1,
+                  borderColor: "#E5E7EB",
+                  borderRadius: 4,
+                }}
+                onPress={() => {
+                  setShowResponsesModal(false);
+                  setReportView({ type: detectReportType(r), id: r.id });
+                }}
+              >
+                <Icon name="eye" size={12} color="#6B7280" />
+                <Text
+                  style={{
+                    fontSize: isMobile ? 10 : 11,
+                    color: "#6B7280",
+                  }}
+                >
+                  View Report
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      );
-    }
-  };
+        );
+      } else {
+        const n = item as NCR;
+        const severityColors = getSeverityBadge(n.severity);
+        const statusColors = getStatusBadge(n.status);
+        return (
+          <View
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderWidth: 1,
+              borderColor: "#E5E7EB",
+              borderRadius: 8,
+              padding: isMobile ? 10 : 12,
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 8,
+                marginBottom: 4,
+              }}
+            >
+              <Badge
+                text={n.severity || "NCR"}
+                bgColor={severityColors.bg}
+                textColor={severityColors.text}
+                icon="alert-circle"
+                size={isMobile ? "sm" : "md"}
+              />
+              <Badge
+                text={n.status || "OPEN"}
+                bgColor={statusColors.bg}
+                textColor={statusColors.text}
+                size={isMobile ? "sm" : "md"}
+              />
+            </View>
+            <Text
+              style={{
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: "600",
+                color: "#1F2937",
+              }}
+            >
+              {n.ncrNumber || `NCR-${n.id}`}
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: 8,
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: "#F3F4F6",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: isMobile ? 10 : 12,
+                  color: "#6B7280",
+                }}
+              >
+                Dept: {n.department || "N/A"}
+              </Text>
+              <TouchableOpacity
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderWidth: 1,
+                  borderColor: "#E5E7EB",
+                  borderRadius: 4,
+                }}
+                onPress={() => {
+                  setShowNCRsModal(false);
+                  setSelectedNcrId(n.id);
+                }}
+              >
+                <Icon name="eye" size={12} color="#6B7280" />
+                <Text
+                  style={{
+                    fontSize: isMobile ? 10 : 11,
+                    color: "#6B7280",
+                  }}
+                >
+                  View Details
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      }
+    },
+    [
+      modalType,
+      isMobile,
+      safeParseAnswers,
+      getStatusBadge,
+      getSeverityBadge,
+      detectReportType,
+    ]
+  );
 
   const stakeholders =
     activeTab === "auditors"
       ? allAuditors.filter(
           (a) =>
             a.role !== "LEAD_AUDITOR" &&
-            !a.role?.toLowerCase().includes("lead"),
+            !a.role?.toLowerCase().includes("lead")
         )
       : allAuditees;
 
@@ -464,7 +863,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     ? getNCRs(selectedStakeholder.id)
     : [];
 
-  // ✅ FIX 1: NCR PREVIEW — rendered inline (NOT in a Modal) so the navbar stays visible
+  // ============================================
+  // NCR PREVIEW
+  // ============================================
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -477,7 +878,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     );
   }
 
-  // ✅ FIX 2: CHECK SHEET REPORT PREVIEW — rendered inline (NOT in a Modal)
+  // ============================================
+  // CHECK SHEET REPORT PREVIEW
+  // ============================================
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -503,20 +906,58 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     );
   }
 
+  // ============================================
+  // MAIN RENDER
+  // ============================================
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.grid}>
+    <ScrollView
+      style={{ flex: 1 }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 20 }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: isMobile ? 8 : 12,
+        }}
+      >
         {stakeholders.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View
+            style={{
+              flex: 1,
+              paddingVertical: 40,
+              alignItems: "center",
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: "#E5E7EB",
+              minWidth: "100%",
+            }}
+          >
             <Icon
               name={activeTab === "auditors" ? "users" : "user-check"}
               size={40}
               color="#CBD5E1"
             />
-            <Text style={styles.emptyStateTitle}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: "#1F2937",
+                marginTop: 12,
+              }}
+            >
               No {activeTab === "auditors" ? "Auditors" : "Auditees"} Found
             </Text>
-            <Text style={styles.emptyStateSubtext}>
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#6B7280",
+                marginTop: 4,
+                textAlign: "center",
+              }}
+            >
               {leadAuditorDepartment
                 ? `No ${activeTab === "auditors" ? "auditors" : "auditees"} found for ${leadAuditorDepartment} department`
                 : `No ${activeTab === "auditors" ? "auditors" : "auditees"} are currently registered`}
@@ -534,70 +975,228 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
         transparent={true}
         onRequestClose={() => setShowResponsesModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 16,
+          }}
+        >
           <View
-            style={[styles.modalContent, isMobile && styles.modalContentMobile]}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              width: isMobile ? width * 0.95 : width * 0.85,
+              maxHeight: height * 0.85,
+              overflow: "hidden",
+            }}
           >
             <View
-              style={[
-                styles.modalHeader,
-                { backgroundColor: NAVBAR_COLORS.primary },
-              ]}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 16,
+                backgroundColor: NAVBAR_COLORS.primary,
+              }}
             >
               <View>
-                <Text style={styles.modalHeaderTitle}>
+                <Text
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    fontWeight: "600",
+                    color: "#FFFFFF",
+                  }}
+                >
                   Responses by {selectedStakeholder?.firstName}{" "}
                   {selectedStakeholder?.lastName}
                 </Text>
-                <Text style={styles.modalHeaderSubtext}>
+                <Text
+                  style={{
+                    fontSize: isMobile ? 11 : 12,
+                    color: "#C7D2FE",
+                    marginTop: 2,
+                  }}
+                >
                   {selectedResponses.length} total responses
                 </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowResponsesModal(false)}
-                style={styles.modalCloseButton}
+                style={{ padding: 4 }}
               >
                 <Icon name="x" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
             {selectedStakeholder && (
-              <View style={styles.modalStatsGrid}>
-                <View style={styles.modalStat}>
-                  <Text style={styles.modalStatValue}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 8,
+                  padding: 12,
+                  backgroundColor: "#F9FAFB",
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#E5E7EB",
+                  flexWrap: "wrap",
+                }}
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? "30%" : "18%",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 8,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: "bold",
+                      color: "#1F2937",
+                    }}
+                  >
                     {getSummary(selectedStakeholder.id).total}
                   </Text>
-                  <Text style={styles.modalStatLabel}>Total</Text>
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 8 : 9,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    Total
+                  </Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#059669" }]}>
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? "30%" : "18%",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 8,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: "bold",
+                      color: "#059669",
+                    }}
+                  >
                     {getSummary(selectedStakeholder.id).approved}
                   </Text>
-                  <Text style={styles.modalStatLabel}>APPROVED</Text>
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 8 : 9,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    APPROVED
+                  </Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#DC2626" }]}>
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? "30%" : "18%",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 8,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: "bold",
+                      color: "#DC2626",
+                    }}
+                  >
                     {getSummary(selectedStakeholder.id).rejected}
                   </Text>
-                  <Text style={styles.modalStatLabel}>REJECTED</Text>
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 8 : 9,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    REJECTED
+                  </Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#D97706" }]}>
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? "30%" : "18%",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 8,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: "bold",
+                      color: "#D97706",
+                    }}
+                  >
                     {getSummary(selectedStakeholder.id).pending}
                   </Text>
-                  <Text style={styles.modalStatLabel}>SUBMITTED</Text>
-                </View>
-                <View style={styles.modalStat}>
                   <Text
-                    style={[
-                      styles.modalStatValue,
-                      { color: NAVBAR_COLORS.primary },
-                    ]}
+                    style={{
+                      fontSize: isMobile ? 8 : 9,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
                   >
-                    {getSummary(selectedStakeholder.id).approvalRate.toFixed(1)}
-                    %
+                    SUBMITTED
                   </Text>
-                  <Text style={styles.modalStatLabel}>Approval Rate</Text>
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? "30%" : "18%",
+                    alignItems: "center",
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 8,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: "#E5E7EB",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 14 : 16,
+                      fontWeight: "bold",
+                      color: NAVBAR_COLORS.primary,
+                    }}
+                  >
+                    {getSummary(selectedStakeholder.id).approvalRate.toFixed(1)}%
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 8 : 9,
+                      color: "#6B7280",
+                      marginTop: 2,
+                    }}
+                  >
+                    Approval Rate
+                  </Text>
                 </View>
               </View>
             )}
@@ -606,11 +1205,24 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               data={selectedResponses}
               renderItem={renderModalItem}
               keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={styles.modalListContent}
+              contentContainerStyle={{ padding: 12 }}
               ListEmptyComponent={
-                <View style={styles.modalEmpty}>
+                <View
+                  style={{
+                    paddingVertical: 40,
+                    alignItems: "center",
+                  }}
+                >
                   <Icon name="file-text" size={40} color="#CBD5E1" />
-                  <Text style={styles.modalEmptyText}>No responses found</Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#6B7280",
+                      marginTop: 8,
+                    }}
+                  >
+                    No responses found
+                  </Text>
                 </View>
               }
             />
@@ -625,28 +1237,57 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
         transparent={true}
         onRequestClose={() => setShowNCRsModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 16,
+          }}
+        >
           <View
-            style={[styles.modalContent, isMobile && styles.modalContentMobile]}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              width: isMobile ? width * 0.95 : width * 0.85,
+              maxHeight: height * 0.85,
+              overflow: "hidden",
+            }}
           >
             <View
-              style={[
-                styles.modalHeader,
-                { backgroundColor: NAVBAR_COLORS.primary },
-              ]}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: 16,
+                backgroundColor: NAVBAR_COLORS.primary,
+              }}
             >
               <View>
-                <Text style={styles.modalHeaderTitle}>
+                <Text
+                  style={{
+                    fontSize: isMobile ? 14 : 16,
+                    fontWeight: "600",
+                    color: "#FFFFFF",
+                  }}
+                >
                   NCRs by {selectedStakeholder?.firstName}{" "}
                   {selectedStakeholder?.lastName}
                 </Text>
-                <Text style={styles.modalHeaderSubtext}>
+                <Text
+                  style={{
+                    fontSize: isMobile ? 11 : 12,
+                    color: "#C7D2FE",
+                    marginTop: 2,
+                  }}
+                >
                   {selectedNCRs.length} total NCRs
                 </Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowNCRsModal(false)}
-                style={styles.modalCloseButton}
+                style={{ padding: 4 }}
               >
                 <Icon name="x" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -656,11 +1297,24 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               data={selectedNCRs}
               renderItem={renderModalItem}
               keyExtractor={(item) => String(item.id)}
-              contentContainerStyle={styles.modalListContent}
+              contentContainerStyle={{ padding: 12 }}
               ListEmptyComponent={
-                <View style={styles.modalEmpty}>
+                <View
+                  style={{
+                    paddingVertical: 40,
+                    alignItems: "center",
+                  }}
+                >
                   <Icon name="alert-triangle" size={40} color="#CBD5E1" />
-                  <Text style={styles.modalEmptyText}>No NCRs found</Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#6B7280",
+                      marginTop: 8,
+                    }}
+                  >
+                    No NCRs found
+                  </Text>
                 </View>
               }
             />
@@ -670,320 +1324,5 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 20,
-  },
-  stakeholderCard: {
-    // Changed from flex: 1 & minWidth to width to enforce strict 3 columns on desktop
-    width: isMobile ? "100%" : "32%",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  stakeholderHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  stakeholderInfo: {
-    flex: 1,
-  },
-  stakeholderName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  stakeholderRole: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    padding: 10,
-    alignItems: "center",
-  },
-  statBoxValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
-  statBoxLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  statusRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 8,
-  },
-  statusBox: {
-    flex: 1,
-    borderRadius: 8,
-    padding: 8,
-    alignItems: "center",
-  },
-  statusBoxValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  statusBoxLabel: {
-    fontSize: 9,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  ncrSummary: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
-  },
-  ncrSummaryText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#DC2626",
-  },
-  ncrSummaryRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 2,
-  },
-  ncrOpenText: {
-    fontSize: 10,
-    color: "#DC2626",
-  },
-  ncrClosedText: {
-    fontSize: 10,
-    color: "#059669",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 8,
-    backgroundColor: "#FFFFFF",
-  },
-  actionButtonText: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  emptyState: {
-    flex: 1,
-    paddingVertical: 40,
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    minWidth: "100%",
-  },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginTop: 12,
-  },
-  emptyStateSubtext: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    width: width * 0.9,
-    maxHeight: height * 0.85,
-    overflow: "hidden",
-  },
-  modalContentMobile: {
-    width: width * 0.95,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-  },
-  modalHeaderTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  modalHeaderSubtext: {
-    fontSize: 12,
-    color: "#C7D2FE",
-    marginTop: 2,
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalStatsGrid: {
-    flexDirection: "row",
-    gap: 8,
-    padding: 12,
-    backgroundColor: "#F9FAFB",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  modalStat: {
-    flex: 1,
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  modalStatValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937",
-  },
-  modalStatLabel: {
-    fontSize: 9,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  modalListContent: {
-    padding: 12,
-  },
-  modalItem: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  modalItemHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  modalItemId: {
-    fontSize: 11,
-    color: "#6B7280",
-    fontFamily: "monospace",
-  },
-  modalItemBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  modalItemBadgeText: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
-  modalItemTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  modalItemSubtext: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  modalItemFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  modalItemScore: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  modalItemScoreValue: {
-    fontWeight: "600",
-    color: "#1F2937",
-  },
-  modalItemViewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 4,
-  },
-  modalItemViewText: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  modalEmpty: {
-    paddingVertical: 40,
-    alignItems: "center",
-  },
-  modalEmptyText: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 8,
-  },
-});
 
 export default StakeholderManagement;

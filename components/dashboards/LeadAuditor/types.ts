@@ -1,4 +1,5 @@
 // app/components/dashboards/LeadAuditor/types.ts
+
 export interface User {
   id: string | number;
   firstName: string;
