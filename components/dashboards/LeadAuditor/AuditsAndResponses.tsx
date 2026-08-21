@@ -2,14 +2,15 @@
 "use client";
 
 import { format } from "date-fns";
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import {
+  Dimensions,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import FiveSView from "../auditor/view/FiveSView";
@@ -17,9 +18,7 @@ import IATFInternalView from "../auditor/view/IATFInternalView";
 import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
 import NCRViewManager from "../auditor/view/NCRViewManager";
 
-// ============================================
-// TYPES
-// ============================================
+// Types
 interface Schedule {
   id: string | number;
   department?: string;
@@ -87,6 +86,9 @@ interface AuditsAndResponsesProps {
   leadAuditorDepartment?: string | null;
 }
 
+const { width, height } = Dimensions.get("window");
+const isMobile = width < 768;
+
 const NAVBAR_COLORS = {
   primary: "#00529B",
   secondary: "#3b82f6",
@@ -97,47 +99,10 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
-// ============================================
-// RESPONSIVE BADGE
-// ============================================
-const Badge: React.FC<{
-  text: string;
-  bgColor: string;
-  textColor: string;
-  icon?: string;
-  size?: "sm" | "md";
-}> = ({ text, bgColor, textColor, icon, size = "sm" }) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  
-  const fontSize = size === "sm" ? (isMobile ? 8 : 9) : (isMobile ? 10 : 11);
-  const paddingH = size === "sm" ? (isMobile ? 4 : 6) : (isMobile ? 6 : 8);
-  const paddingV = size === "sm" ? (isMobile ? 2 : 3) : (isMobile ? 3 : 4);
-  
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: bgColor,
-        paddingHorizontal: paddingH,
-        paddingVertical: paddingV,
-        borderRadius: 4,
-        gap: 2,
-        alignSelf: "flex-start",
-      }}
-    >
-      {icon && <Icon name={icon} size={fontSize + 2} color={textColor} />}
-      <Text style={{ fontSize, fontWeight: "500", color: textColor }}>
-        {text}
-      </Text>
-    </View>
-  );
-};
+const Card: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <View style={styles.card}>{children}</View>
+);
 
-// ============================================
-// MAIN COMPONENT
-// ============================================
 const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   activeTab,
   allSchedules,
@@ -157,20 +122,18 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
-  // ============================================
-  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
-  // ============================================
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1024;
-  
-  const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(null);
+  // ✅ PREVIEW STATE (Same pattern as StakeholderManagement)
+  const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(
+    null,
+  );
+
+  type AuditReportType = "5S" | "IATF" | "MANUFACTURING";
   const [reportView, setReportView] = useState<{
-    type: "5S" | "IATF" | "MANUFACTURING";
+    type: AuditReportType;
     id: string | number;
   } | null>(null);
 
-  const safeParseAnswers = useCallback((answers: any): any => {
+  const safeParseAnswers = (answers: any): any => {
     if (!answers) return {};
     if (typeof answers === "object") return answers;
     try {
@@ -178,9 +141,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     } catch {
       return {};
     }
-  }, []);
+  };
 
-  const detectReportType = useCallback((r: Response): "5S" | "IATF" | "MANUFACTURING" => {
+  // ✅ Decides which check sheet report view to open
+  const detectReportType = (r: Response): AuditReportType => {
     const a = safeParseAnswers(r.answers);
     const raw = String(
       (r as any).auditType ||
@@ -194,7 +158,8 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     ).toUpperCase();
 
     if (raw.includes("5S") || raw.includes("FIVE")) return "5S";
-    if (raw.includes("MANUFACT") || raw.includes("PROCESS")) return "MANUFACTURING";
+    if (raw.includes("MANUFACT") || raw.includes("PROCESS"))
+      return "MANUFACTURING";
     if (raw.includes("IATF")) return "IATF";
 
     if (a.scores) return "5S";
@@ -203,9 +168,9 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     if (a.processName || a.responses || a.observations) return "IATF";
 
     return "5S";
-  }, [safeParseAnswers]);
+  };
 
-  const getStatusBadge = useCallback((status?: string) => {
+  const getStatusBadge = (status?: string) => {
     const colors: Record<string, any> = {
       SCHEDULED: { bg: "#DBEAFE", text: "#2563EB" },
       IN_PROGRESS: { bg: "#FEF3C7", text: "#D97706" },
@@ -218,18 +183,18 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       CLOSED: { bg: "#D1FAE5", text: "#059669" },
     };
     return colors[status || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  }, []);
+  };
 
-  const getSeverityBadge = useCallback((severity?: string) => {
+  const getSeverityBadge = (severity?: string) => {
     const colors: Record<string, any> = {
       CRITICAL: { bg: "#FEE2E2", text: "#DC2626" },
       MAJOR: { bg: "#FFEDD5", text: "#EA580C" },
       MINOR: { bg: "#FEF3C7", text: "#D97706" },
     };
     return colors[severity || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  }, []);
+  };
 
-  const getAuditorName = useCallback((auditorId?: string | number) => {
+  const getAuditorName = (auditorId?: string | number) => {
     if (!auditorId) return "N/A";
     const auditor = allAuditors.find((a) => a.id === auditorId);
     if (auditor) {
@@ -240,9 +205,9 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       );
     }
     return "N/A";
-  }, [allAuditors]);
+  };
 
-  const getFilteredSchedules = useCallback(() => {
+  const getFilteredSchedules = () => {
     let schedules = allSchedules;
     if (searchTerm) {
       schedules = schedules.filter(
@@ -262,284 +227,216 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       ];
       return scheduledStatuses.includes(s.status || "");
     });
-  }, [allSchedules, searchTerm]);
+  };
 
-  const renderResponseVerticalItem = useCallback((item: Response) => {
-    const answers = safeParseAnswers(item.answers);
+  // ✅ VERTICAL LIST ROW COMPONENT - Responses (One Per Row)
+  const renderResponseVerticalItem = (item: Response) => {
+    const answers =
+      typeof item.answers === "string"
+        ? JSON.parse(item.answers)
+        : item.answers;
     const statusColors = getStatusBadge(item.status);
     const auditorName = getAuditorName(item.auditorId);
 
     return (
-      <View
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          padding: isMobile ? 10 : 12,
-          marginBottom: 8,
-          width: "100%",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <View style={{ flex: 2, minWidth: isMobile ? 80 : 120 }}>
-            <Text style={{ fontSize: isMobile ? 10 : 11, color: "#6B7280", fontFamily: "monospace" }}>
+      <View style={styles.verticalItemContainer}>
+        <View style={styles.verticalItemRow}>
+          <View style={styles.verticalItemLeft}>
+            <Text style={styles.verticalItemId}>
               {answers?.documentNumber || `RES-${item.id}`}
             </Text>
-            <Text style={{ fontSize: isMobile ? 12 : 14, fontWeight: "600", color: "#1F2937" }}>
+            <Text style={styles.verticalItemDepartment} numberOfLines={1}>
               {item.department || "N/A"}
             </Text>
           </View>
-          <View style={{ flex: 1.5, minWidth: isMobile ? 60 : 100 }}>
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }} numberOfLines={1}>
+          <View style={styles.verticalItemCenter}>
+            <Text style={styles.verticalItemAuditee} numberOfLines={1}>
               {answers?.auditeeName || item.auditeeName || "N/A"}
             </Text>
-            <Text style={{ fontSize: isMobile ? 9 : 11, color: "#6B7280" }} numberOfLines={1}>
+            <Text style={styles.verticalItemAuditor} numberOfLines={1}>
               {auditorName}
             </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? 60 : 80, alignItems: "flex-end" }}>
-            <Text style={{ fontSize: isMobile ? 12 : 14, fontWeight: "600", color: "#1F2937" }}>
+          <View style={styles.verticalItemRight}>
+            <Text style={styles.verticalItemScore}>
               {(item.percentageScore || 0).toFixed(1)}%
             </Text>
-            <Badge
-              text={item.status || "DRAFT"}
-              bgColor={statusColors.bg}
-              textColor={statusColors.text}
-              size={isMobile ? "sm" : "md"}
-            />
+            <View style={[styles.badge, { backgroundColor: statusColors.bg }]}>
+              <Text style={[styles.badgeText, { color: statusColors.text }]}>
+                {item.status || "DRAFT"}
+              </Text>
+            </View>
           </View>
-          <View style={{ flexDirection: "row", gap: 6, minWidth: isMobile ? 80 : 100, justifyContent: "flex-end" }}>
+          <View style={styles.verticalItemActions}>
             <TouchableOpacity
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingVertical: 4,
-                paddingHorizontal: isMobile ? 6 : 10,
-                borderWidth: 1,
-                borderColor: "#E5E7EB",
-                borderRadius: 6,
-                backgroundColor: "#FFFFFF",
-              }}
+              style={styles.verticalActionButton}
               onPress={() => {
                 onViewResponse(item);
                 setReportView({ type: detectReportType(item), id: item.id });
               }}
             >
-              <Icon name="eye" size={isMobile ? 12 : 14} color="#6B7280" />
-              <Text style={{ fontSize: isMobile ? 9 : 11, color: "#6B7280" }}>View</Text>
+              <Icon name="eye" size={16} color="#6B7280" />
+              <Text style={styles.verticalActionText}>View</Text>
             </TouchableOpacity>
             {item.status === "SUBMITTED" && (
               <TouchableOpacity
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  paddingVertical: 4,
-                  paddingHorizontal: isMobile ? 6 : 10,
-                  borderWidth: 1,
-                  borderColor: NAVBAR_COLORS.primary,
-                  borderRadius: 6,
-                  backgroundColor: NAVBAR_COLORS.primary,
-                }}
+                style={[
+                  styles.verticalActionButton,
+                  styles.verticalReviewButton,
+                ]}
                 onPress={() => onReviewResponse(item)}
               >
-                <Icon name="check" size={isMobile ? 12 : 14} color="#FFFFFF" />
-                <Text style={{ fontSize: isMobile ? 9 : 11, color: "#FFFFFF" }}>Review</Text>
+                <Icon name="check" size={16} color="#FFFFFF" />
+                <Text style={[styles.verticalActionText, { color: "#FFFFFF" }]}>
+                  Review
+                </Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
       </View>
     );
-  }, [isMobile, safeParseAnswers, getStatusBadge, getAuditorName, onViewResponse, onReviewResponse, detectReportType]);
+  };
 
-  const renderNCRVerticalItem = useCallback((item: NCR) => {
+  // ✅ VERTICAL LIST ROW COMPONENT - NCRs (One Per Row)
+  const renderNCRVerticalItem = (item: NCR) => {
     const severityColors = getSeverityBadge(item.severity);
     const statusColors = getStatusBadge(item.status);
 
     return (
       <TouchableOpacity
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          padding: isMobile ? 10 : 12,
-          marginBottom: 8,
-          width: "100%",
-        }}
+        style={styles.verticalItemContainer}
         onPress={() => {
           onViewNCR(item);
           setSelectedNcrId(item.id);
         }}
         activeOpacity={0.7}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <View style={{ flex: 2, minWidth: isMobile ? 80 : 120 }}>
-            <Text style={{ fontSize: isMobile ? 10 : 11, color: "#6B7280", fontFamily: "monospace" }}>
+        <View style={styles.verticalItemRow}>
+          <View style={styles.verticalItemLeft}>
+            <Text style={styles.verticalItemId}>
               {item.ncrNumber || `NCR-${item.id}`}
             </Text>
-            <Text style={{ fontSize: isMobile ? 12 : 14, fontWeight: "600", color: "#1F2937" }} numberOfLines={1}>
+            <Text style={styles.verticalItemTitle} numberOfLines={1}>
               {item.title || "Non-Conformity Report"}
             </Text>
           </View>
-          <View style={{ flex: 1.5, minWidth: isMobile ? 60 : 100 }}>
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }} numberOfLines={1}>
+          <View style={styles.verticalItemCenter}>
+            <Text style={styles.verticalItemDept} numberOfLines={1}>
               {item.department || "N/A"}
             </Text>
-            <Text style={{ fontSize: isMobile ? 9 : 11, color: "#6B7280" }}>
+            <Text style={styles.verticalItemDate}>
               {item.createdAt
                 ? format(new Date(item.createdAt), "dd-MM-yyyy")
                 : "N/A"}
             </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? 60 : 80, alignItems: "flex-end", gap: 4 }}>
-            <Badge
-              text={item.severity || "NCR"}
-              bgColor={severityColors.bg}
-              textColor={severityColors.text}
-              icon="alert-circle"
-              size={isMobile ? "sm" : "md"}
-            />
-            <Badge
-              text={item.status || "OPEN"}
-              bgColor={statusColors.bg}
-              textColor={statusColors.text}
-              size={isMobile ? "sm" : "md"}
-            />
+          <View style={styles.verticalItemRight}>
+            <View
+              style={[styles.badge, { backgroundColor: severityColors.bg }]}
+            >
+              <Icon name="alert-circle" size={8} color={severityColors.text} />
+              <Text style={[styles.badgeText, { color: severityColors.text }]}>
+                {item.severity || "NCR"}
+              </Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: statusColors.bg }]}>
+              <Text style={[styles.badgeText, { color: statusColors.text }]}>
+                {item.status || "OPEN"}
+              </Text>
+            </View>
           </View>
-          <View style={{ flexDirection: "row", gap: 6, minWidth: isMobile ? 80 : 100, justifyContent: "flex-end" }}>
+          <View style={styles.verticalItemActions}>
             <TouchableOpacity
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingVertical: 4,
-                paddingHorizontal: isMobile ? 6 : 10,
-                borderWidth: 1,
-                borderColor: "#BFDBFE",
-                borderRadius: 6,
-                backgroundColor: "#EFF6FF",
-              }}
+              style={styles.verticalActionButton}
               onPress={() => {
                 onViewNCR(item);
-                setSelectedNcrId(item.id);
+                setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
               }}
             >
-              <Icon name="eye" size={isMobile ? 12 : 14} color="#1D4ED8" />
-              <Text style={{ fontSize: isMobile ? 9 : 11, color: "#1D4ED8" }}>View</Text>
+              <Icon name="eye" size={16} color="#1D4ED8" />
+              <Text style={[styles.verticalActionText, { color: "#1D4ED8" }]}>
+                View
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
     );
-  }, [isMobile, getSeverityBadge, getStatusBadge, onViewNCR]);
+  };
 
-  const renderResponseCard = useCallback((item: Response) => {
-    const answers = safeParseAnswers(item.answers);
+  // ✅ GRID CARD COMPONENT - Responses
+  const renderResponseCard = (item: Response) => {
+    const answers =
+      typeof item.answers === "string"
+        ? JSON.parse(item.answers)
+        : item.answers;
     const statusColors = getStatusBadge(item.status);
     const auditorName = getAuditorName(item.auditorId);
 
     return (
-      <View
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          borderRadius: 12,
-          padding: isMobile ? 12 : 16,
-          marginBottom: 8,
-          flex: 1,
-        }}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <Text style={{ fontSize: isMobile ? 10 : 11, color: "#6B7280", fontFamily: "monospace" }}>
+      <View style={styles.responseCard}>
+        <View style={styles.responseHeader}>
+          <Text style={styles.responseId}>
             {answers?.documentNumber || `RES-${item.id}`}
           </Text>
-          <Badge
-            text={item.status || "DRAFT"}
-            bgColor={statusColors.bg}
-            textColor={statusColors.text}
-            size={isMobile ? "sm" : "md"}
-          />
+          <View style={[styles.badge, { backgroundColor: statusColors.bg }]}>
+            <Text style={[styles.badgeText, { color: statusColors.text }]}>
+              {item.status || "DRAFT"}
+            </Text>
+          </View>
         </View>
-        <Text style={{ fontSize: isMobile ? 13 : 14, fontWeight: "600", color: "#1F2937" }}>
+        <Text style={styles.responseDepartment}>
           {item.department || "N/A"}
         </Text>
-        <Text style={{ fontSize: isMobile ? 11 : 12, color: "#6B7280", marginTop: 2 }}>
+        <Text style={styles.responseAuditee}>
           Auditee: {answers?.auditeeName || item.auditeeName || "N/A"}
         </Text>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6" }}>
-          <Text style={{ fontSize: isMobile ? 11 : 12, color: "#6B7280" }}>
-            Score: <Text style={{ fontWeight: "600", color: "#1F2937" }}>{(item.percentageScore || 0).toFixed(1)}%</Text>
+        <View style={styles.responseFooter}>
+          <Text style={styles.responseScore}>
+            Score:{" "}
+            <Text style={styles.responseScoreValue}>
+              {(item.percentageScore || 0).toFixed(2)}%
+            </Text>
           </Text>
-          <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }}>Auditor: {auditorName}</Text>
+          <Text style={styles.responseAuditor}>Auditor: {auditorName}</Text>
         </View>
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6" }}>
+        <View style={styles.responseActions}>
           <TouchableOpacity
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              paddingVertical: 6,
-              borderWidth: 1,
-              borderColor: "#E5E7EB",
-              borderRadius: 6,
-              backgroundColor: "#FFFFFF",
-            }}
+            style={styles.responseActionButton}
             onPress={() => {
               onViewResponse(item);
               setReportView({ type: detectReportType(item), id: item.id });
             }}
           >
-            <Icon name="eye" size={isMobile ? 12 : 14} color="#6B7280" />
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }}>View</Text>
+            <Icon name="eye" size={14} color="#6B7280" />
+            <Text style={styles.responseActionText}>View</Text>
           </TouchableOpacity>
           {item.status === "SUBMITTED" && (
             <TouchableOpacity
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                paddingVertical: 6,
-                borderWidth: 1,
-                borderColor: NAVBAR_COLORS.primary,
-                borderRadius: 6,
-                backgroundColor: NAVBAR_COLORS.primary,
-              }}
+              style={[styles.responseActionButton, styles.reviewButton]}
               onPress={() => onReviewResponse(item)}
             >
-              <Icon name="check" size={isMobile ? 12 : 14} color="#FFFFFF" />
-              <Text style={{ fontSize: isMobile ? 10 : 12, color: "#FFFFFF" }}>Review</Text>
+              <Icon name="check" size={14} color="#FFFFFF" />
+              <Text
+                style={[styles.responseActionText, styles.reviewButtonText]}
+              >
+                Review
+              </Text>
             </TouchableOpacity>
           )}
         </View>
       </View>
     );
-  }, [isMobile, safeParseAnswers, getStatusBadge, getAuditorName, onViewResponse, onReviewResponse, detectReportType]);
+  };
 
-  const renderNCRCard = useCallback((item: NCR) => {
+  // ✅ GRID CARD COMPONENT - NCRs
+  const renderNCRCard = (item: NCR) => {
     const severityColors = getSeverityBadge(item.severity);
     const statusColors = getStatusBadge(item.status);
 
     return (
-      <View
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          borderRadius: 12,
-          padding: isMobile ? 12 : 16,
-          marginBottom: 8,
-          flex: 1,
-        }}
-      >
+      <View style={styles.ncrCard}>
         <TouchableOpacity
           style={{ flex: 1 }}
           onPress={() => {
@@ -548,68 +445,53 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
           }}
           activeOpacity={0.7}
         >
-          <View style={{ flexDirection: "row", gap: 8, marginBottom: 4 }}>
-            <Badge
-              text={item.severity || "NCR"}
-              bgColor={severityColors.bg}
-              textColor={severityColors.text}
-              icon="alert-circle"
-              size={isMobile ? "sm" : "md"}
-            />
-            <Badge
-              text={item.status || "OPEN"}
-              bgColor={statusColors.bg}
-              textColor={statusColors.text}
-              size={isMobile ? "sm" : "md"}
-            />
+          <View style={styles.ncrHeader}>
+            <View
+              style={[styles.badge, { backgroundColor: severityColors.bg }]}
+            >
+              <Icon name="alert-circle" size={10} color={severityColors.text} />
+              <Text style={[styles.badgeText, { color: severityColors.text }]}>
+                {item.severity || "NCR"}
+              </Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: statusColors.bg }]}>
+              <Text style={[styles.badgeText, { color: statusColors.text }]}>
+                {item.status || "OPEN"}
+              </Text>
+            </View>
           </View>
-          <Text style={{ fontSize: isMobile ? 13 : 14, fontWeight: "600", color: "#1F2937" }}>
+          <Text style={styles.ncrNumber}>
             {item.ncrNumber || `NCR-${item.id}`}
           </Text>
-          <Text style={{ fontSize: isMobile ? 11 : 12, color: "#4B5563", marginTop: 4, marginBottom: 8, lineHeight: 16 }} numberOfLines={2}>
+          <Text style={styles.ncrTitle} numberOfLines={2}>
             {item.title || "Non-Conformity Report"}
           </Text>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6" }}>
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }}>Dept: {item.department || "N/A"}</Text>
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#6B7280" }}>
+          <View style={styles.ncrFooter}>
+            <Text style={styles.ncrDept}>Dept: {item.department || "N/A"}</Text>
+            <Text style={styles.ncrDate}>
               {item.createdAt
                 ? format(new Date(item.createdAt), "dd-MM-yyyy")
                 : "N/A"}
             </Text>
           </View>
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F3F4F6" }}>
+        <View style={styles.ncrActions}>
           <TouchableOpacity
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              paddingVertical: 8,
-              borderWidth: 1,
-              borderColor: "#BFDBFE",
-              borderRadius: 8,
-              backgroundColor: "#EFF6FF",
-            }}
+            style={styles.ncrActionButton}
             onPress={() => {
               onViewNCR(item);
-              setSelectedNcrId(item.id);
+              setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
             }}
           >
-            <Icon name="eye" size={isMobile ? 12 : 14} color="#1D4ED8" />
-            <Text style={{ fontSize: isMobile ? 10 : 12, fontWeight: "600", color: "#1D4ED8" }}>View Details</Text>
+            <Icon name="eye" size={14} color="#1D4ED8" />
+            <Text style={styles.ncrActionText}>View Details</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
-  }, [isMobile, getSeverityBadge, getStatusBadge, onViewNCR]);
+  };
 
-  // ============================================
-  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
-  // ============================================
-  
-  // NCR PREVIEW
+  // ✅ NCR PREVIEW (Form7 / Form8 / NCR2 via the common manager)
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -622,7 +504,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // CHECK SHEET REPORT PREVIEW
+  // ✅ CHECK SHEET REPORT PREVIEW (5S / IATF / Manufacturing)
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -648,21 +530,24 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // ============================================
-  // STEP 3: TAB RENDERING
-  // ============================================
-  
+  // ============================================================
   // AUDITS TAB
+  // ============================================================
   if (activeTab === "audits") {
     const scheduledAudits = getFilteredSchedules();
 
     return (
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 12 }}>
-            <Icon name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+      <View style={styles.tabContainer}>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Icon
+              name="search"
+              size={20}
+              color="#9CA3AF"
+              style={styles.searchIcon}
+            />
             <TextInput
-              style={{ flex: 1, paddingVertical: 10, fontSize: 14, color: "#1F2937" }}
+              style={styles.searchInput}
               placeholder="Search audits by department or auditee..."
               value={searchTerm}
               onChangeText={setSearchTerm}
@@ -672,26 +557,179 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
         </View>
 
         {scheduledAudits.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB" }}>
+          <View style={styles.emptyState}>
             <Icon name="calendar" size={40} color="#CBD5E1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937", marginTop: 12 }}>No Scheduled Audits</Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4, textAlign: "center" }}>
+            <Text style={styles.emptyStateTitle}>No Scheduled Audits</Text>
+            <Text style={styles.emptyStateText}>
               {searchTerm
                 ? `No scheduled audits match "${searchTerm}"`
                 : "No audits have been scheduled"}
             </Text>
           </View>
         ) : (
-          <View style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 16, overflow: "hidden", padding: isMobile ? 12 : 16 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ minWidth: isMobile ? 600 : 800 }}>
-                <View style={{ flexDirection: "row", backgroundColor: "#F9FAFB", borderBottomWidth: 1, borderBottomColor: "#E5E7EB", paddingVertical: 8 }}>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 60 : 80 }}>Department</Text>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 80 : 100 }}>Auditor(s)</Text>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 60 : 80 }}>Auditee</Text>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 80 : 120 }}>Date & Time</Text>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 60 : 80 }}>Status</Text>
-                  <Text style={{ fontSize: isMobile ? 10 : 11, fontWeight: "600", color: "#6B7280", paddingHorizontal: 4, width: isMobile ? 50 : 60 }}>Overdue</Text>
+          <Card>
+            {isMobile ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.headerCell, styles.deptCell]}>
+                      Department
+                    </Text>
+                    <Text style={[styles.headerCell, styles.auditorCell]}>
+                      Auditor(s)
+                    </Text>
+                    <Text style={[styles.headerCell, styles.auditeeCell]}>
+                      Auditee
+                    </Text>
+                    <Text style={[styles.headerCell, styles.dateCell]}>
+                      Date & Time
+                    </Text>
+                    <Text style={[styles.headerCell, styles.statusCell]}>
+                      Status
+                    </Text>
+                    <Text style={[styles.headerCell, styles.overdueCell]}>
+                      Overdue
+                    </Text>
+                  </View>
+                  {scheduledAudits.map((s) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    let isOverdue = false;
+                    if (
+                      s.scheduledDate &&
+                      s.status !== "COMPLETED" &&
+                      s.status !== "APPROVED" &&
+                      s.status !== "REJECTED"
+                    ) {
+                      const scheduledDate = new Date(s.scheduledDate);
+                      scheduledDate.setHours(0, 0, 0, 0);
+                      isOverdue = scheduledDate < today;
+                    }
+                    const statusColors = getStatusBadge(s.status);
+                    const primaryAuditorName = getAuditorName(s.auditorId);
+                    const leadAuditorName = s.leadAuditorName;
+                    let auditorDisplay = primaryAuditorName;
+                    if (
+                      leadAuditorName &&
+                      leadAuditorName !== primaryAuditorName
+                    ) {
+                      auditorDisplay += ` (Lead: ${leadAuditorName})`;
+                    }
+                    const formatDateTime = () => {
+                      if (!s.scheduledDate) return "Not Scheduled";
+                      const date = format(
+                        new Date(s.scheduledDate),
+                        "dd MMM yyyy",
+                      );
+                      if (s.startTime && s.endTime)
+                        return `${date} • ${s.startTime} - ${s.endTime}`;
+                      return date;
+                    };
+
+                    return (
+                      <View key={String(s.id)} style={styles.tableRow}>
+                        <Text
+                          style={[styles.tableCell, styles.deptCell]}
+                          numberOfLines={1}
+                        >
+                          {s.department || "N/A"}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.auditorCell]}
+                          numberOfLines={1}
+                        >
+                          {auditorDisplay}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.auditeeCell]}
+                          numberOfLines={1}
+                        >
+                          {s.auditeeName || "N/A"}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.dateCell]}
+                          numberOfLines={1}
+                        >
+                          {formatDateTime()}
+                        </Text>
+                        <View style={[styles.tableCell, styles.statusCell]}>
+                          <View
+                            style={[
+                              styles.badge,
+                              { backgroundColor: statusColors.bg },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.badgeText,
+                                { color: statusColors.text },
+                              ]}
+                            >
+                              {s.status || "DRAFT"}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.tableCell, styles.overdueCell]}>
+                          {isOverdue ? (
+                            <View style={[styles.badge, styles.overdueBadge]}>
+                              <Icon
+                                name="alert-circle"
+                                size={10}
+                                color="#FFFFFF"
+                              />
+                              <Text style={styles.overdueText}>Overdue</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.dashText}>—</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            ) : (
+              <View>
+                <View style={styles.tableHeaderDesktop}>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.deptCellDesktop]}
+                  >
+                    Department
+                  </Text>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.auditorCellDesktop,
+                    ]}
+                  >
+                    Auditor(s)
+                  </Text>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.auditeeCellDesktop,
+                    ]}
+                  >
+                    Auditee
+                  </Text>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.dateCellDesktop]}
+                  >
+                    Date & Time
+                  </Text>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.statusCellDesktop]}
+                  >
+                    Status
+                  </Text>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.overdueCellDesktop,
+                    ]}
+                  >
+                    Overdue
+                  </Text>
                 </View>
 
                 {scheduledAudits.map((s) => {
@@ -725,131 +763,248 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
                       "dd MMM yyyy",
                     );
                     if (s.startTime && s.endTime)
-                      return `${date} • ${s.startTime} - ${s.endTime}`;
+                      return `${date}  •  ${s.startTime} - ${s.endTime}`;
                     return date;
                   };
 
                   return (
-                    <View key={String(s.id)} style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#F3F4F6", paddingVertical: 8, alignItems: "center" }}>
-                      <Text style={{ fontSize: isMobile ? 10 : 11, color: "#1F2937", paddingHorizontal: 4, width: isMobile ? 60 : 80 }} numberOfLines={1}>{s.department || "N/A"}</Text>
-                      <Text style={{ fontSize: isMobile ? 10 : 11, color: "#1F2937", paddingHorizontal: 4, width: isMobile ? 80 : 100 }} numberOfLines={1}>{auditorDisplay}</Text>
-                      <Text style={{ fontSize: isMobile ? 10 : 11, color: "#1F2937", paddingHorizontal: 4, width: isMobile ? 60 : 80 }} numberOfLines={1}>{s.auditeeName || "N/A"}</Text>
-                      <Text style={{ fontSize: isMobile ? 10 : 11, color: "#1F2937", paddingHorizontal: 4, width: isMobile ? 80 : 120 }} numberOfLines={1}>{formatDateTime()}</Text>
-                      <View style={{ paddingHorizontal: 4, width: isMobile ? 60 : 80 }}>
-                        <Badge
-                          text={s.status || "DRAFT"}
-                          bgColor={statusColors.bg}
-                          textColor={statusColors.text}
-                          size="sm"
-                        />
+                    <View key={String(s.id)} style={styles.tableRowDesktop}>
+                      <Text
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.deptCellDesktop,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {s.department || "N/A"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.auditorCellDesktop,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {auditorDisplay}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.auditeeCellDesktop,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {s.auditeeName || "N/A"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.dateCellDesktop,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatDateTime()}
+                      </Text>
+                      <View style={[styles.statusCellDesktop]}>
+                        <View
+                          style={[
+                            styles.badge,
+                            {
+                              backgroundColor: statusColors.bg,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeText,
+                              {
+                                color: statusColors.text,
+                                fontSize: 11,
+                                fontWeight: "600",
+                              },
+                            ]}
+                          >
+                            {s.status || "DRAFT"}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={{ paddingHorizontal: 4, width: isMobile ? 50 : 60 }}>
+                      <View style={[styles.overdueCellDesktop]}>
                         {isOverdue ? (
-                          <Badge
-                            text="Overdue"
-                            bgColor="#EF4444"
-                            textColor="#FFFFFF"
-                            icon="alert-circle"
-                            size="sm"
-                          />
+                          <View
+                            style={[
+                              styles.badge,
+                              styles.overdueBadge,
+                              {
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                              },
+                            ]}
+                          >
+                            <Icon
+                              name="alert-circle"
+                              size={12}
+                              color="#FFFFFF"
+                            />
+                            <Text
+                              style={[styles.overdueText, { fontSize: 11 }]}
+                            >
+                              Overdue
+                            </Text>
+                          </View>
                         ) : (
-                          <Text style={{ color: "#9CA3AF" }}>—</Text>
+                          <Text
+                            style={[
+                              styles.dashText,
+                              { fontSize: 16, color: "#CBD5E1" },
+                            ]}
+                          >
+                            —
+                          </Text>
                         )}
                       </View>
                     </View>
                   );
                 })}
               </View>
-            </ScrollView>
-          </View>
+            )}
+          </Card>
         )}
       </View>
     );
   }
 
+  // ============================================================
   // RESPONSES TAB
+  // ============================================================
   if (activeTab === "responses") {
     const filteredResponses = allResponses.filter((r) => {
       if (!searchTerm) return true;
-      const answers = safeParseAnswers(r.answers);
+      const answers =
+        typeof r.answers === "string" ? JSON.parse(r.answers) : r.answers;
       return (
         r.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.auditeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        answers?.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+        answers?.documentNumber
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase())
       );
     });
 
     return (
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 12 }}>
-            <Icon name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+      <View style={styles.tabContainer}>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Icon
+              name="search"
+              size={20}
+              color="#9CA3AF"
+              style={styles.searchIcon}
+            />
             <TextInput
-              style={{ flex: 1, paddingVertical: 10, fontSize: 14, color: "#1F2937" }}
+              style={styles.searchInput}
               placeholder="Search responses..."
               value={searchTerm}
               onChangeText={setSearchTerm}
               placeholderTextColor="#9CA3AF"
             />
           </View>
-          <View style={{ flexDirection: "row", backgroundColor: "#F3F4F6", borderRadius: 8, padding: 2 }}>
+          <View style={styles.viewToggle}>
             <TouchableOpacity
-              style={{ padding: 8, borderRadius: 6, backgroundColor: responseViewMode === "grid" ? NAVBAR_COLORS.primary : "transparent" }}
+              style={[
+                styles.toggleButton,
+                responseViewMode === "grid" && styles.toggleActive,
+              ]}
               onPress={() => setResponseViewMode("grid")}
             >
-              <Icon name="grid" size={16} color={responseViewMode === "grid" ? "#FFFFFF" : "#6B7280"} />
+              <Icon
+                name="grid"
+                size={16}
+                color={responseViewMode === "grid" ? "#FFFFFF" : "#6B7280"}
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ padding: 8, borderRadius: 6, backgroundColor: responseViewMode === "list" ? NAVBAR_COLORS.primary : "transparent" }}
+              style={[
+                styles.toggleButton,
+                responseViewMode === "list" && styles.toggleActive,
+              ]}
               onPress={() => setResponseViewMode("list")}
             >
-              <Icon name="list" size={16} color={responseViewMode === "list" ? "#FFFFFF" : "#6B7280"} />
+              <Icon
+                name="list"
+                size={16}
+                color={responseViewMode === "list" ? "#FFFFFF" : "#6B7280"}
+              />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FFFFFF", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#1F2937" }}>{allResponses.length}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#6B7280", marginTop: 2 }}>Total</Text>
+        <View style={styles.statsGrid}>
+          <View style={styles.statCardSmall}>
+            <Text style={styles.statCardValue}>{allResponses.length}</Text>
+            <Text style={styles.statCardLabel}>Total</Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#D1FAE5", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#059669" }}>{stats.responsesApproved}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#059669", marginTop: 2 }}>APPROVED</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#D1FAE5" }]}>
+            <Text style={[styles.statCardValue, { color: "#059669" }]}>
+              {stats.responsesApproved}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#059669" }]}>
+              APPROVED
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FEE2E2", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#DC2626" }}>{stats.responsesRejected}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#DC2626", marginTop: 2 }}>REJECTED</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}>
+            <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
+              {stats.responsesRejected}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
+              REJECTED
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FEF3C7", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#D97706" }}>{stats.responsesSubmitted}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#D97706", marginTop: 2 }}>SUBMITTED</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}>
+            <Text style={[styles.statCardValue, { color: "#D97706" }]}>
+              {stats.responsesSubmitted}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
+              SUBMITTED
+            </Text>
           </View>
         </View>
 
         {filteredResponses.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB" }}>
+          <View style={styles.emptyState}>
             <Icon name="file-text" size={40} color="#CBD5E1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937", marginTop: 12 }}>No responses found</Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4, textAlign: "center" }}>
+            <Text style={styles.emptyStateTitle}>No responses found</Text>
+            <Text style={styles.emptyStateText}>
               No check sheet responses match your search
             </Text>
           </View>
         ) : responseViewMode === "grid" ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+          <View style={styles.gridContainer}>
             {filteredResponses.map((item) => (
               <View
                 key={String(item.id)}
-                style={isMobile ? { width: "100%" } : isTablet ? { width: "47%" } : { width: "31%" }}
+                style={
+                  isMobile
+                    ? { width: "100%" }
+                    : { flexBasis: "31%", maxWidth: "32%", flexGrow: 0 }
+                }
               >
                 {renderResponseCard(item)}
               </View>
             ))}
           </View>
         ) : (
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
+          /* ✅ LIST VIEW - VERTICAL SCROLL (One Item Per Row) */
+          <ScrollView
+            style={styles.verticalListContainer}
+            showsVerticalScrollIndicator={true}
+            contentContainerStyle={styles.verticalListContent}
+          >
             {filteredResponses.map((item) => (
-              <View key={String(item.id)} style={{ width: "100%", marginBottom: 4 }}>
+              <View key={String(item.id)} style={styles.verticalItemWrapper}>
                 {renderResponseVerticalItem(item)}
               </View>
             ))}
@@ -859,7 +1014,9 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
+  // ============================================================
   // NCRS TAB
+  // ============================================================
   if (activeTab === "ncrs") {
     const filteredNCRs = allNCRs.filter((n) => {
       if (!searchTerm) return true;
@@ -870,103 +1027,156 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       );
     });
 
-    const criticalCount = allNCRs.filter((n) => n.severity === "CRITICAL").length;
+    const criticalCount = allNCRs.filter(
+      (n) => n.severity === "CRITICAL",
+    ).length;
     const majorCount = allNCRs.filter((n) => n.severity === "MAJOR").length;
     const minorCount = allNCRs.filter((n) => n.severity === "MINOR").length;
-    const openCount = allNCRs.filter((n) => n.status === "OPEN" || n.status === "IN_PROGRESS").length;
+    const openCount = allNCRs.filter(
+      (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
+    ).length;
     const closedCount = allNCRs.filter((n) => n.status === "CLOSED").length;
 
     return (
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", paddingHorizontal: 12 }}>
-            <Icon name="search" size={20} color="#9CA3AF" style={{ marginRight: 8 }} />
+      <View style={styles.tabContainer}>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Icon
+              name="search"
+              size={20}
+              color="#9CA3AF"
+              style={styles.searchIcon}
+            />
             <TextInput
-              style={{ flex: 1, paddingVertical: 10, fontSize: 14, color: "#1F2937" }}
+              style={styles.searchInput}
               placeholder="Search NCRs..."
               value={searchTerm}
               onChangeText={setSearchTerm}
               placeholderTextColor="#9CA3AF"
             />
           </View>
-          <View style={{ flexDirection: "row", backgroundColor: "#F3F4F6", borderRadius: 8, padding: 2 }}>
+          <View style={styles.viewToggle}>
             <TouchableOpacity
-              style={{ padding: 8, borderRadius: 6, backgroundColor: ncrViewMode === "grid" ? NAVBAR_COLORS.primary : "transparent" }}
+              style={[
+                styles.toggleButton,
+                ncrViewMode === "grid" && styles.toggleActive,
+              ]}
               onPress={() => setNcrViewMode("grid")}
             >
-              <Icon name="grid" size={16} color={ncrViewMode === "grid" ? "#FFFFFF" : "#6B7280"} />
+              <Icon
+                name="grid"
+                size={16}
+                color={ncrViewMode === "grid" ? "#FFFFFF" : "#6B7280"}
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ padding: 8, borderRadius: 6, backgroundColor: ncrViewMode === "list" ? NAVBAR_COLORS.primary : "transparent" }}
+              style={[
+                styles.toggleButton,
+                ncrViewMode === "list" && styles.toggleActive,
+              ]}
               onPress={() => setNcrViewMode("list")}
             >
-              <Icon name="list" size={16} color={ncrViewMode === "list" ? "#FFFFFF" : "#6B7280"} />
+              <Icon
+                name="list"
+                size={16}
+                color={ncrViewMode === "list" ? "#FFFFFF" : "#6B7280"}
+              />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FFFFFF", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#1F2937" }}>{allNCRs.length}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#6B7280", marginTop: 2 }}>Total NCRs</Text>
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FFFFFF" }]}>
+            <Text style={styles.statCardValue}>{allNCRs.length}</Text>
+            <Text style={styles.statCardLabel}>Total NCRs</Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FEE2E2", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#DC2626" }}>{criticalCount}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#DC2626", marginTop: 2 }}>Critical</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}>
+            <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
+              {criticalCount}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
+              Critical
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FFEDD5", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#EA580C" }}>{majorCount}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#EA580C", marginTop: 2 }}>Major</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FFEDD5" }]}>
+            <Text style={[styles.statCardValue, { color: "#EA580C" }]}>
+              {majorCount}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#EA580C" }]}>
+              Major
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#FEF3C7", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#D97706" }}>{minorCount}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#D97706", marginTop: 2 }}>Minor</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}>
+            <Text style={[styles.statCardValue, { color: "#D97706" }]}>
+              {minorCount}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
+              Minor
+            </Text>
           </View>
-          <View style={{ flex: 1, minWidth: isMobile ? "30%" : "18%", backgroundColor: "#EDE9FE", borderRadius: 8, padding: isMobile ? 8 : 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#7C3AED" }}>{openCount}</Text>
-            <Text style={{ fontSize: isMobile ? 8 : 10, color: "#7C3AED", marginTop: 2 }}>Open / In Progress</Text>
+          <View style={[styles.statCardSmall, { backgroundColor: "#EDE9FE" }]}>
+            <Text style={[styles.statCardValue, { color: "#7C3AED" }]}>
+              {openCount}
+            </Text>
+            <Text style={[styles.statCardLabel, { color: "#7C3AED" }]}>
+              Open / In Progress
+            </Text>
           </View>
         </View>
 
         {allNCRs.length > 0 && (
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 12, padding: isMobile ? 12 : 16, marginBottom: 16, borderWidth: 1, borderColor: "#E5E7EB" }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-              <Text style={{ fontSize: isMobile ? 11 : 12, fontWeight: "500", color: "#6B7280" }}>Closure Progress</Text>
-              <Text style={{ fontSize: isMobile ? 11 : 12, fontWeight: "500", color: "#6B7280" }}>
+          <View style={styles.progressContainer}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>Closure Progress</Text>
+              <Text style={styles.progressPercent}>
                 {Math.round((closedCount / allNCRs.length) * 100)}% Closed
               </Text>
             </View>
-            <View style={{ height: 8, backgroundColor: "#E5E7EB", borderRadius: 4, overflow: "hidden" }}>
-              <View style={{ height: "100%", width: `${(closedCount / allNCRs.length) * 100}%`, backgroundColor: "#10B981", borderRadius: 4 }} />
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${(closedCount / allNCRs.length) * 100}%` },
+                ]}
+              />
             </View>
           </View>
         )}
 
         {filteredNCRs.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB" }}>
+          <View style={styles.emptyState}>
             <Icon name="alert-triangle" size={40} color="#CBD5E1" />
-            <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937", marginTop: 12 }}>No NCRs found</Text>
-            <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4, textAlign: "center" }}>
+            <Text style={styles.emptyStateTitle}>No NCRs found</Text>
+            <Text style={styles.emptyStateText}>
               {leadAuditorDepartment
                 ? `No non-conformity reports found for ${leadAuditorDepartment} department`
                 : "No non-conformity reports match your search"}
             </Text>
           </View>
         ) : ncrViewMode === "grid" ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+          <View style={styles.gridContainer}>
             {filteredNCRs.map((item) => (
               <View
                 key={String(item.id)}
-                style={isMobile ? { width: "100%" } : isTablet ? { width: "47%" } : { width: "31%" }}
+                style={
+                  isMobile
+                    ? { width: "100%" }
+                    : { flexBasis: "31%", maxWidth: "32%", flexGrow: 0 }
+                }
               >
                 {renderNCRCard(item)}
               </View>
             ))}
           </View>
         ) : (
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 16 }}>
+          /* ✅ LIST VIEW - VERTICAL SCROLL (One Item Per Row) */
+          <ScrollView
+            style={styles.verticalListContainer}
+            showsVerticalScrollIndicator={true}
+            contentContainerStyle={styles.verticalListContent}
+          >
             {filteredNCRs.map((item) => (
-              <View key={String(item.id)} style={{ width: "100%", marginBottom: 4 }}>
+              <View key={String(item.id)} style={styles.verticalItemWrapper}>
                 {renderNCRVerticalItem(item)}
               </View>
             ))}
@@ -978,5 +1188,525 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
 
   return null;
 };
+
+const styles = StyleSheet.create({
+  // ============================================================================
+  // LAYOUT & CONTAINER STYLES
+  // ============================================================================
+  tabContainer: {
+    flex: 1,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+
+  // ============================================================================
+  // SEARCH STYLES
+  // ============================================================================
+  searchContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  viewToggle: {
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    padding: 2,
+  },
+  toggleButton: {
+    padding: 8,
+    borderRadius: 6,
+  },
+  toggleActive: {
+    backgroundColor: NAVBAR_COLORS.primary,
+  },
+
+  // ============================================================================
+  // STATS STYLES
+  // ============================================================================
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  statCardSmall: {
+    flex: 1,
+    minWidth: "18%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  statCardValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#1F2937",
+  },
+  statCardLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+
+  // ============================================================================
+  // TABLE STYLES (Mobile)
+  // ============================================================================
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    paddingVertical: 8,
+  },
+  headerCell: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  tableCell: {
+    fontSize: 11,
+    color: "#1F2937",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  deptCell: { width: isMobile ? 60 : 80 },
+  auditorCell: { width: isMobile ? 80 : 100 },
+  auditeeCell: { width: isMobile ? 60 : 80 },
+  dateCell: { width: isMobile ? 80 : 120 },
+  statusCell: { width: isMobile ? 60 : 80 },
+  overdueCell: { width: isMobile ? 50 : 60 },
+
+  // ============================================================================
+  // TABLE STYLES (Desktop)
+  // ============================================================================
+  tableHeaderDesktop: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderBottomWidth: 2,
+    borderBottomColor: "#E2E8F0",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+  },
+  headerCellDesktop: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  tableRowDesktop: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+  tableCellDesktop: {
+    fontSize: 14,
+    color: "#334155",
+    fontWeight: "500",
+  },
+  deptCellDesktop: { flex: 2 },
+  auditorCellDesktop: { flex: 2.5 },
+  auditeeCellDesktop: { flex: 2 },
+  dateCellDesktop: { flex: 2.5 },
+  statusCellDesktop: { flex: 1.5, alignItems: "flex-start" },
+  overdueCellDesktop: { flex: 1.2, alignItems: "center" },
+
+  // ============================================================================
+  // BADGE STYLES
+  // ============================================================================
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+    gap: 2,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "500",
+  },
+  overdueBadge: {
+    backgroundColor: "#EF4444",
+  },
+  overdueText: {
+    fontSize: 9,
+    fontWeight: "500",
+    color: "#FFFFFF",
+  },
+  dashText: {
+    color: "#9CA3AF",
+  },
+
+  // ============================================================================
+  // EMPTY STATE STYLES
+  // ============================================================================
+  emptyState: {
+    paddingVertical: 40,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 12,
+  },
+  emptyStateText: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  // ============================================================================
+  // RESPONSE CARD STYLES
+  // ============================================================================
+  responseCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  responseHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  responseId: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontFamily: "monospace",
+  },
+  responseDepartment: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  responseAuditee: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  responseFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  responseScore: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  responseScoreValue: {
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  responseAuditor: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  responseActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  responseActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 6,
+    backgroundColor: "#FFFFFF",
+  },
+  responseActionText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  reviewButton: {
+    backgroundColor: NAVBAR_COLORS.primary,
+    borderColor: NAVBAR_COLORS.primary,
+  },
+  reviewButtonText: {
+    color: "#FFFFFF",
+  },
+
+  // ============================================================================
+  // NCR CARD STYLES
+  // ============================================================================
+  ncrCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  ncrHeader: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  ncrNumber: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  ncrTitle: {
+    fontSize: 12,
+    color: "#4B5563",
+    marginTop: 4,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  ncrFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  ncrDept: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  ncrDate: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  ncrActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  ncrActionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+  },
+  ncrActionText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1D4ED8",
+  },
+
+  // ============================================================================
+  // PROGRESS STYLES
+  // ============================================================================
+  progressContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  progressPercent: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#10B981",
+    borderRadius: 4,
+  },
+
+  // ============================================================================
+  // GRID STYLES
+  // ============================================================================
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+  },
+
+  // ============================================================================
+  // VERTICAL LIST STYLES (One Item Per Row)
+  // ============================================================================
+  verticalListContainer: {
+    flex: 1,
+    marginTop: 4,
+  },
+  verticalListContent: {
+    paddingBottom: 16,
+    gap: 8,
+  },
+  verticalItemWrapper: {
+    width: "100%",
+  },
+  verticalItemContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    width: "100%",
+  },
+  verticalItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  verticalItemLeft: {
+    flex: 2,
+    minWidth: 120,
+  },
+  verticalItemCenter: {
+    flex: 1.5,
+    minWidth: 100,
+  },
+  verticalItemRight: {
+    flex: 1,
+    minWidth: 80,
+    alignItems: "flex-end",
+  },
+  verticalItemActions: {
+    flexDirection: "row",
+    gap: 6,
+    minWidth: 100,
+    justifyContent: "flex-end",
+  },
+  verticalItemId: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontFamily: "monospace",
+  },
+  verticalItemDepartment: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  verticalItemTitle: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  verticalItemAuditee: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  verticalItemAuditor: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  verticalItemScore: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  verticalItemDept: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  verticalItemDate: {
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+  verticalActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 6,
+    backgroundColor: "#FFFFFF",
+  },
+  verticalReviewButton: {
+    backgroundColor: NAVBAR_COLORS.primary,
+    borderColor: NAVBAR_COLORS.primary,
+  },
+  verticalActionText: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+});
 
 export default AuditsAndResponses;
