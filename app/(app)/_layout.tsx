@@ -38,26 +38,41 @@ export default function AppLayout() {
       <View style={{ zIndex: 10, elevation: 10 }}>
         <Navbar onMenuPress={toggleDrawer} />
       </View>
-      
+
       {/* Content area with drawer */}
       <View style={{ flex: 1 }}>
         {/* ✅ Drawer inside content - starts below Navbar */}
         {drawerVisible && (
-          <View style={{ 
-            position: 'absolute', 
-            top: 0, left: 0, right: 0, bottom: 0, 
-            zIndex: 5, 
-            flexDirection: 'row' 
-          }}>
-            <View style={{ 
-              width: SCREEN_WIDTH * 0.8, 
-              maxWidth: 300,
-              backgroundColor: 'white',
-            }}>
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 5,
+              flexDirection: "row",
+            }}
+          >
+            {/* ✅ FIXED: Exact width match with SmartNavigator (256) */}
+            <View
+              style={{
+                width: 256,
+                height: "100%",
+                backgroundColor: "white",
+                elevation: 10,
+                shadowColor: "#000",
+                shadowOffset: { width: 2, height: 0 },
+                shadowOpacity: 0.25,
+                shadowRadius: 10,
+              }}
+            >
               <SmartNavigator type="drawer" onClose={closeDrawer} />
             </View>
+
+            {/* Overlay */}
             <TouchableOpacity
-              style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
               activeOpacity={1}
               onPress={closeDrawer}
             />

@@ -610,6 +610,42 @@ export default function IATFInternalAuditForm(props: any) {
     if (editId && questions.length > 0 && !currentCheckSheet) loadAuditData();
   }, [editId, questions]);
 
+    useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (currentStep === 2) {
+        const target = event.target as HTMLElement;
+        const isInput =
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.getAttribute("contenteditable") === "true";
+
+        // Ignore arrow keys if the user is actively typing in the observation field
+        if (isInput) return;
+
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          if (currentCheckpointIndex > 0) {
+            setCurrentCheckpointIndex((prev) => prev - 1);
+            scrollToTop();
+          }
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          if (currentCheckpointIndex < questions.length - 1) {
+            setCurrentCheckpointIndex((prev) => prev + 1);
+            scrollToTop();
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [currentStep, currentCheckpointIndex, questions.length]);
+
   const handleInputChange = (field: string, value: any) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
   const handleObservationChange = (questionId: number, observation: string) =>

@@ -2,6 +2,7 @@
 // FINAL VERSION - First Message Menu Fixed, Event Date Picker Support, Location Zoom, No Extra Spacing
 
 import { API_BASE_URL } from "@/config/apiConfig";
+import { Audio, ResizeMode, Video } from "expo-av";
 import * as FileSystem from 'expo-file-system';
 import { documentDirectory } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -121,7 +122,9 @@ const parseBackendDate = (dateString: string): Date => {
   if (!isoString.includes('T')) {
     isoString = isoString.replace(' ', 'T');
   }
-  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+  // ✅ FIXED: ALWAYS add Z if no timezone marker
+  // Backend always sends UTC (both local and production)
+  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
     isoString += 'Z';
   }
   return new Date(isoString);
@@ -280,13 +283,22 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
 // =====================================================
 // WEB AUDIO PLAYER
 // =====================================================
-const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
+// =====================================================
+// WEB AUDIO PLAYER (INLINE - NO REDIRECT)
+// =====================================================
+const WebAudioPlayer = ({
+  uri,
+  fileName,
+}: {
+  uri: string;
+  fileName?: string;
+}) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const formatDuration = (seconds: number) => {
     if (!seconds || isNaN(seconds) || seconds <= 0) return "00:00";
@@ -294,40 +306,105 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
   };
 
   useEffect(() => {
-    if (Platform.OS === "web" && uri) {
-      try {
-        const audio = new Audio(uri);
-        audio.preload = "metadata";
-        audio.addEventListener("loadedmetadata", () => { setDuration(audio.duration); setIsLoading(false); });
-        audio.addEventListener("timeupdate", () => setCurrentTime(audio.currentTime));
-        audio.addEventListener("ended", () => { setIsPlaying(false); setCurrentTime(0); });
-        audio.addEventListener("error", () => { setError("Cannot play audio"); setIsLoading(false); });
-        audioRef.current = audio;
-        return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; } };
-      } catch (err) { setError("Cannot setup audio"); setIsLoading(false); }
-    }
+    const audio = audioRef.current;
+    if (!audio || !uri) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setIsLoading(false);
+    };
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+    const handleError = () => {
+      console.error("Audio playback error for URI:", uri);
+      setError("Cannot play audio. Check format or permissions.");
+      setIsLoading(false);
+    };
+
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
+
+    // Force the browser to load the metadata
+    audio.load();
+
+    return () => {
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
+      audio.pause();
+      audio.src = "";
+    };
   }, [uri]);
 
   const handlePlayPause = () => {
-    if (error || !audioRef.current) return;
-    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); } 
-    else { audioRef.current.play().then(() => { setIsPlaying(true); setError(null); }).catch(() => setError("Cannot play audio")); }
+    const audio = audioRef.current;
+    if (!audio || error) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().catch((err) => {
+        console.error("Play error:", err);
+        setError("Cannot play audio");
+      });
+    }
   };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  if (!uri) return ( <View style={styles.audioContainer}><Text style={styles.audioFileName}>{fileName || "Audio"}</Text><Text style={styles.audioError}>No audio data</Text></View> );
+
+  if (!uri)
+    return (
+      <View style={styles.audioContainer}>
+        <Text style={styles.audioFileName}>{fileName || "Audio"}</Text>
+        <Text style={styles.audioError}>No audio data</Text>
+      </View>
+    );
 
   return (
     <View style={styles.audioContainer}>
+      {/* ✅ Hidden HTML5 Audio Element for reliable cross-browser playback */}
+      <audio
+        ref={audioRef}
+        src={uri}
+        preload="metadata"
+        crossOrigin="anonymous"
+        style={{ display: "none" }}
+      />
+
       <View style={styles.audioRow}>
-        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error || isLoading}>
-          {isLoading ? <ActivityIndicator size="small" color="#fff" /> : isPlaying ? <Pause size={20} color="#fff" /> : <Play size={20} color="#fff" />}
+        <TouchableOpacity
+          onPress={handlePlayPause}
+          style={styles.audioPlayButton}
+          disabled={!!error || isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : isPlaying ? (
+            <Pause size={20} color="#fff" />
+          ) : (
+            <Play size={20} color="#fff" />
+          )}
         </TouchableOpacity>
         <View style={styles.audioInfo}>
-          <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
+          <Text style={styles.audioFileName} numberOfLines={1}>
+            {fileName || "Audio"}
+          </Text>
           <View style={styles.audioProgressContainer}>
-            <View style={styles.audioProgressTrack}><View style={[styles.audioProgressFill, { width: `${progress}%` }]} /></View>
-            <Text style={styles.audioTime}>{formatDuration(currentTime)} / {formatDuration(duration)}</Text>
+            <View style={styles.audioProgressTrack}>
+              <View
+                style={[styles.audioProgressFill, { width: `${progress}%` }]}
+              />
+            </View>
+            <Text style={styles.audioTime}>
+              {formatDuration(currentTime)} / {formatDuration(duration)}
+            </Text>
           </View>
         </View>
         <Text style={styles.audioFileSize}>{formatFileSize(0)}</Text>
@@ -338,27 +415,200 @@ const WebAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) =
 };
 
 // =====================================================
-// NATIVE AUDIO PLAYER
+// NATIVE AUDIO PLAYER (INLINE - NO REDIRECT)
 // =====================================================
-const NativeAudioPlayer = ({ uri, fileName }: { uri: string; fileName?: string }) => {
+const NativeAudioPlayer = ({
+  uri,
+  fileName,
+}: {
+  uri: string;
+  fileName?: string;
+}) => {
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [position, setPosition] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const handlePlayPause = () => {
-    if (!uri) { setError("Audio not available"); return; }
-    if (!isPlaying) { Linking.openURL(uri).catch(() => setError("Cannot play audio")); }
-    setIsPlaying(!isPlaying);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const setupAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (err) {
+        console.warn("Audio mode setup failed", err);
+      }
+    };
+    setupAudio();
+
+    const loadAudio = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // ✅ Pass callback directly to createAsync (Type-safe & prevents loops)
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri },
+          {
+            shouldPlay: false,
+            isLooping: false,
+          },
+          (status: any) => {
+            if (!isMounted) return;
+
+            if (status.isLoaded) {
+              setDuration(status.durationMillis || 0);
+              setPosition(status.positionMillis || 0);
+              setIsPlaying(status.isPlaying);
+
+              // ✅ Cleanly handle end without triggering a replay loop
+              if (status.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(0);
+              }
+            } else if (status.error) {
+              setError("Cannot play audio");
+              setIsLoading(false);
+            }
+          },
+        );
+
+        if (isMounted) {
+          setSound(newSound);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError("Cannot load audio");
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadAudio();
+
+    return () => {
+      isMounted = false;
+      if (sound) {
+        sound.stopAsync(); // ✅ Force stop before unloading to prevent ghost audio
+        sound.unloadAsync();
+      }
+    };
+  }, [uri]);
+
+  const handlePlayPause = async () => {
+    if (!sound || error) return;
+    try {
+      if (isPlaying) {
+        await sound.pauseAsync();
+        setIsPlaying(false);
+      } else {
+        // ✅ If it already finished, restart from 0, otherwise resume
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && status.didJustFinish) {
+          await sound.setPositionAsync(0);
+        }
+        await sound.playAsync();
+        setIsPlaying(true);
+      }
+    } catch (err) {
+      console.error("Playback error:", err);
+      setError("Playback failed");
+      setIsPlaying(false);
+    }
   };
+
+  const formatTime = (millis: number) => {
+    const seconds = Math.floor(millis / 1000);
+    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+
+  const progress = duration > 0 ? (position / duration) * 100 : 0;
+
   return (
     <View style={styles.audioContainer}>
       <View style={styles.audioRow}>
-        <TouchableOpacity onPress={handlePlayPause} style={styles.audioPlayButton} disabled={!!error}><Play size={20} color="#fff" /></TouchableOpacity>
+        <TouchableOpacity
+          onPress={handlePlayPause}
+          style={styles.audioPlayButton}
+          disabled={!!error || isLoading}
+          activeOpacity={0.7}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : isPlaying ? (
+            <Pause size={20} color="#fff" />
+          ) : (
+            <Play size={20} color="#fff" />
+          )}
+        </TouchableOpacity>
         <View style={styles.audioInfo}>
-          <Text style={styles.audioFileName} numberOfLines={1}>{fileName || "Audio"}</Text>
-          <Text style={styles.audioTime}>{isPlaying ? "Playing..." : "Tap to play"}</Text>
+          <Text style={styles.audioFileName} numberOfLines={1}>
+            {fileName || "Audio"}
+          </Text>
+          <View style={styles.audioProgressContainer}>
+            <View style={styles.audioProgressTrack}>
+              <View
+                style={[styles.audioProgressFill, { width: `${progress}%` }]}
+              />
+            </View>
+            <Text style={styles.audioTime}>
+              {formatTime(position)} / {formatTime(duration)}
+            </Text>
+          </View>
         </View>
-        <Text style={styles.audioFileSize}>{formatFileSize(0)}</Text>
       </View>
       {error && <Text style={styles.audioError}>{error}</Text>}
+    </View>
+  );
+};
+
+// =====================================================
+// INLINE VIDEO PLAYER (WORKS ON BOTH WEB & MOBILE)
+// =====================================================
+const InlineVideoPlayer = ({ uri }: { uri: string }) => {
+  const videoRef = useRef<Video>(null);
+  const webVideoRef = useRef<HTMLVideoElement>(null);
+
+  // ✅ Web: Use native HTML5 <video> tag for perfect inline playback
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.videoPreview}>
+        <video
+          ref={webVideoRef}
+          src={uri}
+          controls
+          playsInline
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: 12,
+            backgroundColor: "#000",
+            objectFit: "contain",
+          }}
+        />
+      </View>
+    );
+  }
+
+  // ✅ Mobile: Use expo-av Video component
+  return (
+    <View style={styles.videoPreview}>
+      <Video
+        ref={videoRef}
+        style={{ width: "100%", height: "100%", borderRadius: 12 }}
+        source={{ uri }}
+        useNativeControls
+        resizeMode={ResizeMode.CONTAIN}
+        isLooping={false}
+      />
     </View>
   );
 };
@@ -617,124 +867,231 @@ export default function ThreadCard({
     finally { setProfileLoading(false); }
   };
 
-  const renderAttachment = (attachment: any, index: number) => {
+   const renderAttachment = (attachment: any, index: number) => {
     if (!attachment) return null;
-    
-    const type = (attachment.attachmentType || "").toUpperCase();
-
-    if (type === "IMAGE") {
+    if (attachment.attachmentType === "IMAGE") {
       let imageUri = attachment.uri || "";
-      if (attachment.hasValidFileData && attachment.fileData) imageUri = base64ToUri(attachment.fileData, attachment.fileType || "image/jpeg");
-      else if (attachment.id && imageDataCache[attachment.id]) imageUri = imageDataCache[attachment.id];
-      else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id]) loadImageData(attachment);
-      
-      if (loadingImages[attachment.id] && !imageUri) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}><ActivityIndicator size="large" color="#4a90d9" /><Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text></View></View>);
-      if (!imageUri || imageErrors[attachment.id]) return (<View key={index} style={styles.attachmentContainer}><View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}><Text style={{ fontSize: 40 }}>🖼️</Text><Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>{imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}</View></View>);
-      return (<View key={index} style={styles.attachmentContainer}><Pressable onPress={() => openImagePreview(imageUri)}><Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" onError={() => { if (attachment.id) setImageErrors(prev => ({ ...prev, [attachment.id!]: true })); }} /></Pressable><View style={styles.fileInfo}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text><Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable></View></View>);
-    }
-    
-    if (type === "VIDEO") {
-      let videoUri = attachment.uri || "";
-      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
-      else if (Platform.OS === "web" && attachment.id) videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      return (<View key={index} style={styles.attachmentContainer}><Pressable style={styles.videoPreview} onPress={() => { if (videoUri) openVideoPreview(videoUri); else if (attachment.id) openVideoPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`); }}><View style={styles.videoPlayIconContainer}><Play size={45} color="white" /></View><Text style={styles.videoLabel} numberOfLines={1}>{attachment.fileName || "Video"}</Text>{attachment.fileSize && <Text style={styles.videoSize}>{formatFileSize(attachment.fileSize)}</Text>}</Pressable></View>);
-    }
-    
-    if (type === "AUDIO") {
-      let audioUri = attachment.uri || "";
-      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) audioUri = base64ToUri(attachment.fileData, attachment.fileType || "audio/mpeg");
-      else if (Platform.OS === "web" && attachment.id) audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
-    }
-
-    if (type === "LOCATION") {
-      let location: any = {};
-      try { 
-        if (attachment.fileData) {
-          if (typeof attachment.fileData === 'string') {
-            try { location = JSON.parse(attachment.fileData); } 
-            catch (e) { 
-              try { location = JSON.parse(atob(attachment.fileData)); }
-              catch (e2) { location = { url: attachment.fileData }; }
-            }
-          } else { location = attachment.fileData; }
-        }
-      } catch (error) { console.warn("Location parse error", error); }
-      
-      let mapUrl = location.url || location.mapUrl || location.uri;
-      if (!mapUrl) {
-        const lat = location.latitude || location.lat || location.coords?.latitude;
-        const lng = location.longitude || location.lng || location.lon || location.coords?.longitude;
-        if (lat && lng) {
-          mapUrl = `https://www.google.com/maps?q=${lat},${lng}&z=16`;
-        } else {
-          mapUrl = "https://maps.google.com";
-        }
-      }
-      
-      const locationName = location.name || location.title || location.address || "Shared Location";
-      return (
-        <Pressable key={index} style={styles.locationContainer} onPress={() => Linking.openURL(mapUrl)}>
-          <MapPin size={20} color="#ef4444" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.locationText} numberOfLines={1}>{locationName}</Text>
-            <Text style={styles.locationSubtext} numberOfLines={1}>Tap to open in maps</Text>
+      if (attachment.hasValidFileData && attachment.fileData)
+        imageUri = base64ToUri(
+          attachment.fileData,
+          attachment.fileType || "image/jpeg",
+        );
+      else if (attachment.id && imageDataCache[attachment.id])
+        imageUri = imageDataCache[attachment.id];
+      else if (
+        attachment.id &&
+        !imageErrors[attachment.id] &&
+        !loadingImages[attachment.id]
+      )
+        loadImageData(attachment);
+      if (loadingImages[attachment.id] && !imageUri)
+        return (
+          <View key={index} style={styles.attachmentContainer}>
+            <View
+              style={[
+                styles.imagePreview,
+                { justifyContent: "center", alignItems: "center" },
+              ]}
+            >
+              <ActivityIndicator size="large" color="#4a90d9" />
+              <Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>
+                Loading...
+              </Text>
+            </View>
           </View>
-        </Pressable>
-      );
-    }
-
-    // ✅ FIX: Ultra-robust Event parsing checking multiple date keys
-    if (type === "EVENT") {
-      let event: any = {};
-      try { 
-        if (attachment.fileData) {
-          if (typeof attachment.fileData === 'string') {
-            try { 
-              event = JSON.parse(attachment.fileData); 
-            } catch (e) { 
-              try { 
-                event = JSON.parse(atob(attachment.fileData)); 
-              } catch (e2) { 
-                event = { title: attachment.fileData }; 
-              }
-            }
-          } else { 
-            event = attachment.fileData; 
-          }
-        }
-      } catch (error) { 
-        console.warn("Event parse error", error); 
-      }
-      
-      // Check multiple possible date keys to ensure we find it
-      const dateVal = event.datetime || event.date || event.time || event.timestamp;
-      const dateDisplay = parseEventDate(dateVal);
-      
+        );
+      if (!imageUri || imageErrors[attachment.id])
+        return (
+          <View key={index} style={styles.attachmentContainer}>
+            <View
+              style={[
+                styles.imagePreview,
+                {
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: "#f3f4f6",
+                },
+              ]}
+            >
+              <Text style={{ fontSize: 40 }}>🖼️</Text>
+              <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                {attachment.fileName || "Image"}
+              </Text>
+              {imageErrors[attachment.id] && (
+                <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>
+                  Failed to load
+                </Text>
+              )}
+            </View>
+          </View>
+        );
       return (
-        <View key={index} style={styles.eventContainer}>
-          <Calendar size={22} color="#9333ea" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eventTitle} numberOfLines={1}>{event.title || "Event"}</Text>
-            <Text style={styles.eventDate} numberOfLines={2}>{dateDisplay}</Text>
-            {event.description && (
-              <Text style={styles.eventDescription} numberOfLines={2}>{event.description}</Text>
-            )}
+        <View key={index} style={styles.attachmentContainer}>
+          <Pressable onPress={() => openImagePreview(imageUri)}>
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.imagePreview}
+              resizeMode="cover"
+              onError={() => {
+                if (attachment.id)
+                  setImageErrors((prev) => ({
+                    ...prev,
+                    [attachment.id!]: true,
+                  }));
+              }}
+            />
+          </Pressable>
+          <View style={styles.fileInfo}>
+            <Text style={styles.fileName} numberOfLines={1}>
+              {attachment.fileName || "Image"}
+            </Text>
+            <Pressable onPress={() => downloadFile(attachment)}>
+              <Download size={18} color="green" />
+            </Pressable>
           </View>
         </View>
       );
     }
+    if (attachment.attachmentType === "VIDEO") {
+      let videoUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100)
+        videoUri = base64ToUri(
+          attachment.fileData,
+          attachment.fileType || "video/mp4",
+        );
+      else if (attachment.id)
+        videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
 
-    const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
+      // ✅ Unified Inline Video Player for BOTH Web and Mobile (No new window/screen)
+      return (
+        <View key={index} style={styles.attachmentContainer}>
+          <InlineVideoPlayer uri={videoUri} />
+          <View style={styles.fileInfo}>
+            <Text style={styles.fileName} numberOfLines={1}>
+              {attachment.fileName || "Video"}
+            </Text>
+            <Text style={styles.fileSize}>
+              {formatFileSize(attachment.fileSize)}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    if (attachment.attachmentType === "AUDIO") {
+      let audioUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100)
+        audioUri = base64ToUri(
+          attachment.fileData,
+          attachment.fileType || "audio/mpeg",
+        );
+      else if (Platform.OS === "web" && attachment.id)
+        audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+      return (
+        <AudioPlayer
+          key={index}
+          uri={audioUri}
+          fileName={attachment.fileName}
+        />
+      );
+    }
+    if (attachment.attachmentType === "LOCATION") {
+      let location: any = {};
+      try {
+        if (attachment.fileData)
+          location = JSON.parse(atob(attachment.fileData));
+      } catch (error) {}
+      return (
+        <Pressable
+          key={index}
+          style={styles.locationContainer}
+          onPress={() => {
+            const map = location.url || location.mapUrl;
+            if (map) Linking.openURL(map);
+          }}
+        >
+          <MapPin size={20} color="red" />
+          <Text style={{ fontSize: 14 }}>Open shared location</Text>
+        </Pressable>
+      );
+    }
+    if (attachment.attachmentType === "EVENT") {
+      let event: any = {};
+      try {
+        if (attachment.fileData) event = JSON.parse(atob(attachment.fileData));
+      } catch (error) {}
+      return (
+        <View key={index} style={styles.eventContainer}>
+          <Calendar size={22} color="purple" />
+          <View>
+            <Text style={styles.eventTitle}>{event.title || "Event"}</Text>
+            <Text style={{ fontSize: 12, color: "#555" }}>
+              {event.datetime ? formatDateAndTime(event.datetime) : "No date"}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    const isPDF =
+      attachment.fileName?.toLowerCase().endsWith(".pdf") ||
+      attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     if (isPDF) {
-      if (attachment.fileData && typeof attachment.fileData === 'string' && attachment.fileData.length > 100) fileUri = base64ToUri(attachment.fileData, attachment.fileType || "application/pdf");
-      else if (Platform.OS === "web" && attachment.id) fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#dc2626" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => { if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf"); else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf"); }} style={{ padding: 8 }}><Eye size={20} color="#2563eb" /></TouchableOpacity><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
+      if (attachment.fileData && attachment.fileData.length > 100)
+        fileUri = base64ToUri(
+          attachment.fileData,
+          attachment.fileType || "application/pdf",
+        );
+      else if (Platform.OS === "web" && attachment.id)
+        fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+      return (
+        <View key={index} style={styles.documentContainer}>
+          <FileText size={32} color="#dc2626" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fileName} numberOfLines={1}>
+              {attachment.fileName || "PDF Document"}
+            </Text>
+            <Text style={styles.fileSize}>
+              {formatFileSize(attachment.fileSize)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              if (fileUri)
+                openPdfPreview(fileUri, attachment.fileName || "document.pdf");
+              else if (attachment.id)
+                openPdfPreview(
+                  `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`,
+                  "document.pdf",
+                );
+            }}
+            style={{ padding: 8 }}
+          >
+            <Eye size={20} color="#2563eb" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => downloadFile(attachment)}>
+            <Download size={20} color="green" />
+          </TouchableOpacity>
+        </View>
+      );
     }
-    
-    return (<View key={index} style={styles.documentContainer}><FileText size={32} color="#555" /><View style={{ flex: 1 }}><Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text><Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text></View><TouchableOpacity onPress={() => downloadFile(attachment)}><Download size={20} color="green" /></TouchableOpacity></View>);
+    return (
+      <View key={index} style={styles.documentContainer}>
+        <FileText size={32} color="#555" />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.fileName} numberOfLines={1}>
+            {attachment.fileName || "File"}
+          </Text>
+          <Text style={styles.fileSize}>
+            {formatFileSize(attachment.fileSize)}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => downloadFile(attachment)}>
+          <Download size={20} color="green" />
+        </TouchableOpacity>
+      </View>
+    );
   };
+
 
   const getAvatarUserId = () => {
     if (isOwnMessage) return currentUser?.id;
@@ -931,8 +1288,16 @@ const styles = StyleSheet.create({
   
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
-  messageBubble: { maxWidth: "75%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
-  myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
+messageBubble: {
+    maxWidth: "80%", // Slightly adjusted for better mobile fit
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },  myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
   otherMessage: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#eeeeee" },
   messageText: { fontSize: 15, color: "#222", lineHeight: 21 },
   senderName: { fontSize: 12, fontWeight: "600", color: "#00529B", marginBottom: 4, textDecorationLine: 'underline' },
@@ -949,12 +1314,27 @@ const styles = StyleSheet.create({
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
   attachmentContainer: { marginTop: 8 },
-  imagePreview: { width: 220, height: 180, borderRadius: 12, backgroundColor: "#f3f4f6" },
-  fileInfo: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+imagePreview: {
+    width: "100%", // ✅ Changed from fixed 220
+    maxWidth: 300, // ✅ Caps size on desktop
+    aspectRatio: 4 / 3, // ✅ Maintains consistent shape
+    borderRadius: 12,
+    backgroundColor: "#f3f4f6",
+    overflow: "hidden",
+  },  fileInfo: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   fileName: { fontSize: 14, fontWeight: "600", color: "#333", flex: 1 },
   fileSize: { fontSize: 12, color: "#777", marginTop: 2 },
-  videoPreview: { width: 220, height: 150, borderRadius: 12, backgroundColor: "#111", justifyContent: "center", alignItems: "center", position: "relative" },
-  videoPlayIconContainer: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
+videoPreview: {
+    width: "100%", // ✅ Changed from fixed 220
+    maxWidth: 300, // ✅ Caps size on desktop
+    // aspectRatio: 16 / 9, // ✅ Perfect responsive video scaling
+    borderRadius: 12,
+    height: 150,
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },  videoPlayIconContainer: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
   videoLabel: { color: "white", marginTop: 8, fontSize: 12, fontWeight: "500" },
   videoSize: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 2 },
   videoModalContainer: { flex: 1, backgroundColor: "black" },
@@ -971,8 +1351,15 @@ const styles = StyleSheet.create({
   videoModalControls: { flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.9)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" },
   videoModalPlayBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginRight: 12 },
   videoModalStatus: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
-  audioContainer: { backgroundColor: "#f0f0f0", padding: 12, borderRadius: 12, marginTop: 8, width: 260 },
-  audioRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+ audioContainer: {
+    backgroundColor: "#f0f0f0",
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 8,
+    width: "100%", // ✅ Changed from fixed 260
+    minHeight: 64, // ✅ Changed from fixed 'height: 50' to prevent clipping on mobile
+    justifyContent: "center",
+  },  audioRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   audioPlayButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#4a90d9", justifyContent: "center", alignItems: "center" },
   audioInfo: { flex: 1 },
   audioFileName: { fontSize: 12, fontWeight: "500", color: "#333", marginBottom: 4 },

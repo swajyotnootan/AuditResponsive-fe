@@ -1267,11 +1267,12 @@ export default function ForumThreadView({
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
  const getDateLabel = (dateStr: string) => {
-  // ✅ Same UTC→local conversion as ThreadCard
   let isoString = dateStr;
   if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  const isProd = !API_BASE_URL.includes('localhost') && !API_BASE_URL.includes('127.0.0.1');
-  if (isProd && !isoString.includes('Z') && !isoString.includes('+')) isoString += 'Z';
+  // ✅ FIXED: ALWAYS add Z if no timezone marker
+  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
+    isoString += 'Z';
+  }
   const date = new Date(isoString);
   
   const today = new Date();

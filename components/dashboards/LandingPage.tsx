@@ -1,4 +1,5 @@
 // src/screens/LandingPage.tsx
+import { API_BASE_URL } from "@/config/apiConfig";
 import { Picker } from "@react-native-picker/picker";
 import {
   useFocusEffect,
@@ -14,14 +15,13 @@ import {
   Alert,
   FlatList,
   Modal,
-  Platform,
   RefreshControl,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View,
+  View
 } from "react-native";
 import { BarChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -42,7 +42,7 @@ import {
   Trash2,
   Users,
   X,
-  Zap
+  Zap,
 } from "lucide-react-native";
 
 // Components
@@ -50,21 +50,7 @@ import { useAuth } from "../context/AuthContext";
 import FinalPreview from "../eightd/steps/FinalPreview";
 import ForumThreadView from "../forum/ForumThreadView";
 
-// ✅ DYNAMIC URL HELPER
-const getBaseUrl = () => {
-  if (Platform.OS === "web") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-  }
-  if (Platform.OS === "android") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-  }
-  if (Platform.OS === "ios") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-  }
-  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-};
 
-const API_BASE_URL = getBaseUrl();
 console.log("🚀 LandingPage API Base URL being used:", API_BASE_URL);
 
 const steps = ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"];
@@ -308,7 +294,11 @@ const StatusProgress = ({
   </View>
 );
 
-export default function LandingPage() {
+export interface LandingPageProps {
+  type?: "fresh" | "ncr" | "all" | string;
+}
+
+export default function LandingPage({ type }: LandingPageProps) {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { isInitiator, isHOD, user, isAdmin } = useAuth();
@@ -349,7 +339,7 @@ export default function LandingPage() {
     ? (width - horizontalPadding * 2) / 2 - 48
     : width - horizontalPadding * 2 - 32;
 
-  const dashboardType = route.params?.type || "all";
+  const dashboardType = type || route.params?.type || "all";
   const dashboardTitle =
     dashboardType === "fresh"
       ? "Fresh 8D Dashboard"
@@ -707,12 +697,15 @@ export default function LandingPage() {
         }`}
         style={{
           backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
-          marginBottom: 16,
-          // ✅ FIXED: Give it a fixed percentage width for 3-column layout,
-          // and a maxWidth so it never stretches to fill the container if it's alone.
-          width: isDesktop ? "30%" : "100%",
-          maxWidth: 400,
-          alignSelf: "flex-start", // ✅ Prevents FlatList from stretching it
+          // ✅ Vertical spacing for mobile (desktop uses gap instead)
+          marginBottom: isDesktop ? 0 : 16,
+          // ✅ 31% width ensures 3 cards + gaps fit perfectly without wrapping on smaller desktops
+          width: isDesktop ? "31%" : "100%",
+          // ✅ Prevent cards from becoming comically wide on ultra-wide monitors
+          maxWidth: isDesktop ? 500 : undefined,
+          // ✅ Ensures cards stretch to match the height of the tallest card in the same row
+          alignSelf: "stretch",
+          marginLeft: isDesktop ? 15 : 0,
         }}
       >
         {isApprovalPending && (
@@ -1500,17 +1493,28 @@ export default function LandingPage() {
                 data={limitedFiltered}
                 renderItem={({ item }) => renderEventCard(item)}
                 keyExtractor={(item) => item.eventNo}
-                key="3-col-grid" // ✅ Updated key to reflect new layout
-                numColumns={3} // ✅ FIXED: Exactly 3 cards in one row
-                columnWrapperStyle={{
-                  justifyContent: "flex-start", // ✅ FIXED: Prevents single card from stretching/centering
-                  gap: 16,
+                // ✅ Dynamic key forces proper re-render when switching between mobile/desktop
+                key={isDesktop ? "desktop-3-col-grid" : "mobile-1-col-list"}
+                numColumns={isDesktop ? 3 : 1}
+
+                // ✅ CRITICAL FIX: Only pass columnWrapperStyle on desktop!
+                // Passing it on mobile (numColumns=1) causes the Invariant Violation error.
+                columnWrapperStyle={
+                  isDesktop
+                    ? { justifyContent: "flex-start", gap: 16 }
+                    : undefined
+                }
+
+                contentContainerStyle={{
+                  paddingBottom: 20,
+                  gap: 16, // Handles vertical spacing between rows cleanly
                 }}
-                contentContainerStyle={{ paddingBottom: 20, gap: 16 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
+                style={{ width: "100%" }}
               />
             ) : (
+              // ... empty state remains exactly the same ...
               !loading && (
                 <View className="items-center py-16">
                   <Grid size={48} color="#cbd5e1" />

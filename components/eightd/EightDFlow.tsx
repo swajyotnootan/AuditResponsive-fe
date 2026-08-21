@@ -80,17 +80,38 @@ function getFirstUnfilledStep(formData: EightDFormData): number {
   return stepKeys.length;
 }
 
-export default function EightDFlow() {
+
+export interface EightDFlowProps {
+  eventId?: string | null;
+  initialStep?: string;
+  isNcrBased?: boolean;
+  type?: string;
+}
+
+export default function EightDFlow({
+  eventId: propEventId,
+  initialStep: propInitialStep,
+  isNcrBased: propIsNcrBased,
+  type: propType,
+}: EightDFlowProps) {
   const navigation = useNavigation();
   const route = useRoute();
 
-  const params = (route.params as RouteParams) || {};
+  const routeParams = (route.params as RouteParams) || {};
 
-  const eventId = params.eventId;
-  const startStep = params.step;
-  const isNcrBased = params.isNcrBased ?? false;
-  const type = params.type;
-
+  // Prioritize props passed from wrapper, fallback to route params
+  const eventId =
+    propEventId !== undefined ? propEventId : (routeParams.eventId ?? null);
+  const startStep =
+    propInitialStep !== undefined
+      ? propInitialStep
+      : (routeParams.step ?? "D0");
+  const isNcrBased =
+    propIsNcrBased !== undefined
+      ? propIsNcrBased
+      : (routeParams.isNcrBased ?? false);
+  const type =
+    propType !== undefined ? propType : (routeParams.type ?? "fresh");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
 
@@ -167,7 +188,7 @@ export default function EightDFlow() {
   }, [approvals]);
 
   useEffect(() => {
-    const newEventId = params.eventId;
+    const newEventId = propEventId; // ✅ Use the prop directly
 
     if (newEventId !== eventNo) {
       setEventNo(newEventId || null);
@@ -185,7 +206,7 @@ export default function EightDFlow() {
         d8: [],
       });
     }
-  }, [params.eventId]);
+  }, [propEventId]);
 
   const saveStep = async (
     currentFormData: EightDFormData,

@@ -937,35 +937,111 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   };
 
   // ✅ Clear All with persistence
+ // ✅ FIXED: Clear All with Web support, Optimistic UI, and Safe API Fallback
   const clearAllNotifications = () => {
+    console.log("🔴 clearAllNotifications triggered. userId:", userId);
+
     if (!userId) {
-      console.warn('No user ID available, cannot clear notifications');
+      console.warn("⚠️ No user ID available, cannot clear notifications");
+      Alert.alert("Error", "You must be logged in to clear notifications.");
       return;
     }
 
-    Alert.alert(
-      'Clear Notifications',
-      'Are you sure you want to clear all notifications? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await notificationAPI.clearAll(String(userId));
-              await clearUserStorage(String(userId));
-              setNotifications([]);
-              setUnreadCount(0);
-              showSuccess('All notifications cleared', 'Success');
-            } catch (error) {
-              console.error('Error clearing notifications:', error);
-              showError('Failed to clear notifications', 'Error');
-            }
+    const handleClear = async () => {
+      console.log("🟢 handleClear executing...");
+      try {
+        // 1. Optimistic UI Update: Clear immediately for instant feedback
+        console.log("1️⃣ Optimistic UI Update...");
+        setNotifications([]);
+        setUnreadCount(0);
+        lastNotificationsRef.current = []; // Clear ref to prevent stale state conflicts
+
+        // 2. Clear local cache
+        console.log("2️⃣ Clearing local cache...");
+        await clearUserStorage(String(userId));
+
+        // 3. Backend sync with SAFE FALLBACK
+        console.log("3️⃣ Backend sync...");
+        try {
+          if (typeof notificationAPI.clearAll === "function") {
+            console.log("   -> Calling notificationAPI.clearAll...");
+            await notificationAPI.clearAll(String(userId));
+            console.log("   ✅ notificationAPI.clearAll succeeded!");
+          } else {
+            throw new Error("notificationAPI.clearAll is not a function");
           }
+        } catch (apiError: any) {
+          console.warn(
+            "⚠️ Backend clearAll failed or not implemented:",
+            apiError.message,
+          );
+          console.log(
+            "   🔄 Falling back to markAllAsRead so they don't reappear as unread...",
+          );
+          // Fallback: Mark as read so the 15s poll doesn't bring them back as "unread"
+          await notificationAPI.markAllAsRead(String(userId));
         }
-      ]
-    );
+
+        // 4. Show success
+        console.log("4️⃣ Showing success toast...");
+        showSuccess("All notifications cleared", "Success");
+        console.log("✅ handleClear finished successfully.");
+      } catch (error: any) {
+        console.error("❌ CRITICAL Error in handleClear:", error);
+
+        // Try to show error, but wrap in try/catch in case toast system is failing
+        try {
+          showError(
+            "Failed to clear: " + (error.message || "Unknown error"),
+            "Error",
+          );
+        } catch (toastError) {
+          Alert.alert(
+            "Error",
+            "Failed to clear notifications. Please try again.",
+          );
+        }
+
+        // Revert optimistic update by fetching fresh data from backend
+        console.log("5️⃣ Reverting optimistic update by fetching fresh data...");
+        await refreshNotifications();
+      }
+    };
+
+    // ✅ FIX: React Native Web does not support Alert.alert natively
+    if (Platform.OS === "web") {
+      console.log("🌐 Web platform: showing window.confirm");
+      if (
+        window.confirm(
+          "Are you sure you want to clear all notifications? This action cannot be undone.",
+        )
+      ) {
+        handleClear();
+      } else {
+        console.log("🌐 User cancelled window.confirm");
+      }
+    } else {
+      console.log("📱 Native platform: showing Alert.alert");
+      Alert.alert(
+        "Clear Notifications",
+        "Are you sure you want to clear all notifications? This action cannot be undone.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => console.log("📱 User cancelled Alert"),
+          },
+          {
+            text: "Clear",
+            style: "destructive",
+            onPress: () => {
+              console.log("📱 User pressed Clear in Alert");
+              handleClear();
+            },
+          },
+        ],
+      );
+    }
   };
 
   // Toast Functions

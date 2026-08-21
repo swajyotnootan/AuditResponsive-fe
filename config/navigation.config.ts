@@ -100,24 +100,19 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           badge: true,
         },
       ];
-    case UserRole.HOD:
+     case UserRole.HOD:
       return [
         ...commonItems,
-        { route: "/(app)/(tabs)/hod", title: "HOD Panel", icon: "Shield" },
-
         {
-          route: "/hod/audits",
-          title: "Dept Audits",
-          icon: "ClipboardList",
-          badge: true,
+          route: "/(app)/(tabs)/fresh-8d",
+          title: "Fresh 8D",
+          icon: "FilePlus",
         },
         {
-          route: "/hod/ncr-approvals",
-          title: "NCR Approvals",
-          icon: "CheckCircle",
-          badge: true,
+          route: "/(app)/(tabs)/ncr-8d",
+          title: "NCR 8D",
+          icon: "AlertCircle",
         },
-        { route: "/hod/settings", title: "Settings", icon: "Settings" },
       ];
 
     case UserRole.LEAD_AUDITOR:
@@ -221,14 +216,10 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "Calendar",
         },
       ];
-    case UserRole.INITIATOR:
+     case UserRole.INITIATOR:
       return [
         ...commonItems,
-        {
-          route: "/(app)/(tabs)/initiator",
-          title: "All 8D",
-          icon: "Grid",
-        },
+
         {
           route: "/(app)/(tabs)/fresh-8d",
           title: "Fresh 8D",
@@ -238,11 +229,6 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           route: "/(app)/(tabs)/ncr-8d",
           title: "NCR 8D",
           icon: "AlertCircle",
-        },
-        {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
         },
       ];
     case UserRole.TOP_MANAGEMENT:
