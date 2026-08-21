@@ -2,21 +2,11 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import { useLocalSearchParams } from "expo-router";
-import {
-  Activity,
-  AlertCircle,
-  Calendar,
-  CheckCircle,
-  FileText,
-  RefreshCw,
-  TrendingDown,
-  TrendingUp,
-  X
-} from "lucide-react-native";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { FileText, RefreshCw, X } from "lucide-react-native"; // ✅ ADD
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, // ✅ ADD
   Modal,
   Platform,
   SafeAreaView,
@@ -25,19 +15,16 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions
+  useWindowDimensions, // ✅ ADD
 } from "react-native";
-import YearFilter from "../common/YearFilter";
+import YearFilter from "../common/YearFilter"; // Adjust path as needed
 import { useAuth } from "../context/AuthContext";
 import { ToastProvider, useToast } from "../context/ToastContext";
 import AuditsAndResponses from "./LeadAuditor/AuditsAndResponses";
 import DashboardAnalytics from "./LeadAuditor/DashboardAnalytics";
 import ResponseDetailModal from "./LeadAuditor/ResponseDetailModal";
 import StakeholderManagement from "./LeadAuditor/StakeholderManagement";
-
-// ============================================
-// TYPES
-// ============================================
+// Types
 interface User {
   id: string | number;
   firstName: string;
@@ -122,284 +109,12 @@ interface Stats {
   ncrOpen: number;
 }
 
-// ============================================
-// 📊 CHART COMPONENTS - Professional & Responsive
-// ============================================
+// const { width, height } = Dimensions.get("window");
+// const isMobile = width < 768;
+// const isTablet = width >= 768 && width < 1024;
+// const isDesktop = width >= 1024;
+// const isWeb = Platform.OS === "web";
 
-interface ChartData {
-  labels: string[];
-  datasets: {
-    data: number[];
-    backgroundColor?: string[];
-    borderColor?: string[];
-    label?: string;
-  }[];
-}
-
-// 1. Responsive Chart Container
-const ChartContainer: React.FC<{
-  title: string;
-  children: React.ReactNode;
-  height?: number;
-  className?: string;
-}> = ({ title, children, height = 280, className = "" }) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1024;
-
-  const chartHeight = useMemo(() => {
-    if (isMobile) return height * 0.7;
-    if (isTablet) return height * 0.85;
-    return height;
-  }, [isMobile, isTablet, height]);
-
-  return (
-    <View 
-      className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}
-      style={{ 
-        minHeight: Math.max(chartHeight, 200),
-        flex: 1,
-        marginHorizontal: isMobile ? 0 : 8,
-      }}
-    >
-      <View className="px-4 py-3 border-b border-slate-100">
-        <Text className="text-sm font-semibold text-slate-700">{title}</Text>
-      </View>
-      <View style={{ flex: 1, padding: isMobile ? 8 : 12, justifyContent: 'center' }}>
-        {children}
-      </View>
-    </View>
-  );
-};
-
-// 2. Bar Chart Component
-const BarChart: React.FC<{ data: ChartData; height?: number }> = ({ 
-  data, 
-  height = 200 
-}) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  
-  const maxValue = useMemo(() => Math.max(...data.datasets[0].data, 1), [data]);
-  const chartWidth = useMemo(() => Math.max(width - (isMobile ? 48 : 80), 200), [width, isMobile]);
-  const barWidth = useMemo(() => Math.max((chartWidth / data.labels.length) * 0.6, 20), [chartWidth, data.labels.length]);
-
-  // For Web: HTML5 Canvas
-  if (Platform.OS === 'web') {
-    return (
-      <View style={{ height, width: '100%' }}>
-        <div style={{ width: '100%', height: '100%' }}>
-          <canvas 
-            id={`bar-chart-${Date.now()}`}
-            width={chartWidth} 
-            height={height}
-            style={{ width: '100%', height: '100%' }}
-          />
-        </div>
-      </View>
-    );
-  }
-
-  // Native: SVG bars
-  return (
-    <View style={{ height, width: '100%', justifyContent: 'flex-end' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: '100%', gap: 4 }}>
-        {data.datasets[0].data.map((value, index) => {
-          const barHeight = Math.max((value / maxValue) * (height - 40), 4);
-          return (
-            <View key={index} style={{ flex: 1, alignItems: 'center' }}>
-              <View
-                style={{
-                  height: barHeight,
-                  width: Math.min(barWidth, 40),
-                  backgroundColor: data.datasets[0].backgroundColor?.[index] || '#00529B',
-                  borderRadius: 4,
-                  minHeight: 4,
-                }}
-              />
-              <Text 
-                numberOfLines={1}
-                style={{ 
-                  fontSize: isMobile ? 8 : 10, 
-                  color: '#6B7280', 
-                  marginTop: 4,
-                  textAlign: 'center',
-                  maxWidth: Math.min(barWidth + 10, 60),
-                }}
-              >
-                {data.labels[index]}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-};
-
-// 3. Donut/Pie Chart Component
-const DonutChart: React.FC<{ 
-  data: { label: string; value: number; color: string }[];
-  size?: number;
-}> = ({ data, size = 160 }) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  
-  const chartSize = useMemo(() => {
-    if (isMobile) return Math.min(size * 0.7, width - 60);
-    return Math.min(size, width - 120);
-  }, [isMobile, size, width]);
-
-  const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0) || 1, [data]);
-  let currentAngle = 0;
-
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'relative', width: chartSize, height: chartSize }}>
-        <svg width={chartSize} height={chartSize} viewBox={`0 0 ${chartSize} ${chartSize}`}>
-          {data.map((item, index) => {
-            const percentage = (item.value / total) * 100;
-            const angle = (percentage / 100) * 360;
-            const startAngle = currentAngle;
-            currentAngle += angle;
-            
-            if (percentage < 0.5) return null;
-            
-            const x1 = chartSize / 2 + (chartSize / 2 - 2) * Math.cos((startAngle - 90) * Math.PI / 180);
-            const y1 = chartSize / 2 + (chartSize / 2 - 2) * Math.sin((startAngle - 90) * Math.PI / 180);
-            const x2 = chartSize / 2 + (chartSize / 2 - 2) * Math.cos((startAngle + angle - 90) * Math.PI / 180);
-            const y2 = chartSize / 2 + (chartSize / 2 - 2) * Math.sin((startAngle + angle - 90) * Math.PI / 180);
-            const largeArc = angle > 180 ? 1 : 0;
-            
-            return (
-              <path
-                key={index}
-                d={`M ${chartSize / 2} ${chartSize / 2} L ${x1} ${y1} A ${chartSize / 2 - 2} ${chartSize / 2 - 2} 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                fill={item.color}
-                stroke="#fff"
-                strokeWidth="1"
-              />
-            );
-          })}
-          <circle 
-            cx={chartSize / 2} 
-            cy={chartSize / 2} 
-            r={chartSize / 2 - 16} 
-            fill="white" 
-          />
-        </svg>
-        <View 
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: [{ translateX: -chartSize / 4 }, { translateY: -chartSize / 4 }],
-            alignItems: 'center',
-            width: chartSize / 2,
-          }}
-        >
-          <Text style={{ fontSize: chartSize * 0.12, fontWeight: 'bold', color: '#1E293B' }}>
-            {total}
-          </Text>
-          <Text style={{ fontSize: chartSize * 0.07, color: '#6B7280' }}>
-            Total
-          </Text>
-        </View>
-      </View>
-      
-      {/* Legend */}
-      <View 
-        style={{ 
-          flexDirection: 'row', 
-          flexWrap: 'wrap', 
-          justifyContent: 'center', 
-          marginTop: 12,
-          gap: 8,
-        }}
-      >
-        {data.map((item, index) => (
-          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: item.color }} />
-            <Text style={{ fontSize: isMobile ? 10 : 12, color: '#475569' }}>
-              {item.label} ({Math.round((item.value / total) * 100)}%)
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-// 4. Stats Card - Responsive Grid
-const StatsCard: React.FC<{
-  title: string;
-  value: number | string;
-  icon: React.ReactNode;
-  trend?: number;
-  color?: string;
-  className?: string;
-}> = ({ title, value, icon, trend, color = '#00529B', className = "" }) => {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-
-  return (
-    <View 
-      className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-4 ${className}`}
-      style={{ 
-        flex: 1,
-        minWidth: isMobile ? '100%' : '45%',
-        maxWidth: isMobile ? '100%' : '48%',
-        marginBottom: isMobile ? 12 : 0,
-      }}
-    >
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1">
-          <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-            {title}
-          </Text>
-          <Text 
-            className="font-bold text-slate-800"
-            style={{ fontSize: isMobile ? 20 : 24, marginTop: 4 }}
-          >
-            {value}
-          </Text>
-          {trend !== undefined && (
-            <View className="flex-row items-center mt-1">
-              {trend >= 0 ? (
-                <TrendingUp size={14} color="#10B981" />
-              ) : (
-                <TrendingDown size={14} color="#EF4444" />
-              )}
-              <Text 
-                style={{ 
-                  color: trend >= 0 ? '#10B981' : '#EF4444',
-                  fontSize: isMobile ? 10 : 12,
-                  marginLeft: 2,
-                  fontWeight: '600',
-                }}
-              >
-                {Math.abs(trend)}%
-              </Text>
-            </View>
-          )}
-        </View>
-        <View 
-          style={{ 
-            backgroundColor: color + '15', 
-            padding: isMobile ? 8 : 10, 
-            borderRadius: 12 
-          }}
-        >
-          {icon}
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// ============================================
-// MAIN COMPONENT
-// ============================================
 
 const NAVBAR_COLORS = {
   primary: "#00529B",
@@ -412,14 +127,8 @@ const NAVBAR_COLORS = {
 };
 
 const LeadAuditorDashboardContent: React.FC = () => {
-  // ============================================
-  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
-  // ============================================
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1024;
-  const isDesktop = width >= 1024;
-
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -431,7 +140,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [carouselSpeed, setCarouselSpeed] = useState(5000);
   const [responseViewMode, setResponseViewMode] = useState("grid");
   const [ncrViewMode, setNcrViewMode] = useState("grid");
-  const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<string | null>(null);
+  const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<
+    string | null
+  >(null);
 
   const [allSchedules, setAllSchedules] = useState<Schedule[]>([]);
   const [allNCRs, setAllNCRs] = useState<NCR[]>([]);
@@ -445,12 +156,15 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [filteredAuditees, setFilteredAuditees] = useState<User[]>([]);
   const [filteredResponses, setFilteredResponses] = useState<Response[]>([]);
 
-  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(null);
+  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(
+    null,
+  );
   const [reviewComment, setReviewComment] = useState("");
   const [reviewApproved, setReviewApproved] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [selectedResponseForDetail, setSelectedResponseForDetail] = useState<Response | null>(null);
+  const [selectedResponseForDetail, setSelectedResponseForDetail] =
+    useState<Response | null>(null);
   const [showResponseDetailModal, setShowResponseDetailModal] = useState(false);
 
   const [stats, setStats] = useState<Stats>({
@@ -490,16 +204,16 @@ const LeadAuditorDashboardContent: React.FC = () => {
   }, [params?.tab]);
 
   // Helper to get department string
-  const getDepartmentString = useCallback((dept: any): string => {
+  const getDepartmentString = (dept: any): string => {
     if (!dept) return "";
     if (typeof dept === "string") return dept;
     if (typeof dept === "object") {
       return dept.displayName || dept.name || "";
     }
     return "";
-  }, []);
+  };
 
-  const fetchLeadAuditorDepartment = useCallback(async () => {
+  const fetchLeadAuditorDepartment = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/users/${user?.id}`, {
         withCredentials: true,
@@ -523,9 +237,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
       }
       return null;
     }
-  }, [user, getDepartmentString]);
+  };
 
-  const normalizeDepartment = useCallback((dept: any): string => {
+  const normalizeDepartment = (dept: any): string => {
     const deptStr = getDepartmentString(dept).toUpperCase().trim();
     if (!deptStr) return "";
     const deptMap: Record<string, string> = {
@@ -558,9 +272,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
       MR: "MR",
     };
     return deptMap[deptStr] || deptStr;
-  }, [getDepartmentString]);
+  };
 
-  const filterDataByDepartment = useCallback((
+  const filterDataByDepartment = (
     department: string | null,
     schedules: Schedule[],
     ncrs: NCR[],
@@ -587,9 +301,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
         (r) => normalizeDepartment(r.department) === normalizedTarget,
       ),
     };
-  }, [normalizeDepartment]);
+  };
 
-  const updateFilteredData = useCallback((
+  const updateFilteredData = (
     department: string | null,
     schedules: Schedule[],
     ncrs: NCR[],
@@ -667,9 +381,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
         .length,
       ncrOpen: filtered.ncrs.filter((n) => n.status === "OPEN").length,
     });
-  }, [filterDataByDepartment]);
+  };
 
-  const fetchAllData = useCallback(async (year: number = selectedYear) => {
+  const fetchAllData = async (year: number = selectedYear) => {
     try {
       setLoading(true);
       const department = await fetchLeadAuditorDepartment();
@@ -737,33 +451,33 @@ const LeadAuditorDashboardContent: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedYear, fetchLeadAuditorDepartment, updateFilteredData, addToast]);
+  };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     setRefreshing(true);
     fetchAllData(selectedYear);
-  }, [fetchAllData, selectedYear]);
+  };
 
-  const handleViewResponse = useCallback((response: Response) => {
+  const handleViewResponse = (response: Response) => {
     console.log("View Response:", response.id);
-  }, []);
+  };
 
-  const handleViewNCR = useCallback((ncr: NCR) => {
+  const handleViewNCR = (ncr: NCR) => {
     console.log("View NCR:", ncr.id);
-  }, []);
+  };
 
-  const handleReviewResponseClick = useCallback((response: Response) => {
+  const handleReviewResponseClick = (response: Response) => {
     setReviewingResponse(response);
     setReviewApproved(true);
     setReviewComment("");
-  }, []);
+  };
 
-  const handleViewResponseDetail = useCallback((response: Response) => {
+  const handleViewResponseDetail = (response: Response) => {
     setSelectedResponseForDetail(response);
     setShowResponseDetailModal(true);
-  }, []);
+  };
 
-  const handleReviewResponse = useCallback(async () => {
+  const handleReviewResponse = async () => {
     if (!reviewingResponse) return;
     if (!reviewApproved && !reviewComment.trim()) {
       addToast("Please provide a reason for rejection", "error");
@@ -794,48 +508,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [reviewingResponse, reviewApproved, reviewComment, addToast, fetchAllData]);
-
-  // Memoized chart data for better performance
-  const chartData = useMemo(() => {
-    return {
-      scheduleStatus: {
-        labels: ['Approved', 'Rejected', 'Pending', 'In Progress', 'Scheduled', 'Overdue'],
-        datasets: [{
-          data: [stats.approved, stats.rejected, stats.pendingApproval, stats.inProgress, stats.scheduled, stats.overdue],
-          backgroundColor: ['#10B981', '#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EF4444'],
-          borderColor: ['#059669', '#DC2626', '#D97706', '#2563EB', '#7C3AED', '#DC2626'],
-        }]
-      },
-      ncrSeverity: {
-        labels: ['Critical', 'Major', 'Minor'],
-        datasets: [{
-          data: [stats.criticalNCRs, stats.majorNCRs, stats.minorNCRs],
-          backgroundColor: ['#EF4444', '#F59E0B', '#3B82F6'],
-          borderColor: ['#DC2626', '#D97706', '#2563EB'],
-        }]
-      },
-      responseStatus: {
-        labels: ['Approved', 'Rejected', 'Submitted'],
-        datasets: [{
-          data: [stats.responsesApproved, stats.responsesRejected, stats.responsesSubmitted],
-          backgroundColor: ['#10B981', '#EF4444', '#3B82F6'],
-          borderColor: ['#059669', '#DC2626', '#2563EB'],
-        }]
-      },
-      donutData: [
-        { label: 'Approved', value: stats.approved, color: '#10B981' },
-        { label: 'Rejected', value: stats.rejected, color: '#EF4444' },
-        { label: 'Pending', value: stats.pendingApproval, color: '#F59E0B' },
-        { label: 'In Progress', value: stats.inProgress, color: '#3B82F6' },
-      ],
-      ncrDonut: [
-        { label: 'Open', value: stats.openNCRs, color: '#EF4444' },
-        { label: 'In Progress', value: stats.ncrInProgress, color: '#F59E0B' },
-        { label: 'Closed', value: stats.closedNCRs, color: '#10B981' },
-      ],
-    };
-  }, [stats]);
+  };
 
   // Effects
   useEffect(() => {
@@ -847,9 +520,9 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
   useEffect(() => {
     fetchAllData(selectedYear);
-  }, [selectedYear, fetchAllData]);
+  }, [selectedYear]);
 
-  const getResponseStatusBadge = useCallback((status?: string) => {
+  const getResponseStatusBadge = (status?: string) => {
     const badges: Record<string, any> = {
       APPROVED: { bg: "#D1FAE5", text: "#059669" },
       REJECTED: { bg: "#FEE2E2", text: "#DC2626" },
@@ -857,174 +530,37 @@ const LeadAuditorDashboardContent: React.FC = () => {
       DRAFT: { bg: "#F3F4F6", text: "#6B7280" },
     };
     return badges[status || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  }, []);
+  };
 
   const departmentDisplayName = leadAuditorDepartment || "All Departments";
 
-  // Render charts section with professional styling
-  const renderChartsSection = useCallback(() => {
+  if (loading) {
     return (
-      <View style={{ marginTop: 20 }}>
-        {/* Header */}
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-slate-800">
-            Analytics Overview
-          </Text>
-          <View className="flex-row items-center gap-2">
-            <Activity size={18} color="#6B7280" />
-            <Text className="text-xs text-slate-500">Live Data</Text>
-          </View>
-        </View>
-
-        {/* Chart Grid - Responsive layout */}
-        <View 
-          style={{ 
-            flexDirection: isMobile ? 'column' : 'row',
-            flexWrap: 'wrap',
-            gap: isMobile ? 16 : 20,
-          }}
-        >
-          {/* Bar Chart - Schedule Status */}
-          <View style={{ 
-            flex: isDesktop ? 1 : 2,
-            width: isMobile ? '100%' : isTablet ? '48%' : '32%',
-          }}>
-            <ChartContainer title="Schedule Status Distribution" height={280}>
-              <BarChart 
-                data={chartData.scheduleStatus} 
-                height={isMobile ? 150 : 200}
-              />
-            </ChartContainer>
-          </View>
-
-          {/* Donut Chart - Schedule Overview */}
-          <View style={{ 
-            flex: 1,
-            width: isMobile ? '100%' : isTablet ? '48%' : '32%',
-          }}>
-            <ChartContainer title="Schedule Overview" height={280}>
-              <DonutChart 
-                data={chartData.donutData} 
-                size={isMobile ? 140 : 180}
-              />
-            </ChartContainer>
-          </View>
-
-          {/* NCR Severity Chart */}
-          <View style={{ 
-            flex: 1,
-            width: isMobile ? '100%' : isTablet ? '48%' : '32%',
-          }}>
-            <ChartContainer title="NCR Severity" height={280}>
-              <BarChart 
-                data={chartData.ncrSeverity} 
-                height={isMobile ? 150 : 200}
-              />
-            </ChartContainer>
-          </View>
-
-          {/* Response Status - Second Row */}
-          <View style={{ 
-            flex: isDesktop ? 1 : 2,
-            width: isMobile ? '100%' : isTablet ? '48%' : '32%',
-          }}>
-            <ChartContainer title="Response Status" height={280}>
-              <BarChart 
-                data={chartData.responseStatus} 
-                height={isMobile ? 150 : 200}
-              />
-            </ChartContainer>
-          </View>
-
-          {/* NCR Donut Chart */}
-          <View style={{ 
-            flex: 1,
-            width: isMobile ? '100%' : isTablet ? '48%' : '32%',
-          }}>
-            <ChartContainer title="NCR Status Distribution" height={280}>
-              <DonutChart 
-                data={chartData.ncrDonut} 
-                size={isMobile ? 140 : 180}
-              />
-            </ChartContainer>
-          </View>
-        </View>
+      <View className="items-center justify-center flex-1 bg-slate-50">
+        <ActivityIndicator size="large" color="#00529B" className="mb-4" />
+        <Text className="text-sm font-medium text-slate-500">
+          Loading dashboard...
+        </Text>
       </View>
     );
-  }, [isMobile, isTablet, isDesktop, chartData]);
+  }
 
-  // ✅ MOVED renderContent useCallback BEFORE the early return!
-  const renderContent = useCallback(() => {
+  // Render content based on active tab
+  const renderContent = () => {
     switch (activeTab) {
       case "overview":
         return (
-          <View>
-            {/* Stats Grid - Responsive */}
-            <View 
-              style={{ 
-                flexDirection: isMobile ? 'column' : 'row',
-                flexWrap: 'wrap',
-                gap: isMobile ? 8 : 12,
-                marginBottom: 16,
-              }}
-            >
-              <StatsCard 
-                title="Total Schedules" 
-                value={stats.totalSchedules} 
-                icon={<Calendar size={20} color="#00529B" />}
-                color="#00529B"
-              />
-              <StatsCard 
-                title="Approved" 
-                value={stats.approved} 
-                icon={<CheckCircle size={20} color="#10B981" />}
-                color="#10B981"
-                trend={12}
-              />
-              <StatsCard 
-                title="Pending" 
-                value={stats.pendingApproval} 
-                icon={<AlertCircle size={20} color="#F59E0B" />}
-                color="#F59E0B"
-                trend={-5}
-              />
-              <StatsCard 
-                title="Total NCRs" 
-                value={stats.totalNCRs} 
-                icon={<AlertCircle size={20} color="#EF4444" />}
-                color="#EF4444"
-              />
-              <StatsCard 
-                title="Open NCRs" 
-                value={stats.openNCRs} 
-                icon={<AlertCircle size={20} color="#EF4444" />}
-                color="#EF4444"
-                trend={8}
-              />
-              <StatsCard 
-                title="Responses" 
-                value={stats.totalResponses} 
-                icon={<FileText size={20} color="#3B82F6" />}
-                color="#3B82F6"
-              />
-            </View>
-
-            {/* Charts Section */}
-            {renderChartsSection()}
-
-            {/* Original DashboardAnalytics - keep for detailed data */}
-            <DashboardAnalytics
-              stats={stats}
-              allSchedules={filteredSchedules}
-              allNCRs={filteredNCRs}
-              allResponses={filteredResponses}
-              carouselSpeed={carouselSpeed}
-              setCarouselSpeed={setCarouselSpeed}
-              onRefresh={handleRefresh}
-              refreshing={refreshing}
-              leadAuditorDepartment={leadAuditorDepartment}
-            />
-          </View>
+          <DashboardAnalytics
+            stats={stats}
+            allSchedules={filteredSchedules}
+            allNCRs={filteredNCRs}
+            allResponses={filteredResponses}
+            carouselSpeed={carouselSpeed}
+            setCarouselSpeed={setCarouselSpeed}
+            onRefresh={handleRefresh}
+            refreshing={refreshing}
+            leadAuditorDepartment={leadAuditorDepartment}
+          />
         );
       case "audits":
       case "responses":
@@ -1075,62 +611,20 @@ const LeadAuditorDashboardContent: React.FC = () => {
           </View>
         );
     }
-  }, [
-    activeTab, 
-    isMobile, 
-    stats, 
-    renderChartsSection, 
-    filteredSchedules, 
-    filteredNCRs, 
-    filteredResponses, 
-    filteredAuditors,
-    carouselSpeed,
-    refreshing,
-    leadAuditorDepartment,
-    searchTerm,
-    responseViewMode,
-    ncrViewMode,
-    handleRefresh,
-    handleViewResponse,
-    handleReviewResponseClick,
-    handleViewNCR,
-    handleViewResponseDetail,
-  ]);
+  };
 
-  // ============================================
-  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
-  // ============================================
-  if (loading) {
-    return (
-      <View className="items-center justify-center flex-1 bg-slate-50">
-        <ActivityIndicator size="large" color="#00529B" className="mb-4" />
-        <Text className="text-sm font-medium text-slate-500">
-          Loading dashboard...
-        </Text>
-      </View>
-    );
-  }
-
-  // ============================================
-  // STEP 3: RENDER
-  // ============================================
   return (
     <SafeAreaView style={{ flex: 1 }} className="bg-slate-50">
-      {/* Header - Responsive */}
+      {/* ✅ FULL-WIDTH HEADER (Moved outside ScrollView to span edge-to-edge) */}
       <View className="w-full px-4 py-5 bg-white border-b shadow-sm border-slate-200 md:px-8">
+        {/* Inner wrapper to keep the text aligned with the 1400px content below */}
         <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
           <View className="flex-row flex-wrap items-center justify-between gap-4">
             <View className="flex-1 min-w-[200px]">
-              <Text 
-                className="font-bold text-slate-800"
-                style={{ fontSize: isMobile ? 18 : 24 }}
-              >
+              <Text className="text-xl font-bold md:text-2xl text-slate-800">
                 Lead Auditor Dashboard
               </Text>
-              <Text 
-                className="text-slate-500"
-                style={{ fontSize: isMobile ? 10 : 14, marginTop: 2 }}
-              >
+              <Text className="mt-1 text-xs md:text-sm text-slate-500">
                 Welcome back,{" "}
                 <Text className="font-semibold text-slate-700">
                   {user?.name || user?.username || "User"}
@@ -1152,9 +646,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
               <TouchableOpacity
                 onPress={handleRefresh}
                 disabled={refreshing}
-                className={`flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl ${
-                  refreshing ? "opacity-60" : ""
-                }`}
+                className={`flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl ${refreshing ? "opacity-60" : ""}`}
               >
                 {refreshing ? (
                   <ActivityIndicator size="small" color="#00529B" />
@@ -1172,7 +664,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
         </View>
       </View>
 
-      {/* Content - Responsive ScrollView */}
+      {/* ✅ SCROLLABLE CONTENT AREA */}
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -1185,6 +677,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
           alignSelf: "center",
         }}
       >
+        {/* Content Wrapper */}
         <View className="w-full mt-6">{renderContent()}</View>
       </ScrollView>
 
@@ -1201,6 +694,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
       )}
 
       {/* Review Response Modal */}
+      {/* ✅ MODERN REVIEW MODAL */}
       {reviewingResponse && (
         <Modal
           visible={true}
