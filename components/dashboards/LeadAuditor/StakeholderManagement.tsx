@@ -129,7 +129,10 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
-const { width, height } = useWindowDimensions();
+  // ============================================
+  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
+  // ============================================
+  const { width, height } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
 
@@ -147,9 +150,6 @@ const { width, height } = useWindowDimensions();
     id: string | number;
   } | null>(null);
 
-  // ============================================
-  // HELPER FUNCTIONS
-  // ============================================
   const safeParseAnswers = useCallback((answers: any): any => {
     if (!answers) return {};
     if (typeof answers === "object") return answers;
@@ -864,8 +864,10 @@ const { width, height } = useWindowDimensions();
     : [];
 
   // ============================================
-  // NCR PREVIEW
+  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
   // ============================================
+
+  // NCR PREVIEW
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -878,9 +880,7 @@ const { width, height } = useWindowDimensions();
     );
   }
 
-  // ============================================
   // CHECK SHEET REPORT PREVIEW
-  // ============================================
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -907,7 +907,7 @@ const { width, height } = useWindowDimensions();
   }
 
   // ============================================
-  // MAIN RENDER
+  // STEP 3: MAIN RENDER
   // ============================================
   return (
     <ScrollView

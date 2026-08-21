@@ -157,13 +157,13 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
+  // ============================================
+  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
+  // ============================================
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   
-  // ============================================
-  // ✅ ALL HOOKS DECLARED FIRST (BEFORE ANY RETURNS)
-  // ============================================
   const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(null);
   const [reportView, setReportView] = useState<{
     type: "5S" | "IATF" | "MANUFACTURING";
@@ -264,9 +264,6 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     });
   }, [allSchedules, searchTerm]);
 
-  // ============================================
-  // RENDER FUNCTIONS (useCallback hooks)
-  // ============================================
   const renderResponseVerticalItem = useCallback((item: Response) => {
     const answers = safeParseAnswers(item.answers);
     const statusColors = getStatusBadge(item.status);
@@ -609,7 +606,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   }, [isMobile, getSeverityBadge, getStatusBadge, onViewNCR]);
 
   // ============================================
-  // ✅ CONDITIONAL RETURNS (AFTER ALL HOOKS)
+  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
   // ============================================
   
   // NCR PREVIEW
@@ -652,8 +649,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   }
 
   // ============================================
-  // AUDITS TAB
+  // STEP 3: TAB RENDERING
   // ============================================
+  
+  // AUDITS TAB
   if (activeTab === "audits") {
     const scheduledAudits = getFilteredSchedules();
 
@@ -768,9 +767,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // ============================================
   // RESPONSES TAB
-  // ============================================
   if (activeTab === "responses") {
     const filteredResponses = allResponses.filter((r) => {
       if (!searchTerm) return true;
@@ -862,9 +859,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // ============================================
   // NCRS TAB
-  // ============================================
   if (activeTab === "ncrs") {
     const filteredNCRs = allNCRs.filter((n) => {
       if (!searchTerm) return true;
