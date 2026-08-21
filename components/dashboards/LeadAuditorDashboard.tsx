@@ -2,24 +2,20 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import { useLocalSearchParams } from "expo-router";
-import { 
-  FileText, 
-  RefreshCw, 
-  X, 
-  TrendingUp, 
-  TrendingDown,
-  Calendar,
-  Users,
-  CheckCircle,
+import {
+  Activity,
   AlertCircle,
-  BarChart3,
-  PieChart,
-  Activity
+  Calendar,
+  CheckCircle,
+  FileText,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  X
 } from "lucide-react-native";
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -29,7 +25,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
+  useWindowDimensions
 } from "react-native";
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
@@ -416,6 +412,9 @@ const NAVBAR_COLORS = {
 };
 
 const LeadAuditorDashboardContent: React.FC = () => {
+  // ============================================
+  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
+  // ============================================
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
@@ -954,18 +953,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     );
   }, [isMobile, isTablet, isDesktop, chartData]);
 
-  if (loading) {
-    return (
-      <View className="items-center justify-center flex-1 bg-slate-50">
-        <ActivityIndicator size="large" color="#00529B" className="mb-4" />
-        <Text className="text-sm font-medium text-slate-500">
-          Loading dashboard...
-        </Text>
-      </View>
-    );
-  }
-
-  // Render content based on active tab
+  // ✅ MOVED renderContent useCallback BEFORE the early return!
   const renderContent = useCallback(() => {
     switch (activeTab) {
       case "overview":
@@ -1109,6 +1097,23 @@ const LeadAuditorDashboardContent: React.FC = () => {
     handleViewResponseDetail,
   ]);
 
+  // ============================================
+  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
+  // ============================================
+  if (loading) {
+    return (
+      <View className="items-center justify-center flex-1 bg-slate-50">
+        <ActivityIndicator size="large" color="#00529B" className="mb-4" />
+        <Text className="text-sm font-medium text-slate-500">
+          Loading dashboard...
+        </Text>
+      </View>
+    );
+  }
+
+  // ============================================
+  // STEP 3: RENDER
+  // ============================================
   return (
     <SafeAreaView style={{ flex: 1 }} className="bg-slate-50">
       {/* Header - Responsive */}
