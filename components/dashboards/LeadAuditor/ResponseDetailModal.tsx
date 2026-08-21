@@ -1,6 +1,4 @@
-// app/components/dashboards/LeadAuditor/ResponseDetailModal.tsx
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
@@ -23,10 +21,12 @@ const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
   onClose,
   visible,
 }) => {
+  // ============================================
+  // ✅ STEP 1: ALL HOOKS DECLARED FIRST
+  // ============================================
   const { width, height } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
-
   const [answers, setAnswers] = useState<any>(null);
 
   useEffect(() => {
@@ -39,6 +39,20 @@ const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
     }
   }, [response]);
 
+  // ✅ Move useMemo hooks BEFORE the early return
+  const modalWidth = useMemo(() => {
+    if (isMobile) return width * 0.95;
+    if (isTablet) return width * 0.85;
+    return width * 0.7;
+  }, [width, isMobile, isTablet]);
+
+  const modalHeight = useMemo(() => {
+    return height * 0.9;
+  }, [height]);
+
+  // ============================================
+  // ✅ STEP 2: CONDITIONAL RETURNS (AFTER ALL HOOKS)
+  // ============================================
   if (!answers) return null;
 
   const responsesObj = answers.responses || {};
@@ -78,16 +92,9 @@ const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
     }
   };
 
-  const modalWidth = useMemo(() => {
-    if (isMobile) return width * 0.95;
-    if (isTablet) return width * 0.85;
-    return width * 0.7;
-  }, [width, isMobile, isTablet]);
-
-  const modalHeight = useMemo(() => {
-    return height * 0.9;
-  }, [height]);
-
+  // ============================================
+  // STEP 3: RENDER
+  // ============================================
   return (
     <Modal
       visible={visible}
@@ -146,7 +153,7 @@ const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({
               <Icon name="x" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-
+          
           <ScrollView style={{ padding: 16 }}>
             {/* Summary Stats */}
             <View
