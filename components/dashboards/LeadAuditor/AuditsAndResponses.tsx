@@ -2,17 +2,14 @@
 "use client";
 
 import { format } from "date-fns";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  Modal,
-  FlatList,
+  useWindowDimensions
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import FiveSView from "../auditor/view/FiveSView";
@@ -164,15 +161,15 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   
+  // ============================================
+  // ✅ ALL HOOKS DECLARED FIRST (BEFORE ANY RETURNS)
+  // ============================================
   const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(null);
   const [reportView, setReportView] = useState<{
     type: "5S" | "IATF" | "MANUFACTURING";
     id: string | number;
   } | null>(null);
 
-  // ============================================
-  // HELPER FUNCTIONS
-  // ============================================
   const safeParseAnswers = useCallback((answers: any): any => {
     if (!answers) return {};
     if (typeof answers === "object") return answers;
@@ -268,7 +265,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   }, [allSchedules, searchTerm]);
 
   // ============================================
-  // RENDER FUNCTIONS
+  // RENDER FUNCTIONS (useCallback hooks)
   // ============================================
   const renderResponseVerticalItem = useCallback((item: Response) => {
     const answers = safeParseAnswers(item.answers);
@@ -612,8 +609,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   }, [isMobile, getSeverityBadge, getStatusBadge, onViewNCR]);
 
   // ============================================
-  // NCR PREVIEW
+  // ✅ CONDITIONAL RETURNS (AFTER ALL HOOKS)
   // ============================================
+  
+  // NCR PREVIEW
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -626,9 +625,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // ============================================
   // CHECK SHEET REPORT PREVIEW
-  // ============================================
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
