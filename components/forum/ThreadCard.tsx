@@ -117,16 +117,23 @@ const isProductionBackend = () => {
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
+// ✅ NEW CODE (Always treat backend as UTC)
 const parseBackendDate = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  
   let isoString = dateString;
+  
+  // Convert space to T if needed
   if (!isoString.includes('T')) {
     isoString = isoString.replace(' ', 'T');
   }
-  // ✅ FIXED: ALWAYS add Z if no timezone marker
-  // Backend always sends UTC (both local and production)
+  
+  // ✅ ALWAYS add Z if no timezone marker
+  // Backend (local AND production) sends UTC because of spring.jackson.time-zone=UTC
   if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
     isoString += 'Z';
   }
+  
   return new Date(isoString);
 };
 

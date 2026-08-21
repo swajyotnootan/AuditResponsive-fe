@@ -1266,13 +1266,20 @@ export default function ForumThreadView({
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
- const getDateLabel = (dateStr: string) => {
+ // ✅ NEW CODE (Always treat backend as UTC)
+const getDateLabel = (dateStr: string) => {
+  if (!dateStr) return null;
+  
   let isoString = dateStr;
+  
+  // Convert space to T if needed
   if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  // ✅ FIXED: ALWAYS add Z if no timezone marker
+  
+  // ✅ ALWAYS add Z if no timezone marker
   if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
     isoString += 'Z';
   }
+  
   const date = new Date(isoString);
   
   const today = new Date();
