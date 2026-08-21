@@ -1268,18 +1268,11 @@ export default function ForumThreadView({
 
  // ✅ NEW CODE (Always treat backend as UTC)
 const getDateLabel = (dateStr: string) => {
-  if (!dateStr) return null;
-  
+  // ✅ Same UTC→local conversion as ThreadCard
   let isoString = dateStr;
-  
-  // Convert space to T if needed
   if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  
-  // ✅ ALWAYS add Z if no timezone marker
-  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
-    isoString += 'Z';
-  }
-  
+  const isProd = !API_BASE_URL.includes('localhost') && !API_BASE_URL.includes('127.0.0.1');
+  if (isProd && !isoString.includes('Z') && !isoString.includes('+')) isoString += 'Z';
   const date = new Date(isoString);
   
   const today = new Date();

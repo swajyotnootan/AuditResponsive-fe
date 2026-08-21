@@ -119,21 +119,13 @@ const isProductionBackend = () => {
 
 // ✅ NEW CODE (Always treat backend as UTC)
 const parseBackendDate = (dateString: string): Date => {
-  if (!dateString) return new Date();
-  
   let isoString = dateString;
-  
-  // Convert space to T if needed
   if (!isoString.includes('T')) {
     isoString = isoString.replace(' ', 'T');
   }
-  
-  // ✅ ALWAYS add Z if no timezone marker
-  // Backend (local AND production) sends UTC because of spring.jackson.time-zone=UTC
-  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
+  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
     isoString += 'Z';
   }
-  
   return new Date(isoString);
 };
 
