@@ -2,11 +2,11 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import { useLocalSearchParams } from "expo-router";
-import { FileText, RefreshCw, X } from "lucide-react-native"; // ✅ ADD
+import { FileText, RefreshCw, X } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView, // ✅ ADD
+  KeyboardAvoidingView,
   Modal,
   Platform,
   SafeAreaView,
@@ -15,16 +15,17 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions, // ✅ ADD
+  useWindowDimensions,
 } from "react-native";
-import YearFilter from "../common/YearFilter"; // Adjust path as needed
+import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
 import { ToastProvider, useToast } from "../context/ToastContext";
 import AuditsAndResponses from "./LeadAuditor/AuditsAndResponses";
 import DashboardAnalytics from "./LeadAuditor/DashboardAnalytics";
 import ResponseDetailModal from "./LeadAuditor/ResponseDetailModal";
 import StakeholderManagement from "./LeadAuditor/StakeholderManagement";
-// Types
+
+// Types (keep same)
 interface User {
   id: string | number;
   firstName: string;
@@ -109,13 +110,6 @@ interface Stats {
   ncrOpen: number;
 }
 
-// const { width, height } = Dimensions.get("window");
-// const isMobile = width < 768;
-// const isTablet = width >= 768 && width < 1024;
-// const isDesktop = width >= 1024;
-// const isWeb = Platform.OS === "web";
-
-
 const NAVBAR_COLORS = {
   primary: "#00529B",
   secondary: "#3b82f6",
@@ -129,6 +123,9 @@ const NAVBAR_COLORS = {
 const LeadAuditorDashboardContent: React.FC = () => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+  const isDesktop = width >= 1024;
+  
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -140,9 +137,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [carouselSpeed, setCarouselSpeed] = useState(5000);
   const [responseViewMode, setResponseViewMode] = useState("grid");
   const [ncrViewMode, setNcrViewMode] = useState("grid");
-  const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<
-    string | null
-  >(null);
+  const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<string | null>(null);
 
   const [allSchedules, setAllSchedules] = useState<Schedule[]>([]);
   const [allNCRs, setAllNCRs] = useState<NCR[]>([]);
@@ -156,15 +151,12 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [filteredAuditees, setFilteredAuditees] = useState<User[]>([]);
   const [filteredResponses, setFilteredResponses] = useState<Response[]>([]);
 
-  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(
-    null,
-  );
+  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(null);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewApproved, setReviewApproved] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [selectedResponseForDetail, setSelectedResponseForDetail] =
-    useState<Response | null>(null);
+  const [selectedResponseForDetail, setSelectedResponseForDetail] = useState<Response | null>(null);
   const [showResponseDetailModal, setShowResponseDetailModal] = useState(false);
 
   const [stats, setStats] = useState<Stats>({
@@ -191,9 +183,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     ncrOpen: 0,
   });
 
-  const [selectedYear, setSelectedYear] = useState(() => {
-    return new Date().getFullYear();
-  });
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([]);
 
   // Listen for tab param from drawer clicks
@@ -338,7 +328,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     const overdue = filtered.schedules.filter((s) => {
       if (!s.scheduledDate) return false;
       return (
-        new Date(s.scheduledDate) < today &&
+        new Date(s.scheduledDate as string) < today &&
         s.status !== "COMPLETED" &&
         s.status !== "REJECTED" &&
         s.status !== "APPROVED"
@@ -354,22 +344,18 @@ const LeadAuditorDashboardContent: React.FC = () => {
         (s) =>
           s.status === "APPROVED" || s.detailedApprovalStatus === "APPROVED",
       ).length,
-      rejected: filtered.schedules.filter((s) => s.status === "REJECTED")
-        .length,
+      rejected: filtered.schedules.filter((s) => s.status === "REJECTED").length,
       pendingApproval: filtered.schedules.filter(
         (s) =>
           s.status === "COMPLETED" && s.detailedApprovalStatus !== "APPROVED",
       ).length,
-      inProgress: filtered.schedules.filter((s) => s.status === "IN_PROGRESS")
-        .length,
-      scheduled: filtered.schedules.filter((s) => s.status === "SCHEDULED")
-        .length,
+      inProgress: filtered.schedules.filter((s) => s.status === "IN_PROGRESS").length,
+      scheduled: filtered.schedules.filter((s) => s.status === "SCHEDULED").length,
       overdue,
       totalNCRs: filtered.ncrs.length,
       openNCRs: filtered.ncrs.filter((n) => n.status !== "CLOSED").length,
       closedNCRs: filtered.ncrs.filter((n) => n.status === "CLOSED").length,
-      criticalNCRs: filtered.ncrs.filter((n) => n.severity === "CRITICAL")
-        .length,
+      criticalNCRs: filtered.ncrs.filter((n) => n.severity === "CRITICAL").length,
       majorNCRs: filtered.ncrs.filter((n) => n.severity === "MAJOR").length,
       minorNCRs: filtered.ncrs.filter((n) => n.severity === "MINOR").length,
       totalResponses: filtered.responses.length,
@@ -377,8 +363,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
       responsesRejected,
       responsesSubmitted,
       ncrApproved: filtered.ncrs.filter((n) => n.status === "APPROVED").length,
-      ncrInProgress: filtered.ncrs.filter((n) => n.status === "IN_PROGRESS")
-        .length,
+      ncrInProgress: filtered.ncrs.filter((n) => n.status === "IN_PROGRESS").length,
       ncrOpen: filtered.ncrs.filter((n) => n.status === "OPEN").length,
     });
   };
@@ -420,13 +405,13 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
       ncrs = ncrs.filter((ncr: NCR) => {
         const ncrDate = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
-        if (ncrDate) return new Date(ncrDate).getFullYear() === year;
+        if (ncrDate) return new Date(ncrDate as string).getFullYear() === year;
         return false;
       });
 
       responses = responses.filter((response: Response) => {
         const responseYear = response.createdAt
-          ? new Date(response.createdAt).getFullYear()
+          ? new Date(response.createdAt as string).getFullYear()
           : null;
         return responseYear === year;
       });
@@ -436,14 +421,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
       setAllAuditors(auditors);
       setAllAuditees(auditees);
       setAllResponses(responses);
-      updateFilteredData(
-        department,
-        schedules,
-        ncrs,
-        auditors,
-        auditees,
-        responses,
-      );
+      updateFilteredData(department, schedules, ncrs, auditors, auditees, responses);
     } catch (error) {
       console.error("Error fetching data:", error);
       addToast("Failed to load dashboard data", "error");
@@ -485,9 +463,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      const endpoint = reviewApproved
-        ? "lead-auditor/approve"
-        : "lead-auditor/reject";
+      const endpoint = reviewApproved ? "lead-auditor/approve" : "lead-auditor/reject";
       await axios.put(
         `${API_BASE_URL}/api/templates/responses/${reviewingResponse.id}/${endpoint}`,
         { comment: reviewComment, signature: "Lead Auditor" },
@@ -510,7 +486,6 @@ const LeadAuditorDashboardContent: React.FC = () => {
     }
   };
 
-  // Effects
   useEffect(() => {
     const currentYear = new Date().getFullYear();
     const years = [];
@@ -522,30 +497,19 @@ const LeadAuditorDashboardContent: React.FC = () => {
     fetchAllData(selectedYear);
   }, [selectedYear]);
 
-  const getResponseStatusBadge = (status?: string) => {
-    const badges: Record<string, any> = {
-      APPROVED: { bg: "#D1FAE5", text: "#059669" },
-      REJECTED: { bg: "#FEE2E2", text: "#DC2626" },
-      SUBMITTED: { bg: "#DBEAFE", text: "#2563EB" },
-      DRAFT: { bg: "#F3F4F6", text: "#6B7280" },
-    };
-    return badges[status || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  };
-
   const departmentDisplayName = leadAuditorDepartment || "All Departments";
 
   if (loading) {
     return (
-      <View className="items-center justify-center flex-1 bg-slate-50">
-        <ActivityIndicator size="large" color="#00529B" className="mb-4" />
-        <Text className="text-sm font-medium text-slate-500">
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8FAFC" }}>
+        <ActivityIndicator size="large" color={NAVBAR_COLORS.primary} style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 14, fontWeight: "500", color: "#64748B" }}>
           Loading dashboard...
         </Text>
       </View>
     );
   }
 
-  // Render content based on active tab
   const renderContent = () => {
     switch (activeTab) {
       case "overview":
@@ -604,8 +568,8 @@ const LeadAuditorDashboardContent: React.FC = () => {
         );
       default:
         return (
-          <View className="items-center justify-center p-10 mt-4 bg-white border rounded-2xl border-slate-200">
-            <Text className="text-base text-center text-slate-500">
+          <View style={{ justifyContent: "center", alignItems: "center", padding: 40, marginTop: 16, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <Text style={{ fontSize: 16, textAlign: "center", color: "#64748B" }}>
               Select a section from the navigation
             </Text>
           </View>
@@ -614,29 +578,62 @@ const LeadAuditorDashboardContent: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} className="bg-slate-50">
-      {/* ✅ FULL-WIDTH HEADER (Moved outside ScrollView to span edge-to-edge) */}
-      <View className="w-full px-4 py-5 bg-white border-b shadow-sm border-slate-200 md:px-8">
-        {/* Inner wrapper to keep the text aligned with the 1400px content below */}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+      {/* ✅ RESPONSIVE HEADER */}
+      <View style={{
+        width: "100%",
+        backgroundColor: "#FFFFFF",
+        borderBottomWidth: 1,
+        borderBottomColor: "#E2E8F0",
+        paddingHorizontal: isMobile ? 16 : 24,
+        paddingVertical: isMobile ? 12 : 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+      }}>
         <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
-          <View className="flex-row flex-wrap items-center justify-between gap-4">
-            <View className="flex-1 min-w-[200px]">
-              <Text className="text-xl font-bold md:text-2xl text-slate-800">
+          <View style={{
+            flexDirection: isMobile ? "column" : "row",
+            flexWrap: "wrap",
+            alignItems: isMobile ? "flex-start" : "center",
+            justifyContent: "space-between",
+            gap: isMobile ? 12 : 16,
+          }}>
+            {/* Title Section */}
+            <View style={{ flex: 1, minWidth: isMobile ? "100%" : 200 }}>
+              <Text style={{
+                fontSize: isMobile ? 18 : 24,
+                fontWeight: "bold",
+                color: "#1E293B",
+              }}>
                 Lead Auditor Dashboard
               </Text>
-              <Text className="mt-1 text-xs md:text-sm text-slate-500">
+              <Text style={{
+                fontSize: isMobile ? 11 : 13,
+                color: "#64748B",
+                marginTop: 4,
+                flexWrap: "wrap",
+              }}>
                 Welcome back,{" "}
-                <Text className="font-semibold text-slate-700">
+                <Text style={{ fontWeight: "600", color: "#334155" }}>
                   {user?.name || user?.username || "User"}
                 </Text>
-                <Text className="text-slate-300"> | </Text>
-                <Text className="font-medium text-blue-600">
+                {" | "}
+                <Text style={{ fontWeight: "500", color: NAVBAR_COLORS.primary }}>
                   Dept: {departmentDisplayName}
                 </Text>
               </Text>
             </View>
 
-            <View className="flex-row flex-wrap items-center gap-3">
+            {/* Controls Section */}
+            <View style={{
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "stretch" : "center",
+              gap: 8,
+              width: isMobile ? "100%" : "auto",
+            }}>
               <YearFilter
                 selectedYear={selectedYear}
                 onYearChange={setSelectedYear}
@@ -646,39 +643,50 @@ const LeadAuditorDashboardContent: React.FC = () => {
               <TouchableOpacity
                 onPress={handleRefresh}
                 disabled={refreshing}
-                className={`flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl ${refreshing ? "opacity-60" : ""}`}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  paddingHorizontal: isMobile ? 12 : 16,
+                  paddingVertical: 10,
+                  backgroundColor: "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 12,
+                  opacity: refreshing ? 0.6 : 1,
+                }}
               >
                 {refreshing ? (
-                  <ActivityIndicator size="small" color="#00529B" />
+                  <ActivityIndicator size="small" color={NAVBAR_COLORS.primary} />
                 ) : (
                   <RefreshCw size={16} color="#475569" />
                 )}
-                {!isMobile && (
-                  <Text className="text-sm font-semibold text-slate-700">
-                    Refresh
-                  </Text>
-                )}
+                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>
+                  {isMobile ? "" : "Refresh"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
 
-      {/* ✅ SCROLLABLE CONTENT AREA */}
+      {/* ✅ RESPONSIVE SCROLLABLE CONTENT */}
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           flexGrow: 1,
           paddingBottom: 24,
-          paddingHorizontal: isMobile ? 12 : 24,
+          paddingHorizontal: isMobile ? 12 : isTablet ? 16 : 24,
           maxWidth: 1400,
           width: "100%",
           alignSelf: "center",
         }}
       >
-        {/* Content Wrapper */}
-        <View className="w-full mt-6">{renderContent()}</View>
+        <View style={{ width: "100%", marginTop: isMobile ? 12 : 20 }}>
+          {renderContent()}
+        </View>
       </ScrollView>
 
       {/* Response Detail Modal */}
@@ -693,8 +701,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
         />
       )}
 
-      {/* Review Response Modal */}
-      {/* ✅ MODERN REVIEW MODAL */}
+      {/* ✅ RESPONSIVE REVIEW MODAL */}
       {reviewingResponse && (
         <Modal
           visible={true}
@@ -704,123 +711,165 @@ const LeadAuditorDashboardContent: React.FC = () => {
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            className="items-center justify-center flex-1 bg-slate-900/60"
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              paddingHorizontal: isMobile ? 16 : 24,
+            }}
           >
-            <View className="w-[90%] max-w-md p-6 bg-white shadow-2xl rounded-3xl border border-slate-100">
+            <View style={{
+              width: isMobile ? "100%" : "100%",
+              maxWidth: isMobile ? 400 : 480,
+              backgroundColor: "#FFFFFF",
+              borderRadius: 24,
+              padding: isMobile ? 16 : 24,
+              borderWidth: 1,
+              borderColor: "#F1F5F9",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.1,
+              shadowRadius: 20,
+              elevation: 10,
+            }}>
               {/* Header */}
-              <View className="flex-row items-center justify-between pb-4 mb-4 border-b border-slate-100">
-                <View className="flex-row items-center gap-3">
-                  <View className="p-2 rounded-lg bg-blue-50">
-                    <FileText size={20} color="#00529B" />
+              <View style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingBottom: 16,
+                marginBottom: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+              }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: NAVBAR_COLORS.bg }}>
+                    <FileText size={20} color={NAVBAR_COLORS.primary} />
                   </View>
-                  <Text className="text-lg font-bold text-slate-800">
+                  <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#1E293B" }}>
                     Review Response
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setReviewingResponse(null)}>
-                  <X size={24} color="#6B7280" />
+                <TouchableOpacity 
+                  onPress={() => setReviewingResponse(null)}
+                  style={{ padding: 4 }}
+                >
+                  <X size={24} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               {/* Info Card */}
-              <View className="p-4 mb-5 border bg-slate-50 rounded-xl border-slate-100">
-                <Text className="text-sm font-bold text-slate-800">
+              <View style={{
+                padding: 16,
+                marginBottom: 20,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#F1F5F9",
+              }}>
+                <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1E293B" }}>
                   {reviewingResponse.department}
                 </Text>
-                <View className="flex-row justify-between mt-2">
-                  <Text className="text-xs text-slate-600">
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8, flexWrap: "wrap", gap: 8 }}>
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
                     Score:{" "}
-                    <Text className="font-bold text-blue-600">
-                      {reviewingResponse.totalScore}/
-                      {reviewingResponse.maxPossibleScore}
+                    <Text style={{ fontWeight: "bold", color: NAVBAR_COLORS.primary }}>
+                      {reviewingResponse.totalScore}/{reviewingResponse.maxPossibleScore}
                     </Text>
                   </Text>
-                  <Text className="text-xs text-slate-600">
+                  <Text style={{ fontSize: 12, color: "#64748B" }}>
                     Auditee:{" "}
-                    <Text className="font-bold text-blue-600">
+                    <Text style={{ fontWeight: "bold", color: NAVBAR_COLORS.primary }}>
                       {reviewingResponse.auditeeName}
                     </Text>
                   </Text>
                 </View>
-                <View className="mt-3">
-                  <View
-                    className={`self-start px-3 py-1 rounded-lg ${
-                      reviewingResponse.status === "APPROVED"
-                        ? "bg-emerald-50"
-                        : reviewingResponse.status === "REJECTED"
-                          ? "bg-rose-50"
-                          : reviewingResponse.status === "SUBMITTED"
-                            ? "bg-blue-50"
-                            : "bg-slate-100"
-                    }`}
-                  >
-                    <Text
-                      className={`text-xs font-semibold ${
-                        reviewingResponse.status === "APPROVED"
-                          ? "text-emerald-700"
-                          : reviewingResponse.status === "REJECTED"
-                            ? "text-rose-700"
-                            : reviewingResponse.status === "SUBMITTED"
-                              ? "text-blue-700"
-                              : "text-slate-600"
-                      }`}
-                    >
+                <View style={{ marginTop: 12 }}>
+                  <View style={{
+                    alignSelf: "flex-start",
+                    paddingHorizontal: 12,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    backgroundColor: 
+                      reviewingResponse.status === "APPROVED" ? "#D1FAE5" :
+                      reviewingResponse.status === "REJECTED" ? "#FEE2E2" :
+                      reviewingResponse.status === "SUBMITTED" ? "#DBEAFE" : "#F3F4F6",
+                  }}>
+                    <Text style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color:
+                        reviewingResponse.status === "APPROVED" ? "#059669" :
+                        reviewingResponse.status === "REJECTED" ? "#DC2626" :
+                        reviewingResponse.status === "SUBMITTED" ? "#2563EB" : "#6B7280",
+                    }}>
                       {reviewingResponse.status || "DRAFT"}
                     </Text>
                   </View>
                 </View>
               </View>
 
-              {/* Approve / Reject Radio Buttons */}
-              <View className="flex-row gap-3 mb-5">
+              {/* Approve / Reject Buttons */}
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
                 <TouchableOpacity
-                  className={`flex-row items-center gap-3 flex-1 p-4 rounded-xl border transition-all ${
-                    reviewApproved
-                      ? "bg-emerald-50 border-emerald-300"
-                      : "bg-white border-slate-200"
-                  }`}
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: isMobile ? 12 : 16,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: reviewApproved ? "#10B981" : "#E2E8F0",
+                    backgroundColor: reviewApproved ? "#ECFDF5" : "#FFFFFF",
+                  }}
                   onPress={() => setReviewApproved(true)}
                 >
-                  <View
-                    className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
-                      reviewApproved ? "border-emerald-600" : "border-slate-300"
-                    }`}
-                  >
-                    {reviewApproved && (
-                      <View className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                    )}
+                  <View style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: reviewApproved ? "#10B981" : "#CBD5E1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}>
+                    {reviewApproved && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#10B981" }} />}
                   </View>
-                  <Text
-                    className={`text-sm font-semibold ${
-                      reviewApproved ? "text-emerald-700" : "text-slate-600"
-                    }`}
-                  >
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: reviewApproved ? "#059669" : "#64748B" }}>
                     Approve
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className={`flex-row items-center gap-3 flex-1 p-4 rounded-xl border transition-all ${
-                    !reviewApproved
-                      ? "bg-rose-50 border-rose-300"
-                      : "bg-white border-slate-200"
-                  }`}
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: isMobile ? 12 : 16,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: !reviewApproved ? "#EF4444" : "#E2E8F0",
+                    backgroundColor: !reviewApproved ? "#FEF2F2" : "#FFFFFF",
+                  }}
                   onPress={() => setReviewApproved(false)}
                 >
-                  <View
-                    className={`w-5 h-5 rounded-full border-2 items-center justify-center ${
-                      !reviewApproved ? "border-rose-600" : "border-slate-300"
-                    }`}
-                  >
-                    {!reviewApproved && (
-                      <View className="w-2.5 h-2.5 rounded-full bg-rose-600" />
-                    )}
+                  <View style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: !reviewApproved ? "#EF4444" : "#CBD5E1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}>
+                    {!reviewApproved && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#EF4444" }} />}
                   </View>
-                  <Text
-                    className={`text-sm font-semibold ${
-                      !reviewApproved ? "text-rose-700" : "text-slate-600"
-                    }`}
-                  >
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: !reviewApproved ? "#DC2626" : "#64748B" }}>
                     Reject
                   </Text>
                 </TouchableOpacity>
@@ -828,46 +877,60 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
               {/* Comment Input */}
               <TextInput
-                className="w-full p-3 mb-6 text-sm bg-white border border-slate-200 rounded-xl"
-                style={{ minHeight: 80, textAlignVertical: "top" }}
+                style={{
+                  width: "100%",
+                  minHeight: isMobile ? 80 : 100,
+                  padding: 12,
+                  marginBottom: 20,
+                  backgroundColor: "#FFFFFF",
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderRadius: 12,
+                  fontSize: 13,
+                  textAlignVertical: "top",
+                  color: "#1E293B",
+                }}
                 value={reviewComment}
                 onChangeText={setReviewComment}
-                placeholder={
-                  reviewApproved
-                    ? "Add approval comments (optional)..."
-                    : "Please provide reason for rejection..."
-                }
+                placeholder={reviewApproved ? "Add approval comments (optional)..." : "Please provide reason for rejection..."}
                 placeholderTextColor="#9CA3AF"
                 multiline
               />
 
               {/* Footer Buttons */}
-              <View className="flex-row justify-end gap-3">
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
                 <TouchableOpacity
                   onPress={() => setReviewingResponse(null)}
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white"
+                  style={{
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                    backgroundColor: "#FFFFFF",
+                  }}
                 >
-                  <Text className="text-sm font-semibold text-slate-700">
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
                     Cancel
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleReviewResponse}
                   disabled={submitting}
-                  className={`px-5 py-2.5 rounded-xl shadow-md ${
-                    submitting
-                      ? "bg-slate-400"
-                      : reviewApproved
-                        ? "bg-emerald-600"
-                        : "bg-rose-600"
-                  }`}
+                  style={{
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: submitting ? "#94A3B8" : reviewApproved ? "#10B981" : "#EF4444",
+                    shadowColor: submitting ? "transparent" : reviewApproved ? "#10B981" : "#EF4444",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 4,
+                    elevation: 3,
+                  }}
                 >
-                  <Text className="text-sm font-semibold text-white">
-                    {submitting
-                      ? "Processing..."
-                      : reviewApproved
-                        ? "Approve"
-                        : "Reject"}
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
+                    {submitting ? "Processing..." : reviewApproved ? "Approve" : "Reject"}
                   </Text>
                 </TouchableOpacity>
               </View>
