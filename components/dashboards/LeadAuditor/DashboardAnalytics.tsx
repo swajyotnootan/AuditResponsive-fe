@@ -52,15 +52,33 @@ const Card = ({ children, className = "", style = {} }: any) => (
 const MetricCard = ({ title, value, subtitle, iconName }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  
   return (
-    <Card style={{ flex: 1, minWidth: isMobile ? "45%" : "22%", padding: isMobile ? 16 : 20 }}>
+    <Card 
+      style={{ 
+        flex: 1, 
+        // ✅ FIXED: Use NUMBER for minWidth, not string
+        minWidth: isMobile ? 150 : 200,
+        maxWidth: isMobile ? "100%" : 280,
+        padding: isMobile ? 12 : 16,
+        overflow: "hidden",
+      }}
+    >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", fontWeight: "500" }}>{title}</Text>
-          <Text style={{ fontSize: isMobile ? 22 : 24, fontWeight: "bold", color: "#1E293B", marginTop: 4 }}>{value}</Text>
-          {subtitle && <Text style={{ fontSize: isMobile ? 10 : 12, color: "#94A3B8", marginTop: 4 }}>{subtitle}</Text>}
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", fontWeight: "500" }} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={{ fontSize: isMobile ? 20 : 24, fontWeight: "bold", color: "#1E293B", marginTop: 4 }}>
+            {value}
+          </Text>
+          {subtitle && (
+            <Text style={{ fontSize: isMobile ? 10 : 12, color: "#94A3B8", marginTop: 4 }} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          )}
         </View>
-        <View style={{ padding: 12, borderRadius: 12, backgroundColor: NAVBAR_COLORS.bg }}>
+        <View style={{ padding: 10, borderRadius: 12, backgroundColor: NAVBAR_COLORS.bg }}>
           <Icon name={iconName} size={20} color={NAVBAR_COLORS.primary} />
         </View>
       </View>
@@ -160,6 +178,9 @@ const AlertItem = ({ message, time, iconName }: any) => {
 // ============================================================================
 // CHART CAROUSEL COMPONENT
 // ============================================================================
+// ============================================================================
+// FIXED CHART CAROUSEL COMPONENT
+// ============================================================================
 const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -168,20 +189,24 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const autoPlayRef = useRef<any>(null);
 
-  const cardWidth = Math.min(width * (isMobile ? 0.92 : 0.7), 800);
+  // ✅ FIXED: Use NUMBER for width calculation, not string
+  const containerWidth = isMobile ? width - 32 : Math.min(width - 48, 750);
+  const cardWidth = containerWidth;
   const gap = 16;
 
   const nextSlide = useCallback(() => {
+    if (slides.length === 0) return;
     const nextIndex = (currentIndex + 1) % slides.length;
     setCurrentIndex(nextIndex);
     scrollViewRef.current?.scrollTo({ x: nextIndex * (cardWidth + gap), animated: true });
-  }, [currentIndex, slides.length, cardWidth]);
+  }, [currentIndex, slides.length, cardWidth, gap]);
 
   const prevSlide = useCallback(() => {
+    if (slides.length === 0) return;
     const prevIndex = (currentIndex - 1 + slides.length) % slides.length;
     setCurrentIndex(prevIndex);
     scrollViewRef.current?.scrollTo({ x: prevIndex * (cardWidth + gap), animated: true });
-  }, [currentIndex, slides.length, cardWidth]);
+  }, [currentIndex, slides.length, cardWidth, gap]);
 
   useEffect(() => {
     if (isAutoPlaying && slides.length > 1) {
@@ -201,8 +226,8 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
   };
 
   return (
-    <View style={{ width: "100%", alignItems: "center" }}>
-      <View style={{ width: cardWidth, position: "relative" }}>
+    <View style={{ width: "100%", alignItems: "center", overflow: "hidden" }}>
+      <View style={{ width: cardWidth, position: "relative", overflow: "hidden" }}>
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -211,18 +236,21 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
           decelerationRate="fast"
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          contentContainerStyle={{ gap: gap }}
+          contentContainerStyle={{ gap: gap, paddingHorizontal: 0 }}
+          style={{ overflow: "hidden" }}
         >
           {slides.map((slide: any, index: number) => (
-            <View key={index} style={{ width: cardWidth }}>
-              <Card style={{ padding: isMobile ? 12 : 16, overflow: "hidden" }}>
+            <View key={index} style={{ width: cardWidth, overflow: "hidden" }}>
+              <Card style={{ padding: isMobile ? 12 : 16, overflow: "hidden", width: cardWidth }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", marginBottom: 16 }}>
                   <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
                     <Icon name={slide.icon} size={16} color={NAVBAR_COLORS.primary} />
                   </View>
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>{slide.title}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B", flexShrink: 1 }} numberOfLines={1}>
+                    {slide.title}
+                  </Text>
                 </View>
-                <View style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
+                <View style={{ alignItems: "center", justifyContent: "center", width: "100%", overflow: "hidden" }}>
                   {slide.component}
                 </View>
               </Card>
@@ -230,17 +258,50 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
           ))}
         </ScrollView>
 
+        {/* ✅ FIXED: Arrows INSIDE the container, not outside */}
         {slides.length > 1 && (
           <>
             <TouchableOpacity
               onPress={prevSlide}
-              style={{ position: "absolute", left: -10, top: "50%", marginTop: -20, padding: 8, backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, zIndex: 10 }}
+              style={{ 
+                position: "absolute", 
+                left: 8, 
+                top: "50%", 
+                marginTop: -20, 
+                padding: 8, 
+                backgroundColor: "rgba(255,255,255,0.9)", 
+                borderRadius: 20, 
+                borderWidth: 1, 
+                borderColor: "#E2E8F0", 
+                shadowColor: "#000", 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.1, 
+                shadowRadius: 4, 
+                elevation: 3, 
+                zIndex: 10 
+              }}
             >
               <Icon name="chevron-left" size={20} color="#475569" />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={nextSlide}
-              style={{ position: "absolute", right: -10, top: "50%", marginTop: -20, padding: 8, backgroundColor: "#FFFFFF", borderRadius: 20, borderWidth: 1, borderColor: "#E2E8F0", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, zIndex: 10 }}
+              style={{ 
+                position: "absolute", 
+                right: 8, 
+                top: "50%", 
+                marginTop: -20, 
+                padding: 8, 
+                backgroundColor: "rgba(255,255,255,0.9)", 
+                borderRadius: 20, 
+                borderWidth: 1, 
+                borderColor: "#E2E8F0", 
+                shadowColor: "#000", 
+                shadowOffset: { width: 0, height: 2 }, 
+                shadowOpacity: 0.1, 
+                shadowRadius: 4, 
+                elevation: 3, 
+                zIndex: 10 
+              }}
             >
               <Icon name="chevron-right" size={20} color="#475569" />
             </TouchableOpacity>
@@ -248,22 +309,35 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
         )}
       </View>
 
+      {/* ✅ FIXED: Pagination row with proper width and wrapping */}
       {slides.length > 1 && (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: cardWidth, marginTop: 20 }}>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ 
+          flexDirection: "row", 
+          alignItems: "center", 
+          justifyContent: "space-between", 
+          width: "100%", 
+          maxWidth: cardWidth,
+          marginTop: 20,
+          paddingHorizontal: 8,
+          flexWrap: "wrap",
+          gap: 8,
+        }}>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {slides.map((_: any, idx: number) => (
-              <TouchableOpacity key={idx} onPress={() => {
-                setCurrentIndex(idx);
-                scrollViewRef.current?.scrollTo({ x: idx * (cardWidth + gap), animated: true });
-              }}>
+              <TouchableOpacity 
+                key={idx} 
+                onPress={() => {
+                  setCurrentIndex(idx);
+                  scrollViewRef.current?.scrollTo({ x: idx * (cardWidth + gap), animated: true });
+                }}
+                style={{ padding: 4 }}
+              >
                 <View
                   style={{
                     height: 8,
                     borderRadius: 4,
                     backgroundColor: currentIndex === idx ? NAVBAR_COLORS.primary : "#CBD5E1",
                     width: currentIndex === idx ? 32 : 8,
-                    transitionProperty: "all",
-                    transitionDuration: "300ms",
                   }}
                 />
               </TouchableOpacity>
@@ -271,10 +345,23 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
           </View>
           <TouchableOpacity
             onPress={() => setIsAutoPlaying(!isAutoPlaying)}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF" }}
+            style={{ 
+              flexDirection: "row", 
+              alignItems: "center", 
+              gap: 6, 
+              paddingHorizontal: 12, 
+              paddingVertical: 6, 
+              borderRadius: 8, 
+              borderWidth: 1, 
+              borderColor: "#E2E8F0", 
+              backgroundColor: "#FFFFFF",
+              alignSelf: "flex-end",
+            }}
           >
             <Icon name={isAutoPlaying ? "pause" : "play"} size={14} color={NAVBAR_COLORS.primary} />
-            <Text style={{ fontSize: 12, fontWeight: "500", color: "#475569" }}>{isAutoPlaying ? "Pause" : "Play"}</Text>
+            <Text style={{ fontSize: 12, fontWeight: "500", color: "#475569" }}>
+              {isAutoPlaying ? "Pause" : "Play"}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
