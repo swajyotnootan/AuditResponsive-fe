@@ -1044,51 +1044,63 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
 
         {/* BOTTOM SECTION */}
         {/* ✅ FIXED BOTTOM SECTION - No Overlapping */}
-{/* ✅ FIXED BOTTOM SECTION - Number-based widths for Android */}
+{/* ✅ FIXED BOTTOM SECTION - Equal Height Columns with Scroll */}
 <View style={{ 
   flexDirection: isMobile ? "column" : "row", 
   gap: isMobile ? 16 : 20,
   flexWrap: "wrap",
   width: "100%",
+  alignItems: "stretch", // ✅ Stretch all columns to equal height
 }}>
   
   {/* Left Column: Key Insights */}
   <View style={{ 
     flex: 1, 
-    // ✅ FIXED: Use NUMBER for minWidth
     minWidth: isMobile ? width - 24 : 280,
-    // ✅ FIXED: Use NUMBER for maxWidth (calculate from screen width)
     maxWidth: isMobile ? width - 24 : Math.floor((width - 48 - 40) / 3),
     width: isMobile ? "100%" : undefined,
   }}>
-    <Card style={{ padding: isMobile ? 14 : 16, marginBottom: 0 }}>
+    <Card style={{ 
+      padding: isMobile ? 14 : 16, 
+      marginBottom: 0,
+      height: isMobile ? undefined : 420, // ✅ Fixed height for desktop
+      overflow: "hidden",
+    }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
           <Icon name="target" size={16} color={NAVBAR_COLORS.primary} />
         </View>
         <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Key Insights</Text>
       </View>
-      <InsightCard
-        title="Month-over-Month"
-        value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`}
-        iconName="trending-up"
-        description="Compared to previous month"
-        trend={momImprovement}
-      />
-      <InsightCard
-        title="Quality Score"
-        value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`}
-        iconName="shield"
-        description="Response quality rating"
-        trend={5}
-      />
-      <InsightCard
-        title="Audit Efficiency"
-        value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`}
-        iconName="zap"
-        description="Audit completion efficiency"
-        trend={8}
-      />
+      
+      {/* ✅ Scrollable content area */}
+      <ScrollView 
+        style={{ flex: 1 }} 
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled
+      >
+        <InsightCard
+          title="Month-over-Month"
+          value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`}
+          iconName="trending-up"
+          description="Compared to previous month"
+          trend={momImprovement}
+        />
+        <InsightCard
+          title="Quality Score"
+          value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`}
+          iconName="shield"
+          description="Response quality rating"
+          trend={5}
+        />
+        <InsightCard
+          title="Audit Efficiency"
+          value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`}
+          iconName="zap"
+          description="Audit completion efficiency"
+          trend={8}
+        />
+      </ScrollView>
     </Card>
   </View>
 
@@ -1100,14 +1112,25 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
     width: isMobile ? "100%" : undefined,
     marginTop: isMobile ? 16 : 0,
   }}>
-    <Card style={{ padding: isMobile ? 14 : 16, marginBottom: 0 }}>
+    <Card style={{ 
+      padding: isMobile ? 14 : 16, 
+      marginBottom: 0,
+      height: isMobile ? undefined : 420, // ✅ Same fixed height
+      overflow: "hidden",
+    }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
           <Icon name="award" size={16} color={NAVBAR_COLORS.primary} />
         </View>
         <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Top Performers</Text>
       </View>
-      <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+      
+      {/* ✅ Scrollable content area */}
+      <ScrollView 
+        style={{ flex: 1 }} 
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled
+      >
         {topAuditors.length > 0 ? (
           topAuditors.map((auditor: any, idx: number) => (
             <TopPerformerCard key={idx} rank={idx + 1} name={auditor.name} score={auditor.score} department="Auditor" />
@@ -1130,7 +1153,12 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
     width: isMobile ? "100%" : undefined,
     marginTop: isMobile ? 16 : 0,
   }}>
-    <Card style={{ padding: isMobile ? 14 : 16, marginBottom: 0 }}>
+    <Card style={{ 
+      padding: isMobile ? 14 : 16, 
+      marginBottom: 0,
+      height: isMobile ? undefined : 420, // ✅ Same fixed height
+      overflow: "hidden",
+    }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
           <Icon name="alert-circle" size={16} color={NAVBAR_COLORS.primary} />
@@ -1142,7 +1170,13 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
           </View>
         )}
       </View>
-      <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+      
+      {/* ✅ Scrollable content area */}
+      <ScrollView 
+        style={{ flex: 1 }} 
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled
+      >
         {alerts.length > 0 ? (
           alerts.map((alert: any, idx: number) => <AlertItem key={idx} message={alert.message} time={alert.time} iconName={alert.iconName} />)
         ) : (
@@ -1154,8 +1188,15 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
         )}
       </ScrollView>
       
-      {/* Quick Stats Summary */}
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+      {/* Quick Stats Summary - Fixed at bottom */}
+      <View style={{ 
+        flexDirection: "row", 
+        gap: 8, 
+        marginTop: 12, 
+        paddingTop: 12, 
+        borderTopWidth: 1, 
+        borderTopColor: "#F1F5F9",
+      }}>
         <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
           <Text style={{ fontSize: 10, color: "#64748B" }}>Active Audits</Text>
           <Text style={{ fontSize: 16, fontWeight: "bold", color: NAVBAR_COLORS.primary, marginTop: 2 }}>{stats.inProgress || 0}</Text>
