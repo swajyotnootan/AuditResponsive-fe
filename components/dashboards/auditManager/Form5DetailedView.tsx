@@ -2360,45 +2360,73 @@ export default function Form5DetailedView({
     }
 
     // ✅ MOBILE: Use DateTimePicker
-    return (
-      <>
-        <TouchableOpacity
-          onPress={() => {
-            if (!disabled) setShowPicker(true);
+    // ✅ MOBILE: Use DateTimePicker (Fixed for iOS Modal)
+return (
+  <>
+    <TouchableOpacity
+      onPress={() => {
+        if (!disabled) setShowPicker(true);
+      }}
+      disabled={disabled}
+      className={`flex-row items-center justify-between px-3 border border-gray-200 rounded-lg h-11 ${className}`}
+      style={{
+        backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+        opacity: disabled ? 0.7 : 1,
+      }}
+    >
+      <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
+      <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
+    </TouchableOpacity>
+    
+    {showPicker && Platform.OS === "ios" ? (
+      <Modal
+        visible={showPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }}>
+          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 30 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}>
+              <TouchableOpacity onPress={() => setShowPicker(false)}>
+                <Text style={{ color: COLORS.accent, fontSize: 16, fontWeight: "600" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowPicker(false)}>
+                <Text style={{ color: COLORS.accent, fontSize: 16, fontWeight: "700" }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={pickerValue}
+              mode="date"
+              display="spinner"
+              onChange={(event: any, selectedDate: any) => {
+                if (selectedDate) {
+                  const isoDate = toISODate(selectedDate);
+                  onChange(getSafeDate(isoDate));
+                }
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+    ) : (
+      showPicker && (
+        <DateTimePicker
+          value={pickerValue}
+          mode="date"
+          display="calendar"
+          onChange={(event: any, selectedDate: any) => {
+            setShowPicker(false);
+            if (selectedDate) {
+              const isoDate = toISODate(selectedDate);
+              onChange(getSafeDate(isoDate));
+            }
           }}
-          disabled={disabled}
-          className={`flex-row items-center justify-between px-3 border border-gray-200 rounded-lg h-11 ${className}`}
-          style={{
-            backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
-            opacity: disabled ? 0.7 : 1,
-          }}
-        >
-          <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
-          <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
-        </TouchableOpacity>
-        {showPicker && (
-          <DateTimePicker
-            value={pickerValue}
-            mode="date"
-            display={Platform.OS === "android" ? "calendar" : "default"}
-            minimumDate={minDate ? new Date(`${minDate}T00:00:00`) : undefined}
-            maximumDate={maxDate ? new Date(`${maxDate}T23:59:59`) : undefined}
-            onChange={(event: any, selectedDate: any) => {
-              if (Platform.OS === "android") {
-                setShowPicker(false);
-              }
-              if (selectedDate) {
-                const isoDate = toISODate(selectedDate);
-                onChange(getSafeDate(isoDate));
-              }
-              if (Platform.OS === "ios" && event.type === "dismissed") {
-                setShowPicker(false);
-              }
-            }}
-          />
-        )}
-      </>
-    );
+        />
+      )
+    )}
+  </>
+);
   };
 
   // ═════ RENDER ═════
@@ -3002,6 +3030,8 @@ export default function Form5DetailedView({
                                         onPress={() =>
                                           handleEditSchedule(schedule)
                                         }
+                                        delayPressIn={0} // ← ADD THIS
+                                        activeOpacity={0.7} // ← ADD THIS
                                         className="items-center justify-center w-8 h-8 border border-blue-200 rounded bg-blue-50"
                                       >
                                         <Edit2
@@ -3013,6 +3043,8 @@ export default function Form5DetailedView({
                                         onPress={() =>
                                           handleDelete(schedule.id!)
                                         }
+                                        delayPressIn={0} // ← ADD THIS
+                                        activeOpacity={0.7} // ← ADD THIS
                                         className="items-center justify-center w-8 h-8 border border-red-200 rounded bg-red-50"
                                       >
                                         <Trash2
