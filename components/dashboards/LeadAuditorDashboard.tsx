@@ -628,45 +628,47 @@ const LeadAuditorDashboardContent: React.FC = () => {
             </View>
 
             {/* Controls Section */}
-            <View style={{
-              flexDirection: isMobile ? "column" : "row",
-              alignItems: isMobile ? "stretch" : "center",
-              gap: 8,
-              width: isMobile ? "100%" : "auto",
-            }}>
-              <YearFilter
-                selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
-                availableYears={availableYears}
-              />
-
-              <TouchableOpacity
-                onPress={handleRefresh}
-                disabled={refreshing}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  paddingHorizontal: isMobile ? 12 : 16,
-                  paddingVertical: 10,
-                  backgroundColor: "#FFFFFF",
-                  borderWidth: 1,
-                  borderColor: "#E2E8F0",
-                  borderRadius: 12,
-                  opacity: refreshing ? 0.6 : 1,
-                }}
-              >
-                {refreshing ? (
-                  <ActivityIndicator size="small" color={NAVBAR_COLORS.primary} />
-                ) : (
-                  <RefreshCw size={16} color="#475569" />
-                )}
-                <Text style={{ fontSize: 13, fontWeight: "600", color: "#334155" }}>
-                  {isMobile ? "" : "Refresh"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {/* ✅ FIXED: Year Filter & Refresh - Side by side, Refresh with text */}
+<View style={{
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+}}>
+  <YearFilter
+    selectedYear={selectedYear}
+    onYearChange={setSelectedYear}
+    availableYears={availableYears}
+  />
+  
+  <TouchableOpacity
+    onPress={handleRefresh}
+    disabled={refreshing}
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      backgroundColor: NAVBAR_COLORS.primary,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: NAVBAR_COLORS.primary,
+      opacity: refreshing ? 0.6 : 1,
+      minWidth: 100,
+    }}
+  >
+    {refreshing ? (
+      <ActivityIndicator size="small" color="#FFFFFF" />
+    ) : (
+      <RefreshCw size={16} color="#FFFFFF" />
+    )}
+    <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>
+      Refresh
+    </Text>
+  </TouchableOpacity>
+</View>
           </View>
         </View>
       </View>

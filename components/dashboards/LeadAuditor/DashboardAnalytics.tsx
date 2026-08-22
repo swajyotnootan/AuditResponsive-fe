@@ -1043,106 +1043,125 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
         </Card>
 
         {/* BOTTOM SECTION */}
-        <View style={{ flexDirection: isMobile ? "column" : "row", gap: 20 }}>
-          
-          {/* Left Column: Key Insights */}
-          <View style={{ flex: 1 }}>
-            <Card style={{ padding: isMobile ? 16 : 20 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-                  <Icon name="target" size={16} color={NAVBAR_COLORS.primary} />
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Key Insights</Text>
-              </View>
-              <InsightCard
-                title="Month-over-Month"
-                value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`}
-                iconName="trending-up"
-                description="Compared to previous month"
-                trend={momImprovement}
-              />
-              <InsightCard
-                title="Quality Score"
-                value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`}
-                iconName="shield"
-                description="Response quality rating"
-                trend={5}
-              />
-              <InsightCard
-                title="Audit Efficiency"
-                value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`}
-                iconName="zap"
-                description="Audit completion efficiency"
-                trend={8}
-              />
-            </Card>
-          </View>
-
-          {/* Middle Column: Top Performers */}
-          <View style={{ flex: 1, marginTop: isMobile ? 20 : 0 }}>
-            <Card style={{ padding: isMobile ? 16 : 20 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-                  <Icon name="award" size={16} color={NAVBAR_COLORS.primary} />
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Top Performers</Text>
-              </View>
-              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                {topAuditors.length > 0 ? (
-                  topAuditors.map((auditor: any, idx: number) => (
-                    <TopPerformerCard key={idx} rank={idx + 1} name={auditor.name} score={auditor.score} department="Auditor" />
-                  ))
-                ) : (
-                  <View style={{ alignItems: "center", paddingVertical: 32 }}>
-                    <Icon name="users" size={32} color="#CBD5E1" />
-                    <Text style={{ color: "#94A3B8", fontSize: 14, marginTop: 8 }}>No auditor data available</Text>
-                  </View>
-                )}
-              </ScrollView>
-            </Card>
-          </View>
-
-          {/* Right Column: Alerts & Notifications */}
-          <View style={{ flex: 1, marginTop: isMobile ? 20 : 0 }}>
-            <Card style={{ padding: isMobile ? 16 : 20 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-                  <Icon name="alert-circle" size={16} color={NAVBAR_COLORS.primary} />
-                </View>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Alerts & Notifications</Text>
-                {alerts.length > 0 && (
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: "auto", backgroundColor: NAVBAR_COLORS.primary }}>
-                    <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "bold" }}>{alerts.length}</Text>
-                  </View>
-                )}
-              </View>
-              <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
-                {alerts.length > 0 ? (
-                  alerts.map((alert: any, idx: number) => <AlertItem key={idx} message={alert.message} time={alert.time} iconName={alert.iconName} />)
-                ) : (
-                  <View style={{ alignItems: "center", paddingVertical: 32 }}>
-                    <Icon name="check-circle" size={32} color="#10B981" />
-                    <Text style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>No pending alerts</Text>
-                    <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>All systems running smoothly</Text>
-                  </View>
-                )}
-              </ScrollView>
-              
-              {/* Quick Stats Summary */}
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
-                <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
-                  <Text style={{ fontSize: 11, color: "#64748B" }}>Active Audits</Text>
-                  <Text style={{ fontSize: 18, fontWeight: "bold", color: NAVBAR_COLORS.primary, marginTop: 4 }}>{stats.inProgress || 0}</Text>
-                </View>
-                <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
-                  <Text style={{ fontSize: 11, color: "#64748B" }}>Open NCRs</Text>
-                  <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1E293B", marginTop: 4 }}>{stats.openNCRs || 0}</Text>
-                </View>
-              </View>
-            </Card>
-          </View>
-
+        {/* ✅ FIXED BOTTOM SECTION - No Overlapping */}
+<View style={{ 
+  flexDirection: isMobile ? "column" : "row", 
+  gap: isMobile ? 16 : 20,
+  flexWrap: "wrap",
+}}>
+  
+  {/* Left Column: Key Insights */}
+  <View style={{ 
+    flex: 1, 
+    minWidth: isMobile ? "100%" : 300,
+    maxWidth: isMobile ? "100%" : "33%",
+  }}>
+    <Card style={{ padding: isMobile ? 14 : 20, height: "100%" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+          <Icon name="target" size={16} color={NAVBAR_COLORS.primary} />
         </View>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Key Insights</Text>
+      </View>
+      <InsightCard
+        title="Month-over-Month"
+        value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`}
+        iconName="trending-up"
+        description="Compared to previous month"
+        trend={momImprovement}
+      />
+      <InsightCard
+        title="Quality Score"
+        value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`}
+        iconName="shield"
+        description="Response quality rating"
+        trend={5}
+      />
+      <InsightCard
+        title="Audit Efficiency"
+        value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`}
+        iconName="zap"
+        description="Audit completion efficiency"
+        trend={8}
+      />
+    </Card>
+  </View>
+
+  {/* Middle Column: Top Performers */}
+  <View style={{ 
+    flex: 1, 
+    minWidth: isMobile ? "100%" : 300,
+    maxWidth: isMobile ? "100%" : "33%",
+    marginTop: isMobile ? 16 : 0,
+  }}>
+    <Card style={{ padding: isMobile ? 14 : 20, height: "100%" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+          <Icon name="award" size={16} color={NAVBAR_COLORS.primary} />
+        </View>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Top Performers</Text>
+      </View>
+      <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+        {topAuditors.length > 0 ? (
+          topAuditors.map((auditor: any, idx: number) => (
+            <TopPerformerCard key={idx} rank={idx + 1} name={auditor.name} score={auditor.score} department="Auditor" />
+          ))
+        ) : (
+          <View style={{ alignItems: "center", paddingVertical: 32 }}>
+            <Icon name="users" size={32} color="#CBD5E1" />
+            <Text style={{ color: "#94A3B8", fontSize: 14, marginTop: 8 }}>No auditor data available</Text>
+          </View>
+        )}
+      </ScrollView>
+    </Card>
+  </View>
+
+  {/* Right Column: Alerts & Notifications */}
+  <View style={{ 
+    flex: 1, 
+    minWidth: isMobile ? "100%" : 300,
+    maxWidth: isMobile ? "100%" : "33%",
+    marginTop: isMobile ? 16 : 0,
+  }}>
+    <Card style={{ padding: isMobile ? 14 : 20, height: "100%" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+          <Icon name="alert-circle" size={16} color={NAVBAR_COLORS.primary} />
+        </View>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Alerts & Notifications</Text>
+        {alerts.length > 0 && (
+          <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: "auto", backgroundColor: NAVBAR_COLORS.primary }}>
+            <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "bold" }}>{alerts.length}</Text>
+          </View>
+        )}
+      </View>
+      <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+        {alerts.length > 0 ? (
+          alerts.map((alert: any, idx: number) => <AlertItem key={idx} message={alert.message} time={alert.time} iconName={alert.iconName} />)
+        ) : (
+          <View style={{ alignItems: "center", paddingVertical: 32 }}>
+            <Icon name="check-circle" size={32} color="#10B981" />
+            <Text style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>No pending alerts</Text>
+            <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>All systems running smoothly</Text>
+          </View>
+        )}
+      </ScrollView>
+      
+      {/* Quick Stats Summary */}
+      <View style={{ flexDirection: "row", gap: 12, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <Text style={{ fontSize: 11, color: "#64748B" }}>Active Audits</Text>
+          <Text style={{ fontSize: 18, fontWeight: "bold", color: NAVBAR_COLORS.primary, marginTop: 4 }}>{stats.inProgress || 0}</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 12, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <Text style={{ fontSize: 11, color: "#64748B" }}>Open NCRs</Text>
+          <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1E293B", marginTop: 4 }}>{stats.openNCRs || 0}</Text>
+        </View>
+      </View>
+    </Card>
+  </View>
+
+</View>
       </View>
     </ScrollView>
   );
