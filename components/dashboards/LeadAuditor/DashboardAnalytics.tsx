@@ -63,15 +63,24 @@ const ResponsiveLineChart = ({
 }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
   
-  // Calculate chart width properly
-  const containerPadding = isMobile ? 8 : 16; // Screen padding
-  const cardPadding = isMobile ? 16 : 24; // Card inner padding
-  const chartMargin = 8; // Extra margin
+  // ✅ FIXED: Proper width calculation for ALL screen sizes
+  const screenPadding = isMobile ? 8 : isTablet ? 16 : 24;
+  const cardPadding = isMobile ? 12 : 20;
+  const yAxisLabelSpace = 40; // Space for Y-axis labels (e.g., "100", "80", etc.)
+  const chartMargin = 8;
   
-  const chartWidth = Math.max(width - containerPadding * 2 - cardPadding - chartMargin, 200);
+  // ✅ Calculate available width properly
+  const maxContainerWidth = Math.min(width - screenPadding * 2, 900);
+  const availableWidth = maxContainerWidth - cardPadding * 2 - yAxisLabelSpace - chartMargin;
+  
+  // ✅ Ensure minimum width and don't exceed available
+  const chartWidth = Math.max(Math.min(availableWidth, 750), 180);
+  
+  console.log("📊 Chart width:", { width, isMobile, isTablet, chartWidth });
 
-  // @ts-ignore - Suppress chartConfig type error
+  // @ts-ignore
   const chartConfig = {
     backgroundColor: "#ffffff",
     backgroundGradientFrom: "#ffffff",
@@ -86,25 +95,36 @@ const ResponsiveLineChart = ({
   };
 
   return (
-    <View style={{ width: "100%", alignItems: "center" }}>
-      {/* @ts-ignore - Suppress LineChart props type error */}
-      <LineChart
-        data={data}
-        width={chartWidth}
-        height={height}
-        chartConfig={chartConfig}
-        bezier={bezier}
-        style={{ 
-          marginVertical: 8, 
-          borderRadius: 12,
-          alignSelf: "center",
-        }}
-        fromZero
-        withShadow={false}
-        withInnerLines={true}
-        yAxisLabel=""
-        yAxisSuffix={suffix}
-      />
+    <View style={{ 
+      width: "100%", 
+      alignItems: "center",
+      paddingHorizontal: 4, // Small padding to prevent edge clipping
+    }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ alignItems: "center" }}
+        style={{ width: "100%" }}
+      >
+        {/* @ts-ignore */}
+        <LineChart
+          data={data}
+          width={chartWidth}
+          height={height}
+          chartConfig={chartConfig}
+          bezier={bezier}
+          style={{ 
+            marginVertical: 8, 
+            borderRadius: 12,
+            alignSelf: "center",
+          }}
+          fromZero
+          withShadow={false}
+          withInnerLines={true}
+          yAxisLabel=""
+          yAxisSuffix={suffix}
+        />
+      </ScrollView>
       
       {/* Legend */}
       {data.legend && data.legend.length > 0 && (
