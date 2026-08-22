@@ -8,7 +8,7 @@ import {
   View,
   useWindowDimensions
 } from "react-native";
-import { LineChart } from "react-native-chart-kit";
+import { LineChart } from "react-native-gifted-charts";
 import Icon from "react-native-vector-icons/Feather";
 
 // ============================================================================
@@ -50,42 +50,43 @@ const Card = ({ children, style = {} }: any) => (
 );
 
 // ============================================================================
-// SIMPLE CHART COMPONENT (Working - Values always visible)
+// TOOLTIP CHART COMPONENT (Using react-native-gifted-charts)
 // ============================================================================
-const SimpleChart = ({ 
-  data, 
-  width, 
-  height, 
-  chartConfig, 
-  bezier = true,
-  suffix = "",
-}: any) => {
+const TooltipChart = ({ data, width, height, suffix = "", bezier = true }: any) => {
+  const { width: screenWidth } = useWindowDimensions();
+  const isMobile = screenWidth < 768;
+
+  const convertedData = data.labels.map((label: string, index: number) => ({
+    value: data.datasets[0]?.data[index] || 0,
+    label: label,
+  }));
+
   return (
     <View style={{ width: "100%", alignItems: "center" }}>
+      {/* @ts-ignore - Suppress TypeScript error for props */}
       <LineChart
-        data={data}
+        data={convertedData}
         width={width}
         height={height}
-        chartConfig={chartConfig}
-        bezier={bezier}
-        style={{ marginVertical: 8, borderRadius: 16 }}
-        fromZero
-        withShadow={false}
-        withInnerLines={true}
-        yAxisLabel=""
-        yAxisSuffix={suffix}
+        spacing={isMobile ? 30 : 50}
+        thickness={2}
+        color={NAVBAR_COLORS.primary}
+        hideDataPoints={false}
+        dataPointsColor={NAVBAR_COLORS.primary}
+        dataPointsRadius={4}
+        curved={bezier}
+        isAnimated
+        showVerticalLines
+        verticalLinesColor="#E2E8F0"
+        xAxisColor="#E2E8F0"
+        yAxisColor="#E2E8F0"
+        yAxisTextStyle={{ color: "#94A3B8", fontSize: 9 }}
+        xAxisLabelTextStyle={{ color: "#94A3B8", fontSize: 9 }}
       />
       
       {/* Legend */}
-      {data.legend && data.legend.length > 0 && (
-        <View style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 10,
-          marginTop: 8,
-          justifyContent: "center",
-          width: "100%",
-        }}>
+      {data.legend && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12, justifyContent: "center" }}>
           {data.legend.map((label: string, idx: number) => {
             const color = typeof data.datasets[idx]?.color === "function" 
               ? data.datasets[idx].color(1) 
@@ -93,50 +94,35 @@ const SimpleChart = ({
             return (
               <View key={idx} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-                <Text style={{ fontSize: 9, color: "#64748B", fontWeight: "500" }}>{label}</Text>
+                <Text style={{ fontSize: 9, color: "#64748B" }}>{label}</Text>
               </View>
             );
           })}
         </View>
       )}
 
-      {/* Values in compact chips */}
-      <View style={{
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 4,
-        marginTop: 8,
-        justifyContent: "center",
-        width: "100%",
-        paddingHorizontal: 4,
-      }}>
-        {data.labels.map((label: string, idx: number) => {
-          const primaryValue = data.datasets[0]?.data[idx];
-          
-          return (
-            <View key={idx} style={{
-              backgroundColor: "#F1F5F9",
-              paddingHorizontal: 6,
-              paddingVertical: 3,
-              borderRadius: 4,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 3,
-            }}>
-              <Text style={{ fontSize: 8, color: "#64748B", fontWeight: "500" }}>
-                {label}:
-              </Text>
-              <Text style={{ fontSize: 9, color: NAVBAR_COLORS.primary, fontWeight: "bold" }}>
-                {primaryValue}{suffix}
-              </Text>
-            </View>
-          );
-        })}
+      {/* Values below chart */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8, justifyContent: "center", width: "100%" }}>
+        {data.labels.map((label: string, idx: number) => (
+          <View key={idx} style={{
+            backgroundColor: "#F1F5F9",
+            paddingHorizontal: 6,
+            paddingVertical: 3,
+            borderRadius: 4,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+          }}>
+            <Text style={{ fontSize: 8, color: "#64748B" }}>{label}:</Text>
+            <Text style={{ fontSize: 9, color: NAVBAR_COLORS.primary, fontWeight: "bold" }}>
+              {data.datasets[0]?.data[idx]}{suffix}
+            </Text>
+          </View>
+        ))}
       </View>
     </View>
   );
 };
-
 // ============================================================================
 // METRIC CARD
 // ============================================================================
@@ -557,24 +543,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const chartConfig = useMemo(
-    () => ({
-      backgroundColor: "#ffffff",
-      backgroundGradientFrom: "#ffffff",
-      backgroundGradientTo: "#ffffff",
-      decimalCount: 0,
-      color: (opacity = 1) => `rgba(0, 82, 155, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
-      style: { borderRadius: 16 },
-      propsForDots: { r: "4", strokeWidth: "2", stroke: "#ffffff" },
-      propsForBackgroundLines: { strokeDasharray: "3 3", stroke: "#e2e8f0", strokeWidth: 1 },
-      fillShadowGradient: NAVBAR_COLORS.primary,
-      fillShadowGradientOpacity: 0.15,
-    }),
-    []
-  );
-
-  const chartWidth = Math.min(width * (isMobile ? 0.85 : 0.65), 750);
+  const chartWidth = Math.min(width * (isMobile ? 0.88 : 0.65), 750);
   const chartHeight = isMobile ? 200 : 260;
 
   // Data calculation functions
@@ -773,17 +742,17 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   if (stats.criticalNCRs > 0) alerts.push({ message: `${stats.criticalNCRs} critical NCR(s) require immediate action`, time: "High Priority", iconName: "alert-circle" });
   if (stats.responsesSubmitted > 0) alerts.push({ message: `${stats.responsesSubmitted} response(s) waiting for review`, time: "Pending", iconName: "file-text" });
 
-  // Chart Slides with SimpleChart
+  // Chart Slides with TooltipChart
   const chartSlides = useMemo(() => [
     {
       title: "Approval Trend (Last 6 Months)",
       icon: "trending-up",
       component: getApprovalTrend.some((d: any) => d.approved > 0) ? (
-        <SimpleChart data={{ labels: getApprovalTrend.map((d: any) => d.month), datasets: [
+        <TooltipChart data={{ labels: getApprovalTrend.map((d: any) => d.month), datasets: [
           { data: getApprovalTrend.map((d: any) => d.approved), color: () => NAVBAR_COLORS.primary },
           { data: getApprovalTrend.map((d: any) => d.rejected), color: () => "#ef4444" },
           { data: getApprovalTrend.map((d: any) => d.pending), color: () => NAVBAR_COLORS.light },
-        ], legend: ["Approved", "Rejected", "Pending"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ], legend: ["Approved", "Rejected", "Pending"] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -795,10 +764,10 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Department Performance",
       icon: "briefcase",
       component: getDepartmentPerformance.length > 0 ? (
-        <SimpleChart data={{ labels: getDepartmentPerformance.map((d: any) => d.name), datasets: [
+        <TooltipChart data={{ labels: getDepartmentPerformance.map((d: any) => d.name), datasets: [
           { data: getDepartmentPerformance.map((d: any) => d.completionRate), color: () => NAVBAR_COLORS.primary },
           { data: getDepartmentPerformance.map((d: any) => d.approvalRate), color: () => NAVBAR_COLORS.light },
-        ], legend: ["Completion %", "Approval %"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="%" />
+        ], legend: ["Completion %", "Approval %"] }} width={chartWidth} height={chartHeight} bezier={true} suffix="%" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -810,9 +779,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Auditor Performance Ranking",
       icon: "users",
       component: getAuditorPerformance.length > 0 ? (
-        <SimpleChart data={{ labels: getAuditorPerformance.map((d: any) => d.name), datasets: [
+        <TooltipChart data={{ labels: getAuditorPerformance.map((d: any) => d.name), datasets: [
           { data: getAuditorPerformance.map((d: any) => d.score), color: () => NAVBAR_COLORS.primary },
-        ], legend: ["Performance Score"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ], legend: ["Performance Score"] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -824,11 +793,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Monthly Performance Trend",
       icon: "activity",
       component: getMonthlyPerformance.some((d: any) => d.completedAudits > 0) ? (
-        <SimpleChart data={{ labels: getMonthlyPerformance.map((d: any) => d.month), datasets: [
+        <TooltipChart data={{ labels: getMonthlyPerformance.map((d: any) => d.month), datasets: [
           { data: getMonthlyPerformance.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
           { data: getMonthlyPerformance.map((d: any) => d.completedAudits), color: () => NAVBAR_COLORS.primary },
           { data: getMonthlyPerformance.map((d: any) => d.ncrs), color: () => "#ef4444" },
-        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -840,9 +809,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Audit Status Distribution",
       icon: "alert-circle",
       component: getAuditStatusDistribution.length > 0 ? (
-        <SimpleChart data={{ labels: getAuditStatusDistribution.map((d: any) => d.name), datasets: [
+        <TooltipChart data={{ labels: getAuditStatusDistribution.map((d: any) => d.name), datasets: [
           { data: getAuditStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.primary },
-        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -854,9 +823,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Check Sheet Response Status",
       icon: "file-text",
       component: getResponseStatusDistribution.length > 0 ? (
-        <SimpleChart data={{ labels: getResponseStatusDistribution.map((d: any) => d.name), datasets: [
+        <TooltipChart data={{ labels: getResponseStatusDistribution.map((d: any) => d.name), datasets: [
           { data: getResponseStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.secondary },
-        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -868,9 +837,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Response Score Distribution",
       icon: "bar-chart-2",
       component: getScoreDistribution.some((d: any) => d.count > 0) ? (
-        <SimpleChart data={{ labels: getScoreDistribution.map((d: any) => d.range), datasets: [
+        <TooltipChart data={{ labels: getScoreDistribution.map((d: any) => d.range), datasets: [
           { data: getScoreDistribution.map((d: any) => d.count), color: () => NAVBAR_COLORS.primary },
-        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -882,11 +851,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Weekly Audit Activity (Last 8 Weeks)",
       icon: "activity",
       component: getWeeklyActivity.some((d: any) => d.completed > 0) ? (
-        <SimpleChart data={{ labels: getWeeklyActivity.map((d: any) => d.week), datasets: [
+        <TooltipChart data={{ labels: getWeeklyActivity.map((d: any) => d.week), datasets: [
           { data: getWeeklyActivity.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
           { data: getWeeklyActivity.map((d: any) => d.completed), color: () => NAVBAR_COLORS.primary },
           { data: getWeeklyActivity.map((d: any) => d.ncrs), color: () => "#ef4444" },
-        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} suffix="" />
+        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} bezier={true} suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -894,7 +863,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
         </View>
       ),
     },
-  ], [getApprovalTrend, getDepartmentPerformance, getAuditorPerformance, getMonthlyPerformance, getAuditStatusDistribution, getResponseStatusDistribution, getScoreDistribution, getWeeklyActivity, chartWidth, chartHeight, chartConfig]);
+  ], [getApprovalTrend, getDepartmentPerformance, getAuditorPerformance, getMonthlyPerformance, getAuditStatusDistribution, getResponseStatusDistribution, getScoreDistribution, getWeeklyActivity, chartWidth, chartHeight]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#F8FAFC" }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -913,7 +882,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
           <View style={{ flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", gap: 16, marginBottom: 20 }}>
             <View>
               <Text style={{ fontSize: isMobile ? 18 : 20, fontWeight: "bold", color: "#1E293B" }}>Analytics Dashboard</Text>
-              <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", marginTop: 4 }}>Real-time audit performance metrics and insights</Text>
+              <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", marginTop: 4 }}>Tap on chart points to see details</Text>
             </View>
             <View style={{ flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: 12, width: isMobile ? "100%" : "auto" }}>
               <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 8, padding: 2 }}>
