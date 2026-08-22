@@ -12,7 +12,116 @@ import { LineChart } from "react-native-chart-kit";
 import Icon from "react-native-vector-icons/Feather";
 
 // ============================================================================
-// COLOR PALETTE (Strictly Professional Blue Shades)
+// CUSTOM TOOLTIP COMPONENT
+// ============================================================================
+const ChartTooltip = ({ visible, x, y, label, value, color }: any) => {
+  if (!visible) return null;
+  
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        backgroundColor: "rgba(30, 41, 59, 0.95)",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        zIndex: 100,
+        elevation: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: "600", color: "#FFFFFF" }}>
+        {label}
+      </Text>
+      <Text style={{ fontSize: 14, fontWeight: "bold", color: color || "#93C5FD" }}>
+        {value}
+      </Text>
+      <View
+        style={{
+          position: "absolute",
+          bottom: -6,
+          left: "50%",
+          marginLeft: -6,
+          width: 0,
+          height: 0,
+          borderLeftWidth: 6,
+          borderRightWidth: 6,
+          borderTopWidth: 6,
+          borderLeftColor: "transparent",
+          borderRightColor: "transparent",
+          borderTopColor: "rgba(30, 41, 59, 0.95)",
+        }}
+      />
+    </View>
+  );
+};
+
+// ============================================================================
+// CHART WITH TOOLTIP SUPPORT
+// ============================================================================
+const ChartWithTooltip = ({ 
+  data, 
+  width, 
+  height, 
+  chartConfig, 
+  bezier = true,
+  tooltipColor = "#93C5FD",
+  suffix = "",
+}: any) => {
+  const [tooltip, setTooltip] = useState<any>(null);
+
+  return (
+    <View style={{ position: "relative" }}>
+      <LineChart
+        data={data}
+        width={width}
+        height={height}
+        chartConfig={chartConfig}
+        bezier={bezier}
+        style={{ marginVertical: 8, borderRadius: 16 }}
+        fromZero
+        withShadow={false}
+        withInnerLines={true}
+        yAxisLabel=""
+        yAxisSuffix={suffix}
+        onDataPointClick={({ value, index, x, y }) => {
+          setTooltip({
+            visible: true,
+            x: Math.min(x, width - 120),
+            y: Math.max(y - 60, 10),
+            label: data.labels[index],
+            value: `${value}${suffix}`,
+            color: tooltipColor,
+          });
+          
+          setTimeout(() => {
+            setTooltip(null);
+          }, 3000);
+        }}
+        decorator={() => {
+          return tooltip ? (
+            <ChartTooltip
+              visible={tooltip.visible}
+              x={tooltip.x}
+              y={tooltip.y}
+              label={tooltip.label}
+              value={tooltip.value}
+              color={tooltip.color}
+            />
+          ) : null;
+        }}
+      />
+    </View>
+  );
+};
+
+// ============================================================================
+// COLOR PALETTE
 // ============================================================================
 const NAVBAR_COLORS = {
   primary: "#00529B",
@@ -25,9 +134,9 @@ const NAVBAR_COLORS = {
 };
 
 // ============================================================================
-// CLEAN UI COMPONENTS (MNC Professional Look)
+// CARD COMPONENT
 // ============================================================================
-const Card = ({ children, className = "", style = {} }: any) => (
+const Card = ({ children, style = {} }: any) => (
   <View
     style={[
       {
@@ -49,6 +158,9 @@ const Card = ({ children, className = "", style = {} }: any) => (
   </View>
 );
 
+// ============================================================================
+// METRIC CARD
+// ============================================================================
 const MetricCard = ({ title, value, subtitle, iconName }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -57,9 +169,8 @@ const MetricCard = ({ title, value, subtitle, iconName }: any) => {
     <Card 
       style={{ 
         flex: 1, 
-        // ✅ FIXED: Use NUMBER for minWidth, not string
         minWidth: isMobile ? 150 : 200,
-        maxWidth: isMobile ? "100%" : 280,
+        maxWidth: isMobile ? width - 24 : 280,
         padding: isMobile ? 12 : 16,
         overflow: "hidden",
       }}
@@ -86,20 +197,23 @@ const MetricCard = ({ title, value, subtitle, iconName }: any) => {
   );
 };
 
+// ============================================================================
+// INSIGHT CARD (Mobile optimized)
+// ============================================================================
 const InsightCard = ({ title, value, iconName, description, trend }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   
   return (
     <View style={{ 
-      padding: isMobile ? 10 : 16, 
-      marginBottom: isMobile ? 6 : 12,
+      padding: isMobile ? 10 : 14, 
+      marginBottom: isMobile ? 6 : 10,
       backgroundColor: "#F8FAFC",
       borderRadius: 12,
       borderWidth: 1,
       borderColor: "#F1F5F9",
     }}>
-      <View style={{ flexDirection: "row", gap: isMobile ? 8 : 12 }}>
+      <View style={{ flexDirection: "row", gap: isMobile ? 8 : 10 }}>
         <View style={{ 
           padding: isMobile ? 6 : 8, 
           borderRadius: 8, 
@@ -134,6 +248,9 @@ const InsightCard = ({ title, value, iconName, description, trend }: any) => {
   );
 };
 
+// ============================================================================
+// TOP PERFORMER CARD
+// ============================================================================
 const TopPerformerCard = ({ rank, name, score, department }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -142,25 +259,25 @@ const TopPerformerCard = ({ rank, name, score, department }: any) => {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 12,
-        padding: isMobile ? 10 : 12,
+        gap: 10,
+        padding: isMobile ? 8 : 12,
         backgroundColor: "#F8FAFC",
         borderRadius: 12,
         borderWidth: 1,
         borderColor: "#F1F5F9",
-        marginBottom: 12,
+        marginBottom: 8,
       }}
     >
-      <View style={{ width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center", backgroundColor: NAVBAR_COLORS.primary }}>
-        <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "bold" }}>{rank}</Text>
+      <View style={{ width: 30, height: 30, borderRadius: 15, justifyContent: "center", alignItems: "center", backgroundColor: NAVBAR_COLORS.primary }}>
+        <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "bold" }}>{rank}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: isMobile ? 13 : 14, fontWeight: "600", color: "#1E293B" }} numberOfLines={1}>{name}</Text>
-        <Text style={{ fontSize: isMobile ? 10 : 12, color: "#64748B", marginTop: 2 }}>{department}</Text>
+        <Text style={{ fontSize: isMobile ? 12 : 14, fontWeight: "600", color: "#1E293B" }} numberOfLines={1}>{name}</Text>
+        <Text style={{ fontSize: isMobile ? 9 : 12, color: "#64748B", marginTop: 2 }}>{department}</Text>
       </View>
       <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ fontSize: isMobile ? 13 : 14, fontWeight: "bold", color: "#1E293B" }}>{score}%</Text>
-        <View style={{ width: isMobile ? 50 : 64, height: 6, backgroundColor: "#E2E8F0", borderRadius: 3, marginTop: 4, overflow: "hidden" }}>
+        <Text style={{ fontSize: isMobile ? 12 : 14, fontWeight: "bold", color: "#1E293B" }}>{score}%</Text>
+        <View style={{ width: isMobile ? 40 : 64, height: 5, backgroundColor: "#E2E8F0", borderRadius: 3, marginTop: 4, overflow: "hidden" }}>
           <View style={{ width: `${score}%`, height: "100%", backgroundColor: NAVBAR_COLORS.secondary, borderRadius: 3 }} />
         </View>
       </View>
@@ -168,6 +285,9 @@ const TopPerformerCard = ({ rank, name, score, department }: any) => {
   );
 };
 
+// ============================================================================
+// ALERT ITEM
+// ============================================================================
 const AlertItem = ({ message, time, iconName }: any) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -176,8 +296,8 @@ const AlertItem = ({ message, time, iconName }: any) => {
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
-        gap: 12,
-        padding: isMobile ? 10 : 12,
+        gap: 10,
+        padding: isMobile ? 8 : 12,
         borderBottomWidth: 1,
         borderBottomColor: "#F1F5F9",
       }}
@@ -186,8 +306,8 @@ const AlertItem = ({ message, time, iconName }: any) => {
         <Icon name={iconName} size={14} color={NAVBAR_COLORS.primary} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: isMobile ? 12 : 13, color: "#334155" }}>{message}</Text>
-        <Text style={{ fontSize: isMobile ? 10 : 11, color: "#94A3B8", marginTop: 4 }}>{time}</Text>
+        <Text style={{ fontSize: isMobile ? 11 : 13, color: "#334155" }}>{message}</Text>
+        <Text style={{ fontSize: isMobile ? 9 : 11, color: "#94A3B8", marginTop: 4 }}>{time}</Text>
       </View>
     </View>
   );
@@ -195,9 +315,6 @@ const AlertItem = ({ message, time, iconName }: any) => {
 
 // ============================================================================
 // CHART CAROUSEL COMPONENT
-// ============================================================================
-// ============================================================================
-// FIXED CHART CAROUSEL COMPONENT
 // ============================================================================
 const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
   const { width } = useWindowDimensions();
@@ -207,7 +324,6 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
   const scrollViewRef = useRef<ScrollView>(null);
   const autoPlayRef = useRef<any>(null);
 
-  // ✅ FIXED: Use NUMBER for width calculation, not string
   const containerWidth = isMobile ? width - 32 : Math.min(width - 48, 750);
   const cardWidth = containerWidth;
   const gap = 16;
@@ -276,7 +392,6 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
           ))}
         </ScrollView>
 
-        {/* ✅ FIXED: Arrows INSIDE the container, not outside */}
         {slides.length > 1 && (
           <>
             <TouchableOpacity
@@ -327,7 +442,6 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
         )}
       </View>
 
-      {/* ✅ FIXED: Pagination row with proper width and wrapping */}
       {slides.length > 1 && (
         <View style={{ 
           flexDirection: "row", 
@@ -388,7 +502,7 @@ const ChartCarousel = ({ slides, autoPlayInterval = 5000 }: any) => {
 };
 
 // ============================================================================
-// MAIN DASHBOARD ANALYTICS COMPONENT
+// TYPES
 // ============================================================================
 interface Stats {
   totalSchedules: number;
@@ -447,6 +561,9 @@ interface DashboardAnalyticsProps {
   leadAuditorDepartment?: string | null;
 }
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   stats,
   allSchedules,
@@ -461,7 +578,6 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  // Professional Chart Config mimicking Recharts
   const chartConfig = useMemo(
     () => ({
       backgroundColor: "#ffffff",
@@ -480,196 +596,122 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   );
 
   const chartWidth = Math.min(width * (isMobile ? 0.85 : 0.65), 750);
-  const chartHeight = isMobile ? 240 : 280;
+  const chartHeight = isMobile ? 220 : 280;
 
-  // ============================================================
-  // DATA CALCULATION FUNCTIONS (Ported from Web Version)
-  // ============================================================
- const getApprovalTrend = useMemo(() => {
-  const months = [];
-  const today = new Date();
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-    const monthStr = date.toLocaleString("default", { month: "short" });
-    const year = date.getFullYear();
-    const month = date.getMonth();
-
-    const monthSchedules = allSchedules.filter((s) => {
-      if (!s.scheduledDate) return false;
-      const d = new Date(s.scheduledDate as string); // ✅ Cast to string
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-    
-    const approved = monthSchedules.filter(
-      (s) => s.approvalStatus === "APPROVED" || s.status === "APPROVED"
-    ).length;
-    const rejected = monthSchedules.filter(
-      (s) => s.approvalStatus === "REJECTED" || s.status === "REJECTED"
-    ).length;
-    const pending = monthSchedules.filter(
-      (s) => 
-        s.approvalStatus === "SUBMITTED" || 
-        s.approvalStatus === "PENDING" || 
-        s.status === "SUBMITTED"
-    ).length;
-
-    const monthResponses = allResponses.filter((r) => {
-      const dateStr = r.submittedAt || r.createdAt; // ✅ Get first available
-      if (!dateStr) return false;
-      const d = new Date(dateStr as string); // ✅ Cast to string
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-    
-    const responsesApproved = monthResponses.filter(
-      (r) => r.status === "APPROVED"
-    ).length;
-    const responsesRejected = monthResponses.filter(
-      (r) => r.status === "REJECTED"
-    ).length;
-
-    months.push({
-      month: monthStr,
-      approved: approved + responsesApproved,
-      rejected: rejected + responsesRejected,
-      pending: pending,
-    });
-  }
-  return months;
-}, [allSchedules, allResponses]);
+  // Data calculation functions (same as before)
+  const getApprovalTrend = useMemo(() => {
+    const months = [];
+    const today = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthStr = date.toLocaleString("default", { month: "short" });
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthSchedules = allSchedules.filter((s) => {
+        if (!s.scheduledDate) return false;
+        const d = new Date(s.scheduledDate as string);
+        return d.getMonth() === month && d.getFullYear() === year;
+      });
+      const approved = monthSchedules.filter((s) => s.approvalStatus === "APPROVED" || s.status === "APPROVED").length;
+      const rejected = monthSchedules.filter((s) => s.approvalStatus === "REJECTED" || s.status === "REJECTED").length;
+      const pending = monthSchedules.filter((s) => s.approvalStatus === "SUBMITTED" || s.approvalStatus === "PENDING" || s.status === "SUBMITTED").length;
+      const monthResponses = allResponses.filter((r) => {
+        const dateStr = r.submittedAt || r.createdAt;
+        if (!dateStr) return false;
+        const d = new Date(dateStr as string);
+        return d.getMonth() === month && d.getFullYear() === year;
+      });
+      const responsesApproved = monthResponses.filter((r) => r.status === "APPROVED").length;
+      const responsesRejected = monthResponses.filter((r) => r.status === "REJECTED").length;
+      months.push({ month: monthStr, approved: approved + responsesApproved, rejected: rejected + responsesRejected, pending });
+    }
+    return months;
+  }, [allSchedules, allResponses]);
 
   const getDepartmentPerformance = useMemo(() => {
-  const deptMap = new Map<string, { total: number; completed: number; approved: number }>();
-  
-  allSchedules.forEach((s) => {
-    const dept = s.department || "Unknown";
-    if (!deptMap.has(dept)) {
-      deptMap.set(dept, { total: 0, completed: 0, approved: 0 });
-    }
-    const data = deptMap.get(dept)!; // ✅ Non-null assertion
-    data.total++;
-    if (s.status === "COMPLETED") data.completed++;
-    if (s.approvalStatus === "APPROVED") data.approved++;
-  });
-  
-  return Array.from(deptMap.entries())
-    .map(([name, data]) => ({
-      name: name.length > 12 ? name.substring(0, 10) + "..." : name,
-      total: data.total,
-      completionRate: data.total ? Math.round((data.completed / data.total) * 100) : 0,
-      approvalRate: data.total ? Math.round((data.approved / data.total) * 100) : 0,
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8);
-}, [allSchedules]);
-
- const getAuditorPerformance = useMemo(() => {
-  const auditorMap = new Map<string, {
-    total: number;
-    completed: number;
-    approved: number;
-    responsesCount: number;
-    responsesApproved: number;
-  }>();
-  
-  allSchedules.forEach((s) => {
-    const auditorName = s.auditorName || s.leadAuditorName;
-    if (!auditorName) return;
-    
-    if (!auditorMap.has(auditorName)) {
-      auditorMap.set(auditorName, { 
-        total: 0, 
-        completed: 0, 
-        approved: 0, 
-        responsesCount: 0, 
-        responsesApproved: 0 
-      });
-    }
-    const data = auditorMap.get(auditorName)!;
-    data.total++;
-    if (s.status === "COMPLETED") data.completed++;
-    if (s.approvalStatus === "APPROVED") data.approved++;
-  });
-  
-  allResponses.forEach((r) => {
-    const auditorName = r.auditorName;
-    if (!auditorName) return;
-    
-    if (!auditorMap.has(auditorName)) {
-      auditorMap.set(auditorName, { 
-        total: 0, 
-        completed: 0, 
-        approved: 0, 
-        responsesCount: 0, 
-        responsesApproved: 0 
-      });
-    }
-    const data = auditorMap.get(auditorName)!;
-    data.responsesCount++;
-    if (r.status === "APPROVED") data.responsesApproved++;
-  });
-  
-  return Array.from(auditorMap.entries())
-    .map(([name, data]) => ({
-      name: name.split(" ")[0],
-      total: data.total,
-      completionRate: data.total ? Math.round((data.completed / data.total) * 100) : 0,
-      approvalRate: data.total ? Math.round((data.approved / data.total) * 100) : 0,
-      responseApprovalRate: data.responsesCount ? Math.round((data.responsesApproved / data.responsesCount) * 100) : 0,
-      score: Math.round(((data.completed / (data.total || 1)) * 0.5 + (data.approved / (data.total || 1)) * 0.5) * 100),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
-}, [allSchedules, allResponses]);
-
- const getMonthlyPerformance = useMemo(() => {
-  const months = [];
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  let startYear = currentYear;
-  let startMonth = 3;
-  
-  if (today.getMonth() < 3) startYear = currentYear - 1;
-  
-  for (let i = 0; i < 12; i++) {
-    const date = new Date(startYear, startMonth + i, 1);
-    const monthIndex = date.getMonth();
-    const year = date.getFullYear();
-    const monthName = date.toLocaleString("default", { month: "short" });
-    
-    const schedulesInMonth = allSchedules.filter((s) => {
-      if (!s.scheduledDate) return false;
-      const d = new Date(s.scheduledDate as string); // ✅ Cast
-      return d.getMonth() === monthIndex && d.getFullYear() === year;
+    const deptMap = new Map<string, { total: number; completed: number; approved: number }>();
+    allSchedules.forEach((s) => {
+      const dept = s.department || "Unknown";
+      if (!deptMap.has(dept)) deptMap.set(dept, { total: 0, completed: 0, approved: 0 });
+      const data = deptMap.get(dept)!;
+      data.total++;
+      if (s.status === "COMPLETED") data.completed++;
+      if (s.approvalStatus === "APPROVED") data.approved++;
     });
-    
-    const scheduledCount = schedulesInMonth.length;
-    const completedCount = schedulesInMonth.filter((s) => s.status === "COMPLETED").length;
-    
-    const ncrCount = allNCRs.filter((n) => {
-      if (!n.createdAt) return false;
-      const d = new Date(n.createdAt as string); // ✅ Cast
-      return d.getMonth() === monthIndex && d.getFullYear() === year;
-    }).length;
-    
-    months.push({ 
-      month: monthName, 
-      audits: scheduledCount, 
-      completedAudits: completedCount, 
-      ncrs: ncrCount 
-    });
-  }
-  return months;
-}, [allSchedules, allNCRs]);
+    return Array.from(deptMap.entries())
+      .map(([name, data]) => ({
+        name: name.length > 12 ? name.substring(0, 10) + "..." : name,
+        total: data.total,
+        completionRate: data.total ? Math.round((data.completed / data.total) * 100) : 0,
+        approvalRate: data.total ? Math.round((data.approved / data.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [allSchedules]);
 
-  const getAuditStatusDistribution = useMemo(() => {
-    return [
-      { name: "Scheduled", value: stats.scheduled || 0 },
-      { name: "In Progress", value: stats.inProgress || 0 },
-      { name: "Completed", value: stats.completedSchedules || 0 },
-      { name: "Approved", value: stats.approved || 0 },
-      { name: "Rejected", value: stats.rejected || 0 },
-    ].filter((s) => s.value > 0);
-  }, [stats]);
+  const getAuditorPerformance = useMemo(() => {
+    const auditorMap = new Map<string, { total: number; completed: number; approved: number; responsesCount: number; responsesApproved: number }>();
+    allSchedules.forEach((s) => {
+      const auditorName = s.auditorName || s.leadAuditorName;
+      if (!auditorName) return;
+      if (!auditorMap.has(auditorName)) auditorMap.set(auditorName, { total: 0, completed: 0, approved: 0, responsesCount: 0, responsesApproved: 0 });
+      const data = auditorMap.get(auditorName)!;
+      data.total++;
+      if (s.status === "COMPLETED") data.completed++;
+      if (s.approvalStatus === "APPROVED") data.approved++;
+    });
+    allResponses.forEach((r) => {
+      const auditorName = r.auditorName;
+      if (!auditorName) return;
+      if (!auditorMap.has(auditorName)) auditorMap.set(auditorName, { total: 0, completed: 0, approved: 0, responsesCount: 0, responsesApproved: 0 });
+      const data = auditorMap.get(auditorName)!;
+      data.responsesCount++;
+      if (r.status === "APPROVED") data.responsesApproved++;
+    });
+    return Array.from(auditorMap.entries())
+      .map(([name, data]) => ({
+        name: name.split(" ")[0],
+        total: data.total,
+        score: Math.round(((data.completed / (data.total || 1)) * 0.5 + (data.approved / (data.total || 1)) * 0.5) * 100),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [allSchedules, allResponses]);
+
+  const getMonthlyPerformance = useMemo(() => {
+    const months = [];
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    let startYear = currentYear;
+    let startMonth = 3;
+    if (today.getMonth() < 3) startYear = currentYear - 1;
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(startYear, startMonth + i, 1);
+      const monthIndex = date.getMonth();
+      const year = date.getFullYear();
+      const monthName = date.toLocaleString("default", { month: "short" });
+      const schedulesInMonth = allSchedules.filter((s) => {
+        if (!s.scheduledDate) return false;
+        const d = new Date(s.scheduledDate as string);
+        return d.getMonth() === monthIndex && d.getFullYear() === year;
+      });
+      const ncrCount = allNCRs.filter((n) => {
+        if (!n.createdAt) return false;
+        const d = new Date(n.createdAt as string);
+        return d.getMonth() === monthIndex && d.getFullYear() === year;
+      }).length;
+      months.push({ month: monthName, audits: schedulesInMonth.length, completedAudits: schedulesInMonth.filter((s) => s.status === "COMPLETED").length, ncrs: ncrCount });
+    }
+    return months;
+  }, [allSchedules, allNCRs]);
+
+  const getAuditStatusDistribution = useMemo(() => [
+    { name: "Scheduled", value: stats.scheduled || 0 },
+    { name: "In Progress", value: stats.inProgress || 0 },
+    { name: "Completed", value: stats.completedSchedules || 0 },
+    { name: "Approved", value: stats.approved || 0 },
+    { name: "Rejected", value: stats.rejected || 0 },
+  ].filter((s) => s.value > 0), [stats]);
 
   const getResponseStatusDistribution = useMemo(() => {
     const approved = allResponses.filter((r) => r.status === "APPROVED").length;
@@ -695,10 +737,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
     allResponses.forEach((r) => {
       const score = r.percentageScore || 0;
       for (const range of ranges) {
-        if (score >= range.min && score <= range.max) {
-          range.count++;
-          break;
-        }
+        if (score >= range.min && score <= range.max) { range.count++; break; }
       }
     });
     return ranges;
@@ -713,13 +752,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
       const weekLabel = `W${Math.floor(weekStart.getDate() / 7 + 1)}`;
-      
       const weekSchedules = allSchedules.filter((s) => {
         if (!s.scheduledDate) return false;
         const d = new Date(s.scheduledDate);
         return d >= weekStart && d <= weekEnd;
       });
-      
       weeks.push({
         week: weekLabel,
         audits: weekSchedules.length,
@@ -749,13 +786,10 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   };
   const momImprovement = getMoMImprovement();
 
-  const getScheduledAuditsCount = () => {
-  return allSchedules.filter((s) => {
+  const getScheduledAuditsCount = () => allSchedules.filter((s) => {
     if (!s.scheduledDate) return false;
-    const scheduledStatuses = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "APPROVED", "REJECTED"];
-    return scheduledStatuses.includes(s.status || ""); // ✅ Handle undefined
+    return ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "APPROVED", "REJECTED"].includes(s.status || "");
   }).length;
-};
 
   const overdueAudits = allSchedules.filter((s) => {
     if (!s.scheduledDate) return false;
@@ -768,35 +802,17 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
   if (stats.criticalNCRs > 0) alerts.push({ message: `${stats.criticalNCRs} critical NCR(s) require immediate action`, time: "High Priority", iconName: "alert-circle" });
   if (stats.responsesSubmitted > 0) alerts.push({ message: `${stats.responsesSubmitted} response(s) waiting for review`, time: "Pending", iconName: "file-text" });
 
-  // ========================================================================
-  // CHART SLIDES (Mimicking Recharts Line/Area Charts)
-  // ========================================================================
+  // Chart Slides with Tooltips
   const chartSlides = useMemo(() => [
     {
       title: "Approval Trend (Last 6 Months)",
       icon: "trending-up",
       component: getApprovalTrend.some((d: any) => d.approved > 0) ? (
-        <LineChart
-          data={{
-            labels: getApprovalTrend.map((d: any) => d.month),
-            datasets: [
-              { data: getApprovalTrend.map((d: any) => d.approved), color: () => NAVBAR_COLORS.primary },
-              { data: getApprovalTrend.map((d: any) => d.rejected), color: () => "#ef4444" },
-              { data: getApprovalTrend.map((d: any) => d.pending), color: () => NAVBAR_COLORS.light },
-            ],
-            legend: ["Approved", "Rejected", "Pending"],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          withInnerLines={true}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getApprovalTrend.map((d: any) => d.month), datasets: [
+          { data: getApprovalTrend.map((d: any) => d.approved), color: () => NAVBAR_COLORS.primary },
+          { data: getApprovalTrend.map((d: any) => d.rejected), color: () => "#ef4444" },
+          { data: getApprovalTrend.map((d: any) => d.pending), color: () => NAVBAR_COLORS.light },
+        ], legend: ["Approved", "Rejected", "Pending"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -808,25 +824,10 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Department Performance",
       icon: "briefcase",
       component: getDepartmentPerformance.length > 0 ? (
-        <LineChart
-          data={{
-            labels: getDepartmentPerformance.map((d: any) => d.name),
-            datasets: [
-              { data: getDepartmentPerformance.map((d: any) => d.completionRate), color: () => NAVBAR_COLORS.primary },
-              { data: getDepartmentPerformance.map((d: any) => d.approvalRate), color: () => NAVBAR_COLORS.light },
-            ],
-            legend: ["Completion %", "Approval %"],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix="%"
-        />
+        <ChartWithTooltip data={{ labels: getDepartmentPerformance.map((d: any) => d.name), datasets: [
+          { data: getDepartmentPerformance.map((d: any) => d.completionRate), color: () => NAVBAR_COLORS.primary },
+          { data: getDepartmentPerformance.map((d: any) => d.approvalRate), color: () => NAVBAR_COLORS.light },
+        ], legend: ["Completion %", "Approval %"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="%" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -838,25 +839,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Auditor Performance Ranking",
       icon: "users",
       component: getAuditorPerformance.length > 0 ? (
-        <LineChart
-          data={{
-            labels: getAuditorPerformance.map((d: any) => d.name),
-            datasets: [
-              { data: getAuditorPerformance.map((d: any) => d.score), color: () => NAVBAR_COLORS.primary },
-              { data: getAuditorPerformance.map((d: any) => d.responseApprovalRate), color: () => NAVBAR_COLORS.secondary },
-            ],
-            legend: ["Performance Score", "Response Approval %"],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getAuditorPerformance.map((d: any) => d.name), datasets: [
+          { data: getAuditorPerformance.map((d: any) => d.score), color: () => NAVBAR_COLORS.primary },
+        ], legend: ["Performance Score"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -868,26 +853,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Monthly Performance Trend",
       icon: "activity",
       component: getMonthlyPerformance.some((d: any) => d.completedAudits > 0) ? (
-        <LineChart
-          data={{
-            labels: getMonthlyPerformance.map((d: any) => d.month),
-            datasets: [
-              { data: getMonthlyPerformance.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
-              { data: getMonthlyPerformance.map((d: any) => d.completedAudits), color: () => NAVBAR_COLORS.primary },
-              { data: getMonthlyPerformance.map((d: any) => d.ncrs), color: () => "#ef4444" },
-            ],
-            legend: ["Scheduled", "Completed", "NCRs Raised"],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getMonthlyPerformance.map((d: any) => d.month), datasets: [
+          { data: getMonthlyPerformance.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
+          { data: getMonthlyPerformance.map((d: any) => d.completedAudits), color: () => NAVBAR_COLORS.primary },
+          { data: getMonthlyPerformance.map((d: any) => d.ncrs), color: () => "#ef4444" },
+        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -899,21 +869,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Audit Status Distribution",
       icon: "alert-circle",
       component: getAuditStatusDistribution.length > 0 ? (
-        <LineChart
-          data={{
-            labels: getAuditStatusDistribution.map((d: any) => d.name),
-            datasets: [{ data: getAuditStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.primary }],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getAuditStatusDistribution.map((d: any) => d.name), datasets: [
+          { data: getAuditStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.primary },
+        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -925,21 +883,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Check Sheet Response Status",
       icon: "file-text",
       component: getResponseStatusDistribution.length > 0 ? (
-        <LineChart
-          data={{
-            labels: getResponseStatusDistribution.map((d: any) => d.name),
-            datasets: [{ data: getResponseStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.secondary }],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getResponseStatusDistribution.map((d: any) => d.name), datasets: [
+          { data: getResponseStatusDistribution.map((d: any) => d.value), color: () => NAVBAR_COLORS.secondary },
+        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -951,21 +897,9 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Response Score Distribution",
       icon: "bar-chart-2",
       component: getScoreDistribution.some((d: any) => d.count > 0) ? (
-        <LineChart
-          data={{
-            labels: getScoreDistribution.map((d: any) => d.range),
-            datasets: [{ data: getScoreDistribution.map((d: any) => d.count), color: () => NAVBAR_COLORS.primary }],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getScoreDistribution.map((d: any) => d.range), datasets: [
+          { data: getScoreDistribution.map((d: any) => d.count), color: () => NAVBAR_COLORS.primary },
+        ] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -977,26 +911,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
       title: "Weekly Audit Activity (Last 8 Weeks)",
       icon: "activity",
       component: getWeeklyActivity.some((d: any) => d.completed > 0) ? (
-        <LineChart
-          data={{
-            labels: getWeeklyActivity.map((d: any) => d.week),
-            datasets: [
-              { data: getWeeklyActivity.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
-              { data: getWeeklyActivity.map((d: any) => d.completed), color: () => NAVBAR_COLORS.primary },
-              { data: getWeeklyActivity.map((d: any) => d.ncrs), color: () => "#ef4444" },
-            ],
-            legend: ["Scheduled", "Completed", "NCRs"],
-          }}
-          width={chartWidth}
-          height={chartHeight}
-          chartConfig={chartConfig}
-          bezier
-          style={{ marginVertical: 8, borderRadius: 16 }}
-          fromZero
-          withShadow={false}
-          yAxisLabel=""
-          yAxisSuffix=""
-        />
+        <ChartWithTooltip data={{ labels: getWeeklyActivity.map((d: any) => d.week), datasets: [
+          { data: getWeeklyActivity.map((d: any) => d.audits), color: () => NAVBAR_COLORS.light },
+          { data: getWeeklyActivity.map((d: any) => d.completed), color: () => NAVBAR_COLORS.primary },
+          { data: getWeeklyActivity.map((d: any) => d.ncrs), color: () => "#ef4444" },
+        ], legend: ["Scheduled", "Completed", "NCRs"] }} width={chartWidth} height={chartHeight} chartConfig={chartConfig} bezier={true} tooltipColor="#93C5FD" suffix="" />
       ) : (
         <View style={{ height: chartHeight, justifyContent: "center", alignItems: "center" }}>
           <Icon name="bar-chart-2" size={40} color="#CBD5E1" />
@@ -1006,9 +925,6 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
     },
   ], [getApprovalTrend, getDepartmentPerformance, getAuditorPerformance, getMonthlyPerformance, getAuditStatusDistribution, getResponseStatusDistribution, getScoreDistribution, getWeeklyActivity, chartWidth, chartHeight, chartConfig]);
 
-  // ========================================================================
-  // MAIN RENDER
-  // ========================================================================
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#F8FAFC" }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
       <View style={{ paddingHorizontal: isMobile ? 12 : 24, paddingTop: 16, maxWidth: 1200, width: "100%", alignSelf: "center" }}>
@@ -1026,7 +942,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
           <View style={{ flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", gap: 16, marginBottom: 20 }}>
             <View>
               <Text style={{ fontSize: isMobile ? 18 : 20, fontWeight: "bold", color: "#1E293B" }}>Analytics Dashboard</Text>
-              <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", marginTop: 4 }}>Real-time audit performance metrics and insights</Text>
+              <Text style={{ fontSize: isMobile ? 12 : 14, color: "#64748B", marginTop: 4 }}>Tap on chart points for details</Text>
             </View>
             <View style={{ flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: 12, width: isMobile ? "100%" : "auto" }}>
               <View style={{ flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 8, padding: 2 }}>
@@ -1051,7 +967,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
                 onPress={onRefresh}
                 style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.primary }}
               >
-                <Icon name="refresh-cw" size={16} color="#FFFFFF" style={refreshing ? { transform: [{ rotate: "360deg" }] } : {}} />
+                <Icon name="refresh-cw" size={16} color="#FFFFFF" />
                 <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "600" }}>Refresh</Text>
               </TouchableOpacity>
             </View>
@@ -1060,143 +976,83 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({
           <ChartCarousel slides={chartSlides} autoPlayInterval={carouselSpeed} />
         </Card>
 
-        {/* BOTTOM SECTION */}
-        {/* ✅ FIXED BOTTOM SECTION - No Overlapping */}
-{/* ✅ FIXED BOTTOM SECTION - Mobile First, No Overlap */}
-<View style={{ 
-  flexDirection: "column", 
-  gap: 16,
-  width: "100%",
-}}>
-  
-  {/* Key Insights - Full Width on Mobile */}
-  <Card style={{ 
-    padding: isMobile ? 12 : 16, 
-    marginBottom: 0,
-    width: "100%",
-    overflow: "hidden",
-  }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-      <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-        <Icon name="target" size={16} color={NAVBAR_COLORS.primary} />
-      </View>
-      <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Key Insights</Text>
-    </View>
-    
-    {/* Insights content */}
-    <View style={{ gap: 8 }}>
-      <InsightCard
-        title="Month-over-Month"
-        value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`}
-        iconName="trending-up"
-        description="Compared to previous month"
-        trend={momImprovement}
-      />
-      <InsightCard
-        title="Quality Score"
-        value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`}
-        iconName="shield"
-        description="Response quality rating"
-        trend={5}
-      />
-      <InsightCard
-        title="Audit Efficiency"
-        value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`}
-        iconName="zap"
-        description="Audit completion efficiency"
-        trend={8}
-      />
-    </View>
-  </Card>
+        {/* Bottom Section - Stacked on Mobile */}
+        <View style={{ flexDirection: "column", gap: 16, width: "100%" }}>
+          
+          {/* Key Insights */}
+          <Card style={{ padding: isMobile ? 12 : 16, width: "100%", overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+                <Icon name="target" size={16} color={NAVBAR_COLORS.primary} />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Key Insights</Text>
+            </View>
+            <View style={{ gap: 8 }}>
+              <InsightCard title="Month-over-Month" value={`${momImprovement > 0 ? "+" : ""}${momImprovement}%`} iconName="trending-up" description="Compared to previous month" trend={momImprovement} />
+              <InsightCard title="Quality Score" value={`${Math.round((stats.responsesApproved / (stats.responsesApproved + stats.responsesRejected || 1)) * 100)}%`} iconName="shield" description="Response quality rating" trend={5} />
+              <InsightCard title="Audit Efficiency" value={`${stats.totalSchedules ? Math.round((stats.completedSchedules / stats.totalSchedules) * 100) : 0}%`} iconName="zap" description="Audit completion efficiency" trend={8} />
+            </View>
+          </Card>
 
-  {/* Top Performers - Full Width on Mobile */}
-  <Card style={{ 
-    padding: isMobile ? 12 : 16, 
-    marginBottom: 0,
-    width: "100%",
-    overflow: "hidden",
-  }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-      <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-        <Icon name="award" size={16} color={NAVBAR_COLORS.primary} />
-      </View>
-      <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Top Performers</Text>
-    </View>
-    
-    <ScrollView 
-      style={{ maxHeight: isMobile ? 200 : 280 }} 
-      showsVerticalScrollIndicator={true}
-      nestedScrollEnabled
-    >
-      {topAuditors.length > 0 ? (
-        topAuditors.map((auditor: any, idx: number) => (
-          <TopPerformerCard key={idx} rank={idx + 1} name={auditor.name} score={auditor.score} department="Auditor" />
-        ))
-      ) : (
-        <View style={{ alignItems: "center", paddingVertical: 32 }}>
-          <Icon name="users" size={32} color="#CBD5E1" />
-          <Text style={{ color: "#94A3B8", fontSize: 14, marginTop: 8 }}>No auditor data available</Text>
-        </View>
-      )}
-    </ScrollView>
-  </Card>
+          {/* Top Performers */}
+          <Card style={{ padding: isMobile ? 12 : 16, width: "100%", overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+                <Icon name="award" size={16} color={NAVBAR_COLORS.primary} />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Top Performers</Text>
+            </View>
+            <ScrollView style={{ maxHeight: isMobile ? 200 : 280 }} showsVerticalScrollIndicator={true} nestedScrollEnabled>
+              {topAuditors.length > 0 ? (
+                topAuditors.map((auditor: any, idx: number) => (
+                  <TopPerformerCard key={idx} rank={idx + 1} name={auditor.name} score={auditor.score} department="Auditor" />
+                ))
+              ) : (
+                <View style={{ alignItems: "center", paddingVertical: 32 }}>
+                  <Icon name="users" size={32} color="#CBD5E1" />
+                  <Text style={{ color: "#94A3B8", fontSize: 14, marginTop: 8 }}>No auditor data available</Text>
+                </View>
+              )}
+            </ScrollView>
+          </Card>
 
-  {/* Alerts & Notifications - Full Width on Mobile */}
-  <Card style={{ 
-    padding: isMobile ? 12 : 16, 
-    marginBottom: 0,
-    width: "100%",
-    overflow: "hidden",
-  }}>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-      <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
-        <Icon name="alert-circle" size={16} color={NAVBAR_COLORS.primary} />
-      </View>
-      <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Alerts & Notifications</Text>
-      {alerts.length > 0 && (
-        <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: "auto", backgroundColor: NAVBAR_COLORS.primary }}>
-          <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "bold" }}>{alerts.length}</Text>
-        </View>
-      )}
-    </View>
-    
-    <ScrollView 
-      style={{ maxHeight: isMobile ? 180 : 240 }} 
-      showsVerticalScrollIndicator={true}
-      nestedScrollEnabled
-    >
-      {alerts.length > 0 ? (
-        alerts.map((alert: any, idx: number) => <AlertItem key={idx} message={alert.message} time={alert.time} iconName={alert.iconName} />)
-      ) : (
-        <View style={{ alignItems: "center", paddingVertical: 24 }}>
-          <Icon name="check-circle" size={32} color="#10B981" />
-          <Text style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>No pending alerts</Text>
-          <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>All systems running smoothly</Text>
-        </View>
-      )}
-    </ScrollView>
-    
-    {/* Quick Stats Summary */}
-    <View style={{ 
-      flexDirection: "row", 
-      gap: 8, 
-      marginTop: 12, 
-      paddingTop: 12, 
-      borderTopWidth: 1, 
-      borderTopColor: "#F1F5F9",
-    }}>
-      <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
-        <Text style={{ fontSize: 10, color: "#64748B" }}>Active Audits</Text>
-        <Text style={{ fontSize: 16, fontWeight: "bold", color: NAVBAR_COLORS.primary, marginTop: 2 }}>{stats.inProgress || 0}</Text>
-      </View>
-      <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
-        <Text style={{ fontSize: 10, color: "#64748B" }}>Open NCRs</Text>
-        <Text style={{ fontSize: 16, fontWeight: "bold", color: "#1E293B", marginTop: 2 }}>{stats.openNCRs || 0}</Text>
-      </View>
-    </View>
-  </Card>
+          {/* Alerts & Notifications */}
+          <Card style={{ padding: isMobile ? 12 : 16, width: "100%", overflow: "hidden" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <View style={{ padding: 8, borderRadius: 8, backgroundColor: NAVBAR_COLORS.bg }}>
+                <Icon name="alert-circle" size={16} color={NAVBAR_COLORS.primary} />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#1E293B" }}>Alerts & Notifications</Text>
+              {alerts.length > 0 && (
+                <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: "auto", backgroundColor: NAVBAR_COLORS.primary }}>
+                  <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "bold" }}>{alerts.length}</Text>
+                </View>
+              )}
+            </View>
+            <ScrollView style={{ maxHeight: isMobile ? 180 : 240 }} showsVerticalScrollIndicator={true} nestedScrollEnabled>
+              {alerts.length > 0 ? (
+                alerts.map((alert: any, idx: number) => <AlertItem key={idx} message={alert.message} time={alert.time} iconName={alert.iconName} />)
+              ) : (
+                <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                  <Icon name="check-circle" size={32} color="#10B981" />
+                  <Text style={{ fontSize: 14, color: "#334155", marginTop: 8 }}>No pending alerts</Text>
+                  <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>All systems running smoothly</Text>
+                </View>
+              )}
+            </ScrollView>
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+              <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <Text style={{ fontSize: 10, color: "#64748B" }}>Active Audits</Text>
+                <Text style={{ fontSize: 16, fontWeight: "bold", color: NAVBAR_COLORS.primary, marginTop: 2 }}>{stats.inProgress || 0}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: "#F8FAFC", borderRadius: 8, padding: 10, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <Text style={{ fontSize: 10, color: "#64748B" }}>Open NCRs</Text>
+                <Text style={{ fontSize: 16, fontWeight: "bold", color: "#1E293B", marginTop: 2 }}>{stats.openNCRs || 0}</Text>
+              </View>
+            </View>
+          </Card>
 
-</View>
+        </View>
       </View>
     </ScrollView>
   );
