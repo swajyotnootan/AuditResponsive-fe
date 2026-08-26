@@ -1088,42 +1088,247 @@ export default function ThreadCard({
       );
     }
     if (attachment.attachmentType === "LOCATION") {
-      let location: any = {};
-      try {
-        if (attachment.fileData)
-          location = JSON.parse(atob(attachment.fileData));
-      } catch (error) {}
-      return (
-        <Pressable
-          key={index}
-          style={styles.locationContainer}
-          onPress={() => {
-            const map = location.url || location.mapUrl;
-            if (map) Linking.openURL(map);
+  let location: any = {};
+
+  try {
+    if (attachment.fileData) {
+      location = JSON.parse(atob(attachment.fileData));
+    }
+  } catch (error) {
+    console.log("Location parse error:", error);
+  }
+
+  const latitude = Number(
+    location.latitude ?? location.lat
+  );
+
+  const longitude = Number(
+    location.longitude ?? location.lng
+  );
+
+  const address =
+    location.address ||
+    location.name ||
+    "Shared location";
+
+  const mapUrl =
+    location.url ||
+    location.mapUrl ||
+    (
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude)
+        ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+        : ""
+    );
+
+  const openLocation = async () => {
+    if (!mapUrl) {
+      Alert.alert(
+        "Location unavailable",
+        "No valid location information was provided."
+      );
+      return;
+    }
+
+    try {
+      await Linking.openURL(mapUrl);
+    } catch (error) {
+      console.log("Open location error:", error);
+      Alert.alert("Unable to open location");
+    }
+  };
+
+  return (
+    <Pressable
+      key={index}
+      onPress={openLocation}
+      style={{
+        marginTop: 8,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#bfdbfe",
+        backgroundColor: "#eff6ff",
+        padding: 14,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <View
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            backgroundColor: "#dbeafe",
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 12,
           }}
         >
-          <MapPin size={20} color="red" />
-          <Text style={{ fontSize: 14 }}>Open shared location</Text>
-        </Pressable>
-      );
-    }
-    if (attachment.attachmentType === "EVENT") {
-      let event: any = {};
-      try {
-        if (attachment.fileData) event = JSON.parse(atob(attachment.fileData));
-      } catch (error) {}
-      return (
-        <View key={index} style={styles.eventContainer}>
-          <Calendar size={22} color="purple" />
-          <View>
-            <Text style={styles.eventTitle}>{event.title || "Event"}</Text>
-            <Text style={{ fontSize: 12, color: "#555" }}>
-              {event.datetime ? formatDateAndTime(event.datetime) : "No date"}
-            </Text>
-          </View>
+          <MapPin size={21} color="#2563eb" />
         </View>
-      );
+
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: "700",
+              color: "#1e3a8a",
+            }}
+          >
+            Shared location
+          </Text>
+
+          <Text
+            style={{
+              marginTop: 3,
+              fontSize: 14,
+              color: "#374151",
+            }}
+            numberOfLines={2}
+          >
+            {address}
+          </Text>
+
+          {Number.isFinite(latitude) &&
+            Number.isFinite(longitude) && (
+              <Text
+                style={{
+                  marginTop: 3,
+                  fontSize: 11,
+                  color: "#6b7280",
+                }}
+              >
+                {latitude.toFixed(5)}, {longitude.toFixed(5)}
+              </Text>
+            )}
+        </View>
+
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: "700",
+            color: "#2563eb",
+          }}
+        >
+          Open
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+  if (attachment.attachmentType === "EVENT") {
+  let event: any = {};
+
+  try {
+    if (attachment.fileData) {
+      event = JSON.parse(atob(attachment.fileData));
     }
+  } catch (error) {
+    console.log("Event parse error:", error);
+  }
+
+  return (
+    <View
+      key={index}
+      style={{
+        marginTop: 8,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: "#c4b5fd",
+        backgroundColor: "#faf5ff",
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: "#7c3aed",
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <Calendar size={18} color="#fff" />
+
+        <Text
+          style={{
+            marginLeft: 8,
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: "800",
+          }}
+        >
+          EVENT
+        </Text>
+      </View>
+
+      <View style={{ padding: 14 }}>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "700",
+            color: "#111827",
+          }}
+        >
+          {event.title || "Event"}
+        </Text>
+
+        <Text
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            color: "#374151",
+          }}
+        >
+          📅{" "}
+          {event.datetime
+            ? formatDateAndTime(event.datetime)
+            : "No date"}
+        </Text>
+
+        {event.location ? (
+          <Text
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: "#374151",
+            }}
+          >
+            📍 {event.location}
+          </Text>
+        ) : null}
+
+        {event.url ? (
+          <TouchableOpacity
+            onPress={() => Linking.openURL(event.url)}
+            style={{
+              marginTop: 12,
+              alignSelf: "flex-start",
+              backgroundColor: "#7c3aed",
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 8,
+            }}
+          >
+            <Text
+              style={{
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: "700",
+              }}
+            >
+              Open Event →
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
     const isPDF =
       attachment.fileName?.toLowerCase().endsWith(".pdf") ||
       attachment.fileType === "application/pdf";
@@ -1167,6 +1372,8 @@ export default function ThreadCard({
         </View>
       );
     }
+
+    
     return (
       <View key={index} style={styles.documentContainer}>
         <FileText size={32} color="#555" />
