@@ -268,6 +268,41 @@ const parseEventDate = (dateInput: any): string => {
   }
 };
 
+// For EVENT attachment - Better date parsing
+const parseEventDateTime = (datetimeValue: any): string => {
+  if (!datetimeValue) return "No date";
+  
+  try {
+    let date: Date;
+    
+    if (datetimeValue instanceof Date) {
+      date = datetimeValue;
+    } else if (typeof datetimeValue === "number") {
+      date = new Date(datetimeValue);
+    } else if (typeof datetimeValue === "string") {
+      // Try multiple formats
+      const cleanStr = datetimeValue.replace(/^"|"$/g, "").trim();
+      
+      if (!isNaN(Date.parse(cleanStr))) {
+        date = new Date(cleanStr);
+      } else {
+        return datetimeValue; // Return as-is if can't parse
+      }
+    } else {
+      return "No date";
+    }
+    
+    if (isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+    
+    return formatDateAndTime(date.toISOString());
+  } catch (error) {
+    console.error("Event date parse error:", error);
+    return "No date";
+  }
+};
+
 const formatFileSize = (bytes?: number) => {
   if (!bytes) return "0 B";
   const sizes = ["B", "KB", "MB", "GB"];
@@ -1163,22 +1198,31 @@ export default function ThreadCard({
         : ""
     );
 
-  const openLocation = async () => {
-    if (!mapUrl) {
-      Alert.alert(
-        "Location unavailable",
-        "No valid location information was provided."
-      );
-      return;
-    }
-
-    try {
+  // For LOCATION attachment - Fix the openLocation function
+const openLocation = async () => {
+  if (!mapUrl) {
+    Alert.alert(
+      "Location unavailable",
+      "No valid location information was provided."
+    );
+    return;
+  }
+  try {
+    console.log("Opening location URL:", mapUrl); // Debug log
+    const supported = await Linking.canOpenURL(mapUrl);
+    if (supported) {
       await Linking.openURL(mapUrl);
-    } catch (error) {
-      console.log("Open location error:", error);
-      Alert.alert("Unable to open location");
+    } else {
+      Alert.alert("Unable to open location", "No app available to open maps");
     }
-  };
+  } catch (error) {
+    console.error("Open location error:", error);
+    Alert.alert("Error", "Unable to open location");
+  }
+};
+
+
+
 
   return (
     <Pressable
@@ -1327,9 +1371,8 @@ export default function ThreadCard({
           }}
         >
           📅{" "}
-          {event.datetime
-            ? formatDateAndTime(event.datetime)
-            : "No date"}
+          {parseEventDateTime(event.datetime)}
+
         </Text>
 
         {event.location ? (

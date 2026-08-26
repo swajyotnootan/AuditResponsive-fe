@@ -2,8 +2,11 @@
 // FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), and Edit Mode
 
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Audio, ResizeMode, Video } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
+
+// Add state for date picker
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Location from "expo-location";
@@ -115,6 +118,9 @@ export default function ThreadComposer({
 
   const [audioSound, setAudioSound] = useState<Audio.Sound | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+ 
+const [showDatePicker, setShowDatePicker] = useState(false);
+const [selectedDate, setSelectedDate] = useState(new Date());
 
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [eventForm, setEventForm] = useState({
@@ -1360,65 +1366,91 @@ export default function ThreadComposer({
       </Modal>
 
       {/* Event Form Modal */}
-      <Modal visible={eventForm.open} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.eventModalContent}>
-            <Text style={styles.eventModalTitle}>Create Event</Text>
-            <TextInput
-              style={styles.eventInput}
-              placeholder="Event title"
-              value={eventForm.title}
-              onChangeText={(text) =>
-                setEventForm({ ...eventForm, title: text })
-              }
-            />
-            <TextInput
-              style={styles.eventInput}
-              placeholder="Date & Time"
-              value={eventForm.datetime}
-              onChangeText={(text) =>
-                setEventForm({ ...eventForm, datetime: text })
-              }
-            />
-            <View style={styles.eventModalButtons}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (!eventForm.title || !eventForm.datetime) return;
-                  const eventData = {
-                    title: eventForm.title,
-                    datetime: eventForm.datetime,
-                  };
-                  setContent(
-                    `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
-                  );
-                  setAttachments((prev) => [
-                    ...prev,
-                    {
-                      fileName: "event.json",
-                      fileType: "application/json",
-                      fileSize: JSON.stringify(eventData).length,
-                      attachmentType: "EVENT",
-                      eventData,
-                    },
-                  ]);
-                  setEventForm({ open: false, title: "", datetime: "" });
-                }}
-                style={styles.eventSubmitBtn}
-              >
-                <Text style={styles.eventSubmitBtnText}>Add Event</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() =>
-                  setEventForm({ open: false, title: "", datetime: "" })
-                }
-                style={styles.eventCancelBtn}
-              >
-                <Text style={styles.eventCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+     {/* Event Form Modal */}
+<Modal visible={eventForm.open} transparent animationType="fade">
+  <View style={styles.modalOverlay}>
+    <View style={styles.eventModalContent}>
+      <Text style={styles.eventModalTitle}>Create Event</Text>
+      <TextInput
+        style={styles.eventInput}
+        placeholder="Event title"
+        value={eventForm.title}
+        onChangeText={(text) =>
+          setEventForm({ ...eventForm, title: text })
+        }
+      />
+      
+      {/* Date/Time Picker Trigger */}
+      <TouchableOpacity
+        style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+        onPress={() => setShowDatePicker(true)}
+      >
+        <Text style={{ color: eventForm.datetime ? '#000' : '#999' }}>
+          {eventForm.datetime
+            ? new Date(eventForm.datetime).toLocaleString()
+            : "Select Date & Time"}
+        </Text>
+        <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+      </TouchableOpacity>
+
+      {/* Native Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="datetime"
+          display="default"
+          onChange={(event, date) => {
+            setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS until confirmed
+            if (date) {
+              setSelectedDate(date);
+              setEventForm({
+                ...eventForm,
+                datetime: date.toISOString()
+              });
+            }
+          }}
+        />
+      )}
+
+      <View style={styles.eventModalButtons}>
+        <TouchableOpacity
+          onPress={() => {
+            if (!eventForm.title || !eventForm.datetime) return;
+            const eventData = {
+              title: eventForm.title,
+              datetime: eventForm.datetime,
+            };
+            setContent(
+              `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
+            );
+            setAttachments((prev) => [
+              ...prev,
+              {
+                fileName: "event.json",
+                fileType: "application/json",
+                fileSize: JSON.stringify(eventData).length,
+                attachmentType: "EVENT",
+                eventData,
+              },
+            ]);
+            setEventForm({ open: false, title: "", datetime: "" });
+          }}
+          style={styles.eventSubmitBtn}
+        >
+          <Text style={styles.eventSubmitBtnText}>Add Event</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() =>
+            setEventForm({ open: false, title: "", datetime: "" })
+          }
+          style={styles.eventCancelBtn}
+        >
+          <Text style={styles.eventCancelBtnText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
 
       {/* Attachment Menu */}
       <Modal visible={showAttachmentMenu} transparent animationType="fade">
