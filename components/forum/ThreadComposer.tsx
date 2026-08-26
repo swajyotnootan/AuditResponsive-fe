@@ -730,33 +730,43 @@ const [selectedDate, setSelectedDate] = useState(new Date());
   };
 
   const handleLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "Location access is required.");
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-      setContent("📍 Shared location");
-      setAttachments((prev) => [
-        ...prev,
-        {
-          fileName: "location.json",
-          fileType: "application/json",
-          fileSize: 0,
-          attachmentType: "LOCATION",
-          locationUrl: url,
-        },
-      ]);
-      setShowAttachmentMenu(false);
-    } catch (err) {
-      Alert.alert("Error", "Failed to get location");
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Denied", "Location access is required.");
+      return;
     }
-  };
+
+    const location = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = location.coords;
+    const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+    // ✅ FIX: Store location data as JSON string (not base64)
+    const locationData = {
+      latitude: latitude,
+      longitude: longitude,
+      url: url,
+      name: "Shared location",
+    };
+    const jsonString = JSON.stringify(locationData);
+
+    setContent("📍 Shared location");
+    setAttachments((prev) => [
+      ...prev,
+      {
+        fileName: "location.json",
+        fileType: "application/json",
+        fileSize: jsonString.length,
+        attachmentType: "LOCATION",
+        locationUrl: url,
+        fileData: jsonString, // ✅ Store as JSON string
+      },
+    ]);
+    setShowAttachmentMenu(false);
+  } catch (err) {
+    Alert.alert("Error", "Failed to get location");
+  }
+};
 
   const startVoiceRecording = async () => {
     try {
@@ -945,102 +955,111 @@ const [selectedDate, setSelectedDate] = useState(new Date());
   }, [previewMedia]);
 
   // ========== SUBMIT ==========
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
-    if (!content.trim() && attachments.length === 0 && !editingPost) return;
+ const handleSubmit = async () => {
+  if (isSubmitting) return;
+  if (!content.trim() && attachments.length === 0 && !editingPost) return;
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      let messageType = "TEXT";
-      if (attachments.length > 0) {
-        const firstAtt = attachments[0];
-        if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
-        else if (firstAtt.attachmentType === "VIDEO") messageType = "VIDEO";
-        else if (firstAtt.attachmentType === "AUDIO") messageType = "AUDIO";
-        else if (firstAtt.attachmentType === "LOCATION")
-          messageType = "LOCATION";
-        else if (firstAtt.attachmentType === "EVENT") messageType = "EVENT";
-      }
-
-      const resolvedAttachments = await Promise.all(
-        attachments.map(async (att) => {
-          if (att.fileData) {
-            return {
-              fileName: att.fileName,
-              fileType: att.fileType,
-              fileSize: att.fileSize,
-              attachmentType: att.attachmentType,
-              fileData: att.fileData,
-            };
-          }
-
-          if (att.uri && !att.fileData) {
-            const base64 = await readFileAsBase64(att.uri);
-            return {
-              fileName: att.fileName,
-              fileType: att.fileType,
-              fileSize: att.fileSize,
-              attachmentType: att.attachmentType,
-              fileData: base64,
-            };
-          }
-
-          if (att.attachmentType === "LOCATION") {
-            return {
-              fileName: "location.json",
-              fileType: "application/json",
-              fileSize: 0,
-              attachmentType: "LOCATION",
-              fileData: btoa(JSON.stringify({ url: att.locationUrl })),
-            };
-          }
-
-          if (att.attachmentType === "EVENT") {
-            return {
-              fileName: "event.json",
-              fileType: "application/json",
-              fileSize: JSON.stringify(att.eventData).length,
-              attachmentType: "EVENT",
-              fileData: btoa(JSON.stringify(att.eventData)),
-            };
-          }
-
-          return att;
-        }),
-      );
-
-      const userEmail = username || "anonymous@jws.com";
-      const payload: any = {
-        content: content.trim() || " ",
-        createdBy: userEmail,
-        messageType,
-        attachments: resolvedAttachments,
-      };
-
-      if (editingPost) {
-        payload.id = editingPost.id;
-        payload.isEdit = true;
-      }
-
-      onThreadCreated(payload);
-
-      setContent("");
-      setAttachments([]);
-      setError("");
-      setShowAttachmentMenu(false);
-      setShowEmojiPicker(false);
-
-      if (editingPost) {
-        onCancelEdit?.();
-      }
-    } catch (err) {
-      console.error("Submit error:", err);
-      setError("Failed to send message");
-    } finally {
-      setIsSubmitting(false);
+  try {
+    let messageType = "TEXT";
+    if (attachments.length > 0) {
+      const firstAtt = attachments[0];
+      if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
+      else if (firstAtt.attachmentType === "VIDEO") messageType = "VIDEO";
+      else if (firstAtt.attachmentType === "AUDIO") messageType = "AUDIO";
+      else if (firstAtt.attachmentType === "LOCATION") messageType = "LOCATION";
+      else if (firstAtt.attachmentType === "EVENT") messageType = "EVENT";
     }
-  };
+
+    const resolvedAttachments = await Promise.all(
+      attachments.map(async (att) => {
+        // If fileData already exists, use it
+        if (att.fileData) {
+          return {
+            fileName: att.fileName,
+            fileType: att.fileType,
+            fileSize: att.fileSize,
+            attachmentType: att.attachmentType,
+            fileData: att.fileData,
+          };
+        }
+
+        // If we have a URI but no fileData, read it
+        if (att.uri && !att.fileData) {
+          const base64 = await readFileAsBase64(att.uri);
+          return {
+            fileName: att.fileName,
+            fileType: att.fileType,
+            fileSize: att.fileSize,
+            attachmentType: att.attachmentType,
+            fileData: base64,
+          };
+        }
+
+        // ✅ FIX: Location - Use JSON string directly (not base64)
+        if (att.attachmentType === "LOCATION") {
+          const locationData = {
+            latitude: att.eventData?.latitude || 0,
+            longitude: att.eventData?.longitude || 0,
+            url: att.locationUrl || "",
+          };
+          return {
+            fileName: "location.json",
+            fileType: "application/json",
+            fileSize: JSON.stringify(locationData).length,
+            attachmentType: "LOCATION",
+            fileData: JSON.stringify(locationData), // ✅ JSON string, not base64
+          };
+        }
+
+        // ✅ FIX: Event - Use JSON string directly (not base64)
+        if (att.attachmentType === "EVENT") {
+          const eventData = att.eventData || {};
+          return {
+            fileName: "event.json",
+            fileType: "application/json",
+            fileSize: JSON.stringify(eventData).length,
+            attachmentType: "EVENT",
+            fileData: JSON.stringify(eventData), // ✅ JSON string, not base64
+          };
+        }
+
+        return att;
+      }),
+    );
+
+    const userEmail = username || "anonymous@jws.com";
+    const payload: any = {
+      content: content.trim() || " ",
+      createdBy: userEmail,
+      messageType,
+      attachments: resolvedAttachments,
+    };
+
+    if (editingPost) {
+      payload.id = editingPost.id;
+      payload.isEdit = true;
+    }
+
+    onThreadCreated(payload);
+
+    setContent("");
+    setAttachments([]);
+    setError("");
+    setShowAttachmentMenu(false);
+    setShowEmojiPicker(false);
+
+    if (editingPost) {
+      onCancelEdit?.();
+    }
+  } catch (err) {
+    console.error("Submit error:", err);
+    setError("Failed to send message");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleInputChange = (text: string) => {
     setContent(text);
@@ -1368,6 +1387,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
       </Modal>
 
     {/* Event Form Modal */}
+{/* Event Form Modal */}
 <Modal visible={eventForm.open} transparent animationType="fade">
   <View style={styles.modalOverlay}>
     <View style={styles.eventModalContent}>
@@ -1384,7 +1404,6 @@ const [selectedDate, setSelectedDate] = useState(new Date());
       
       {/* Date/Time Picker - Platform Specific */}
       {Platform.OS === 'web' ? (
-        // ✅ Web: Use HTML5 datetime input
         <input
           type="datetime-local"
           value={eventForm.datetime ? new Date(eventForm.datetime).toISOString().slice(0, 16) : ''}
@@ -1403,7 +1422,6 @@ const [selectedDate, setSelectedDate] = useState(new Date());
           }}
         />
       ) : (
-        // ✅ Mobile: Use TouchableOpacity to trigger DateTimePicker
         <TouchableOpacity
           style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
           onPress={() => setShowDatePicker(true)}
@@ -1463,24 +1481,28 @@ const [selectedDate, setSelectedDate] = useState(new Date());
               Alert.alert("Missing Information", "Please provide event title and date/time");
               return;
             }
+            
+            // ✅ FIX: Create event data with all fields
             const eventData = {
               title: eventForm.title,
               datetime: eventForm.datetime,
-              location: eventForm.location,
-              url: eventForm.url,
+              location: eventForm.location || "",
+              url: eventForm.url || "",
             };
-            setContent(
-              `📅 ${eventForm.title}`,
-            );
+            
+            // ✅ FIX: Store as JSON string (not base64) for cross-platform compatibility
+            const jsonString = JSON.stringify(eventData);
+            
+            setContent(`📅 ${eventForm.title}`);
             setAttachments((prev) => [
               ...prev,
               {
                 fileName: "event.json",
                 fileType: "application/json",
-                fileSize: JSON.stringify(eventData).length,
+                fileSize: jsonString.length,
                 attachmentType: "EVENT",
-                eventData,
-                fileData: btoa(JSON.stringify(eventData)),
+                eventData: eventData,
+                fileData: jsonString, // ✅ Store as JSON string, not base64
               },
             ]);
             setEventForm({ open: false, title: "", datetime: "", location: "", url: "" });
@@ -1501,7 +1523,6 @@ const [selectedDate, setSelectedDate] = useState(new Date());
     </View>
   </View>
 </Modal>
-
       {/* Attachment Menu */}
       <Modal visible={showAttachmentMenu} transparent animationType="fade">
         <TouchableOpacity

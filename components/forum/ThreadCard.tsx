@@ -1164,12 +1164,28 @@ export default function ThreadCard({
         />
       );
     }
-   if (attachment.attachmentType === "LOCATION") {
+  if (attachment.attachmentType === "LOCATION") {
   let location: any = {};
 
   try {
     if (attachment.fileData) {
-      location = JSON.parse(atob(attachment.fileData));
+      // ✅ FIX: Handle both base64 and direct JSON
+      if (typeof attachment.fileData === 'string') {
+        if (attachment.fileData.startsWith('{')) {
+          // Already JSON string
+          location = JSON.parse(attachment.fileData);
+        } else {
+          // Base64 encoded JSON
+          try {
+            // For React Native, use Buffer or fallback
+            const decoded = Platform.OS === 'web' ? atob(attachment.fileData) : Buffer.from(attachment.fileData, 'base64').toString('utf-8');
+            location = JSON.parse(decoded);
+          } catch (e) {
+            console.log("Location decode error:", e);
+            location = {};
+          }
+        }
+      }
     }
   } catch (error) {
     console.log("Location parse error:", error);
@@ -1186,11 +1202,7 @@ export default function ThreadCard({
       ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
       : "");
 
-  // ✅ BULLETPROOF openLocation function
   const openLocation = async () => {
-    console.log("📍 DEBUG: Parsed location object =", location);
-    console.log("📍 DEBUG: Final mapUrl =", mapUrl);
-
     if (!mapUrl) {
       Alert.alert("Location unavailable", "No valid location information was provided.");
       return;
@@ -1198,23 +1210,19 @@ export default function ThreadCard({
 
     try {
       if (Platform.OS === 'web') {
-        // ✅ Web: Force open in a new tab (noopener prevents popup blockers)
         window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {
-        // ✅ Mobile: Use Expo Linking
         const supported = await Linking.canOpenURL(mapUrl);
         if (supported) {
           await Linking.openURL(mapUrl);
         } else {
-          // Fallback: If canOpenURL fails, try opening it anyway or alert
           await Linking.openURL(mapUrl).catch(() => {
             Alert.alert("Unable to open location", "No map application is available on this device.");
           });
         }
       }
     } catch (error) {
-      console.error("❌ Open location error:", error);
-      // ✅ Ultimate fallback for Web if the try block fails
+      console.error("Open location error:", error);
       if (Platform.OS === 'web') {
         window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {
@@ -1279,11 +1287,69 @@ export default function ThreadCard({
 
   try {
     if (attachment.fileData) {
-      event = JSON.parse(atob(attachment.fileData));
+      // ✅ FIX: Handle both base64 and direct JSON
+      if (typeof attachment.fileData === 'string') {
+        if (attachment.fileData.startsWith('{')) {
+          // Already JSON string
+          event = JSON.parse(attachment.fileData);
+        } else {
+          // Base64 encoded JSON
+          try {
+            const decoded = Platform.OS === 'web' ? atob(attachment.fileData) : Buffer.from(attachment.fileData, 'base64').toString('utf-8');
+            event = JSON.parse(decoded);
+          } catch (e) {
+            console.log("Event decode error:", e);
+            event = {};
+          }
+        }
+      }
     }
   } catch (error) {
     console.log("Event parse error:", error);
   }
+
+  // ✅ FIX: Parse event date properly
+  const formatEventDateTime = (datetime: any): string => {
+    if (!datetime) return "No date set";
+    
+    try {
+      let date: Date;
+      
+      if (datetime instanceof Date) {
+        date = datetime;
+      } else if (typeof datetime === "number") {
+        date = new Date(datetime);
+      } else if (typeof datetime === "string") {
+        let isoString = datetime.replace(/^"|"$/g, "").trim();
+        if (!isoString.includes("T")) {
+          isoString = isoString.replace(" ", "T");
+        }
+        if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
+          isoString += "Z";
+        }
+        date = new Date(isoString);
+      } else {
+        return "No date set";
+      }
+      
+      if (isNaN(date.getTime())) return "Invalid date";
+      
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+      }) + " at " + date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC",
+      });
+    } catch (error) {
+      return "No date set";
+    }
+  };
 
   return (
     <View
@@ -1307,7 +1373,6 @@ export default function ThreadCard({
         }}
       >
         <Calendar size={18} color="#fff" />
-
         <Text
           style={{
             marginLeft: 8,
@@ -1338,9 +1403,7 @@ export default function ThreadCard({
             color: "#374151",
           }}
         >
-          📅{" "}
-          {parseEventDateTime(event.datetime)}
-
+          📅 {formatEventDateTime(event.datetime)}
         </Text>
 
         {event.location ? (
