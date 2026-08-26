@@ -143,7 +143,6 @@ const getTimeOnly = (date: Date) => {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-    timeZone: 'UTC', // 👈 Force UTC
   });
 };
 
@@ -166,7 +165,6 @@ const formatDateAndTime = (dateString?: string) => {
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-      timeZone: 'UTC', // 👈 Force UTC
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
     return "";
