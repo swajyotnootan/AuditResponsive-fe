@@ -1164,40 +1164,59 @@ export default function ThreadCard({
         />
       );
     }
-  if (attachment.attachmentType === "LOCATION") {
+ if (attachment.attachmentType === "LOCATION") {
   let location: any = {};
 
   try {
     if (attachment.fileData) {
-      // ✅ FIX: Handle both base64 and direct JSON
       if (typeof attachment.fileData === 'string') {
+        // ✅ Check if it's already a JSON string
         if (attachment.fileData.startsWith('{')) {
-          // Already JSON string
+          // Already JSON - parse directly
           location = JSON.parse(attachment.fileData);
         } else {
-          // Base64 encoded JSON
+          // Might be base64 encoded - try to decode
           try {
-            // For React Native, use Buffer or fallback
-            const decoded = Platform.OS === 'web' ? atob(attachment.fileData) : Buffer.from(attachment.fileData, 'base64').toString('utf-8');
-            location = JSON.parse(decoded);
+            let decoded;
+            if (Platform.OS === 'web') {
+              decoded = atob(attachment.fileData);
+            } else {
+              // React Native - use Buffer or fallback
+              try {
+                decoded = Buffer.from(attachment.fileData, 'base64').toString('utf-8');
+              } catch (e) {
+                // If Buffer fails, try alternative
+                decoded = decodeURIComponent(escape(atob(attachment.fileData)));
+              }
+            }
+            if (decoded && decoded.startsWith('{')) {
+              location = JSON.parse(decoded);
+            }
           } catch (e) {
             console.log("Location decode error:", e);
-            location = {};
+            // Try to parse as-is
+            try {
+              location = JSON.parse(attachment.fileData);
+            } catch (e2) {
+              location = {};
+            }
           }
         }
       }
     }
   } catch (error) {
     console.log("Location parse error:", error);
+    location = {};
   }
 
+  // ✅ Extract location data with fallbacks
   const latitude = Number(location.latitude ?? location.lat);
   const longitude = Number(location.longitude ?? location.lng);
   const address = location.address || location.name || "Shared location";
+  const url = location.url || location.mapUrl || "";
 
-  const mapUrl =
-    location.url ||
-    location.mapUrl ||
+  // ✅ Build map URL
+  const mapUrl = url || 
     (Number.isFinite(latitude) && Number.isFinite(longitude)
       ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
       : "");
@@ -1268,9 +1287,9 @@ export default function ThreadCard({
             {address}
           </Text>
 
-          {Number.isFinite(latitude) && Number.isFinite(longitude) && (
+          {Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0 && longitude !== 0 && (
             <Text style={{ marginTop: 3, fontSize: 11, color: "#6b7280" }}>
-              {latitude.toFixed(5)}, {longitude.toFixed(5)}
+              📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
             </Text>
           )}
         </View>
@@ -1282,33 +1301,48 @@ export default function ThreadCard({
     </Pressable>
   );
 }
-  if (attachment.attachmentType === "EVENT") {
+ if (attachment.attachmentType === "EVENT") {
   let event: any = {};
 
   try {
     if (attachment.fileData) {
-      // ✅ FIX: Handle both base64 and direct JSON
       if (typeof attachment.fileData === 'string') {
+        // ✅ Check if it's already a JSON string
         if (attachment.fileData.startsWith('{')) {
-          // Already JSON string
           event = JSON.parse(attachment.fileData);
         } else {
-          // Base64 encoded JSON
+          // Might be base64 encoded - try to decode
           try {
-            const decoded = Platform.OS === 'web' ? atob(attachment.fileData) : Buffer.from(attachment.fileData, 'base64').toString('utf-8');
-            event = JSON.parse(decoded);
+            let decoded;
+            if (Platform.OS === 'web') {
+              decoded = atob(attachment.fileData);
+            } else {
+              try {
+                decoded = Buffer.from(attachment.fileData, 'base64').toString('utf-8');
+              } catch (e) {
+                decoded = decodeURIComponent(escape(atob(attachment.fileData)));
+              }
+            }
+            if (decoded && decoded.startsWith('{')) {
+              event = JSON.parse(decoded);
+            }
           } catch (e) {
             console.log("Event decode error:", e);
-            event = {};
+            try {
+              event = JSON.parse(attachment.fileData);
+            } catch (e2) {
+              event = {};
+            }
           }
         }
       }
     }
   } catch (error) {
     console.log("Event parse error:", error);
+    event = {};
   }
 
-  // ✅ FIX: Parse event date properly
+  // ✅ Format event date with UTC
   const formatEventDateTime = (datetime: any): string => {
     if (!datetime) return "No date set";
     
