@@ -1267,22 +1267,43 @@ export default function ForumThreadView({
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
  // ✅ NEW CODE (Always treat backend as UTC)
+// ✅ REPLACE with consistent UTC parser
 const getDateLabel = (dateStr: string) => {
+  if (!dateStr) return null;
+  
   let isoString = dateStr;
-  if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  // ✅ FIXED: ALWAYS add Z if no timezone marker
+  if (!isoString.includes('T')) {
+    isoString = isoString.replace(' ', 'T');
+  }
+  
+  // ALWAYS treat as UTC
   if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
     isoString += 'Z';
   }
+  
   const date = new Date(isoString);
- 
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return null;
+  
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
- 
-  if (date.toDateString() === today.toDateString()) return null;
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  
+  // Compare dates in UTC
+  const dateStrUTC = date.toISOString().split('T')[0];
+  const todayStrUTC = today.toISOString().split('T')[0];
+  const yesterdayStrUTC = yesterday.toISOString().split('T')[0];
+  
+  if (dateStrUTC === todayStrUTC) return null;
+  if (dateStrUTC === yesterdayStrUTC) return "Yesterday";
+  
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric',
+    timeZone: 'UTC' // 👈 Force UTC display
+  });
 };
  
 
