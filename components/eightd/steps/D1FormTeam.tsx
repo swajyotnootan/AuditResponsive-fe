@@ -366,7 +366,13 @@ export default function D1FormTeam({ eventId, updateParent }: D1FormTeamProps) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true} // 👈 CRITICAL: Allows scrolling/tapping inside parent ScrollViews/Modals
+        pointerEvents="box-none" // 👈 CRITICAL: Lets touches pass through the ScrollView wrapper to the inputs
+      >
         {/* Event ID */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Event ID</Text>
@@ -380,12 +386,14 @@ export default function D1FormTeam({ eventId, updateParent }: D1FormTeamProps) {
         </View>
 
         {/* Team Leader */}
-        <View style={styles.fieldGroup}>
+        <View style={styles.fieldGroup} pointerEvents="box-none">
           <Text style={styles.label}>
             Team Leader <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
             style={styles.input}
+            pointerEvents="auto" // 👈 Forces this specific element to accept touches
+            collapsable={false} // 👈 Prevents React Native from optimizing this View away and breaking touch handling
             value={formData.teamLeader}
             onChangeText={(text) => handleChange("teamLeader", text)}
             placeholder="Enter Team Leader Name"
@@ -674,7 +682,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: 12, // Slightly reduced padding for mobile
     backgroundColor: "#2242a1",
     borderTopWidth: 4,
     borderTopColor: "#EE161F",
@@ -682,20 +690,40 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    flex: 1, // 👈 Takes all available space
+    minWidth: 0, // 👈 Allows children to shrink below their content size
+    marginRight: 8, // 👈 Guarantees space between the text and the button
   },
   headerTitle: {
-    fontSize: isMobile ? 16 : 20,
+    fontSize: isMobile ? 14 : 20, // 👈 Smaller, more compact font on mobile
     fontWeight: "600",
     color: "#FFFFFF",
+    flexShrink: 1, // 👈 Allows the text to truncate with "..." if needed
   },
   headerBadge: {
-    fontSize: 12,
+    fontSize: 10,
     backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
     color: "#FFFFFF",
+    flexShrink: 0, // 👈 Prevents the badge from squishing
+  },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexShrink: 0, // 👈 CRITICAL: Prevents the button from being pushed off-screen or squished
+  },
+  autoFillButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
   content: {
     flex: 1,
@@ -721,10 +749,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: "#1F2937",
+    backgroundColor: "#FFFFFF",
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: "top",
+    backgroundColor: "#FFFFFF",
   },
   memberCard: {
     backgroundColor: "#F9FAFB",
@@ -755,6 +785,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 13,
     color: "#1F2937",
+    backgroundColor: "#FFFFFF",
   },
   removeButton: {
     justifyContent: "center",
@@ -797,20 +828,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
-  },
-  autoFillButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  autoFillButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
   },
 
   // --- Add these inside your StyleSheet.create ---

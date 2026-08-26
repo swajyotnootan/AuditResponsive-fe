@@ -42,6 +42,7 @@ import { ncrService } from "@/services/ncrService";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { getDashboardPath } from "../../../utils/roleUtils";
 import { useAuth } from "../../context/AuthContext";
+import Form8DetailView from "./Form8DetailView";
 // ============================================================================
 // TYPES & INTERFACES
 // ============================================================================
@@ -180,7 +181,7 @@ const DateInputField = ({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            className="w-5xl px-3 py-3 pr-10 text-sm bg-white border rounded-lg border-slate-200 text-slate-800 focus:outline-none focus:ring-2  focus:border-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+            className="px-3 py-3 pr-10 text-sm bg-white border rounded-lg w-5xl border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:border-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
           />
         </View>
       </View>
@@ -243,6 +244,7 @@ export default function Form8View({ initialParams, onClose }: any) {
   const urlParams = useLocalSearchParams();
   const { user } = useAuth();
 
+  const [showDetailView, setShowDetailView] = useState<boolean>(false);
   // ✅ MERGE inline params and URL params safely
   const params = { ...urlParams, ...initialParams };
   const paramId = params.id as string;
@@ -533,6 +535,7 @@ export default function Form8View({ initialParams, onClose }: any) {
   };
 
   // ─── Submit ────────────────────────────────────────────────
+  // ─── Submit ────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!validateForm()) return;
     if (!ncrId) {
@@ -566,10 +569,11 @@ export default function Form8View({ initialParams, onClose }: any) {
           ? `NCR2 corrective action submitted for NCR #${result.data.ncrNumber}`
           : `Corrective action submitted for NCR #${result.data.ncrNumber}`;
         setSuccess(message);
-        setTimeout(
-          () => router.replace(`/form7-detail?id=${ncrId}` as any),
-          1800,
-        );
+
+        // ✅ UPDATED: Wait 1.8s so the user sees the success message, then swap the view
+        setTimeout(() => {
+          setShowDetailView(true);
+        }, 1800);
       } else {
         setError(result.error || "Submission failed");
       }
@@ -579,7 +583,6 @@ export default function Form8View({ initialParams, onClose }: any) {
       setSaving(false);
     }
   };
-
   // ─── PDF download ──────────────────────────────────────────
   const downloadForm8Pdf = async () => {
     if (!ncrId) {
@@ -631,6 +634,20 @@ export default function Form8View({ initialParams, onClose }: any) {
           </Text>
         </View>
       </View>
+    );
+  }
+
+  if (showDetailView) {
+    return (
+      <Form8DetailView
+        initialParams={{
+          id: ncrId,
+          type: isNCR2Mode ? "ncr2" : "form8",
+        }}
+        onClose={() => {
+          setShowDetailView(false); // Allows the user to go back to the form/dashboard if needed
+        }}
+      />
     );
   }
 

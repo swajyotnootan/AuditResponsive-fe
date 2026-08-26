@@ -43,7 +43,6 @@ import { API_BASE_URL } from "@/config/apiConfig";
 import { isInitiator } from "@/utils/roleUtils";
 import Generate8DPdf from "../Generate8DPdf";
 
-
 // ============================================================================
 // TYPES & INTERFACES
 // ============================================================================
@@ -560,22 +559,26 @@ export default function FinalPreview({
       );
 
       if (res.data.success) {
-        // 👇 FIX: Update local state immediately so it shows "Approved / In Progress"
+        // 1. Update local modal state
         setEventData((prev: any) => ({
           ...prev,
           status: "in progress",
           currentStep: "d1",
         }));
-        Alert.alert("Success", "✅ Document approved successfully!", [
-          {
-            text: "OK",
-            onPress: () => {
-              setApprovalComment("");
-              if (onRefresh) onRefresh();
-              if (onClose) onClose();
-            },
-          },
-        ]);
+
+        setApprovalComment("");
+
+        // 2. ✅ CRITICAL FIX FOR WEB: Trigger refresh and close IMMEDIATELY.
+        // Do not wait for the Alert callback, as it is unreliable on React Native Web.
+        if (onRefresh) onRefresh();
+        if (onClose) onClose();
+
+        // 3. Show success message (window.alert is 100% reliable on Web)
+        if (Platform.OS === "web") {
+          window.alert("✅ Document approved successfully!");
+        } else {
+          Alert.alert("Success", "✅ Document approved successfully!");
+        }
       }
     } catch (err: any) {
       Alert.alert(
@@ -594,28 +597,33 @@ export default function FinalPreview({
       setRejecting(true);
       const userStr = await AsyncStorage.getItem("user");
       const user = userStr ? JSON.parse(userStr) : null;
-      const res = await axios.post(`${API_BASE_URL}/api/eightd/reject/${eventId}`, {
-        userEmail: user?.email,
-        comment: approvalComment.trim(),
-      });
+      const res = await axios.post(
+        `${API_BASE_URL}/api/eightd/reject/${eventId}`,
+        {
+          userEmail: user?.email,
+          comment: approvalComment.trim(),
+        },
+      );
       if (res.data.success) {
-        // 👇 FIX: Update local state immediately so it shows "Rejected"
+        // 1. Update local modal state
         setEventData((prev: any) => ({
           ...prev,
           status: "rejected",
           currentStep: "d0",
         }));
 
-        Alert.alert("Rejected", "❌ Document rejected successfully!", [
-          {
-            text: "OK",
-            onPress: () => {
-              setApprovalComment("");
-              if (onRefresh) onRefresh(); // Triggers dashboard to re-fetch (turns card red)
-              if (onClose) onClose(); // 👈 FIX: Closes the modal
-            },
-          },
-        ]);
+        setApprovalComment("");
+
+        // 2. ✅ CRITICAL FIX FOR WEB: Trigger refresh and close IMMEDIATELY.
+        if (onRefresh) onRefresh();
+        if (onClose) onClose();
+
+        // 3. Show success message
+        if (Platform.OS === "web") {
+          window.alert("❌ Document rejected successfully!");
+        } else {
+          Alert.alert("Rejected", "❌ Document rejected successfully!");
+        }
       }
     } catch (err: any) {
       Alert.alert(
@@ -1303,13 +1311,13 @@ export default function FinalPreview({
                 <View className="flex-row gap-3">
                   <TouchableOpacity
                     onPress={handleDownloadOrShare}
-                    className="p-1 active:bg-gray-700 rounded"
+                    className="p-1 rounded active:bg-gray-700"
                   >
                     <Download size={20} color="white" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={closePreview}
-                    className="p-1 active:bg-gray-700 rounded"
+                    className="p-1 rounded active:bg-gray-700"
                   >
                     <X size={24} color="white" />
                   </TouchableOpacity>
@@ -1318,7 +1326,7 @@ export default function FinalPreview({
 
               {/* Media Preview Area */}
               <View
-                className="items-center justify-center bg-gray-900 flex-1" // ✅ flex-1 fills the remaining height
+                className="items-center justify-center flex-1 bg-gray-900" // ✅ flex-1 fills the remaining height
                 style={{ minHeight: 400 }} // Keeps it from collapsing on tiny screens
               >
                 {previewFile?.mimeType?.startsWith("image/") ? (
@@ -1342,12 +1350,12 @@ export default function FinalPreview({
                     }}
                   />
                 ) : previewFile?.mimeType === "application/pdf" ? (
-                  <View className="items-center justify-center p-4 flex-1">
+                  <View className="items-center justify-center flex-1 p-4">
                     <File size={48} color="#DC2626" />
-                    <Text className="mt-4 text-center text-white font-semibold text-lg">
+                    <Text className="mt-4 text-lg font-semibold text-center text-white">
                       {previewFile?.fileName}
                     </Text>
-                    <Text className="mt-2 text-center text-gray-300 px-4">
+                    <Text className="px-4 mt-2 text-center text-gray-300">
                       Native PDF preview is not supported. Tap below to
                       download.
                     </Text>

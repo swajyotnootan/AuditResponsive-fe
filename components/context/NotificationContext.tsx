@@ -261,7 +261,7 @@ private async playNotifyFile(): Promise<void> {
     // ✅ Unified approach: use expo-av Audio.Sound on BOTH platforms
     const source = Platform.OS === 'web'
       ? { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
-      : require('../assets/sounds/notify.mp3');
+      : { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
 
     const { sound } = await Audio.Sound.createAsync(
       source,

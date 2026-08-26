@@ -541,7 +541,7 @@ const TeamMemberField = ({
 
   return (
     <View className="relative p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50">
-       <Pressable
+      <Pressable
         onPress={() => onRemove(index)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
@@ -2616,7 +2616,7 @@ export default function D0PlanContain({
         statusBarTranslucent={true}
         onRequestClose={() => setIsPreviewOpen(false)}
       >
-        <View className="flex-1 flex-row bg-black/50">
+        <View className="flex-row flex-1 bg-black/50">
           {/* Left Backdrop (closes the drawer when tapped) */}
           <Pressable
             className="flex-1 h-full"
@@ -2636,13 +2636,13 @@ export default function D0PlanContain({
               elevation: 15,
             }}
           >
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200 bg-white">
+            <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
               <Text className="text-lg font-semibold text-gray-800">
                 Preview
               </Text>
               <Pressable
                 onPress={() => setIsPreviewOpen(false)}
-                className="p-2 rounded-full bg-gray-100 active:bg-gray-200"
+                className="p-2 bg-gray-100 rounded-full active:bg-gray-200"
               >
                 <X size={20} color="#4B5563" />
               </Pressable>

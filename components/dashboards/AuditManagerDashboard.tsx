@@ -206,17 +206,39 @@ interface ActivityItem {
 // ============================================================================
 // REUSABLE UI COMPONENTS
 // ============================================================================
-const KpiCard = ({ title, value, icon, isDesktop }: KpiCardProps) => (
+const KpiCard = ({
+  title,
+  value,
+  icon,
+  isDesktop,
+}: KpiCardProps) => (
   <AnimatedGlassCard
-    style={
+    style={[
+      styles.kpiCard,
       isDesktop
-        ? [styles.kpiCard, { flex: 1 }]
-        : [styles.kpiCard, { width: "100%" }]
-    }
+        ? { flex: 1 }
+        : { width: "100%" },
+    ]}
   >
-    <View style={styles.kpiIconContainer}>{icon}</View>
-    <Text style={styles.kpiValue}>{value}</Text>
-    <Text style={styles.kpiTitle}>{title}</Text>
+    <View style={styles.kpiIconContainer}>
+      {icon}
+    </View>
+
+    <Text
+      style={styles.kpiValue}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.7}
+    >
+      {value}
+    </Text>
+
+    <Text
+      style={styles.kpiTitle}
+      numberOfLines={2}
+    >
+      {title}
+    </Text>
   </AnimatedGlassCard>
 );
 
@@ -496,20 +518,38 @@ export default function AuditManagerDashboard() {
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
+  const isCompactHeader = width < 900;
+  const isVerySmall = width < 420;
+  const isNarrowTablet = width >= 768 && width < 900;
 
   const { user } = useAuth();
 
-  const getUserName = () => {
-    if (user?.name) return user.name;
-    if (user?.firstName) return user.firstName;
-    if (user?.email) return user.email.split("@")[0];
-    return "User";
-  };
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
-  const displayName = getUserName().split(" ")[0];
+  // Replace the above function with these 3 functions:
 
+const getFullNameWithTitle = () => {
+  const firstName = user?.firstName || '';
+  const lastName = user?.lastName || '';
+  const fullName = `${firstName} ${lastName}`.trim() || 'User';
+  let title = user?.salutation || user?.title || 'Mr.';
+  return `${title} ${fullName}`;
+};
+
+const getDisplayName = () => {
+  if (user?.firstName) return user.firstName;
+  if (user?.name) return user.name.split(" ")[0];
+  if (user?.email) return user.email.split("@")[0];
+  return "User";
+};
+
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  return "Good Evening";
+};
+  const greeting = getGreeting();
+const displayName = getDisplayName();
+const fullDisplayName = getFullNameWithTitle();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -1225,12 +1265,12 @@ export default function AuditManagerDashboard() {
         return (
           <View style={{ gap: 16 }}>
             <View
-              style={{
-                flexDirection: isDesktop ? "row" : "column",
-                gap: 16,
-                flexWrap: "wrap",
-              }}
-            >
+  style={{
+    width: "100%",
+    flexDirection: isDesktop ? "row" : "column",
+    gap: 16,
+  }}
+>
               <KpiCard
                 title="Total Audits"
                 value={stats.totalAudits}
@@ -1258,6 +1298,7 @@ export default function AuditManagerDashboard() {
             </View>
             <View
               style={{
+                width: "100%",
                 flexDirection: isDesktop ? "row" : "column",
                 gap: 16,
               }}
@@ -1278,6 +1319,7 @@ export default function AuditManagerDashboard() {
             </View>
             <View
               style={{
+                width: "100%",
                 flexDirection: isDesktop ? "row" : "column",
                 gap: 16,
               }}
@@ -1651,7 +1693,7 @@ export default function AuditManagerDashboard() {
                 isDesktop={isDesktop}
               />
               <NcrCard
-                title="NCR Summary"
+                title="NCR Reports"
                 description="View all Non-Conformance Reports"
                 icon={<AlertCircle size={24} />}
                 onPress={() => setActiveSection("ncr-dashboard")}
@@ -1868,69 +1910,119 @@ export default function AuditManagerDashboard() {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={[styles.content, isDesktop && styles.contentDesktop]}>
-          {/* HEADER - Only show on main tab views */}
           {["dashboard", "schedules", "ncr", "requests"].includes(
-            activeSection,
-          ) && (
-            <AnimatedGlassCard
-              style={[styles.header, isSmallMobile && styles.headerSmall]}
-            >
-              <View
-                style={[
-                  styles.headerInner,
-                  isSmallMobile && {
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    gap: 12,
-                  },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.greetingText,
-                      isSmallMobile && { fontSize: 18 },
-                    ]}
-                  >
-                    {greeting}, {displayName}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.subGreetingText,
-                      isSmallMobile && { fontSize: 12 },
-                    ]}
-                  >
-                    Manage your audit workflow and schedules
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.headerActions,
-                    isSmallMobile && {
-                      width: "100%",
-                      justifyContent: "space-between",
-                    },
-                  ]}
-                >
-                  <YearFilter
-                    selectedYear={selectedYear}
-                    onYearChange={setSelectedYear}
-                    availableYears={availableYears}
-                  />
-                  <TouchableOpacity
-                    style={styles.forumBtn}
-                    onPress={openAuditForum}
-                  >
-                    <MessageSquare size={16} color={COLORS.white} />
-                    {!isSmallMobile && (
-                      <Text style={styles.forumBtnText}>Forum</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </AnimatedGlassCard>
-          )}
+  activeSection,
+) && (
+  <AnimatedGlassCard
+    style={[
+      styles.header,
+      isSmallMobile && styles.headerSmall,
+      isCompactHeader && styles.headerCompact,
+    ]}
+  >
+    <View
+      style={[
+        styles.headerInner,
+        isCompactHeader && styles.headerInnerCompact,
+      ]}
+    >
+      {/* =========================================================
+          LEFT SIDE - GREETING
+      ========================================================= */}
+      <View
+        style={[
+          styles.headerGreetingSection,
+          isCompactHeader && styles.headerGreetingSectionCompact,
+        ]}
+      >
+        <View style={styles.greetingRow}>
+          <Text
+            style={[
+              styles.greetingText,
+              isSmallMobile && styles.greetingTextSmall,
+              isCompactHeader && styles.greetingTextCompact,
+            ]}
+          >
+            {greeting},
+          </Text>
 
+          <Text
+            style={[
+              styles.greetingName,
+              isSmallMobile && styles.greetingNameSmall,
+              isCompactHeader && styles.greetingNameCompact,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {displayName}
+          </Text>
+        </View>
+
+        <Text
+          style={[
+            styles.subGreetingText,
+            isSmallMobile && styles.subGreetingTextSmall,
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {fullDisplayName}
+        </Text>
+      </View>
+
+      {/* =========================================================
+          RIGHT SIDE - YEAR + FORUM
+      ========================================================= */}
+      <View
+        style={[
+          styles.headerActions,
+          isCompactHeader && styles.headerActionsCompact,
+          isVerySmall && styles.headerActionsVerySmall,
+        ]}
+      >
+        {/* YEAR FILTER */}
+        <View
+          style={[
+            styles.yearFilterWrapper,
+            isVerySmall && styles.yearFilterWrapperSmall,
+          ]}
+        >
+          <YearFilter
+            selectedYear={selectedYear}
+            onYearChange={setSelectedYear}
+            availableYears={availableYears}
+          />
+        </View>
+
+        {/* FORUM BUTTON */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[
+            styles.forumBtn,
+            isVerySmall && styles.forumBtnSmall,
+            isCompactHeader && styles.forumBtnCompact,
+          ]}
+          onPress={openAuditForum}
+        >
+          <MessageSquare
+            size={isVerySmall ? 15 : 17}
+            color={COLORS.white}
+          />
+
+          <Text
+            style={[
+              styles.forumBtnText,
+              isVerySmall && styles.forumBtnTextSmall,
+            ]}
+          >
+            Forum
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </AnimatedGlassCard>
+)}
           {/* MAIN CONTENT - Using renderContent function like Lead Auditor */}
           {renderContent()}
 
@@ -2828,34 +2920,180 @@ const styles = StyleSheet.create({
       android: { elevation: 4 },
     }),
   },
-  header: { padding: 20, marginBottom: 20 },
-  headerSmall: { padding: 16, marginBottom: 16 },
-  headerInner: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-  },
-  greetingText: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: COLORS.primary,
-    letterSpacing: -0.5,
-  },
-  subGreetingText: { fontSize: 14, color: COLORS.gray[500], marginTop: 4 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  forumBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  forumBtnText: { color: COLORS.white, fontSize: 14, fontWeight: "600" },
-  kpiCard: { padding: 20, marginBottom: 0 },
-  kpiIconContainer: {
+  header: {
+  padding: 20,
+  marginBottom: 20,
+},
+
+headerSmall: {
+  padding: 14,
+  marginBottom: 16,
+},
+
+headerCompact: {
+  padding: 18,
+},
+
+headerInner: {
+  width: "100%",
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 20,
+},
+
+headerInnerCompact: {
+  flexDirection: "column",
+  alignItems: "stretch",
+  justifyContent: "flex-start",
+  gap: 14,
+},
+
+headerGreetingSection: {
+  flex: 1,
+  minWidth: 0,
+  justifyContent: "center",
+},
+
+headerGreetingSectionCompact: {
+  width: "100%",
+  flex: 0,
+},
+
+greetingRow: {
+  width: "100%",
+  flexDirection: "row",
+  alignItems: "center",
+  flexWrap: "nowrap",
+  minWidth: 0,
+},
+
+greetingText: {
+  fontSize: 22,
+  lineHeight: 28,
+  fontWeight: "700",
+  color: COLORS.primary,
+  letterSpacing: -0.5,
+  flexShrink: 0,
+},
+
+greetingName: {
+  flexShrink: 1,
+  minWidth: 0,
+  fontSize: 22,
+  lineHeight: 28,
+  fontWeight: "700",
+  color: COLORS.primary,
+  letterSpacing: -0.5,
+  marginLeft: 6,
+},
+
+greetingTextCompact: {
+  fontSize: 20,
+  lineHeight: 26,
+},
+
+greetingNameCompact: {
+  fontSize: 20,
+  lineHeight: 26,
+},
+
+greetingTextSmall: {
+  fontSize: 17,
+  lineHeight: 22,
+},
+
+greetingNameSmall: {
+  fontSize: 17,
+  lineHeight: 22,
+  marginLeft: 4,
+},
+
+subGreetingText: {
+  fontSize: 13,
+  lineHeight: 19,
+  color: COLORS.gray[500],
+  marginTop: 3,
+  flexShrink: 1,
+},
+
+subGreetingTextSmall: {
+  fontSize: 11,
+  lineHeight: 16,
+  marginTop: 2,
+},
+
+headerActions: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: 10,
+  flexShrink: 0,
+},
+
+headerActionsCompact: {
+  width: "100%",
+  justifyContent: "flex-start",
+  alignItems: "stretch",
+  flexDirection: "row",
+  flexWrap: "wrap",
+},
+
+headerActionsVerySmall: {
+  gap: 8,
+},
+
+yearFilterWrapper: {
+  minWidth: 120,
+  maxWidth: 180,
+  flexShrink: 0,
+},
+
+yearFilterWrapperSmall: {
+  flex: 1,
+  minWidth: 0,
+  maxWidth: undefined,
+},
+
+forumBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  backgroundColor: COLORS.accent,
+  minHeight: 44,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+  borderRadius: 12,
+  flexShrink: 0,
+},
+
+forumBtnCompact: {
+  minWidth: 100,
+},
+
+forumBtnSmall: {
+  minHeight: 40,
+  minWidth: 84,
+  paddingHorizontal: 11,
+  paddingVertical: 8,
+  borderRadius: 10,
+},
+
+forumBtnText: {
+  color: COLORS.white,
+  fontSize: 14,
+  fontWeight: "600",
+},
+
+forumBtnTextSmall: {
+  fontSize: 12,
+},
+kpiCard: {
+  padding: 20,
+  marginBottom: 0,
+  minWidth: 0,
+},  kpiIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 12,
@@ -2865,30 +3103,35 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   kpiValue: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: COLORS.textMain,
-    marginBottom: 4,
-  },
+  fontSize: 28,
+  fontWeight: "700",
+  color: COLORS.textMain,
+  marginBottom: 4,
+  flexShrink: 1,
+},
   kpiTitle: {
-    fontSize: 12,
-    color: COLORS.textSub,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+  fontSize: 12,
+  lineHeight: 16,
+  color: COLORS.textSub,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+  flexShrink: 1,
+},
   cardTitle: {
     fontSize: 16,
     fontWeight: "bold",
     color: COLORS.textMain,
     marginBottom: 4,
+    padding: 20
   },
-  cardSubtitle: { fontSize: 12, color: COLORS.textSub, marginBottom: 16 },
+  cardSubtitle: { fontSize: 12, color: COLORS.textSub, marginBottom: 16, padding: 8 },
   emptyChart: {
     height: 200,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#f8fafc",
     borderRadius: 12,
+    padding: 8
   },
   emptyText: { color: COLORS.textSub, fontSize: 14 },
   barChartContainer: {
@@ -2940,6 +3183,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 4,
+    padding: 8
   },
   deptName: { fontSize: 12, color: COLORS.textMain },
   deptCount: { fontSize: 12, fontWeight: "bold", color: COLORS.primary },
@@ -2948,11 +3192,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
     borderRadius: 4,
     overflow: "hidden",
+    padding: 8
   },
   progressFill: {
     height: "100%",
     backgroundColor: COLORS.primary,
     borderRadius: 4,
+    padding: 8
   },
   feedHeader: {
     flexDirection: "row",
@@ -3179,7 +3425,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 4,
   },
   modalContent: {
     backgroundColor: COLORS.white,
@@ -3256,7 +3502,8 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12,padding:8 
+ },
   headerIcon: {
     width: 40,
     height: 40,
@@ -3265,15 +3512,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  modalTitleV2: { fontSize: 18, fontWeight: "700", color: COLORS.textMain },
+  modalTitleV2: { fontSize: 18, fontWeight: "700", color: COLORS.textMain,  },
   modalSubtitle: { fontSize: 14, color: COLORS.textSub, marginTop: 2 },
   closeBtnV2: { padding: 8, borderRadius: 8 },
-  modalBodyV2: { padding: 24, maxHeight: "60%" },
+  modalBodyV2: { padding: 12, maxHeight: "100%" },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,
-    padding: 20,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.white,

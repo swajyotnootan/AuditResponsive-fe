@@ -276,20 +276,37 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    flex: 1, // 👈 ADD THIS
+    minWidth: 0, // 👈 ADD THIS
+    marginRight: 8, // 👈 ADD THIS
   },
   headerTitle: {
-    fontSize: isMobile ? 16 : 20,
+    fontSize: isMobile ? 14 : 20, // 👈 Smaller font on mobile
     fontWeight: "600",
     color: "#FFFFFF",
+    flexShrink: 1, // 👈 ADD THIS (Allows text to truncate with "...")
   },
   headerBadge: {
-    fontSize: 12,
     backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
+    flexShrink: 0, // 👈 ADD THIS
+  },
+  headerBadgeText: {
+    fontSize: 10, // 👈 Smaller font on mobile
     color: "#FFFFFF",
+  },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexShrink: 0, // 👈 ADD THIS (Prevents button from being squished)
   },
   content: {
     flex: 1,
@@ -371,15 +388,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
   },
-  autoFillButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
+
   autoFillButtonText: {
     color: "#FFFFFF",
     fontSize: 12,

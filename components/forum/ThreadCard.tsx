@@ -119,15 +119,29 @@ const isProductionBackend = () => {
 
 // ✅ NEW CODE (Always treat backend as UTC)
 const parseBackendDate = (dateString: string): Date => {
+
   let isoString = dateString;
+
   if (!isoString.includes('T')) {
+
     isoString = isoString.replace(' ', 'T');
+
   }
-  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+
+  // ✅ FIXED: ALWAYS add Z if no timezone marker
+
+  // Backend always sends UTC (both local and production)
+
+  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
+
     isoString += 'Z';
+
   }
+
   return new Date(isoString);
+
 };
+ 
 
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString('en-US', {
@@ -279,11 +293,9 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
   );
 };
 
+
 // =====================================================
-// WEB AUDIO PLAYER
-// =====================================================
-// =====================================================
-// WEB AUDIO PLAYER (INLINE - NO REDIRECT)
+// WEB AUDIO PLAYER (FIXED - Button Toggle Issue)
 // =====================================================
 const WebAudioPlayer = ({
   uri,
@@ -308,51 +320,83 @@ const WebAudioPlayer = ({
     const audio = audioRef.current;
     if (!audio || !uri) return;
 
+    // Reset state when URI changes
+    setIsPlaying(false);
+    setIsLoading(true);
+    setCurrentTime(0);
+    setDuration(0);
+
     const handleLoadedMetadata = () => {
       setDuration(audio.duration);
       setIsLoading(false);
+      setError(null);
     };
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
     const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
     };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setError(null);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
     const handleError = () => {
-      console.error("Audio playback error for URI:", uri);
-      setError("Cannot play audio. Check format or permissions.");
+      console.error("Audio error");
+      setError("Cannot play audio");
+      setIsPlaying(false);
       setIsLoading(false);
     };
 
+    // Add all event listeners
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
     audio.addEventListener("error", handleError);
 
-    // Force the browser to load the metadata
+    // Load the audio
     audio.load();
 
     return () => {
+      // Cleanup
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("error", handleError);
       audio.pause();
       audio.src = "";
     };
   }, [uri]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     const audio = audioRef.current;
-    if (!audio || error) return;
+    if (!audio || error || isLoading) return;
 
-    if (isPlaying) {
-      audio.pause();
+    try {
+      if (isPlaying) {
+        await audio.pause();
+        // State will be updated by the 'pause' event listener
+      } else {
+        await audio.play();
+        // State will be updated by the 'play' event listener
+      }
+    } catch (err) {
+      console.error("Play/Pause error:", err);
+      setError("Playback failed");
       setIsPlaying(false);
-    } else {
-      audio.play().catch((err) => {
-        console.error("Play error:", err);
-        setError("Cannot play audio");
-      });
     }
   };
 
@@ -368,7 +412,6 @@ const WebAudioPlayer = ({
 
   return (
     <View style={styles.audioContainer}>
-      {/* ✅ Hidden HTML5 Audio Element for reliable cross-browser playback */}
       <audio
         ref={audioRef}
         src={uri}
@@ -380,8 +423,12 @@ const WebAudioPlayer = ({
       <View style={styles.audioRow}>
         <TouchableOpacity
           onPress={handlePlayPause}
-          style={styles.audioPlayButton}
-          disabled={!!error || isLoading}
+          style={[
+            styles.audioPlayButton,
+            (isLoading || !!error) && { opacity: 0.5 },
+          ]}
+          disabled={isLoading || !!error}
+          activeOpacity={0.7}
         >
           {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -391,6 +438,7 @@ const WebAudioPlayer = ({
             <Play size={20} color="#fff" />
           )}
         </TouchableOpacity>
+
         <View style={styles.audioInfo}>
           <Text style={styles.audioFileName} numberOfLines={1}>
             {fileName || "Audio"}
@@ -406,9 +454,11 @@ const WebAudioPlayer = ({
             </Text>
           </View>
         </View>
+
         <Text style={styles.audioFileSize}>{formatFileSize(0)}</Text>
       </View>
-      {error && <Text style={styles.audioError}>{error}</Text>}
+
+      {error && <Text style={styles.audioError}>⚠️ {error}</Text>}
     </View>
   );
 };

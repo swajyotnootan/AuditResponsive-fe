@@ -33,15 +33,13 @@ import {
 } from "react-native";
 
 // Import your existing services and components
+import { API_BASE_URL } from "@/config/apiConfig";
 import { ncrService } from "@/services/ncrService";
 import { getDashboardPath } from "@/utils/roleUtils";
-import { useAuth } from "../../context/AuthContext";
-
-import { API_BASE_URL } from "@/config/apiConfig";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../context/AuthContext";
 import FinalPreview from "../../eightd/steps/FinalPreview"; // 👈 Adjust path if needed
-// Add this near your other imports
-// import BackButton from "../dashboards/leadAuditor/BackButton";
+import Form7DetailView from "../auditor/view/Form7DetailView";
 
 const BackButton = ({
   label,
@@ -376,6 +374,9 @@ export default function Form8DetailView({
   const [loading, setLoading] = useState(true);
   const [ncr, setNcr] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [showForm7Detail, setShowForm7Detail] = useState<boolean>(false);
+
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
@@ -492,7 +493,9 @@ export default function Form8DetailView({
       }
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/eightd/data?t=${Date.now()}`);
+    const response = await fetch(
+      `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
+    );
     const data = (await response.json()) as any;
     const events = Array.isArray(data?.data) ? data.data : [];
     const matchedEvent = events.find((event: any) => {
@@ -786,6 +789,19 @@ export default function Form8DetailView({
           </Text>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  if (showForm7Detail) {
+    return (
+      <Form7DetailView
+        initialParams={{ id: ncr.id }}
+        onClose={() => setShowForm7Detail(false)} // Allows going back to Form 8 Detail
+        onNavigateToForm8={() => {
+          // If they click "View NCR2" inside Form 7, just close this overlay and return here
+          setShowForm7Detail(false);
+        }}
+      />
     );
   }
 
@@ -1253,12 +1269,7 @@ export default function Form8DetailView({
         {/* Bottom Action Buttons */}
         <View className="flex-row flex-wrap self-center justify-end w-full max-w-5xl gap-3 px-4 mb-8">
           <TouchableOpacity
-            onPress={() => {
-              // ✅ Call the parent callback
-              if (onNavigateToForm7) {
-                onNavigateToForm7({ id: ncr.id });
-              }
-            }}
+            onPress={() => setShowForm7Detail(true)}
             className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
             style={{ backgroundColor: "#0ea5e9" }}
           >

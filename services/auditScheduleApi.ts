@@ -11,7 +11,7 @@ const getBaseURL = (): string => {
     return (
       Platform.select({
         ios: "http://10.2.0.95:8080/api",
-        android: "http://10.2.0.95:8080/api",
+        android: "http://10.2.0.73:8080/api",
         default: "http://10.2.0.73:8080/api",
       }) || "http://10.2.0.73:8080/api"
     );

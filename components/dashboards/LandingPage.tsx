@@ -354,14 +354,17 @@ export default function LandingPage({ type }: LandingPageProps) {
         : "Showing all 8D forms";
 
   const createNew8D = () => {
+    console.log("🆕 [LANDING] Creating new 8D with resetKey:", Date.now());
+
     router.push({
-      pathname: "/eightdflow", // ✅ FIXED: Changed to lowercase
+      pathname: "/eightdflow",
       params: {
-        eventId: "null",
+        eventId: null, // ✅ Must be actual null, not string "null"
         step: "D0",
         type: dashboardType,
         isNcrBased: String(dashboardType === "ncr"),
         isHOD: String(isHOD),
+        resetKey: Date.now(), // ✅ Unique key every time
       },
     });
   };
@@ -1317,7 +1320,6 @@ export default function LandingPage({ type }: LandingPageProps) {
         </View>
 
         {/* Event Management & Filters */}
-        {/* Event Management & Filters */}
         <View className="mb-6 overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-100">
           <View className="p-4 border-b bg-slate-50/50 border-slate-100">
             <Text className="mb-3 text-lg font-extrabold text-slate-800">
@@ -1500,14 +1502,12 @@ export default function LandingPage({ type }: LandingPageProps) {
                 // ✅ CRITICAL FIX: Only pass columnWrapperStyle on desktop!
                 // Passing it on mobile (numColumns=1) causes the Invariant Violation error.
                 columnWrapperStyle={
-                  isDesktop
-                    ? { justifyContent: "flex-start", gap: 16 }
-                    : undefined
+                  isDesktop ? { justifyContent: "flex-start" } : undefined
                 }
 
                 contentContainerStyle={{
                   paddingBottom: 20,
-                  gap: 16, // Handles vertical spacing between rows cleanly
+                  gap: 10, // Handles vertical spacing between rows cleanly
                 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
@@ -1569,7 +1569,12 @@ export default function LandingPage({ type }: LandingPageProps) {
                 </TouchableOpacity>
               </View>
               {activeEventId && (
-                <FinalPreview eventId={activeEventId} isHOD={isHOD} />
+                <FinalPreview
+                  eventId={activeEventId}
+                  isHOD={isHOD}
+                  onRefresh={fetchEvents}
+                  onClose={() => setShowPreview(false)}
+                />
               )}
             </SafeAreaView>
           </View>

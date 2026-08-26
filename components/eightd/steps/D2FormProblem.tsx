@@ -266,8 +266,13 @@ export default function D2FormProblem({
           <Text style={styles.autoFillButtonText}>Auto-fill</Text>
         </TouchableOpacity>
       </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled" // 👈 ADD THIS
+        nestedScrollEnabled={true} // 👈 ADD THIS
+        pointerEvents="box-none" // 👈 ADD THIS
+      >
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Event ID</Text>
           <TextInput
@@ -279,12 +284,17 @@ export default function D2FormProblem({
           />
         </View>
 
-        <View style={styles.fieldGroup}>
+        {/* Briefly Describe the Problem */}
+        <View style={styles.fieldGroup} pointerEvents="box-none">
+          {" "}
+          {/* 👈 ADD wrapper with box-none */}
           <Text style={styles.label}>
             Briefly Describe the Problem <Text style={styles.required}>*</Text>
           </Text>
           <TextInput
             style={[styles.input, styles.textArea]}
+            pointerEvents="auto" // 👈 ADD THIS
+            collapsable={false} // 👈 ADD THIS
             value={formData.problemStatement}
             onChangeText={(text) => handleChange("problemStatement", text)}
             placeholder="e.g. Product X shows cracks after 2 hours of operation..."
@@ -558,20 +568,35 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    flex: 1, // 👈 ADD THIS
+    minWidth: 0, // 👈 ADD THIS
+    marginRight: 8, // 👈 ADD THIS
   },
   headerTitle: {
-    fontSize: isMobile ? 16 : 20,
+    fontSize: isMobile ? 14 : 20,
     fontWeight: "600",
     color: "#FFFFFF",
+    flexShrink: 1, // 👈 ADD THIS (Allows text to truncate with "...")
   },
   headerBadge: {
-    fontSize: 12,
+    fontSize: 10,
     backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
     color: "#FFFFFF",
+    flexShrink: 0, // 👈 ADD THIS
+  },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexShrink: 0, // 👈 ADD THIS (Prevents button from being squished)
   },
   content: {
     flex: 1,
@@ -597,14 +622,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: "#1F2937",
+    backgroundColor: "#FFFFFF",
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: "top",
+    backgroundColor: "#FFFFFF",
   },
   textAreaSmall: {
     minHeight: 50,
     textAlignVertical: "top",
+    backgroundColor: "#FFFFFF",
   },
   gridContainer: {
     flexDirection: isMobile ? "column" : "row",
@@ -657,15 +685,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
   },
-  autoFillButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
+
   autoFillButtonText: {
     color: "#FFFFFF",
     fontSize: 12,

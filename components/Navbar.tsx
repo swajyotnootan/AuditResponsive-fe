@@ -851,7 +851,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     </TouchableOpacity>
 
                     <View style={{ paddingVertical: 8 }}>
-                      <TouchableOpacity
+                       <TouchableOpacity
                         onPress={() => {
                           setMobileMenuOpen(false);
                           setTimeout(() => {
@@ -874,6 +874,7 @@ const Navbar: React.FC<NavbarProps> = ({
                             backgroundColor: "#EFF6FF",
                             alignItems: "center",
                             justifyContent: "center",
+                            position: "relative", // ✅ Added for badge positioning
                           }}
                         >
                           <Bell
@@ -881,7 +882,38 @@ const Navbar: React.FC<NavbarProps> = ({
                             color={PRIMARY_COLOR}
                             strokeWidth={1.5}
                           />
+
+                          {/* ✅ 1. Small Red Badge on the Bell Icon */}
+                          {unreadCount > 0 && (
+                            <View
+                              style={{
+                                position: "absolute",
+                                top: -2,
+                                right: -2,
+                                minWidth: 18,
+                                height: 18,
+                                backgroundColor: "#ef4444",
+                                borderRadius: 9,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                paddingHorizontal: 4,
+                                borderWidth: 2,
+                                borderColor: "#FFFFFF",
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: "white",
+                                  fontSize: 10,
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </Text>
+                            </View>
+                          )}
                         </View>
+
                         <Text
                           style={{
                             flex: 1,
@@ -893,6 +925,30 @@ const Navbar: React.FC<NavbarProps> = ({
                         >
                           Notifications
                         </Text>
+
+                        {/* ✅ 2. Count Pill on the Right Side (Highly visible on mobile) */}
+                        {unreadCount > 0 && (
+                          <View
+                            style={{
+                              backgroundColor: "#ef4444",
+                              borderRadius: 12,
+                              paddingHorizontal: 8,
+                              paddingVertical: 2,
+                              minWidth: 24,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: "white",
+                                fontSize: 12,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
 
                       {!shouldHideCalendar() && (

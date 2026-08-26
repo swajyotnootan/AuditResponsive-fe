@@ -5,16 +5,16 @@ import { API_BASE_URL } from "@/config/apiConfig";
 import { Mail, MessageSquare, X } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface User {
@@ -565,6 +565,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
+    
   },
   modalContent: {
     width: "100%",
@@ -624,7 +625,7 @@ const styles = StyleSheet.create({
     color: "#2563eb",
   },
   formContent: {
-    flex: 1,
+    // flex: 1,
     padding: 16,
   },
   formContainer: {
@@ -676,8 +677,8 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
-    borderTopWidth: 1,
+    padding: 6,
+    borderTopWidth: 2,
     borderTopColor: "#e5e7eb",
     gap: 8,
   },

@@ -246,11 +246,19 @@ export default function D3InterimContainment({
           <Text style={styles.autoFillButtonText}>Auto-fill</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.fieldGroup}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled" // 👈 ADD THIS
+        nestedScrollEnabled={true} // 👈 ADD THIS
+        pointerEvents="box-none" // 👈 ADD THIS
+      >
+        <View style={styles.fieldGroup} pointerEvents="box-none">
           <Text style={styles.label}>Event ID</Text>
           <TextInput
             style={styles.input}
+            pointerEvents="auto"
+            collapsable={false}
             value={formData.eventId}
             onChangeText={(text) => handleChange("eventId", text)}
             placeholder="Enter Event ID"
@@ -258,10 +266,12 @@ export default function D3InterimContainment({
           />
         </View>
 
-        <View style={styles.fieldGroup}>
+        <View style={styles.fieldGroup} pointerEvents="box-none">
           <Text style={styles.label}>Problem Statement</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
+            pointerEvents="auto"
+            collapsable={false}
             value={formData.problemStatement}
             onChangeText={(text) => handleChange("problemStatement", text)}
             placeholder="Reference the problem statement with 5W2H"
@@ -424,23 +434,39 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
+    flex: 1, // 👈 ADD THIS
+    minWidth: 0, // 👈 ADD THIS
+    marginRight: 8, // 👈 ADD THIS
   },
   headerTitle: {
-    fontSize: isMobile ? 16 : 20,
+    fontSize: isMobile ? 14 : 20, // 👈 Smaller font on mobile
     fontWeight: "600",
     color: "#FFFFFF",
+    flexShrink: 1, // 👈 ADD THIS (Allows text to truncate with "...")
   },
   headerBadge: {
     backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
+    flexShrink: 0, // 👈 ADD THIS
   },
   headerBadgeText: {
-    fontSize: 12,
+    fontSize: 10, // 👈 Smaller font on mobile
     color: "#FFFFFF",
   },
+  autoFillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexShrink: 0, // 👈 ADD THIS (Prevents button from being squished)
+  },
+
   content: {
     flex: 1,
     padding: 16,
@@ -462,10 +488,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: "#1F2937",
+    backgroundColor: "#FFFFFF",
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: "top",
+    backgroundColor: "#FFFFFF",
   },
   radioGroup: {
     flexDirection: "row",
@@ -536,6 +564,7 @@ const styles = StyleSheet.create({
   },
   actionInput: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   actionButtons: {
     flexDirection: "row",
@@ -562,6 +591,7 @@ const styles = StyleSheet.create({
   },
   addActionInput: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   addActionButton: {
     flexDirection: "row",
@@ -591,15 +621,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
-  },
-  autoFillButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
   },
   autoFillButtonText: {
     color: "#FFFFFF",

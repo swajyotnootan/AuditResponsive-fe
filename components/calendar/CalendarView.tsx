@@ -1665,21 +1665,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
 
-  calendar: {
+      calendar: {
     borderRadius: 8,
     elevation: 2,
     width: "100%",
-    minHeight: 380,
+    minHeight: 450, // ✅ INCREASED from 380 to force rows to spread out
     paddingHorizontal: 4,
+    paddingBottom: 10,
   },
 
-  dayContainer: {
-    flex: 1,
+      dayContainer: {
+    // flex: 1,             // ❌ REMOVE THIS (it causes compression)
+    height: 80,             // ✅ ADD THIS (forces a fixed tall cell)
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
+    paddingVertical: 4,     // ✅ REDUCED slightly since we have fixed height
     paddingHorizontal: 4,
-    minHeight: 50,
+    // minHeight: 50,       // ❌ REMOVE THIS
     minWidth: 42,
     borderRadius: 8,
     backgroundColor: "transparent",
@@ -1696,13 +1698,13 @@ const styles = StyleSheet.create({
   },
 
   // ✅ Update dots container spacing
-  dayDotsContainer: {
+      dayDotsContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4, // Increased from 3
-    gap: 3, // Increased from 2
-    height: 16, // Increased from 14
+    marginTop: 6,           // ✅ Space between number and dots
+    gap: 3,
+    height: 16,             // ✅ Fixed height for dots area
   },
 
   dayDot: {
@@ -1864,6 +1866,7 @@ const styles = StyleSheet.create({
   dayWithEvents: {
     backgroundColor: "rgba(0, 82, 155, 0.08)",
     borderRadius: 8,
+    
   },
 
   dayToday: {

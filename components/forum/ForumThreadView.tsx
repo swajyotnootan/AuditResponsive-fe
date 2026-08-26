@@ -1268,21 +1268,23 @@ export default function ForumThreadView({
 
  // ✅ NEW CODE (Always treat backend as UTC)
 const getDateLabel = (dateStr: string) => {
-  // ✅ Same UTC→local conversion as ThreadCard
   let isoString = dateStr;
   if (!isoString.includes('T')) isoString = isoString.replace(' ', 'T');
-  const isProd = !API_BASE_URL.includes('localhost') && !API_BASE_URL.includes('127.0.0.1');
-  if (isProd && !isoString.includes('Z') && !isoString.includes('+')) isoString += 'Z';
+  // ✅ FIXED: ALWAYS add Z if no timezone marker
+  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
+    isoString += 'Z';
+  }
   const date = new Date(isoString);
-  
+ 
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
-
+ 
   if (date.toDateString() === today.toDateString()) return null;
   if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
+ 
 
   const SearchBar = () => (
     <View className="flex-row items-center px-3 py-2 bg-white border-b border-gray-200 gap-2">

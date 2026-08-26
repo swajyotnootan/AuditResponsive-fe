@@ -1,9 +1,16 @@
 // AddScheduleModal.tsx
+
 import { User } from "@/services/auditScheduleApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Picker } from "@react-native-picker/picker";
-import { AlertCircle, Calendar, Check, Save, X } from "lucide-react-native";
-import React, { useState } from "react";
+import {
+  AlertCircle,
+  Calendar,
+  Check,
+  ChevronDown,
+  Save,
+  X,
+} from "lucide-react-native";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -14,144 +21,789 @@ import {
   View,
 } from "react-native";
 
-// ═════ CONSTANTS ═════
+// ============================================================
+// COLORS
+// ============================================================
+
 const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
+
   border: "#E2E8F0",
   borderStrong: "#CBD5E1",
-  inputBg: "#FFFFFF",
-  inputHover: "#F8FAFC",
+
+  inputBg: "#F8FAFC",
+
   text: "#0F172A",
   textValue: "#334155",
   textMuted: "#64748B",
+
   accent: "#00529B",
   accentLight: "#EFF6FF",
   accentBorder: "#DBEAFE",
+
   success: "#10B981",
   successLight: "#ECFDF5",
   successBorder: "#A7F3D0",
+
   error: "#EF4444",
   errorLight: "#FEF2F2",
   errorBorder: "#FECACA",
+
   warning: "#F59E0B",
   warningLight: "#FFFBEB",
   warningBorder: "#FDE68A",
+
   purple: "#8B5CF6",
   purpleLight: "#F5F3FF",
   purpleBorder: "#DDD6FE",
 };
 
-/**
- * Borderless Picker styling.
- * On React Native Web, the native <select> can keep a browser
- * focus/selection outline unless these properties are explicitly reset.
- */
-const BORDERLESS_PICKER_STYLE: any = {
-  height: 48,
-  width: "100%",
-  borderWidth: 0,
-  borderColor: "transparent",
-  outlineWidth: 0,
-  outlineColor: "transparent",
-  backgroundColor: "transparent",
-  color: COLORS.textValue,
-  ...(Platform.OS === "web"
-    ? {
-        outline: "none",
-        border: "none",
-        boxShadow: "none",
-        appearance: "none",
-        WebkitAppearance: "none",
-        paddingLeft: 16,
-        paddingRight: 16,
-        cursor: "pointer",
-      }
-    : {}),
-};
+// ============================================================
+// TIME OPTIONS
+// 9:00 AM -> 5:00 PM
+// ============================================================
 
-const timeOptions = (() => {
+const TIME_OPTIONS = (() => {
   const options: string[] = [];
+
   for (let hour = 9; hour <= 17; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
-      if (hour === 17 && minute > 0) break;
-      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-      const displayMinute = minute.toString().padStart(2, "0");
+      if (hour === 17 && minute > 0) {
+        break;
+      }
+
+      const displayHour =
+        hour === 0
+          ? 12
+          : hour > 12
+            ? hour - 12
+            : hour;
+
+      const displayMinute = String(minute).padStart(2, "0");
+
       const period = hour >= 12 ? "PM" : "AM";
-      options.push(`${displayHour}:${displayMinute} ${period}`);
+
+      options.push(
+        `${displayHour}:${displayMinute} ${period}`,
+      );
     }
   }
+
   return options;
 })();
 
-// ═════ INTERFACES ═════
+// ============================================================
+// INTERFACES
+// ============================================================
+
 interface Schedule {
   id?: number;
+
   scheduledDate?: string;
   date?: string;
+
   startTime: string;
   endTime: string;
+
   department?: string;
   departments?: string[];
-  selectedDepartments?: { department: string; selectedElements: string[] }[];
+
+  selectedDepartments?: {
+    department: string;
+    selectedElements: string[];
+  }[];
+
   auditorId?: number | null;
   auditorName?: string;
+
   auditeeId?: number | null;
   auditeeName?: string;
+
   status?: string;
+
   detailedApprovalStatus?: string;
   approvalStatus?: string;
+
   isSpecialEvent?: boolean;
   specialEventType?: string;
+
   auditType?: string;
+
   auditElements?: string[] | string;
+
   fromDate?: string;
   toDate?: string;
   week?: string;
+
   remarks?: string;
 }
 
 interface FormData {
   id: number | null;
+
   date: string;
+
   startTime: string;
   endTime: string;
-  selectedDepartments: { department: string; selectedElements: string[] }[];
+
+  selectedDepartments: {
+    department: string;
+    selectedElements: string[];
+  }[];
+
   auditorId: string;
   auditeeId: string;
+
   isSpecialEvent: boolean;
   specialEventType: string;
+
   auditType: string;
+
   status: string;
 }
 
 interface DepartmentTeamInfo {
   leadAuditorId: number | null;
   leadAuditorName: string | null;
+
   teamAuditorIds: number[];
   teamAuditorNames: string[];
+
   auditeeIds: number[];
   auditeeNames: string[];
 }
 
-// ═════ HELPER ═════
+// ============================================================
+// HELPERS
+// ============================================================
+
 const getTimeValue = (timeStr: string): number => {
   if (!timeStr) return 0;
+
   const [time, modifier] = timeStr.split(" ");
+
   let [hours, minutes] = time.split(":").map(Number);
-  if (modifier === "PM" && hours !== 12) hours += 12;
-  if (modifier === "AM" && hours === 12) hours = 0;
+
+  if (modifier === "PM" && hours !== 12) {
+    hours += 12;
+  }
+
+  if (modifier === "AM" && hours === 12) {
+    hours = 0;
+  }
+
   return hours + minutes / 60;
 };
 
 const toISODate = (date: Date): string => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+
+  const month = String(
+    date.getMonth() + 1,
+  ).padStart(2, "0");
+
+  const day = String(
+    date.getDate(),
+  ).padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 };
 
-// ═════ SUB-COMPONENTS ═════
+const parseDate = (dateString?: string): Date => {
+  if (!dateString) {
+    return new Date();
+  }
+
+  const [year, month, day] = dateString
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) {
+    return new Date();
+  }
+
+  return new Date(year, month - 1, day);
+};
+
+const clampDate = (
+  dateString: string,
+  minDate?: string,
+  maxDate?: string,
+): string => {
+  if (!dateString) {
+    return dateString;
+  }
+
+  if (minDate && dateString < minDate) {
+    return minDate;
+  }
+
+  if (maxDate && dateString > maxDate) {
+    return maxDate;
+  }
+
+  return dateString;
+};
+
+// ============================================================
+// CUSTOM SELECT FIELD
+// ============================================================
+//
+// IMPORTANT:
+//
+// We intentionally do NOT use <Picker> here.
+//
+// The native Picker was causing the half/clipped UI inside
+// the modal + ScrollView, especially on React Native Web.
+//
+// This component opens a separate Modal containing the options.
+// Therefore it is not clipped by the parent ScrollView.
+// ============================================================
+
+interface SelectOption {
+  label: string;
+  value: string;
+  disabled?: boolean;
+}
+
+interface SelectFieldProps {
+  value: string;
+  placeholder: string;
+
+  options: SelectOption[];
+
+  onChange: (value: string) => void;
+
+  disabled?: boolean;
+
+  searchable?: boolean;
+
+  emptyMessage?: string;
+}
+
+const SelectField = ({
+  value,
+  placeholder,
+  options,
+  onChange,
+  disabled = false,
+  searchable = false,
+  emptyMessage = "No options available",
+}: SelectFieldProps) => {
+  const [open, setOpen] = useState(false);
+
+  const [search, setSearch] = useState("");
+
+  const selectedOption = options.find(
+    (option) =>
+      option.value === value,
+  );
+
+  const filteredOptions = searchable
+    ? options.filter((option) =>
+        option.label
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+      )
+    : options;
+
+  const handleSelect = (
+    option: SelectOption,
+  ) => {
+    if (option.disabled) {
+      return;
+    }
+
+    onChange(option.value);
+
+    setOpen(false);
+
+    setSearch("");
+  };
+
+  return (
+    <>
+      {/* ======================================================
+          SELECT BUTTON
+      ====================================================== */}
+
+      <TouchableOpacity
+        activeOpacity={disabled ? 1 : 0.75}
+        disabled={disabled}
+        onPress={() => {
+          if (!disabled) {
+            setOpen(true);
+          }
+        }}
+        style={{
+          minHeight: 48,
+
+          width: "100%",
+
+          flexDirection: "row",
+
+          alignItems: "center",
+
+          justifyContent: "space-between",
+
+          paddingHorizontal: 16,
+
+          borderWidth: 1,
+
+          borderColor: COLORS.border,
+
+          borderRadius: 12,
+
+          backgroundColor: disabled
+            ? "#F1F5F9"
+            : COLORS.inputBg,
+
+          opacity: disabled ? 0.65 : 1,
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+
+            fontSize: 14,
+
+            color: selectedOption
+              ? COLORS.textValue
+              : COLORS.textMuted,
+
+            marginRight: 12,
+          }}
+        >
+          {selectedOption
+            ? selectedOption.label
+            : placeholder}
+        </Text>
+
+        <ChevronDown
+          size={18}
+          color={
+            disabled
+              ? "#94A3B8"
+              : "#64748B"
+          }
+        />
+      </TouchableOpacity>
+
+      {/* ======================================================
+          OPTION MODAL
+      ====================================================== */}
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setOpen(false);
+          setSearch("");
+        }}
+      >
+        <View
+          style={{
+            flex: 1,
+
+            backgroundColor:
+              "rgba(15,23,42,0.40)",
+
+            justifyContent: "center",
+
+            alignItems: "center",
+
+            paddingHorizontal: 20,
+
+            paddingVertical: 30,
+          }}
+        >
+          <View
+  style={{
+    width: "92%",
+    maxWidth: 500,
+    maxHeight: "80%",
+
+    backgroundColor: COLORS.card,
+
+    borderRadius: 18,
+
+    borderWidth: 1,
+    borderColor: COLORS.border,
+
+    overflow: "hidden",
+
+    shadowColor: "#000",
+
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+
+    elevation: 12,
+  }}
+>
+            {/* ==================================================
+                OPTION HEADER
+            ================================================== */}
+
+            <View
+              style={{
+                flexDirection: "row",
+
+                alignItems: "center",
+
+                justifyContent:
+                  "space-between",
+
+                paddingHorizontal: 18,
+
+                paddingVertical: 16,
+
+                borderBottomWidth: 1,
+
+                borderBottomColor:
+                  COLORS.border,
+              }}
+            >
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+
+                    fontWeight: "700",
+
+                    color: COLORS.text,
+                  }}
+                >
+                  {placeholder}
+                </Text>
+
+                <Text
+                  style={{
+                    marginTop: 3,
+
+                    fontSize: 12,
+
+                    color: COLORS.textMuted,
+                  }}
+                >
+                  Select an option
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setOpen(false);
+                  setSearch("");
+                }}
+                style={{
+                  width: 36,
+
+                  height: 36,
+
+                  borderRadius: 10,
+
+                  alignItems: "center",
+
+                  justifyContent:
+                    "center",
+
+                  backgroundColor:
+                    "#F1F5F9",
+                }}
+              >
+                <X
+                  size={19}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* ==================================================
+                SEARCH
+            ================================================== */}
+
+            {searchable && (
+              <View
+                style={{
+                  marginHorizontal: 16,
+
+                  marginTop: 14,
+
+                  marginBottom: 8,
+                }}
+              >
+                <View
+                  style={{
+                    height: 44,
+
+                    borderWidth: 1,
+
+                    borderColor:
+                      COLORS.border,
+
+                    borderRadius: 10,
+
+                    backgroundColor:
+                      "#F8FAFC",
+
+                    justifyContent:
+                      "center",
+
+                    paddingHorizontal: 14,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color:
+                        COLORS.textMuted,
+                    }}
+                  >
+                    Search...
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* ==================================================
+                OPTIONS
+            ================================================== */}
+
+            <ScrollView
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              style={{
+                maxHeight: 430,
+              }}
+              contentContainerStyle={{
+                padding: 10,
+
+                paddingBottom: 14,
+              }}
+            >
+              {filteredOptions.length >
+              0 ? (
+                filteredOptions.map(
+                  (option) => {
+                    const isSelected =
+                      option.value ===
+                      value;
+
+                    return (
+                      <TouchableOpacity
+                        key={`${option.value}-${option.label}`}
+                        activeOpacity={
+                          option.disabled
+                            ? 1
+                            : 0.7
+                        }
+                        disabled={
+                          option.disabled
+                        }
+                        onPress={() =>
+                          handleSelect(
+                            option,
+                          )
+                        }
+                        style={{
+                          minHeight: 48,
+
+                          flexDirection:
+                            "row",
+
+                          alignItems:
+                            "center",
+
+                          paddingHorizontal:
+                            14,
+
+                          marginBottom: 4,
+
+                          borderRadius: 10,
+
+                          backgroundColor:
+                            option.disabled
+                              ? "#F8FAFC"
+                              : isSelected
+                                ? COLORS.accentLight
+                                : "#FFFFFF",
+
+                          borderWidth:
+                            isSelected
+                              ? 1
+                              : 0,
+
+                          borderColor:
+                            isSelected
+                              ? COLORS.accentBorder
+                              : "transparent",
+
+                          opacity:
+                            option.disabled
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            flex: 1,
+
+                            fontSize: 14,
+
+                            fontWeight:
+                              isSelected
+                                ? "600"
+                                : "400",
+
+                            color:
+                              option.disabled
+                                ? "#94A3B8"
+                                : isSelected
+                                  ? COLORS.accent
+                                  : COLORS.textValue,
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+
+                        {isSelected && (
+                          <View
+                            style={{
+                              width: 28,
+
+                              height: 28,
+
+                              borderRadius: 14,
+
+                              alignItems:
+                                "center",
+
+                              justifyContent:
+                                "center",
+
+                              backgroundColor:
+                                COLORS.accent,
+                            }}
+                          >
+                            <Check
+                              size={15}
+                              color="#FFFFFF"
+                            />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  },
+                )
+              ) : (
+                <View
+                  style={{
+                    alignItems:
+                      "center",
+
+                    justifyContent:
+                      "center",
+
+                    paddingVertical: 40,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+
+                      color:
+                        COLORS.textMuted,
+                    }}
+                  >
+                    {emptyMessage}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* ==================================================
+                CLOSE
+            ================================================== */}
+
+            <View
+              style={{
+                paddingHorizontal: 16,
+
+                paddingVertical: 12,
+
+                borderTopWidth: 1,
+
+                borderTopColor:
+                  COLORS.border,
+
+                backgroundColor:
+                  "#F8FAFC",
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  setOpen(false);
+                  setSearch("");
+                }}
+                style={{
+                  height: 42,
+
+                  borderRadius: 10,
+
+                  alignItems:
+                    "center",
+
+                  justifyContent:
+                    "center",
+
+                  backgroundColor:
+                    "#FFFFFF",
+
+                  borderWidth: 1,
+
+                  borderColor:
+                    COLORS.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+
+                    fontWeight: "600",
+
+                    color:
+                      COLORS.textValue,
+                  }}
+                >
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+};
+
+// ============================================================
+// ALERT BANNER
+// ============================================================
+
 const AlertBanner = ({
   type,
   title,
@@ -159,31 +811,45 @@ const AlertBanner = ({
   footer,
   icon: Icon,
 }: {
-  type: "error" | "warning" | "success" | "info";
+  type:
+    | "error"
+    | "warning"
+    | "success"
+    | "info";
+
   title: string;
+
   message: string;
+
   footer?: string;
+
   icon: any;
 }) => {
-  const stylesMap: Record<string, any> = {
+  const stylesMap: Record<
+    string,
+    any
+  > = {
     error: {
       bg: COLORS.errorLight,
       border: COLORS.errorBorder,
       color: "#991B1B",
       iconColor: "#DC2626",
     },
+
     warning: {
       bg: COLORS.warningLight,
       border: COLORS.warningBorder,
       color: "#92400E",
       iconColor: "#D97706",
     },
+
     success: {
       bg: COLORS.successLight,
       border: COLORS.successBorder,
       color: "#065F46",
       iconColor: "#059669",
     },
+
     info: {
       bg: COLORS.accentLight,
       border: COLORS.accentBorder,
@@ -191,27 +857,60 @@ const AlertBanner = ({
       iconColor: COLORS.accent,
     },
   };
-  const s = stylesMap[type] || stylesMap.info;
+
+  const style =
+    stylesMap[type] ||
+    stylesMap.info;
+
   return (
     <View
       className="flex-row gap-3 p-4 mb-4 border rounded-xl"
-      style={{ backgroundColor: s.bg, borderColor: s.border }}
+      style={{
+        backgroundColor: style.bg,
+
+        borderColor: style.border,
+      }}
     >
       <View
         className="items-center justify-center bg-white border rounded-lg w-9 h-9"
-        style={{ borderColor: s.border }}
+        style={{
+          borderColor: style.border,
+        }}
       >
-        <Icon size={18} color={s.iconColor} />
+        <Icon
+          size={18}
+          color={style.iconColor}
+        />
       </View>
+
       <View className="flex-1">
-        <Text className="text-sm font-semibold" style={{ color: s.color }}>
+        <Text
+          className="text-sm font-semibold"
+          style={{
+            color: style.color,
+          }}
+        >
           {title}
         </Text>
-        <Text className="mt-1 text-xs opacity-90" style={{ color: s.color }}>
+
+        <Text
+          className="mt-1 text-xs"
+          style={{
+            color: style.color,
+          }}
+        >
           {message}
         </Text>
+
         {footer && (
-          <Text className="mt-2 text-xs opacity-70" style={{ color: s.color }}>
+          <Text
+            className="mt-2 text-xs"
+            style={{
+              color: style.color,
+
+              opacity: 0.7,
+            }}
+          >
             {footer}
           </Text>
         )}
@@ -220,6 +919,10 @@ const AlertBanner = ({
   );
 };
 
+// ============================================================
+// DATE PICKER FIELD
+// ============================================================
+
 const DatePickerField = ({
   value,
   onChange,
@@ -227,172 +930,808 @@ const DatePickerField = ({
   maxDate,
   disabled = false,
   placeholder = "Select Date",
-  iconColor = "#6B7280",
-  className = "",
+  iconColor = "#64748B",
 }: {
   value: string;
-  onChange: (dateStr: string) => void;
-  minDate?: string;
-  maxDate?: string;
-  disabled?: boolean;
-  placeholder?: string;
-  iconColor?: string;
-  className?: string;
-}) => {
-  const [showPicker, setShowPicker] = useState(false);
 
-  const getSafeDate = (dateStr: string) => {
-    if (!dateStr) return dateStr;
-    if (minDate && dateStr < minDate) return minDate;
-    if (maxDate && dateStr > maxDate) return maxDate;
-    return dateStr;
+  onChange: (
+    dateStr: string,
+  ) => void;
+
+  minDate?: string;
+
+  maxDate?: string;
+
+  disabled?: boolean;
+
+  placeholder?: string;
+
+  iconColor?: string;
+}) => {
+  const [showPicker, setShowPicker] =
+    useState(false);
+
+  const pickerValue = useMemo(() => {
+    if (value) {
+      return parseDate(value);
+    }
+
+    if (minDate) {
+      return parseDate(minDate);
+    }
+
+    return new Date();
+  }, [value, minDate]);
+
+  const handleDateChange = (
+    event: any,
+    selectedDate?: Date,
+  ) => {
+    if (Platform.OS === "android") {
+      setShowPicker(false);
+    }
+
+    if (
+      event?.type === "dismissed" ||
+      !selectedDate
+    ) {
+      return;
+    }
+
+    const selectedISO =
+      toISODate(selectedDate);
+
+    const safeDate = clampDate(
+      selectedISO,
+      minDate,
+      maxDate,
+    );
+
+    onChange(safeDate);
   };
 
-  const pickerValue = value
-    ? new Date(`${value}T00:00:00`)
-    : minDate
-      ? new Date(`${minDate}T00:00:00`)
-      : new Date();
+  // ==========================================================
+  // WEB
+  // ==========================================================
 
   if (Platform.OS === "web") {
     return (
-      <View className={`relative ${className}`}>
+      <View
+        style={{
+          position: "relative",
+
+          height: 48,
+
+          width: "100%",
+        }}
+      >
         <View
-          className="flex-row items-center justify-between h-12 px-4 bg-white rounded-xl"
           style={{
-            position: "relative",
-            overflow: "hidden",
+            height: 48,
+
+            width: "100%",
+
+            flexDirection: "row",
+
+            alignItems: "center",
+
+            justifyContent:
+              "space-between",
+
+            paddingHorizontal: 16,
+
             borderWidth: 1,
-            borderColor: COLORS.border,
-            backgroundColor: disabled ? "#F8FAFC" : COLORS.inputBg,
-            opacity: disabled ? 0.7 : 1,
+
+            borderColor:
+              COLORS.border,
+
+            borderRadius: 12,
+
+            backgroundColor: disabled
+              ? "#F1F5F9"
+              : COLORS.inputBg,
+
+            opacity: disabled
+              ? 0.7
+              : 1,
           }}
         >
           <Text
-            className="flex-1 text-gray-800"
-            style={{ pointerEvents: "none" }}
+            style={{
+              flex: 1,
+
+              fontSize: 14,
+
+              color: value
+                ? COLORS.textValue
+                : COLORS.textMuted,
+
+              pointerEvents: "none",
+            }}
           >
             {value || placeholder}
           </Text>
+
           <Calendar
-            size={16}
-            color={iconColor}
-            style={{ pointerEvents: "none" }}
+            size={17}
+            color={
+              disabled
+                ? "#94A3B8"
+                : iconColor
+            }
+            style={{
+              pointerEvents: "none",
+            }}
           />
         </View>
+
         <input
           type="date"
           value={value || ""}
           min={minDate || undefined}
           max={maxDate || undefined}
           disabled={disabled}
-          onChange={(e: any) => {
-            const selectedDate = e.target.value;
-            onChange(getSafeDate(selectedDate));
+          onChange={(event: any) => {
+            const selectedDate =
+              event.target.value;
+
+            if (!selectedDate) {
+              return;
+            }
+
+            onChange(
+              clampDate(
+                selectedDate,
+                minDate,
+                maxDate,
+              ),
+            );
           }}
           style={{
             position: "absolute",
+
             top: 0,
+
             left: 0,
+
             width: "100%",
+
             height: "100%",
+
             opacity: 0,
-            cursor: disabled ? "not-allowed" : "pointer",
+
+            cursor: disabled
+              ? "not-allowed"
+              : "pointer",
+
             zIndex: 10,
-            pointerEvents: disabled ? "none" : "auto",
-          }}
-          onClick={(e: any) => {
-            if (disabled) return;
-            const target = e.target as HTMLInputElement;
-            target.showPicker?.();
+
+            pointerEvents: disabled
+              ? "none"
+              : "auto",
           }}
         />
       </View>
     );
   }
 
+  // ==========================================================
+  // IOS / ANDROID
+  // ==========================================================
+
   return (
     <>
       <TouchableOpacity
-        onPress={() => {
-          if (!disabled) setShowPicker(true);
-        }}
         disabled={disabled}
-        className={`flex-row items-center justify-between px-4 rounded-xl h-12 ${className}`}
+        onPress={() => {
+          if (!disabled) {
+            setShowPicker(true);
+          }
+        }}
+        className="flex-row items-center justify-between px-4 rounded-xl"
         style={{
+          height: 48,
+
           borderWidth: 1,
-          borderColor: COLORS.border,
-          backgroundColor: disabled ? "#F1F5F9" : "#F8FAFC",
-          opacity: disabled ? 0.7 : 1,
+
+          borderColor:
+            COLORS.border,
+
+          backgroundColor: disabled
+            ? "#F1F5F9"
+            : COLORS.inputBg,
+
+          opacity: disabled
+            ? 0.7
+            : 1,
         }}
       >
-        <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
-        <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
+        <Text
+          className="flex-1 text-sm"
+          style={{
+            color: value
+              ? COLORS.textValue
+              : COLORS.textMuted,
+          }}
+        >
+          {value || placeholder}
+        </Text>
+
+        <Calendar
+          size={17}
+          color={
+            disabled
+              ? "#94A3B8"
+              : iconColor
+          }
+        />
       </TouchableOpacity>
+
       {showPicker && (
         <DateTimePicker
           value={pickerValue}
           mode="date"
-          display={Platform.OS === "android" ? "calendar" : "default"}
-          minimumDate={minDate ? new Date(`${minDate}T00:00:00`) : undefined}
-          maximumDate={maxDate ? new Date(`${maxDate}T23:59:59`) : undefined}
-          onChange={(event: any, selectedDate: any) => {
-            if (Platform.OS === "android") {
-              setShowPicker(false);
-            }
-            if (selectedDate) {
-              const isoDate = toISODate(selectedDate);
-              onChange(getSafeDate(isoDate));
-            }
-            if (Platform.OS === "ios" && event.type === "dismissed") {
-              setShowPicker(false);
-            }
-          }}
+          display={
+            Platform.OS === "android"
+              ? "calendar"
+              : "default"
+          }
+          minimumDate={
+            minDate
+              ? parseDate(minDate)
+              : undefined
+          }
+          maximumDate={
+            maxDate
+              ? parseDate(maxDate)
+              : undefined
+          }
+          onChange={
+            handleDateChange
+          }
         />
       )}
     </>
   );
 };
 
-// ═════ MAIN MODAL COMPONENT ═════
+// ============================================================
+// MAIN COMPONENT PROPS
+// ============================================================
+
 interface AddScheduleModalProps {
   showModal: boolean;
+
   onClose: () => void;
+
   formData: FormData;
-  setFormData: React.Dispatch<React.SetStateAction<FormData>>;
-  conflictWarning: { type: string; conflict: Schedule } | null;
+
+  setFormData: React.Dispatch<
+    React.SetStateAction<FormData>
+  >;
+
+  conflictWarning:
+    | {
+        type: string;
+        conflict: Schedule;
+      }
+    | null;
+
   selectedAuditDepartment: string;
-  setSelectedAuditDepartment: React.Dispatch<React.SetStateAction<string>>;
+
+  setSelectedAuditDepartment: React.Dispatch<
+    React.SetStateAction<string>
+  >;
+
   departmentTeamInfo: DepartmentTeamInfo;
+
   departmentAuditors: User[];
+
   departmentAuditees: User[];
+
   saving: boolean;
+
   onSave: () => void;
-  onAuditDepartmentChange: (departmentCode: string) => void;
+
+  onAuditDepartmentChange: (
+    departmentCode: string,
+  ) => void;
+
   getAvailableDepartmentsForDate: (
     dateStr: string,
-  ) => { department: string; auditElements: string[] }[];
+  ) => {
+    department: string;
+    auditElements: string[];
+  }[];
+
   isDesktop: boolean;
 }
+
+// ============================================================
+// MAIN MODAL
+// ============================================================
 
 export default function AddScheduleModal({
   showModal,
   onClose,
+
   formData,
   setFormData,
+
   conflictWarning,
+
   selectedAuditDepartment,
   setSelectedAuditDepartment,
+
   departmentTeamInfo,
+
   departmentAuditors,
   departmentAuditees,
+
   saving,
+
   onSave,
+
   onAuditDepartmentChange,
+
   getAvailableDepartmentsForDate,
+
   isDesktop,
 }: AddScheduleModalProps) {
-  if (!showModal) return null;
+  if (!showModal) {
+    return null;
+  }
+
+  // ==========================================================
+  // AVAILABLE DEPARTMENTS
+  // ==========================================================
+
+  const availableDepartments =
+    getAvailableDepartmentsForDate(
+      formData.date,
+    );
+
+  // ==========================================================
+  // VALIDATION
+  // ==========================================================
+
+  const isSpecialEventWithoutLunch =
+    formData.isSpecialEvent &&
+    formData.specialEventType !==
+      "LUNCH";
+
+  const canSave =
+    !saving &&
+    !!selectedAuditDepartment &&
+    !!formData.date &&
+    !!formData.startTime &&
+    !!formData.endTime &&
+    (formData.isSpecialEvent
+      ? !!formData.specialEventType &&
+        (formData.specialEventType ===
+          "LUNCH" ||
+          (!!formData.auditorId &&
+            !!formData.auditeeId))
+      : !!formData.auditorId &&
+        !!formData.auditeeId &&
+        formData.selectedDepartments
+          .length > 0);
+
+  // ==========================================================
+  // SELECT DEPARTMENT
+  // ==========================================================
+
+  const handleDepartmentChange = (
+    departmentCode: string,
+  ) => {
+    setSelectedAuditDepartment(
+      departmentCode,
+    );
+
+    onAuditDepartmentChange(
+      departmentCode,
+    );
+
+    if (
+      departmentCode &&
+      formData.date
+    ) {
+      const selectedDeptInfo =
+        availableDepartments.find(
+          (dept) =>
+            dept.department ===
+            departmentCode,
+        );
+
+      if (selectedDeptInfo) {
+        setFormData((prev) => ({
+          ...prev,
+
+          selectedDepartments: [
+            {
+              department:
+                departmentCode,
+
+              selectedElements: [
+                ...selectedDeptInfo.auditElements,
+              ],
+            },
+          ],
+        }));
+      }
+    }
+
+    if (!departmentCode) {
+      setFormData((prev) => ({
+        ...prev,
+
+        selectedDepartments: [],
+      }));
+    }
+  };
+
+  // ==========================================================
+  // SELECT ALL ELEMENTS FOR DEPARTMENT
+  // ==========================================================
+
+  const toggleDepartment = (
+    departmentName: string,
+    availableElements: string[],
+  ) => {
+    setFormData((prev) => {
+      const existing =
+        prev.selectedDepartments.find(
+          (item) =>
+            item.department ===
+            departmentName,
+        );
+
+      if (existing) {
+        const isAllSelected =
+          existing.selectedElements
+            .length ===
+          availableElements.length;
+
+        if (isAllSelected) {
+          return {
+            ...prev,
+
+            selectedDepartments:
+              prev.selectedDepartments.filter(
+                (item) =>
+                  item.department !==
+                  departmentName,
+              ),
+          };
+        }
+
+        return {
+          ...prev,
+
+          selectedDepartments:
+            prev.selectedDepartments.map(
+              (item) =>
+                item.department ===
+                departmentName
+                  ? {
+                      ...item,
+
+                      selectedElements: [
+                        ...availableElements,
+                      ],
+                    }
+                  : item,
+            ),
+        };
+      }
+
+      return {
+        ...prev,
+
+        selectedDepartments: [
+          ...prev.selectedDepartments,
+
+          {
+            department:
+              departmentName,
+
+            selectedElements: [
+              ...availableElements,
+            ],
+          },
+        ],
+      };
+    });
+
+    if (
+      departmentName ===
+      selectedAuditDepartment
+    ) {
+      setSelectedAuditDepartment("");
+    }
+  };
+
+  // ==========================================================
+  // TOGGLE SINGLE ELEMENT
+  // ==========================================================
+
+  const toggleElement = (
+    departmentName: string,
+    element: string,
+  ) => {
+    setFormData((prev) => {
+      const departments = [
+        ...prev.selectedDepartments,
+      ];
+
+      const departmentIndex =
+        departments.findIndex(
+          (item) =>
+            item.department ===
+            departmentName,
+        );
+
+      if (departmentIndex === -1) {
+        departments.push({
+          department:
+            departmentName,
+
+          selectedElements: [
+            element,
+          ],
+        });
+
+        return {
+          ...prev,
+
+          selectedDepartments:
+            departments,
+        };
+      }
+
+      const department =
+        departments[
+          departmentIndex
+        ];
+
+      const isSelected =
+        department.selectedElements.includes(
+          element,
+        );
+
+      const updatedElements =
+        isSelected
+          ? department.selectedElements.filter(
+              (item) =>
+                item !== element,
+            )
+          : [
+              ...department.selectedElements,
+              element,
+            ];
+
+      if (
+        updatedElements.length ===
+        0
+      ) {
+        departments.splice(
+          departmentIndex,
+          1,
+        );
+      } else {
+        departments[
+          departmentIndex
+        ] = {
+          ...department,
+
+          selectedElements:
+            updatedElements,
+        };
+      }
+
+      return {
+        ...prev,
+
+        selectedDepartments:
+          departments,
+      };
+    });
+  };
+
+  // ==========================================================
+  // AUDITOR LIST
+  // ==========================================================
+
+  const availableAuditors =
+    departmentTeamInfo.teamAuditorIds
+      .length > 0
+      ? departmentAuditors.filter(
+          (auditor) =>
+            departmentTeamInfo.teamAuditorIds.includes(
+              Number(auditor.id),
+            ),
+        )
+      : [];
+
+  // ==========================================================
+  // AUDITEE LIST
+  // ==========================================================
+
+  const availableAuditees =
+    departmentTeamInfo.auditeeIds
+      .length > 0
+      ? departmentAuditees.filter(
+          (auditee) =>
+            departmentTeamInfo.auditeeIds.includes(
+              Number(auditee.id),
+            ),
+        )
+      : [];
+
+  // ==========================================================
+  // SELECT OPTIONS
+  // ==========================================================
+
+  const departmentOptions: SelectOption[] =
+    [
+      {
+        label: "Select Department",
+        value: "",
+      },
+
+      ...availableDepartments.map(
+        (dept) => ({
+          label: dept.department,
+
+          value: dept.department,
+        }),
+      ),
+    ];
+
+  const startTimeOptions: SelectOption[] =
+    [
+      {
+        label: "Select Start Time",
+        value: "",
+      },
+
+      ...TIME_OPTIONS.map((time) => ({
+        label: time,
+        value: time,
+      })),
+    ];
+
+  const endTimeOptions: SelectOption[] =
+    [
+      {
+        label: "Select End Time",
+        value: "",
+      },
+
+      ...TIME_OPTIONS.filter(
+        (time) =>
+          !formData.startTime ||
+          getTimeValue(time) >
+            getTimeValue(
+              formData.startTime,
+            ),
+      ).map((time) => ({
+        label: time,
+        value: time,
+      })),
+    ];
+
+  const eventTypeOptions: SelectOption[] =
+    [
+      {
+        label: "Select Event Type",
+        value: "",
+      },
+
+      {
+        label: "Opening Meeting",
+        value: "OPENING",
+      },
+
+      {
+        label: "Lunch Break",
+        value: "LUNCH",
+      },
+
+      {
+        label: "Closing Meeting",
+        value: "CLOSING",
+      },
+    ];
+
+  const auditorOptions: SelectOption[] =
+    [
+      {
+        label: "Select Auditor",
+        value: "",
+      },
+
+      ...(availableAuditors.length > 0
+        ? availableAuditors.map(
+            (auditor) => ({
+              label: `${auditor.firstName} ${auditor.lastName}`,
+
+              value: String(
+                auditor.id,
+              ),
+            }),
+          )
+        : [
+            {
+              label:
+                "No team auditors assigned",
+
+              value: "",
+
+              disabled: true,
+            },
+          ]),
+    ];
+
+  const auditeeOptions: SelectOption[] =
+    [
+      {
+        label: "Select Auditee",
+        value: "",
+      },
+
+      ...(availableAuditees.length > 0
+        ? availableAuditees.map(
+            (auditee) => ({
+              label: `${auditee.firstName} ${auditee.lastName}${
+                auditee.role === "HOD"
+                  ? " (HOD)"
+                  : ""
+              }`,
+
+              value: String(
+                auditee.id,
+              ),
+            }),
+          )
+        : [
+            {
+              label:
+                "No matching auditees found",
+
+              value: "",
+
+              disabled: true,
+            },
+          ]),
+    ];
+
+  const statusOptions: SelectOption[] =
+    [
+      {
+        label: "Scheduled",
+        value: "SCHEDULED",
+      },
+
+      {
+        label: "In Progress",
+        value: "IN_PROGRESS",
+      },
+
+      {
+        label: "Completed",
+        value: "COMPLETED",
+      },
+
+      {
+        label: "Cancelled",
+        value: "CANCELLED",
+      },
+    ];
+
+  // ==========================================================
+  // MODAL
+  // ==========================================================
 
   return (
     <Modal
@@ -401,722 +1740,927 @@ export default function AddScheduleModal({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        className="items-center justify-center flex-1 p-5 bg-black/30"
-        activeOpacity={1}
-        onPress={onClose}
+      <View
+        style={{
+          flex: 1,
+
+          backgroundColor:
+            "rgba(0,0,0,0.30)",
+
+          justifyContent: "center",
+
+          alignItems: "center",
+
+          padding: isDesktop
+            ? 24
+            : 12,
+        }}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          className="bg-white rounded-2xl max-h-[90%] overflow-hidden"
+        <View
           style={{
-            maxWidth: isDesktop ? 800 : "100%",
-            alignSelf: "center",
-            margin: isDesktop ? 40 : 0,
-            width: isDesktop ? "90%" : "100%",
+            width: isDesktop
+              ? "90%"
+              : "100%",
+
+            maxWidth: 800,
+
+            height: isDesktop
+              ? undefined
+              : "94%",
+
+            maxHeight: isDesktop
+              ? "92%"
+              : "94%",
+
+            backgroundColor:
+              "#FFFFFF",
+
+            borderRadius: isDesktop
+              ? 16
+              : 18,
+
+            overflow: "hidden",
+
             borderWidth: 1,
-            borderColor: "#E2E8F0",
-            shadowColor: "#0F172A",
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.12,
-            shadowRadius: 28,
-            elevation: 10,
+
+            borderColor:
+              "#E2E8F0",
+
+            elevation: 5,
+
+            shadowColor: "#000",
+
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+
+            shadowOpacity: 0.15,
+
+            shadowRadius: 12,
           }}
         >
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-6 py-5 border-b border-slate-100">
-            <View>
-              <Text className="text-lg font-bold text-gray-900">
-                {formData.id ? "Edit Schedule" : "Add Schedule"}
+          {/* ==================================================
+              HEADER
+          ================================================== */}
+
+          <View
+            className="flex-row items-center justify-between px-6 py-5 border-b"
+            style={{
+              borderBottomColor:
+                "#F1F5F9",
+            }}
+          >
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-slate-900">
+                {formData.id
+                  ? "Edit Schedule"
+                  : "Add Schedule"}
               </Text>
-              <Text className="text-xs text-gray-500">
-                Schedule daily audit for department
+
+              <Text className="mt-1 text-xs text-slate-500">
+                Schedule daily audit for
+                department
               </Text>
             </View>
+
             <TouchableOpacity
               onPress={onClose}
-              className="items-center justify-center rounded-lg bg-slate-50 w-9 h-9"
+              activeOpacity={0.7}
+              className="items-center justify-center rounded-lg w-9 h-9"
               style={{
-                borderWidth: 0,
-                backgroundColor: "#F1F5F9",
+                backgroundColor:
+                  "#F1F5F9",
               }}
             >
-              <X size={20} color="#64748B" />
+              <X
+                size={20}
+                color="#64748B"
+              />
             </TouchableOpacity>
           </View>
 
-          {/* Body */}
+          {/* ==================================================
+              BODY
+          ================================================== */}
+
           <ScrollView
-            className="p-6"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={
+              false
+            }
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
             contentContainerStyle={{
-              paddingBottom: isDesktop ? 40 : 24,
+              padding: 24,
+
+              paddingBottom: 28,
             }}
           >
-            {/* Conflict Warning */}
+            {/* ==================================================
+                CONFLICT
+            ================================================== */}
+
             {conflictWarning && (
               <AlertBanner
                 type="error"
                 icon={AlertCircle}
                 title="Schedule Conflict!"
                 message={
-                  conflictWarning.type === "auditor"
-                    ? `Auditor ${conflictWarning.conflict.auditorName} already scheduled`
-                    : conflictWarning.type === "auditee"
-                      ? `Auditee ${conflictWarning.conflict.auditeeName} already scheduled`
-                      : "Another event already scheduled at this time"
+                  conflictWarning.type ===
+                  "auditor"
+                    ? `Auditor ${
+                        conflictWarning
+                          .conflict
+                          .auditorName ||
+                        ""
+                      } is already scheduled.`
+                    : conflictWarning.type ===
+                        "auditee"
+                      ? `Auditee ${
+                          conflictWarning
+                            .conflict
+                            .auditeeName ||
+                          ""
+                        } is already scheduled.`
+                      : "Another event is already scheduled at this time."
                 }
               />
             )}
 
-            {/* Department Selector */}
-            <View className="mb-4">
+            {/* ==================================================
+                DEPARTMENT
+            ================================================== */}
+
+            <View className="mb-5">
               <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Department to Audit *
               </Text>
-              <View
-                className="overflow-hidden rounded-xl"
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  // paddingHorizontal: 4,
-                }}
-              >
-                <Picker
-                  selectedValue={selectedAuditDepartment}
-                  onValueChange={(itemValue: string) => {
-                    setSelectedAuditDepartment(itemValue);
-                    onAuditDepartmentChange(itemValue);
-                    // Auto-select elements if available
-                    if (itemValue && formData.date) {
-                      const availableDepts = getAvailableDepartmentsForDate(
-                        formData.date,
-                      );
-                      const selectedDeptInfo = availableDepts.find(
-                        (d) => d.department === itemValue,
-                      );
-                      if (selectedDeptInfo) {
-                        setFormData((prev) => ({
-                          ...prev,
-                          selectedDepartments: [
-                            {
-                              department: itemValue,
-                              selectedElements: [
-                                ...selectedDeptInfo.auditElements,
-                              ],
-                            },
-                          ],
-                        }));
-                      }
-                    } else if (!itemValue) {
-                      setFormData((prev) => ({
-                        ...prev,
-                        selectedDepartments: [],
-                      }));
-                    }
-                  }}
-                  style={BORDERLESS_PICKER_STYLE}
-                >
-                  <Picker.Item label="Select Department" value="" />
-                  {getAvailableDepartmentsForDate(formData.date).map(
-                    (dept, index) => (
-                      <Picker.Item
-                        key={index}
-                        label={dept.department}
-                        value={dept.department}
-                      />
-                    ),
-                  )}
-                </Picker>
-              </View>
+
+              <SelectField
+                value={
+                  selectedAuditDepartment
+                }
+                placeholder="Select Department"
+                options={
+                  departmentOptions
+                }
+                onChange={
+                  handleDepartmentChange
+                }
+                searchable
+                emptyMessage="No departments available for this date"
+              />
             </View>
 
-            {/* Date */}
-            <View className="mb-4">
+            {/* ==================================================
+                DATE
+            ================================================== */}
+
+            <View className="mb-5">
               <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Date *
               </Text>
+
               <DatePickerField
                 value={formData.date}
-                onChange={(dateStr) =>
-                  setFormData({ ...formData, date: dateStr })
-                }
+                onChange={(date) => {
+                  setFormData(
+                    (prev) => ({
+                      ...prev,
+
+                      date,
+
+                      selectedDepartments:
+                        selectedAuditDepartment
+                          ? (() => {
+                              const deptInfo =
+                                getAvailableDepartmentsForDate(
+                                  date,
+                                ).find(
+                                  (dept) =>
+                                    dept.department ===
+                                    selectedAuditDepartment,
+                                );
+
+                              return deptInfo
+                                ? [
+                                    {
+                                      department:
+                                        selectedAuditDepartment,
+
+                                      selectedElements:
+                                        [
+                                          ...deptInfo.auditElements,
+                                        ],
+                                    },
+                                  ]
+                                : [];
+                            })()
+                          : prev.selectedDepartments,
+                    }),
+                  );
+                }}
                 placeholder="Select Date"
               />
             </View>
 
-            {/* Time Pickers */}
-            <View className="flex-row gap-4 mb-4">
-              <View className="flex-1">
+            {/* ==================================================
+                TIME
+            ================================================== */}
+
+            <View
+              className={
+                isDesktop
+                  ? "flex-row gap-4 mb-5"
+                  : "mb-5"
+              }
+            >
+              {/* START TIME */}
+
+              <View
+                className={
+                  isDesktop
+                    ? "flex-1"
+                    : "mb-4"
+                }
+              >
                 <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                   Start Time *
                 </Text>
-                <View
-                  className="overflow-hidden rounded-xl"
-                  style={{
-                    backgroundColor: "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: COLORS.border,
+
+                <SelectField
+                  value={
+                    formData.startTime
+                  }
+                  placeholder="Select Start Time"
+                  options={
+                    startTimeOptions
+                  }
+                  onChange={(
+                    itemValue,
+                  ) => {
+                    let newEndTime =
+                      formData.endTime;
+
+                    if (
+                      newEndTime &&
+                      getTimeValue(
+                        newEndTime,
+                      ) <=
+                        getTimeValue(
+                          itemValue,
+                        )
+                    ) {
+                      newEndTime = "";
+                    }
+
+                    setFormData(
+                      (prev) => ({
+                        ...prev,
+
+                        startTime:
+                          itemValue,
+
+                        endTime:
+                          newEndTime,
+                      }),
+                    );
                   }}
-                >
-                  <Picker
-                    selectedValue={formData.startTime}
-                    onValueChange={(itemValue: string) => {
-                      let newEndTime = formData.endTime;
-                      if (
-                        newEndTime &&
-                        getTimeValue(newEndTime) <= getTimeValue(itemValue)
-                      ) {
-                        newEndTime = "";
-                      }
-                      setFormData({
-                        ...formData,
-                        startTime: itemValue,
-                        endTime: newEndTime,
-                      });
-                    }}
-                    style={BORDERLESS_PICKER_STYLE}
-                  >
-                    {timeOptions.map((time) => (
-                      <Picker.Item key={time} label={time} value={time} />
-                    ))}
-                  </Picker>
-                </View>
+                />
               </View>
+
+              {/* END TIME */}
+
               <View className="flex-1">
                 <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                   End Time *
                 </Text>
-                <View
-                  className="overflow-hidden rounded-xl"
-                  style={{
-                    backgroundColor: "#F8FAFC",
-                    borderWidth: 1,
-                    borderColor: COLORS.border,
+
+                <SelectField
+                  value={
+                    formData.endTime
+                  }
+                  placeholder="Select End Time"
+                  options={
+                    endTimeOptions
+                  }
+                  onChange={(
+                    itemValue,
+                  ) => {
+                    setFormData(
+                      (prev) => ({
+                        ...prev,
+
+                        endTime:
+                          itemValue,
+                      }),
+                    );
                   }}
-                >
-                  <Picker
-                    selectedValue={formData.endTime}
-                    onValueChange={(itemValue: string) =>
-                      setFormData({ ...formData, endTime: itemValue })
-                    }
-                    style={BORDERLESS_PICKER_STYLE}
-                  >
-                    {timeOptions
-                      .filter(
-                        (t) =>
-                          !formData.startTime ||
-                          getTimeValue(t) > getTimeValue(formData.startTime),
-                      )
-                      .map((time) => (
-                        <Picker.Item key={time} label={time} value={time} />
-                      ))}
-                  </Picker>
-                </View>
+                />
               </View>
             </View>
 
-            {/* Special Event Checkbox */}
-            <View className="flex-row items-center gap-3 mb-4">
+            {/* ==================================================
+                SPECIAL EVENT CHECKBOX
+            ================================================== */}
+
+            <View className="flex-row items-center gap-3 mb-5">
               <TouchableOpacity
-                onPress={() =>
-                  setFormData({
-                    ...formData,
-                    isSpecialEvent: !formData.isSpecialEvent,
-                    specialEventType: "",
-                  })
-                }
-                className="items-center justify-center w-5 h-5 rounded-md"
+                activeOpacity={0.8}
+                onPress={() => {
+                  setFormData(
+                    (prev) => ({
+                      ...prev,
+
+                      isSpecialEvent:
+                        !prev.isSpecialEvent,
+
+                      specialEventType:
+                        "",
+                    }),
+                  );
+                }}
+                className="items-center justify-center rounded-md"
                 style={{
+                  width: 20,
+
+                  height: 20,
+
                   borderWidth: 1,
-                  borderColor: formData.isSpecialEvent
-                    ? COLORS.accent
-                    : COLORS.borderStrong,
-                  backgroundColor: formData.isSpecialEvent
-                    ? COLORS.accent
-                    : "transparent",
+
+                  borderColor:
+                    formData.isSpecialEvent
+                      ? COLORS.accent
+                      : COLORS.borderStrong,
+
+                  backgroundColor:
+                    formData.isSpecialEvent
+                      ? COLORS.accent
+                      : "transparent",
                 }}
               >
-                {formData.isSpecialEvent && <Check size={14} color="#FFF" />}
+                {formData.isSpecialEvent && (
+                  <Check
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                )}
               </TouchableOpacity>
-              <Text className="text-sm text-gray-900">
-                This is a Special Event (Opening/Lunch/Closing)
+
+              <Text className="flex-1 text-sm text-slate-800">
+                This is a Special Event
+                (Opening/Lunch/Closing)
               </Text>
             </View>
 
+            {/* ==================================================
+                SPECIAL EVENT
+            ================================================== */}
+
             {formData.isSpecialEvent ? (
               <>
-                {/* Event Type Picker */}
-                <View className="mb-4">
+                {/* EVENT TYPE */}
+
+                <View className="mb-5">
                   <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                     Event Type *
                   </Text>
-                  <View
-                    className="overflow-hidden rounded-xl"
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderWidth: 1,
-                      borderColor: COLORS.border,
+
+                  <SelectField
+                    value={
+                      formData.specialEventType
+                    }
+                    placeholder="Select Event Type"
+                    options={
+                      eventTypeOptions
+                    }
+                    onChange={(
+                      itemValue,
+                    ) => {
+                      setFormData(
+                        (prev) => ({
+                          ...prev,
+
+                          specialEventType:
+                            itemValue,
+
+                          ...(itemValue ===
+                          "LUNCH"
+                            ? {
+                                auditorId:
+                                  "",
+
+                                auditeeId:
+                                  "",
+                              }
+                            : {}),
+                        }),
+                      );
                     }}
-                  >
-                    <Picker
-                      selectedValue={formData.specialEventType}
-                      onValueChange={(itemValue: string) =>
-                        setFormData({
-                          ...formData,
-                          specialEventType: itemValue,
-                        })
-                      }
-                      style={BORDERLESS_PICKER_STYLE}
-                    >
-                      <Picker.Item label="Select Event Type" value="" />
-                      <Picker.Item label="Opening Meeting" value="OPENING" />
-                      <Picker.Item label="Lunch Break" value="LUNCH" />
-                      <Picker.Item label="Closing Meeting" value="CLOSING" />
-                    </Picker>
-                  </View>
+                  />
                 </View>
 
-                {/* Auditor/Auditee for Special Events (non-LUNCH) */}
-                {formData.specialEventType !== "LUNCH" && (
-                  <View className="flex-row gap-4 mb-4">
-                    <View className="flex-1">
+                {/* SPECIAL EVENT AUDITOR/AUDITEE */}
+
+                {isSpecialEventWithoutLunch && (
+                  <View
+                    className={
+                      isDesktop
+                        ? "flex-row gap-4 mb-5"
+                        : "mb-5"
+                    }
+                  >
+                    {/* AUDITOR */}
+
+                    <View
+                      className={
+                        isDesktop
+                          ? "flex-1"
+                          : "mb-4"
+                      }
+                    >
                       <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                         Auditor *
                       </Text>
-                      <View
-                        className="overflow-hidden rounded-xl"
-                        style={{
-                          backgroundColor: "#F8FAFC",
-                          borderWidth: 1,
-                          borderColor: COLORS.border,
-                        }}
-                      >
-                        <Picker
-                          selectedValue={formData.auditorId}
-                          onValueChange={(itemValue: string) =>
-                            setFormData({
-                              ...formData,
-                              auditorId: itemValue,
-                            })
-                          }
-                          style={BORDERLESS_PICKER_STYLE}
-                        >
-                          <Picker.Item label="Select Auditor" value="" />
-                          {departmentTeamInfo.teamAuditorIds.length > 0 ? (
-                            departmentAuditors
-                              .filter((a) =>
-                                departmentTeamInfo.teamAuditorIds.includes(
-                                  Number(a.id),
-                                ),
-                              )
-                              .map((auditor) => (
-                                <Picker.Item
-                                  key={auditor.id}
-                                  label={`${auditor.firstName} ${auditor.lastName}`}
-                                  value={auditor.id.toString()}
-                                />
-                              ))
-                          ) : (
-                            <Picker.Item
-                              label="No team auditors assigned"
-                              value=""
-                              enabled={false}
-                            />
-                          )}
-                        </Picker>
-                      </View>
+
+                      <SelectField
+                        value={
+                          formData.auditorId
+                        }
+                        placeholder="Select Auditor"
+                        options={
+                          auditorOptions
+                        }
+                        onChange={(
+                          itemValue,
+                        ) =>
+                          setFormData(
+                            (prev) => ({
+                              ...prev,
+
+                              auditorId:
+                                itemValue,
+                            }),
+                          )
+                        }
+                        searchable
+                        emptyMessage="No team auditors assigned"
+                      />
                     </View>
+
+                    {/* AUDITEE */}
+
                     <View className="flex-1">
                       <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                         Auditee *
                       </Text>
-                      <View
-                        className="overflow-hidden rounded-xl"
-                        style={{
-                          backgroundColor: "#F8FAFC",
-                          borderWidth: 1,
-                          borderColor: COLORS.border,
-                        }}
-                      >
-                        <Picker
-                          selectedValue={formData.auditeeId}
-                          onValueChange={(itemValue: string) =>
-                            setFormData({
-                              ...formData,
-                              auditeeId: itemValue,
-                            })
-                          }
-                          style={BORDERLESS_PICKER_STYLE}
-                        >
-                          <Picker.Item label="Select Auditee" value="" />
-                          {departmentTeamInfo.auditeeIds.length > 0 ? (
-                            departmentAuditees
-                              .filter((a) =>
-                                departmentTeamInfo.auditeeIds.includes(
-                                  Number(a.id),
-                                ),
-                              )
-                              .map((auditee) => (
-                                <Picker.Item
-                                  key={auditee.id}
-                                  label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                  value={auditee.id.toString()}
-                                />
-                              ))
-                          ) : (
-                            <Picker.Item
-                              label="No matching auditees found"
-                              value=""
-                              enabled={false}
-                            />
-                          )}
-                        </Picker>
-                      </View>
+
+                      <SelectField
+                        value={
+                          formData.auditeeId
+                        }
+                        placeholder="Select Auditee"
+                        options={
+                          auditeeOptions
+                        }
+                        onChange={(
+                          itemValue,
+                        ) =>
+                          setFormData(
+                            (prev) => ({
+                              ...prev,
+
+                              auditeeId:
+                                itemValue,
+                            }),
+                          )
+                        }
+                        searchable
+                        emptyMessage="No matching auditees found"
+                      />
                     </View>
                   </View>
                 )}
               </>
             ) : (
               <>
-                {/* Departments & Elements Selection */}
-                <View className="mb-4">
+                {/* ==================================================
+                    DEPARTMENTS + ELEMENTS
+                ================================================== */}
+
+                <View className="mb-5">
                   <Text className="mb-2 text-[13px] font-semibold text-slate-800">
-                    Select Departments & Audit Elements *
+                    Select Departments &
+                    Audit Elements *
                   </Text>
+
                   <View
                     className="rounded-xl"
                     style={{
                       height: 240,
+
                       overflow: "hidden",
+
                       borderWidth: 1,
-                      borderColor: COLORS.border,
-                      backgroundColor: "#F8FAFC",
+
+                      borderColor:
+                        COLORS.border,
+
+                      backgroundColor:
+                        COLORS.inputBg,
                     }}
                   >
                     <ScrollView
-                      nestedScrollEnabled={true}
-                      showsVerticalScrollIndicator={true}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                      keyboardShouldPersistTaps="handled"
                       contentContainerStyle={{
                         padding: 16,
                       }}
                     >
-                      {getAvailableDepartmentsForDate(formData.date)
+                      {availableDepartments
                         .filter(
                           (deptInfo) =>
                             !selectedAuditDepartment ||
-                            deptInfo.department === selectedAuditDepartment,
+                            deptInfo.department ===
+                              selectedAuditDepartment,
                         )
-                        .map((deptInfo) => {
-                          const departmentName = deptInfo.department;
-                          const availableElements =
-                            deptInfo.auditElements || [];
-                          const selectedDept =
-                            formData.selectedDepartments?.find(
-                              (d) => d.department === departmentName,
-                            );
-                          const selectedElements =
-                            selectedDept?.selectedElements || [];
-                          return (
-                            <View
-                              key={departmentName}
-                              className="pb-3 mb-3 border-b border-gray-200"
-                            >
-                              <TouchableOpacity
-                                onPress={() => {
-                                  let updated = [
-                                    ...(formData.selectedDepartments || []),
-                                  ];
-                                  const existingIndex = updated.findIndex(
-                                    (d) => d.department === departmentName,
-                                  );
-                                  if (existingIndex >= 0) {
-                                    updated[existingIndex].selectedElements = [
-                                      ...availableElements,
-                                    ];
-                                  } else {
-                                    updated.push({
-                                      department: departmentName,
-                                      selectedElements: [...availableElements],
-                                    });
-                                  }
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    selectedDepartments: updated,
-                                  }));
-                                  if (
-                                    departmentName === selectedAuditDepartment
-                                  )
-                                    setSelectedAuditDepartment("");
-                                }}
-                                className="flex-row items-center gap-3 mb-2"
+                        .map(
+                          (
+                            deptInfo,
+                          ) => {
+                            const departmentName =
+                              deptInfo.department;
+
+                            const availableElements =
+                              deptInfo.auditElements ||
+                              [];
+
+                            const selectedDept =
+                              formData.selectedDepartments.find(
+                                (dept) =>
+                                  dept.department ===
+                                  departmentName,
+                              );
+
+                            const selectedElements =
+                              selectedDept?.selectedElements ||
+                              [];
+
+                            const allSelected =
+                              availableElements.length >
+                                0 &&
+                              selectedElements.length ===
+                                availableElements.length;
+
+                            return (
+                              <View
+                                key={
+                                  departmentName
+                                }
+                                className="pb-4 mb-4 border-b border-slate-200"
                               >
-                                <View
-                                  className="items-center justify-center w-5 h-5 rounded-md"
-                                  style={{
-                                    borderWidth: 1,
-                                    borderColor:
-                                      availableElements.length > 0 &&
-                                      selectedElements.length ===
-                                        availableElements.length
-                                        ? COLORS.accent
-                                        : COLORS.borderStrong,
-                                    backgroundColor:
-                                      availableElements.length > 0 &&
-                                      selectedElements.length ===
-                                        availableElements.length
-                                        ? COLORS.accent
-                                        : "transparent",
-                                  }}
+                                {/* DEPARTMENT CHECKBOX */}
+
+                                <TouchableOpacity
+                                  activeOpacity={
+                                    0.7
+                                  }
+                                  onPress={() =>
+                                    toggleDepartment(
+                                      departmentName,
+                                      availableElements,
+                                    )
+                                  }
+                                  className="flex-row items-center gap-3 mb-3"
                                 >
-                                  {availableElements.length > 0 &&
-                                    selectedElements.length ===
-                                      availableElements.length && (
-                                      <Check size={14} color="#FFF" />
-                                    )}
-                                </View>
-                                <Text className="font-semibold text-gray-900">
-                                  {departmentName}
-                                </Text>
-                              </TouchableOpacity>
-                              <View className="flex-row flex-wrap gap-2 ml-8">
-                                {availableElements.map((element) => (
-                                  <TouchableOpacity
-                                    key={element}
-                                    onPress={() => {
-                                      let updated = [
-                                        ...(formData.selectedDepartments || []),
-                                      ];
-                                      let deptIndex = updated.findIndex(
-                                        (d) => d.department === departmentName,
-                                      );
-                                      if (deptIndex === -1) {
-                                        updated.push({
-                                          department: departmentName,
-                                          selectedElements: [],
-                                        });
-                                        deptIndex = updated.length - 1;
-                                      }
-                                      const isSelected =
-                                        updated[
-                                          deptIndex
-                                        ].selectedElements.includes(element);
-                                      if (isSelected) {
-                                        updated[deptIndex].selectedElements =
-                                          updated[
-                                            deptIndex
-                                          ].selectedElements.filter(
-                                            (el) => el !== element,
-                                          );
-                                      } else {
-                                        updated[deptIndex].selectedElements = [
-                                          ...updated[deptIndex]
-                                            .selectedElements,
-                                          element,
-                                        ];
-                                      }
-                                      if (
-                                        updated[deptIndex].selectedElements
-                                          .length === 0
-                                      )
-                                        updated.splice(deptIndex, 1);
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        selectedDepartments: updated,
-                                      }));
+                                  <View
+                                    className="items-center justify-center rounded-md"
+                                    style={{
+                                      width: 20,
+
+                                      height: 20,
+
+                                      borderWidth: 1,
+
+                                      borderColor:
+                                        allSelected
+                                          ? COLORS.accent
+                                          : COLORS.borderStrong,
+
+                                      backgroundColor:
+                                        allSelected
+                                          ? COLORS.accent
+                                          : "transparent",
                                     }}
-                                    className={`px-3 py-1.5 rounded-full border flex-row items-center gap-2 ${
-                                      selectedElements.includes(element)
-                                        ? "bg-blue-50 border-blue-200"
-                                        : "bg-slate-50 border-slate-200"
-                                    }`}
                                   >
-                                    {selectedElements.includes(element) && (
-                                      <Check size={12} color={COLORS.accent} />
+                                    {allSelected && (
+                                      <Check
+                                        size={
+                                          14
+                                        }
+                                        color="#FFFFFF"
+                                      />
                                     )}
-                                    <Text
-                                      className={`text-xs font-medium ${selectedElements.includes(element) ? "text-blue-700" : "text-gray-700"}`}
-                                    >
-                                      {element}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
+                                  </View>
+
+                                  <Text className="font-semibold text-slate-900">
+                                    {
+                                      departmentName
+                                    }
+                                  </Text>
+                                </TouchableOpacity>
+
+                                {/* ELEMENTS */}
+
+                                <View className="flex-row flex-wrap gap-2 ml-8">
+                                  {availableElements.map(
+                                    (
+                                      element,
+                                    ) => {
+                                      const selected =
+                                        selectedElements.includes(
+                                          element,
+                                        );
+
+                                      return (
+                                        <TouchableOpacity
+                                          key={
+                                            element
+                                          }
+                                          activeOpacity={
+                                            0.7
+                                          }
+                                          onPress={() =>
+                                            toggleElement(
+                                              departmentName,
+                                              element,
+                                            )
+                                          }
+                                          className="flex-row items-center gap-2 px-3 py-1.5 rounded-full border"
+                                          style={{
+                                            backgroundColor:
+                                              selected
+                                                ? "#EFF6FF"
+                                                : "#F8FAFC",
+
+                                            borderColor:
+                                              selected
+                                                ? "#BFDBFE"
+                                                : "#E2E8F0",
+                                          }}
+                                        >
+                                          {selected && (
+                                            <Check
+                                              size={
+                                                12
+                                              }
+                                              color={
+                                                COLORS.accent
+                                              }
+                                            />
+                                          )}
+
+                                          <Text
+                                            className="text-xs font-medium"
+                                            style={{
+                                              color:
+                                                selected
+                                                  ? "#1D4ED8"
+                                                  : "#475569",
+                                            }}
+                                          >
+                                            {
+                                              element
+                                            }
+                                          </Text>
+                                        </TouchableOpacity>
+                                      );
+                                    },
+                                  )}
+                                </View>
                               </View>
-                            </View>
-                          );
-                        })}
+                            );
+                          },
+                        )}
+
+                      {availableDepartments.filter(
+                        (deptInfo) =>
+                          !selectedAuditDepartment ||
+                          deptInfo.department ===
+                            selectedAuditDepartment,
+                      ).length ===
+                        0 && (
+                        <View className="items-center justify-center py-10">
+                          <Text className="text-sm text-slate-500">
+                            No departments
+                            available for
+                            this date.
+                          </Text>
+                        </View>
+                      )}
                     </ScrollView>
                   </View>
                 </View>
 
-                {/* Regular Auditor/Auditee Pickers */}
-                <View className="flex-row gap-4 mb-4">
-                  <View className="flex-1">
+                {/* ==================================================
+                    REGULAR AUDITOR / AUDITEE
+                ================================================== */}
+
+                <View
+                  className={
+                    isDesktop
+                      ? "flex-row gap-4 mb-5"
+                      : "mb-5"
+                  }
+                >
+                  {/* AUDITOR */}
+
+                  <View
+                    className={
+                      isDesktop
+                        ? "flex-1"
+                        : "mb-4"
+                    }
+                  >
                     <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                       Auditor *
                     </Text>
-                    <View
-                      className="overflow-hidden rounded-xl"
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderWidth: 1,
-                        borderColor: COLORS.border,
-                      }}
-                    >
-                      <Picker
-                        selectedValue={formData.auditorId}
-                        onValueChange={(itemValue: string) =>
-                          setFormData({ ...formData, auditorId: itemValue })
-                        }
-                        style={BORDERLESS_PICKER_STYLE}
-                      >
-                        <Picker.Item label="Select Auditor" value="" />
-                        {departmentTeamInfo.teamAuditorIds.length > 0 ? (
-                          departmentAuditors
-                            .filter((a) =>
-                              departmentTeamInfo.teamAuditorIds.includes(
-                                Number(a.id),
-                              ),
-                            )
-                            .map((auditor) => (
-                              <Picker.Item
-                                key={auditor.id}
-                                label={`${auditor.firstName} ${auditor.lastName}`}
-                                value={auditor.id.toString()}
-                              />
-                            ))
-                        ) : (
-                          <Picker.Item
-                            label="No team auditors assigned"
-                            value=""
-                            enabled={false}
-                          />
-                        )}
-                      </Picker>
-                    </View>
+
+                    <SelectField
+                      value={
+                        formData.auditorId
+                      }
+                      placeholder="Select Auditor"
+                      options={
+                        auditorOptions
+                      }
+                      onChange={(
+                        itemValue,
+                      ) =>
+                        setFormData(
+                          (prev) => ({
+                            ...prev,
+
+                            auditorId:
+                              itemValue,
+                          }),
+                        )
+                      }
+                      searchable
+                      emptyMessage="No team auditors assigned"
+                    />
                   </View>
+
+                  {/* AUDITEE */}
+
                   <View className="flex-1">
                     <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                       Auditee *
                     </Text>
-                    <View
-                      className="overflow-hidden rounded-xl"
-                      style={{
-                        backgroundColor: "#F8FAFC",
-                        borderWidth: 1,
-                        borderColor: COLORS.border,
-                      }}
-                    >
-                      <Picker
-                        selectedValue={formData.auditeeId}
-                        onValueChange={(itemValue: string) =>
-                          setFormData({ ...formData, auditeeId: itemValue })
-                        }
-                        style={BORDERLESS_PICKER_STYLE}
-                      >
-                        <Picker.Item label="Select Auditee" value="" />
-                        {departmentTeamInfo.auditeeIds.length > 0 ? (
-                          departmentAuditees
-                            .filter((a) =>
-                              departmentTeamInfo.auditeeIds.includes(
-                                Number(a.id),
-                              ),
-                            )
-                            .map((auditee) => (
-                              <Picker.Item
-                                key={auditee.id}
-                                label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                value={auditee.id.toString()}
-                              />
-                            ))
-                        ) : (
-                          <Picker.Item
-                            label="No matching auditees found"
-                            value=""
-                            enabled={false}
-                          />
-                        )}
-                      </Picker>
-                    </View>
+
+                    <SelectField
+                      value={
+                        formData.auditeeId
+                      }
+                      placeholder="Select Auditee"
+                      options={
+                        auditeeOptions
+                      }
+                      onChange={(
+                        itemValue,
+                      ) =>
+                        setFormData(
+                          (prev) => ({
+                            ...prev,
+
+                            auditeeId:
+                              itemValue,
+                          }),
+                        )
+                      }
+                      searchable
+                      emptyMessage="No matching auditees found"
+                    />
                   </View>
                 </View>
               </>
             )}
 
-            {/* Status Picker */}
-            <View className="mb-4">
+            {/* ==================================================
+                STATUS
+            ================================================== */}
+
+            <View className="mb-2">
               <Text className="mb-2 text-[13px] font-semibold text-slate-800">
                 Status
               </Text>
-              <View
-                className="overflow-hidden rounded-xl"
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                }}
-              >
-                <Picker
-                  selectedValue={formData.status}
-                  onValueChange={(itemValue: string) =>
-                    setFormData({ ...formData, status: itemValue })
-                  }
-                  style={BORDERLESS_PICKER_STYLE}
-                >
-                  <Picker.Item label="Scheduled" value="SCHEDULED" />
-                  <Picker.Item label="In Progress" value="IN_PROGRESS" />
-                  <Picker.Item label="Completed" value="COMPLETED" />
-                  <Picker.Item label="Cancelled" value="CANCELLED" />
-                </Picker>
-              </View>
+
+              <SelectField
+                value={formData.status}
+                placeholder="Select Status"
+                options={
+                  statusOptions
+                }
+                onChange={(
+                  itemValue,
+                ) =>
+                  setFormData(
+                    (prev) => ({
+                      ...prev,
+
+                      status:
+                        itemValue,
+                    }),
+                  )
+                }
+              />
             </View>
           </ScrollView>
 
-          {/* Footer Buttons */}
-          <View className="flex-row justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
+          {/* ==================================================
+              FOOTER
+          ================================================== */}
+
+          <View
+            className="flex-row items-center justify-end gap-3 px-6 py-4 border-t"
+            style={{
+              borderTopColor:
+                "#E2E8F0",
+
+              backgroundColor:
+                "#F8FAFC",
+            }}
+          >
+            {/* CANCEL */}
+
             <TouchableOpacity
+              activeOpacity={0.7}
               onPress={onClose}
-              className="justify-center h-10 px-5 bg-slate-50 rounded-xl"
+              disabled={saving}
+              className="items-center justify-center px-5 rounded-xl"
               style={{
-                borderWidth: 0,
+                height: 42,
+
+                backgroundColor:
+                  "#FFFFFF",
+
+                borderWidth: 1,
+
+                borderColor:
+                  "#E2E8F0",
+
+                opacity: saving
+                  ? 0.6
+                  : 1,
               }}
             >
-              <Text className="text-sm font-semibold text-gray-700">
+              <Text className="text-sm font-semibold text-slate-700">
                 Cancel
               </Text>
             </TouchableOpacity>
+
+            {/* SAVE */}
+
             <TouchableOpacity
+              activeOpacity={0.8}
               onPress={onSave}
-              disabled={
-                saving ||
-                !selectedAuditDepartment ||
-                !formData.auditorId ||
-                !formData.auditeeId
-              }
-              className="flex-row items-center h-10 gap-2 px-5 rounded-xl"
+              disabled={!canSave}
+              className="flex-row items-center justify-center gap-2 px-5 rounded-xl"
               style={{
+                height: 42,
+
                 backgroundColor:
-                  saving ||
-                  !selectedAuditDepartment ||
-                  !formData.auditorId ||
-                  !formData.auditeeId
-                    ? "#F1F5F9"
-                    : COLORS.accent,
+                  canSave
+                    ? COLORS.accent
+                    : "#CBD5E1",
+
+                opacity: canSave
+                  ? 1
+                  : 0.8,
               }}
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
               ) : (
-                <Save size={16} color="#FFF" />
+                <Save
+                  size={16}
+                  color="#FFFFFF"
+                />
               )}
+
               <Text className="text-sm font-semibold text-white">
-                {formData.id ? "Update Schedule" : "Add Schedule"}
+                {formData.id
+                  ? "Update Schedule"
+                  : "Add Schedule"}
               </Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </View>
+      </View>
     </Modal>
   );
 }

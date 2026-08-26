@@ -42,10 +42,33 @@ interface StepNodeProps {
 }
 
 // --- Helpers ---
+// --- Helpers ---
 const isStepCompleted = (index: number, stepData?: StepData): boolean => {
   if (!stepData) return false;
   const content = stepData[`d${index}`];
-  return Array.isArray(content) ? content.length > 0 : false;
+
+  // 1. Must be an array with at least one item
+  if (!Array.isArray(content) || content.length === 0) {
+    return false;
+  }
+
+  // 2. Check if at least one item has ACTUAL meaningful data
+  return content.some((item: any) => {
+    if (!item || typeof item !== "object") return false;
+
+    // Remove auto-generated metadata fields from the check
+    const { eventId, eventNo, id, createdAt, updatedAt, __typename, ...rest } =
+      item;
+
+    // Return true only if there is at least one field with a real value
+    return Object.values(rest).some(
+      (value) =>
+        value !== null &&
+        value !== undefined &&
+        value !== "" &&
+        value !== false,
+    );
+  });
 };
 
 const getStepStatus = (

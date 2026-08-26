@@ -802,6 +802,12 @@ export default function TopManagementDashboard() {
   }, [params?.tab]);
 
   const [loading, setLoading] = useState(true);
+const [annualLoading, setAnnualLoading] = useState(false);
+const [deptLoading, setDeptLoading] = useState(false);
+const [weekLoading, setWeekLoading] = useState(false);
+const [dailyLoading, setDailyLoading] = useState(false);
+
+const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("pending");
 
@@ -936,382 +942,220 @@ export default function TopManagementDashboard() {
     setAllUsersList([]);
   }
 };
-  const fetchAnnualPlans = async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const years = [];
-      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
+ // ✅ OPTIMIZED: Fetch only current year
+const fetchAnnualPlans = async () => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear]; // Only current year
 
-      let allPlans: any[] = [];
-      for (const year of years) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/audit-plan/${year}`, {
-            method: "GET",
-            credentials: "include",
+    let allPlans: any[] = [];
+    for (const year of years) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-plan/${year}`, {
+          method: "GET",
+          credentials: "include",
+        });
+        const data = await response.json();
+        if (data && data.planItems && data.planItems.length > 0) {
+          allPlans.push({
+            year,
+            ...data,
+            approvalStatus: data.approvalStatus || "PENDING_APPROVAL",
+            preparedBy: data.preparedBy || data.preparedByName || "N/A",
+            preparedAt: data.preparedAt || data.createdAt || new Date().toISOString(),
+            planItems: data.planItems || [],
           });
-          const data = await response.json();
-          if (data && data.planItems && data.planItems.length > 0) {
-            allPlans.push({
-              year,
-              ...data,
-              approvalStatus: data.approvalStatus || "PENDING_APPROVAL",
-              preparedBy: data.preparedBy || data.preparedByName || "N/A",
-              preparedAt:
-                data.preparedAt || data.createdAt || new Date().toISOString(),
-              planItems: data.planItems || [],
-            });
-          }
-        } catch (err) {
-          console.error(`Error fetching annual plan for year ${year}:`, err);
         }
+      } catch (err) {
+        console.error(`Error fetching annual plan for year ${year}:`, err);
       }
+    }
 
-      const pending = allPlans.filter(
-        (p) => p.approvalStatus === "PENDING_APPROVAL",
-      );
-      const approved = allPlans.filter((p) => p.approvalStatus === "APPROVED");
+    const pending = allPlans.filter((p) => p.approvalStatus === "PENDING_APPROVAL");
+    const approved = allPlans.filter((p) => p.approvalStatus === "APPROVED");
 
-      setPendingPlans(pending);
-      setApprovedPlans(approved);
+    setPendingPlans(pending);
+    setApprovedPlans(approved);
 
-      let totalPlanned = 0,
-        totalCompleted = 0;
-      approved.forEach((plan: any) => {
-        plan.planItems?.forEach((item: any) => {
-          item.months?.forEach((month: any) => {
-            if (month?.status === "PLANNED") totalPlanned++;
-            if (month?.status === "COMPLETED") totalCompleted++;
-          });
+    let totalPlanned = 0, totalCompleted = 0;
+    approved.forEach((plan: any) => {
+      plan.planItems?.forEach((item: any) => {
+        item.months?.forEach((month: any) => {
+          if (month?.status === "PLANNED") totalPlanned++;
+          if (month?.status === "COMPLETED") totalCompleted++;
         });
       });
+    });
 
-      return { totalPlanned, totalCompleted, allPlans, pending, approved };
-    } catch (error) {
-      console.error("Error fetching annual plans:", error);
-      return {
-        totalPlanned: 0,
-        totalCompleted: 0,
-        allPlans: [],
-        pending: [],
-        approved: [],
-      };
-    }
-  };
+    return { totalPlanned, totalCompleted, allPlans, pending, approved };
+  } catch (error) {
+    console.error("Error fetching annual plans:", error);
+    return { totalPlanned: 0, totalCompleted: 0, allPlans: [], pending: [], approved: [] };
+  }
+};
 
-  const fetchDepartmentPlans = async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const years = [];
-      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
+  // ✅ OPTIMIZED: Fetch only current year
+const fetchDepartmentPlans = async () => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear]; // Only current year
 
-      let allDeptPlans: any[] = [];
-      for (const year of years) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/department-plan/${year}`, {
-            method: "GET",
-            credentials: "include",
-          });
-          const data = await response.json();
-          if (data && data.planItems && data.planItems.length > 0)
-            allDeptPlans.push({ year, ...data });
-        } catch (err) {
-          console.error(`Error fetching dept plan for year ${year}:`, err);
-        }
+    let allDeptPlans: any[] = [];
+    for (const year of years) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/department-plan/${year}`, {
+          method: "GET",
+          credentials: "include",
+        });
+        const data = await response.json();
+        if (data && data.planItems && data.planItems.length > 0)
+          allDeptPlans.push({ year, ...data });
+      } catch (err) {
+        console.error(`Error fetching dept plan for year ${year}:`, err);
       }
-
-      const pending = allDeptPlans.filter(
-        (p) => p.approvalStatus === "PENDING_APPROVAL",
-      );
-      const approved = allDeptPlans.filter(
-        (p) => p.approvalStatus === "APPROVED",
-      );
-
-      setPendingDeptPlans(pending);
-      setApprovedDeptPlans(approved);
-
-      return {
-        pendingCount: pending.length,
-        approvedCount: approved.length,
-        allPlans: allDeptPlans,
-        pending,
-        approved,
-      };
-    } catch (error) {
-      console.error("Error fetching department plans:", error);
-      return {
-        pendingCount: 0,
-        approvedCount: 0,
-        allPlans: [],
-        pending: [],
-        approved: [],
-      };
     }
-  };
 
-  const fetchForm5Plans = async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const years = [];
-      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
+    const pending = allDeptPlans.filter((p) => p.approvalStatus === "PENDING_APPROVAL");
+    const approved = allDeptPlans.filter((p) => p.approvalStatus === "APPROVED");
 
-      let allPendingApprovals: any[] = [];
-      let allApproved: any[] = [];
+    setPendingDeptPlans(pending);
+    setApprovedDeptPlans(approved);
 
-      for (const year of years) {
-        try {
-          const response = await fetch(
-            `${API_BASE_URL}/api/audit-schedule/year/${year}`,
-            {
-              method: "GET",
-              credentials: "include",
-            },
-          );
-          const allSchedules = await response.json();
-          const weekSchedules = allSchedules.filter(
-            (s: any) => !s.scheduledDate,
-          );
+    return { pendingCount: pending.length, approvedCount: approved.length, allPlans: allDeptPlans, pending, approved };
+  } catch (error) {
+    console.error("Error fetching department plans:", error);
+    return { pendingCount: 0, approvedCount: 0, allPlans: [], pending: [], approved: [] };
+  }
+};
 
-          if (weekSchedules.length > 0) {
-            const monthMap = new Map();
-            weekSchedules.forEach((schedule: any) => {
-              const month = schedule.month;
-              if (!monthMap.has(month)) {
-                monthMap.set(month, {
-                  year,
-                  month,
-                  approvalStatus: schedule.approvalStatus || "DRAFT",
-                  preparedBy: schedule.preparedByName,
-                  approvedBy: schedule.approvedByName,
-                  approvedAt: schedule.approvedAt,
-                  rejectionReason: schedule.rejectionReason,
-                  leadAuditorId: schedule.leadAuditorId,
-                  leadAuditorName: schedule.leadAuditorName,
-                  scheduleCount: 0,
-                  schedules: [],
-                });
-              }
-              const monthData = monthMap.get(month);
-              monthData.scheduleCount++;
-              monthData.schedules.push(schedule);
-            });
+ // ✅ OPTIMIZED: Fetch only current year
+const fetchForm5Plans = async () => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear]; // Only current year
 
-            for (const [month, monthData] of monthMap) {
-              if (monthData.approvalStatus === "PENDING_APPROVAL")
-                allPendingApprovals.push(monthData);
-              else if (monthData.approvalStatus === "APPROVED")
-                allApproved.push(monthData);
+    let allPendingApprovals: any[] = [];
+    let allApproved: any[] = [];
+
+    for (const year of years) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {
+          method: "GET",
+          credentials: "include",
+        });
+        const allSchedules = await response.json();
+        const weekSchedules = allSchedules.filter((s: any) => !s.scheduledDate);
+
+        if (weekSchedules.length > 0) {
+          const monthMap = new Map();
+          weekSchedules.forEach((schedule: any) => {
+            const month = schedule.month;
+            if (!monthMap.has(month)) {
+              monthMap.set(month, {
+                year, month,
+                approvalStatus: schedule.approvalStatus || "DRAFT",
+                preparedBy: schedule.preparedByName,
+                approvedBy: schedule.approvedByName,
+                approvedAt: schedule.approvedAt,
+                rejectionReason: schedule.rejectionReason,
+                leadAuditorId: schedule.leadAuditorId,
+                leadAuditorName: schedule.leadAuditorName,
+                scheduleCount: 0,
+                schedules: [],
+              });
             }
-          }
-        } catch (err) {
-          console.error(`Error fetching form 5 plan for year ${year}:`, err);
-        }
-      }
-
-      setPendingForm5Plans(allPendingApprovals);
-      setApprovedForm5Plans(allApproved);
-
-      return {
-        pendingCount: allPendingApprovals.length,
-        approvedCount: allApproved.length,
-        pending: allPendingApprovals,
-        approved: allApproved,
-      };
-    } catch (error) {
-      console.error("Error fetching Form 5 plans:", error);
-      return { pendingCount: 0, approvedCount: 0, pending: [], approved: [] };
-    }
-  };
-
-  const fetchDetailedPlans = useCallback(async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const years: number[] = [];
-      for (let i = currentYear - 5; i <= currentYear + 2; i++) years.push(i);
-
-      let allDailySchedules: any[] = [];
-      for (const year of years) {
-        for (const month of monthOrder) {
-          try {
-            // ✅ FIX: Handle both cases — if API returns raw array OR AxiosResponse
-            const response = await auditScheduleApi.getDateSchedulesByMonth(
-              year,
-              month as any,
-            );
-            const rawData = Array.isArray(response) ? response : response?.data;
-            const schedules: any[] = Array.isArray(rawData) ? rawData : [];
-
-            schedules.forEach((schedule: any) => {
-              schedule.planYear = year;
-              schedule.month = month;
-              if (!schedule.preparedByName && schedule.preparedBy)
-                schedule.preparedByName = schedule.preparedBy;
-              if (!schedule.approvedByName && schedule.approvedBy)
-                schedule.approvedByName = schedule.approvedBy;
-              if (!schedule.detailedApprovalStatus && schedule.approvalStatus)
-                schedule.detailedApprovalStatus = schedule.approvalStatus;
-            });
-
-            allDailySchedules.push(...schedules);
-          } catch (err) {
-            console.error(
-              `Error fetching detailed plan for ${year} ${month}:`,
-              err,
-            );
-          }
-        }
-      }
-
-      setAllDetailedSchedules(allDailySchedules);
-
-      // --- Grouping logic ---
-      const monthMap = new Map<string, any>();
-      allDailySchedules.forEach((schedule: any) => {
-        const year = schedule.planYear;
-        const month = schedule.month;
-        const key = `${year}-${month}`;
-
-        if (!monthMap.has(key)) {
-          monthMap.set(key, {
-            year,
-            month,
-            preparedBySet: new Set(),
-            approvedBySet: new Set(),
-            approvedAt: null,
-            leadAuditorName: schedule.leadAuditorName,
-            schedules: [],
+            const monthData = monthMap.get(month);
+            monthData.scheduleCount++;
+            monthData.schedules.push(schedule);
           });
+
+          for (const [month, monthData] of monthMap) {
+            if (monthData.approvalStatus === "PENDING_APPROVAL") allPendingApprovals.push(monthData);
+            else if (monthData.approvalStatus === "APPROVED") allApproved.push(monthData);
+          }
         }
+      } catch (err) {
+        console.error(`Error fetching form 5 plan for year ${year}:`, err);
+      }
+    }
 
-        const monthData = monthMap.get(key);
+    setPendingForm5Plans(allPendingApprovals);
+    setApprovedForm5Plans(allApproved);
 
-        if (
-          schedule.preparedBy &&
-          schedule.preparedBy !== "N/A" &&
-          schedule.preparedBy !== "null"
-        )
-          monthData.preparedBySet.add(schedule.preparedBy);
-        else if (schedule.preparedByName && schedule.preparedByName !== "N/A")
-          monthData.preparedBySet.add(schedule.preparedByName);
+    return { pendingCount: allPendingApprovals.length, approvedCount: allApproved.length, pending: allPendingApprovals, approved: allApproved };
+  } catch (error) {
+    console.error("Error fetching Form 5 plans:", error);
+    return { pendingCount: 0, approvedCount: 0, pending: [], approved: [] };
+  }
+};
 
-        if (
-          schedule.approvedBy &&
-          schedule.approvedBy !== "N/A" &&
-          schedule.approvedBy !== "null"
-        )
-          monthData.approvedBySet.add(schedule.approvedBy);
-        else if (schedule.approvedByName && schedule.approvedByName !== "N/A")
-          monthData.approvedBySet.add(schedule.approvedByName);
+  // ✅ OPTIMIZED: Fetch only current month (1 API call instead of 132)
+const fetchDetailedPlans = useCallback(async () => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const currentMonthIndex = new Date().getMonth();
+    const currentMonthAbbr = monthOrder[currentMonthIndex >= 3 ? currentMonthIndex - 3 : currentMonthIndex + 9];
 
-        const approvalDate = schedule.approvedAt || schedule.approvedDate;
-        if (
-          approvalDate &&
-          (!monthData.approvedAt ||
-            new Date(approvalDate) > new Date(monthData.approvedAt))
-        )
-          monthData.approvedAt = approvalDate;
+    // ✅ Only 1 API call
+    const response = await auditScheduleApi.getDateSchedulesByMonth(currentYear, currentMonthAbbr as any);
+    const rawData = Array.isArray(response) ? response : response?.data;
+    const schedules: any[] = Array.isArray(rawData) ? rawData : [];
 
-        monthData.schedules.push(schedule);
+    schedules.forEach((schedule: any) => {
+      schedule.planYear = currentYear;
+      schedule.month = currentMonthAbbr;
+      if (!schedule.preparedByName && schedule.preparedBy) schedule.preparedByName = schedule.preparedBy;
+      if (!schedule.approvedByName && schedule.approvedBy) schedule.approvedByName = schedule.approvedBy;
+      if (!schedule.detailedApprovalStatus && schedule.approvalStatus) schedule.detailedApprovalStatus = schedule.approvalStatus;
+    });
+
+    setAllDetailedSchedules(schedules);
+
+    // Group into pending/approved for current month
+    const getStatus = (s: any) => s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
+    const pendingSchedules = schedules.filter((s: any) => getStatus(s) === "PENDING_APPROVAL" || getStatus(s) === "CHANGE_REQUESTED");
+    const approvedSchedules = schedules.filter((s: any) => getStatus(s) === "APPROVED");
+
+    const monthData = {
+      year: currentYear,
+      month: currentMonthAbbr,
+      preparedBy: schedules[0]?.preparedByName || "N/A",
+      approvedBy: schedules[0]?.approvedByName || "Not approved yet",
+      leadAuditorName: schedules[0]?.leadAuditorName,
+      schedules,
+    };
+
+    let pendingMonths: any[] = [];
+    let approvedMonths: any[] = [];
+
+    if (pendingSchedules.length > 0) {
+      pendingMonths.push({
+        ...monthData,
+        scheduleCount: schedules.length,
+        pendingCount: pendingSchedules.length,
+        changeRequestedCount: pendingSchedules.filter((s: any) => getStatus(s) === "CHANGE_REQUESTED").length,
+        isChangeRequested: pendingSchedules.some((s: any) => getStatus(s) === "CHANGE_REQUESTED"),
+        rejectedCount: schedules.filter((s: any) => getStatus(s) === "REJECTED").length,
+        schedules,
       });
-
-      const pendingMonths: any[] = [];
-      const approvedMonths: any[] = [];
-
-      for (const [, monthData] of monthMap) {
-        const schedules = monthData.schedules;
-        const uniquePreparedBy = Array.from(monthData.preparedBySet);
-        const uniqueApprovedBy = Array.from(monthData.approvedBySet);
-
-        monthData.displayPreparedBy =
-          uniquePreparedBy.length > 0
-            ? uniquePreparedBy.join(", ")
-            : "Not available";
-        monthData.displayApprovedBy =
-          uniqueApprovedBy.length > 0
-            ? uniqueApprovedBy.join(", ")
-            : "Not approved yet";
-
-        const getStatus = (s: any) =>
-          s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
-
-        const allApproved =
-          schedules.length > 0 &&
-          schedules.every((s: any) => getStatus(s) === "APPROVED");
-        const hasPending = schedules.some(
-          (s: any) => getStatus(s) === "PENDING_APPROVAL",
-        );
-        const hasChangeRequested = schedules.some(
-          (s: any) => getStatus(s) === "CHANGE_REQUESTED",
-        );
-        const hasRejected = schedules.some(
-          (s: any) => getStatus(s) === "REJECTED",
-        );
-
-        if (hasPending || hasChangeRequested) {
-          pendingMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            pendingCount: schedules.filter(
-              (s: any) => getStatus(s) === "PENDING_APPROVAL",
-            ).length,
-            changeRequestedCount: schedules.filter(
-              (s: any) => getStatus(s) === "CHANGE_REQUESTED",
-            ).length,
-            isChangeRequested: hasChangeRequested,
-            rejectedCount: schedules.filter(
-              (s: any) => getStatus(s) === "REJECTED",
-            ).length,
-            schedules,
-          });
-        } else if (allApproved && schedules.length > 0) {
-          approvedMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            approvedCount: schedules.length,
-            approvedAt: monthData.approvedAt,
-            schedules,
-          });
-        } else if (hasRejected) {
-          approvedMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            rejectedCount: schedules.filter(
-              (s: any) => getStatus(s) === "REJECTED",
-            ).length,
-            approvedCount: schedules.filter(
-              (s: any) => getStatus(s) === "APPROVED",
-            ).length,
-            schedules,
-          });
-        }
-      }
-
-      setPendingDetailedPlans(pendingMonths);
-      setApprovedDetailedPlans(approvedMonths);
-
-      return {
-        pendingCount: pendingMonths.length,
-        approvedCount: approvedMonths.length,
-        pending: pendingMonths,
-        approved: approvedMonths,
-        allSchedules: allDailySchedules,
-      };
-    } catch (error) {
-      console.error("Error fetching detailed plans:", error);
-      return {
-        pendingCount: 0,
-        approvedCount: 0,
-        pending: [],
-        approved: [],
-        allSchedules: [],
-      };
+    } else if (approvedSchedules.length > 0) {
+      approvedMonths.push({
+        ...monthData,
+        scheduleCount: schedules.length,
+        approvedCount: approvedSchedules.length,
+        schedules,
+      });
     }
-  }, []);
+
+    setPendingDetailedPlans(pendingMonths);
+    setApprovedDetailedPlans(approvedMonths);
+
+    return { pendingCount: pendingMonths.length, approvedCount: approvedMonths.length, pending: pendingMonths, approved: approvedMonths, allSchedules: schedules };
+  } catch (error) {
+    console.error("Error fetching detailed plans:", error);
+    return { pendingCount: 0, approvedCount: 0, pending: [], approved: [], allSchedules: [] };
+  }
+}, []);
 
   const prepareAnalyticsData = useCallback(
     (annualData: any, deptData: any, form5Data: any, detailedData: any) => {
@@ -1436,48 +1280,45 @@ export default function TopManagementDashboard() {
     [],
   );
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const [annualData, deptData, form5Data, detailedData] = await Promise.all(
-        [
-          fetchAnnualPlans(),
-          fetchDepartmentPlans(),
-          fetchForm5Plans(),
-          fetchDetailedPlans(),
-        ],
-      );
+ const fetchDashboardData = async () => {
+  try {
+    setLoading(true);
+    
+    // ✅ Only fetch current year data for overview
+    const [annualData, deptData, form5Data, detailedData] = await Promise.all([
+      fetchAnnualPlans(),
+      fetchDepartmentPlans(),
+      fetchForm5Plans(),
+      fetchDetailedPlans(),
+    ]);
 
-      const statsData = {
-        totalAudits: annualData.totalPlanned,
-        completedAudits: annualData.totalCompleted,
-        pendingApproval: annualData.pending.length,
-        approvedPlans: annualData.approved.length,
-        pendingDeptApproval: deptData.pending.length,
-        approvedDeptPlans: deptData.approved.length,
-        pendingForm5Approval: form5Data.pending.length,
-        approvedForm5Plans: form5Data.approved.length,
-        pendingDetailedApproval: detailedData.pending.length,
-        approvedDetailedPlans: detailedData.approved.length,
-        overallCompletion:
-          annualData.totalPlanned > 0
-            ? parseFloat(
-                (
-                  (annualData.totalCompleted / annualData.totalPlanned) *
-                  100
-                ).toFixed(1),
-              )
-            : 0,
-      };
+    const statsData = {
+      totalAudits: annualData.totalPlanned,
+      completedAudits: annualData.totalCompleted,
+      pendingApproval: annualData.pending.length,
+      approvedPlans: annualData.approved.length,
+      pendingDeptApproval: deptData.pending.length,
+      approvedDeptPlans: deptData.approved.length,
+      pendingForm5Approval: form5Data.pending.length,
+      approvedForm5Plans: form5Data.approved.length,
+      pendingDetailedApproval: detailedData.pending.length,
+      approvedDetailedPlans: detailedData.approved.length,
+      overallCompletion: annualData.totalPlanned > 0
+        ? parseFloat(((annualData.totalCompleted / annualData.totalPlanned) * 100).toFixed(1))
+        : 0,
+    };
 
-      setStats(statsData);
-      prepareAnalyticsData(annualData, deptData, form5Data, detailedData);
-    } catch (error) {
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setStats(statsData);
+    prepareAnalyticsData(annualData, deptData, form5Data, detailedData);
+    
+    // ✅ Mark all as loaded after initial fetch
+    setLoadedTabs(new Set(["overview", "annual", "dept", "week", "daily"]));
+  } catch (error) {
+    toast.error("Failed to load dashboard data");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleRefresh = async () => {
     setRefreshing(true);

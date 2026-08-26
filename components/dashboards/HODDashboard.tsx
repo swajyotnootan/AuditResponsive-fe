@@ -1,4 +1,5 @@
-﻿import axios from "axios";
+﻿import { API_BASE_URL } from "@/config/apiConfig";
+import axios from "axios";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -19,13 +20,12 @@ import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  Modal, // 👈 ADD
-  Platform,
+  Modal,
   SafeAreaView, // 👈 ADD
   ScrollView,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -44,32 +44,7 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
-const getBaseUrl = () => {
-  // ✅ 1. WEB BROWSER ONLY (Expo Web)
-  if (Platform.OS === "web") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-  }
 
-  // ✅ 2. PHYSICAL ANDROID PHONE (Your current setup)
-  if (Platform.OS === "android") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-  }
-
-  // ✅ 3. ANDROID STUDIO EMULATOR (If you are using the emulator instead of a physical phone, use this instead of #2)
-  // if (Platform.OS === "android") {
-  //   return "http://10.0.2.2:8080";
-  // }
-
-  // ✅ 4. iOS (Simulator or Physical)
-  if (Platform.OS === "ios") {
-    return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443"; // Physical iPhone needs the IP. Simulator can use localhost.
-  }
-
-  // ✅ 5. FALLBACK
-  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443";
-};
-
-const API_BASE_URL = getBaseUrl();
 console.log("🚀 API Base URL being used:", API_BASE_URL); // <-- WATCH THIS LOG
 
 // ... [Keep your isNcrBasedEvent, isApprovalPendingStatus, StatusBadge, ActionCard, ApprovalCard exactly as they were] ...

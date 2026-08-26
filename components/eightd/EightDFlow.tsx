@@ -1,7 +1,7 @@
+import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import axios from "axios";
-import { router } from "expo-router";
 import { Grid, Layout } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
@@ -21,7 +21,7 @@ import Animated, {
   SlideOutLeft,
   SlideOutRight,
 } from "react-native-reanimated";
-
+import LandingPage from "../dashboards/LandingPage";
 import EightDStepper, { Orientation } from "./EightDStepper";
 import D0PlanContain from "./steps/D0PlanContain";
 import D1FormTeam from "./steps/D1FormTeam";
@@ -39,6 +39,7 @@ interface RouteParams {
   step?: string;
   isNcrBased?: boolean;
   type?: string;
+  resetKey?: number;
 }
 
 interface EightDFormData extends Record<string, any[]> {
@@ -80,7 +81,6 @@ function getFirstUnfilledStep(formData: EightDFormData): number {
   return stepKeys.length;
 }
 
-
 export interface EightDFlowProps {
   eventId?: string | null;
   initialStep?: string;
@@ -112,16 +112,16 @@ export default function EightDFlow({
       : (routeParams.isNcrBased ?? false);
   const type =
     propType !== undefined ? propType : (routeParams.type ?? "fresh");
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
-
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
   const { width } = useWindowDimensions();
+
   const isWeb = Platform.OS === "web";
   const isDesktop = isWeb && width >= 768;
 
-  // ✅ Float the toggle in the empty right margin (no overlap, no gap)
-  const CONTAINER_MAX = 1080; // must match max-w-[1200px] below
+  const CONTAINER_MAX = 1080;
   const sideMargin = Math.max(0, (width - CONTAINER_MAX) / 2);
   const toggleRight = sideMargin >= 70 ? (sideMargin - 42) / 2 : 12;
 
@@ -187,26 +187,107 @@ export default function EightDFlow({
     saveApprovals();
   }, [approvals]);
 
+  // ✅ 1. RESET USE EFFECT (Fixed stepIndex scope)
   useEffect(() => {
-    const newEventId = propEventId; // ✅ Use the prop directly
+    console.log("🔄 [RESET] useEffect triggered. Dependencies:", {
+      propEventId,
+      type,
+      startStep,
+      resetKey: routeParams.resetKey,
+    });
 
-    if (newEventId !== eventNo) {
-      setEventNo(newEventId || null);
-      setDocumentStatus("draft");
-      setIsSubmitted(false);
-      setFormData({
-        d0: [],
-        d1: [],
-        d2: [],
-        d3: [],
-        d4: [],
-        d5: [],
-        d6: [],
-        d7: [],
-        d8: [],
-      });
+    setEventNo(propEventId || null);
+    setDocumentStatus("draft");
+    setIsSubmitted(false);
+
+    const cleanFormData = {
+      d0: [],
+      d1: [],
+      d2: [],
+      d3: [],
+      d4: [],
+      d5: [],
+      d6: [],
+      d7: [],
+      d8: [],
+    };
+
+    console.log("🧹 [RESET] Setting clean formData");
+    setFormData(cleanFormData);
+
+    let finalStepIndex = 0; // ✅ Declared outside the if block
+    if (startStep) {
+      finalStepIndex = stepKeys.indexOf(
+        startStep.toLowerCase() as keyof EightDFormData,
+      );
+      setCurrentStep(finalStepIndex >= 0 ? finalStepIndex : 0);
+    } else {
+      setCurrentStep(0);
     }
-  }, [propEventId]);
+
+    console.log(
+      "✅ [RESET] Complete. currentStep:",
+      finalStepIndex >= 0 ? finalStepIndex : 0,
+    );
+  }, [propEventId, type, startStep, routeParams.resetKey]);
+
+  // ✅ 2. FETCH USE EFFECT (Added resetKey guard, removed duplicate)
+  useEffect(() => {
+    const fetchData = async () => {
+      console.log(
+        "📥 [FETCH] fetchData called. eventNo:",
+        eventNo,
+        "resetKey:",
+        routeParams.resetKey,
+      );
+
+      // ✅ Guard: Don't fetch if there's no eventNo OR if we are explicitly resetting
+      if (!eventNo || routeParams.resetKey) {
+        console.log("⏸️ [FETCH] Skipping - no eventNo OR fresh reset detected");
+        return;
+      }
+
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/eightd/data/${eventNo}`,
+        );
+        if (response.data?.success && response.data.data?.content) {
+          const content = response.data.data.content;
+          const loadedData: Partial<EightDFormData> = {};
+
+          stepKeys.forEach((key) => {
+            const rawData = Array.isArray(content[key]) ? content[key] : [];
+            loadedData[key] = rawData.filter((item: any) => {
+              if (!item || typeof item !== "object") return false;
+              const { eventId, eventNo, id, createdAt, updatedAt, ...rest } =
+                item;
+              return Object.values(rest).some(
+                (value) =>
+                  value !== null && value !== undefined && value !== "",
+              );
+            });
+          });
+
+          console.log("📦 [FETCH] Loaded and filtered data:", loadedData);
+          setFormData(loadedData as EightDFormData);
+          setDocumentStatus(response.data.data.status || "draft");
+
+          let fetchStepIndex = 0;
+          if (startStep) {
+            fetchStepIndex = stepKeys.indexOf(
+              startStep.toLowerCase() as keyof EightDFormData,
+            );
+            if (fetchStepIndex >= 0) setCurrentStep(fetchStepIndex);
+          } else {
+            setCurrentStep(getFirstUnfilledStep(loadedData as EightDFormData));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching 8D ", err);
+      }
+    };
+    fetchData();
+  }, [eventNo, startStep, routeParams.resetKey]); // ✅ Added routeParams.resetKey to dependencies
 
   const saveStep = async (
     currentFormData: EightDFormData,
@@ -225,10 +306,7 @@ export default function EightDFlow({
       }
 
       const payload: Record<string, any> = {};
-
-      if (finalStatus) {
-        payload.status = finalStatus;
-      }
+      if (finalStatus) payload.status = finalStatus;
 
       stepKeys.forEach((key) => {
         if (currentFormData[key] && currentFormData[key].length > 0) {
@@ -246,7 +324,7 @@ export default function EightDFlow({
       formDataToSend.append("jsonContent", JSON.stringify(payload));
 
       let response;
-      const baseURL = "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api/eightd/data";
+      const baseURL = `${API_BASE_URL}/api/eightd/data`;
 
       if (eventNo) {
         response = await axios.put(`${baseURL}/${eventNo}`, formDataToSend, {
@@ -289,7 +367,6 @@ export default function EightDFlow({
         );
         return;
       }
-
       if (documentStatus !== "in progress") {
         Alert.alert(
           "Approval Required",
@@ -311,16 +388,23 @@ export default function EightDFlow({
   };
 
   const goToStep = (index: number) => {
+    console.log(`🖱️ Step ${index} clicked. Current status: ${documentStatus}`);
+
     if (index === 0) {
       setDirection(index > currentStep ? 1 : -1);
       setCurrentStep(index);
       return;
     }
 
-    if (documentStatus !== "in progress") {
+    if (
+      documentStatus !== "in progress" &&
+      documentStatus !== "Submitted" &&
+      documentStatus !== "closed"
+    ) {
+      console.warn("⚠️ Click blocked: Document is not in progress");
       Alert.alert(
         "Approval Required",
-        "⚠️ You must get HOD approval before accessing steps beyond D0.",
+        "⚠️ You must get HOD approval (Status: 'in progress') before accessing steps beyond D0.",
       );
       return;
     }
@@ -334,66 +418,36 @@ export default function EightDFlow({
     setIsSubmitting(true);
 
     try {
+      console.log("🚀 [DEBUG] Starting submission...");
       const success = await saveStep(formData, "Submitted");
+      console.log("🚀 [DEBUG] saveStep result:", success);
 
       if (success) {
         setIsSubmitted(true);
         setDocumentStatus("Submitted");
-
         Alert.alert("Success", "✅ 8D Report submitted successfully!", [
           {
             text: "OK",
-            onPress: () => {
-              router.replace({
-                pathname: "/",
-                params: { refreshToken: Date.now().toString() },
-              });
-            },
+            onPress: () =>
+              console.log(
+                "🚀 [DEBUG] OK pressed. View will now swap to LandingPage.",
+              ),
           },
         ]);
       } else {
+        console.log("❌ [DEBUG] saveStep returned false. Check API response.");
         Alert.alert("Error", "❌ Failed to submit. Please check your data.");
       }
     } catch (error: any) {
-      console.error("Submission error:", error);
-      Alert.alert("Error", " An error occurred during submission.");
+      console.error("💥 [DEBUG] Submission error:", error);
+      Alert.alert(
+        "Error",
+        "An error occurred during submission: " + error.message,
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!eventNo) return;
-
-      try {
-        const response = await axios.get(
-          `https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api/eightd/data/${eventNo}`,
-        );
-        if (response.data?.success && response.data.data?.content) {
-          const content = response.data.data.content;
-          const loadedData: Partial<EightDFormData> = {};
-          stepKeys.forEach((key) => {
-            loadedData[key] = Array.isArray(content[key]) ? content[key] : [];
-          });
-          setFormData(loadedData as EightDFormData);
-          setDocumentStatus(response.data.data.status || "draft");
-
-          if (startStep) {
-            const stepIndex = stepKeys.indexOf(
-              startStep.toLowerCase() as keyof EightDFormData,
-            );
-            if (stepIndex >= 0) setCurrentStep(stepIndex);
-          } else {
-            setCurrentStep(getFirstUnfilledStep(loadedData as EightDFormData));
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching 8D ", err);
-      }
-    };
-    fetchData();
-  }, [eventNo, startStep]);
 
   useEffect(() => {
     const normalizedStatus = documentStatus?.toLowerCase();
@@ -420,9 +474,7 @@ export default function EightDFlow({
             initialIsNcrBased={startedFromNcrFlow}
             updateParent={(rows: any[]) => {
               setFormData((prev) => ({ ...prev, d0: rows }));
-              if (rows[0]?.status) {
-                setDocumentStatus(rows[0].status);
-              }
+              if (rows[0]?.status) setDocumentStatus(rows[0].status);
             }}
           />
         );
@@ -505,9 +557,10 @@ export default function EightDFlow({
     }
   };
 
-  return (
+  return isSubmitted ? (
+    <LandingPage type={startedFromNcrFlow ? "ncr" : "fresh"} />
+  ) : (
     <View className="flex-1 bg-gray-50">
-      {/* ✅ Floating toggle — absolute, zero layout space */}
       {isDesktop && (
         <Pressable
           onPress={() =>
@@ -547,7 +600,7 @@ export default function EightDFlow({
           flexGrow: 1,
           paddingBottom: 8,
           paddingTop: 4,
-          paddingHorizontal: isDesktop ? 8 : 0, // ✅ no side padding on mobile
+          paddingHorizontal: isDesktop ? 8 : 0,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -555,10 +608,11 @@ export default function EightDFlow({
           style={{
             alignSelf: "center",
             width: "100%",
-            maxWidth: isDesktop ? 1080 : "100%", // ✅ full width on mobile (like UserFormModal)
+            maxWidth: isDesktop ? 1080 : "100%",
           }}
         >
           <EightDStepper
+            key={`stepper-${eventNo || `fresh-${routeParams.resetKey || 0}`}`}
             steps={steps}
             currentStep={currentStep}
             onStepClick={goToStep}
@@ -570,7 +624,7 @@ export default function EightDFlow({
                 width: "100%",
                 backgroundColor: "white",
                 marginTop: isDesktop ? 8 : 2,
-                padding: isDesktop ? 16 : 8, // ✅ tighter on mobile
+                padding: isDesktop ? 16 : 8,
                 borderRadius: 12,
                 shadowColor: "#000",
                 shadowOffset: { width: 0, height: 2 },
@@ -580,7 +634,6 @@ export default function EightDFlow({
               }}
             >
               <Animated.View
-                key={currentStep}
                 entering={
                   direction > 0
                     ? SlideInRight.duration(400)
@@ -595,6 +648,7 @@ export default function EightDFlow({
               >
                 {renderStepContent()}
               </Animated.View>
+
               <View className="flex flex-col items-stretch justify-between gap-2 pt-3 mt-3 border-t border-gray-200 sm:flex-row sm:items-center">
                 <TouchableOpacity
                   onPress={prevStep}
@@ -610,11 +664,7 @@ export default function EightDFlow({
                   <TouchableOpacity
                     onPress={nextStep}
                     disabled={isSubmitting}
-                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${
-                      isSubmitting
-                        ? "bg-gray-400 border-gray-500"
-                        : "bg-blue-600 border-blue-700 active:bg-blue-700"
-                    }`}
+                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${isSubmitting ? "bg-gray-400 border-gray-500" : "bg-blue-600 border-blue-700 active:bg-blue-700"}`}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="white" />
@@ -634,11 +684,7 @@ export default function EightDFlow({
                   <TouchableOpacity
                     onPress={handleFinalSubmit}
                     disabled={isSubmitting}
-                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${
-                      isSubmitting
-                        ? "bg-gray-400 border-gray-500"
-                        : "bg-green-600 border-green-700 active:bg-green-700"
-                    }`}
+                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${isSubmitting ? "bg-gray-400 border-gray-500" : "bg-green-600 border-green-700 active:bg-green-700"}`}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="white" />
