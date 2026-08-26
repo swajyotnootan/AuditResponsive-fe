@@ -1265,6 +1265,9 @@ export default function ForumThreadView({
 
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
+  const visiblePosts = displayPosts.filter(
+  p => p.messageType !== "REACTION"
+);
 
  // ✅ NEW CODE (Always treat backend as UTC)
 // ✅ REPLACE with consistent UTC parser
@@ -1553,14 +1556,14 @@ const getDateLabel = (dateString?: string) => {
           ) : (
             <FlatList
               ref={flatListRef}
-              data={displayPosts.filter(p => p.messageType !== 'REACTION')} // Filter out reactions from main list
-              keyExtractor={(item, index) => item?.id || String(index)}
+              data={visiblePosts}
+                keyExtractor={(item, index) => item?.id || String(index)}
               renderItem={({ item, index }) => {
                 let dateLabel = null;
                 if (index === 0) {
                   dateLabel = getDateLabel(item.createdAt);
                 } else {
-                  const prevItem = displayPosts[index - 1];
+                  const prevItem = visiblePosts[index - 1];
                   if (prevItem) {
                     const prevDate = new Date(prevItem.createdAt).toDateString();
                     const currDate = new Date(item.createdAt).toDateString();
