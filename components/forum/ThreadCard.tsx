@@ -847,6 +847,42 @@ export default function ThreadCard({
   const [showReactionBar, setShowReactionBar] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showReactionDetail, setShowReactionDetail] = useState<string | null>(null);
+  const [extraAttachmentData, setExtraAttachmentData] = useState<Record<string, any>>({});
+
+useEffect(() => {
+  if (!thread.attachments) return;
+  thread.attachments.forEach((att) => {
+    if (
+      (att.attachmentType === "LOCATION" || att.attachmentType === "EVENT") &&
+      att.id &&
+      !att.fileData &&
+      !extraAttachmentData[att.id]
+    ) {
+      const fetchFileData = async () => {
+        try {
+          const url = `${API_BASE_URL}/api/forum/8d/files/${att.id}`;
+          const response = await fetch(url);
+          if (response.ok) {
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result as string;
+              const base64 = result.split(",")[1];
+              if (base64) {
+                const decoded = JSON.parse(atob(base64));
+                setExtraAttachmentData((prev) => ({ ...prev, [att.id!]: decoded }));
+              }
+            };
+            reader.readAsDataURL(blob);
+          }
+        } catch (error) {
+          console.error("Error fetching attachment data:", error);
+        }
+      };
+      fetchFileData();
+    }
+  });
+}, [thread.attachments]);
   const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
 
   const currentEmail = currentUser?.email || currentUsername;
@@ -1166,89 +1202,52 @@ export default function ThreadCard({
     }
  if (attachment.attachmentType === "LOCATION") {
   let location: any = {};
-
   try {
     if (attachment.fileData) {
-      if (typeof attachment.fileData === 'string') {
-        // ✅ Check if it's already a JSON string
-        if (attachment.fileData.startsWith('{')) {
-          // Already JSON - parse directly
-          location = JSON.parse(attachment.fileData);
-        } else {
-          // Might be base64 encoded - try to decode
-          try {
-            let decoded;
-            if (Platform.OS === 'web') {
-              decoded = atob(attachment.fileData);
-            } else {
-              // React Native - use Buffer or fallback
-              try {
-                decoded = Buffer.from(attachment.fileData, 'base64').toString('utf-8');
-              } catch (e) {
-                // If Buffer fails, try alternative
-                decoded = decodeURIComponent(escape(atob(attachment.fileData)));
-              }
-            }
-            if (decoded && decoded.startsWith('{')) {
-              location = JSON.parse(decoded);
-            }
-          } catch (e) {
-            console.log("Location decode error:", e);
-            // Try to parse as-is
-            try {
-              location = JSON.parse(attachment.fileData);
-            } catch (e2) {
-              location = {};
-            }
-          }
-        }
-      }
+      location = JSON.parse(atob(attachment.fileData));
+    } else if (attachment.id && extraAttachmentData[attachment.id]) {
+      location = extraAttachmentData[attachment.id];
     }
   } catch (error) {
     console.log("Location parse error:", error);
-    location = {};
   }
 
-  // ✅ Extract location data with fallbacks
   const latitude = Number(location.latitude ?? location.lat);
   const longitude = Number(location.longitude ?? location.lng);
   const address = location.address || location.name || "Shared location";
-  const url = location.url || location.mapUrl || "";
 
-  // ✅ Build map URL
-  const mapUrl = url || 
+  const mapUrl =
+    location.url ||
+    location.mapUrl ||
     (Number.isFinite(latitude) && Number.isFinite(longitude)
       ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
       : "");
 
- const openLocation = async () => {
-  if (!mapUrl) {
-    Alert.alert("Location unavailable", "No valid location information was provided.");
-    return;
-  }
-  try {
-    if (Platform.OS === 'web') {
-      // ✅ Opens in a new tab on web
-      window.open(mapUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      // ✅ Uses native Linking for mobile
-      const supported = await Linking.canOpenURL(mapUrl);
-      if (supported) {
-        await Linking.openURL(mapUrl);
+  const openLocation = async () => {
+    if (!mapUrl) {
+      Alert.alert("Location unavailable", "No valid location information was provided.");
+      return;
+    }
+    try {
+      if (Platform.OS === 'web') {
+        window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {
-        Alert.alert("Unable to open location", "No map application available");
+        const supported = await Linking.canOpenURL(mapUrl);
+        if (supported) {
+          await Linking.openURL(mapUrl);
+        } else {
+          Alert.alert("Unable to open location", "No map application available");
+        }
+      }
+    } catch (error) {
+      console.error("Open location error:", error);
+      if (Platform.OS === 'web') {
+        window.open(mapUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        Alert.alert("Error", "Unable to open location");
       }
     }
-  } catch (error) {
-    console.error("Open location error:", error);
-    // Ultimate fallback for Web if the try block fails
-    if (Platform.OS === 'web') {
-      window.open(mapUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      Alert.alert("Error", "Unable to open location");
-    }
-  }
-};
+  };
 
   return (
     <Pressable
