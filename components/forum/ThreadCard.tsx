@@ -736,6 +736,48 @@ const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () =
   );
 };
 
+const URL_REGEX =
+  /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?)/gi;
+
+const MessageContent = ({
+  content,
+  onOpenLink,
+}: {
+  content: string;
+  onOpenLink: (url: string) => void;
+}) => {
+  const parts = content.split(URL_REGEX);
+
+  return (
+    <Text style={styles.messageText}>
+      {parts.map((part, index) => {
+        const isUrl =
+          /^https?:\/\//i.test(part) ||
+          /^www\./i.test(part) ||
+          /^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}/i.test(part);
+
+        if (!isUrl) {
+          return <Text key={index}>{part}</Text>;
+        }
+
+        return (
+          <Text
+            key={index}
+            onPress={() => onOpenLink(part)}
+            style={{
+              color: "#2563eb",
+              textDecorationLine: "underline",
+              fontWeight: "600",
+            }}
+          >
+            {part}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+};
+
 // =====================================================
 // COMPONENT
 // =====================================================
@@ -1406,6 +1448,21 @@ export default function ThreadCard({
     return null; 
   };
 
+  const openLink = async (url: string) => {
+  try {
+    let finalUrl = url.trim();
+
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    await Linking.openURL(finalUrl);
+  } catch (error) {
+    console.error("Open link error:", error);
+    Alert.alert("Unable to open link");
+  }
+};
+
   const avatarUserId = getAvatarUserId();
   const avatar = isOwnMessage ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
 
@@ -1490,8 +1547,12 @@ export default function ThreadCard({
           )}
           
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
-          {thread.content && thread.messageType !== "EVENT" && (<Text style={styles.messageText}>{thread.content}</Text>)}
-          
+{thread.content && thread.messageType !== "EVENT" && (
+  <MessageContent
+    content={thread.content}
+    onOpenLink={openLink}
+  />
+)}          
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {thread.isEdited && <Text style={styles.editedText}>(edited)</Text>}
