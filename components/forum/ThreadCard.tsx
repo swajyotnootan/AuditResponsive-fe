@@ -118,23 +118,28 @@ const isProductionBackend = () => {
 };
 
 // ✅ NEW CODE (Always treat backend as UTC)
-// ✅ REPLACE with this consistent UTC parser
 const parseBackendDate = (dateString: string): Date => {
-  if (!dateString) return new Date();
-  
+
   let isoString = dateString;
-  
-  // Handle "2026-08-26 11:30:45" format (space instead of T)
+
   if (!isoString.includes('T')) {
+
     isoString = isoString.replace(' ', 'T');
+
   }
-  
-  // ALWAYS treat as UTC - backend sends UTC
+
+  // ✅ FIXED: ALWAYS add Z if no timezone marker
+
+  // Backend always sends UTC (both local and production)
+
   if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
+
     isoString += 'Z';
+
   }
-  
+
   return new Date(isoString);
+
 };
  
 
