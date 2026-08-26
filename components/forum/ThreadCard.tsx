@@ -117,109 +117,152 @@ const isProductionBackend = () => {
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
-// ✅ REPLACE parseBackendDate - Always treat as UTC
+// ✅ NEW CODE (Always treat backend as UTC)
+// =====================================================
+// DATE/TIME HELPERS
+// Backend stores/sends timestamps in UTC.
+// Frontend converts them to the device's LOCAL timezone.
+// =====================================================
+
 const parseBackendDate = (dateString: string): Date => {
   if (!dateString) return new Date();
-  
-  let isoString = dateString;
-  
-  // Handle "2026-08-26 11:30:45" format
-  if (!isoString.includes('T')) {
-    isoString = isoString.replace(' ', 'T');
+
+  let isoString = String(dateString).trim();
+
+  // Handle: "2026-08-26 08:45:00"
+  if (!isoString.includes("T")) {
+    isoString = isoString.replace(" ", "T");
   }
-  
-  // ALWAYS treat as UTC
-  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
-    isoString += 'Z';
+
+  // If backend gives a timestamp without timezone information,
+  // treat it as UTC.
+  if (
+    !isoString.endsWith("Z") &&
+    !/[+-]\d{2}:\d{2}$/.test(isoString)
+  ) {
+    isoString += "Z";
   }
-  
+
   return new Date(isoString);
 };
 
-// ✅ REPLACE getTimeOnly - Force UTC
+
+// Display time in the user's/device's local timezone.
+// On your Indian device this will automatically use IST (UTC+5:30).
 const getTimeOnly = (date: Date) => {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
     hour12: true,
-    timeZone: 'UTC', // FORCE UTC
   });
 };
 
-// ✅ REPLACE formatDateAndTime - Force UTC
+
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
+
   try {
     const date = parseBackendDate(dateString);
+
     if (isNaN(date.getTime())) return "";
-    
+
     const now = new Date();
-    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const msgDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
-    
-    if (diffDays === 0) return getTimeOnly(date);
-    if (diffDays === 1) return `Yesterday, ${getTimeOnly(date)}`;
-    if (diffDays < 7) return `${date.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      timeZone: 'UTC' // FORCE UTC
-    })}, ${getTimeOnly(date)}`;
-    
-    return `${date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-      timeZone: 'UTC', // FORCE UTC
+
+    // Compare local calendar dates.
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const messageDate = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+
+    const diffDays = Math.floor(
+      (today.getTime() - messageDate.getTime()) / 86400000
+    );
+
+    if (diffDays === 0) {
+      return getTimeOnly(date);
+    }
+
+    if (diffDays === 1) {
+      return `Yesterday, ${getTimeOnly(date)}`;
+    }
+
+    if (diffDays < 7) {
+      return `${date.toLocaleDateString("en-US", {
+        weekday: "long",
+      })}, ${getTimeOnly(date)}`;
+    }
+
+    return `${date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year:
+        date.getFullYear() !== now.getFullYear()
+          ? "numeric"
+          : undefined,
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
+    console.error("Date formatting error:", error);
     return "";
   }
 };
 
-// ✅ REPLACE parseEventDate - Force UTC
+// ✅ FIX: Ultra-robust date parser for events with debug logging
 const parseEventDate = (dateInput: any): string => {
   if (!dateInput) return "No date set";
+
   try {
     let date: Date;
+
     if (dateInput instanceof Date) {
       date = dateInput;
-    } else if (typeof dateInput === 'number') {
+    } else if (typeof dateInput === "number") {
       date = new Date(dateInput);
-    } else if (typeof dateInput === 'string') {
-      const cleanStr = dateInput.replace(/^"|"$/g, '').trim();
-      date = new Date(cleanStr);
-      if (isNaN(date.getTime())) {
-        const parts = cleanStr.split(/[\/\-]/);
-        if (parts.length === 3) {
-          const [p1, p2, p3] = parts;
-          if (parseInt(p1) > 12) {
-            date = new Date(`${p3}-${p2}-${p1}`);
-          } else {
-            date = new Date(cleanStr);
-          }
-        }
+    } else if (typeof dateInput === "string") {
+      const cleanStr = dateInput.replace(/^"|"$/g, "").trim();
+
+      let isoString = cleanStr;
+
+      if (!isoString.includes("T")) {
+        isoString = isoString.replace(" ", "T");
       }
+
+      if (
+        !isoString.endsWith("Z") &&
+        !/[+-]\d{2}:\d{2}$/.test(isoString)
+      ) {
+        isoString += "Z";
+      }
+
+      date = new Date(isoString);
     } else {
       return "Invalid date format";
     }
-    
+
     if (isNaN(date.getTime())) {
       return "Invalid date";
     }
-    
-    // FORCE UTC
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long',
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric',
-      timeZone: 'UTC' // FORCE UTC
-    }) + ' at ' + date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'UTC' // FORCE UTC
-    });
+
+    return (
+      date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }) +
+      " at " +
+      date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    );
   } catch (error) {
     return "Invalid date";
   }
