@@ -117,40 +117,36 @@ const isProductionBackend = () => {
   return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
 };
 
-// ✅ NEW CODE (Always treat backend as UTC)
+// ✅ REPLACE parseBackendDate - Always treat as UTC
 const parseBackendDate = (dateString: string): Date => {
-
+  if (!dateString) return new Date();
+  
   let isoString = dateString;
-
+  
+  // Handle "2026-08-26 11:30:45" format
   if (!isoString.includes('T')) {
-
     isoString = isoString.replace(' ', 'T');
-
   }
-
-  // ✅ FIXED: ALWAYS add Z if no timezone marker
-
-  // Backend always sends UTC (both local and production)
-
+  
+  // ALWAYS treat as UTC
   if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
-
     isoString += 'Z';
-
   }
-
+  
   return new Date(isoString);
-
 };
- 
 
+// ✅ REPLACE getTimeOnly - Force UTC
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'UTC', // FORCE UTC
   });
 };
 
+// ✅ REPLACE formatDateAndTime - Force UTC
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
   try {
@@ -158,25 +154,29 @@ const formatDateAndTime = (dateString?: string) => {
     if (isNaN(date.getTime())) return "";
     
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const msgDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / 86400000);
     
     if (diffDays === 0) return getTimeOnly(date);
     if (diffDays === 1) return `Yesterday, ${getTimeOnly(date)}`;
-    if (diffDays < 7) return `${date.toLocaleDateString('en-US', { weekday: 'long' })}, ${getTimeOnly(date)}`;
+    if (diffDays < 7) return `${date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      timeZone: 'UTC' // FORCE UTC
+    })}, ${getTimeOnly(date)}`;
     
     return `${date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+      timeZone: 'UTC', // FORCE UTC
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
     return "";
   }
 };
 
-// ✅ FIX: Ultra-robust date parser for events with debug logging
+// ✅ REPLACE parseEventDate - Force UTC
 const parseEventDate = (dateInput: any): string => {
   if (!dateInput) return "No date set";
   try {
@@ -204,22 +204,23 @@ const parseEventDate = (dateInput: any): string => {
     }
     
     if (isNaN(date.getTime())) {
-      console.warn("Invalid date parsed from:", dateInput);
       return "Invalid date";
     }
     
+    // FORCE UTC
     return date.toLocaleDateString('en-US', { 
       weekday: 'long',
       month: 'short', 
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: 'UTC' // FORCE UTC
     }) + ' at ' + date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: 'UTC' // FORCE UTC
     });
   } catch (error) {
-    console.warn("Date parse error:", error, dateInput);
     return "Invalid date";
   }
 };

@@ -1268,6 +1268,7 @@ export default function ForumThreadView({
 
  // ✅ NEW CODE (Always treat backend as UTC)
 // ✅ REPLACE with consistent UTC parser
+// ✅ REPLACE getDateLabel - Force UTC
 const getDateLabel = (dateStr: string) => {
   if (!dateStr) return null;
   
@@ -1283,14 +1284,13 @@ const getDateLabel = (dateStr: string) => {
   
   const date = new Date(isoString);
   
-  // Check if date is valid
   if (isNaN(date.getTime())) return null;
   
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const yesterday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   
-  // Compare dates in UTC
+  // Compare UTC dates
   const dateStrUTC = date.toISOString().split('T')[0];
   const todayStrUTC = today.toISOString().split('T')[0];
   const yesterdayStrUTC = yesterday.toISOString().split('T')[0];
@@ -1302,7 +1302,7 @@ const getDateLabel = (dateStr: string) => {
     month: 'short', 
     day: 'numeric', 
     year: 'numeric',
-    timeZone: 'UTC' // 👈 Force UTC display
+    timeZone: 'UTC' // FORCE UTC
   });
 };
  
