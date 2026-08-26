@@ -1269,41 +1269,79 @@ export default function ForumThreadView({
  // ✅ NEW CODE (Always treat backend as UTC)
 // ✅ REPLACE with consistent UTC parser
 // ✅ REPLACE getDateLabel - Force UTC
-const getDateLabel = (dateStr: string) => {
-  if (!dateStr) return null;
-  
-  let isoString = dateStr;
-  if (!isoString.includes('T')) {
-    isoString = isoString.replace(' ', 'T');
+const getDateLabel = (dateString?: string) => {
+  if (!dateString) return "";
+
+  try {
+    let isoString = String(dateString).trim();
+
+    // Backend format:
+    // 2026-08-26 08:45:00
+    if (!isoString.includes("T")) {
+      isoString = isoString.replace(" ", "T");
+    }
+
+    // Backend timestamp without timezone = UTC
+    if (
+      !isoString.endsWith("Z") &&
+      !/[+-]\d{2}:\d{2}$/.test(isoString)
+    ) {
+      isoString += "Z";
+    }
+
+    const date = new Date(isoString);
+
+    if (isNaN(date.getTime())) return "";
+
+    const now = new Date();
+
+    // Compare LOCAL calendar dates
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const messageDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+
+    const diffDays = Math.floor(
+      (today.getTime() - messageDay.getTime()) / 86400000
+    );
+
+    // Today
+    if (diffDays === 0) {
+      return "Today";
+    }
+
+    // Yesterday
+    if (diffDays === 1) {
+      return "Yesterday";
+    }
+
+    // Within the last 7 days
+    if (diffDays > 1 && diffDays < 7) {
+      return date.toLocaleDateString("en-US", {
+        weekday: "long",
+      });
+    }
+
+    // Older dates
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year:
+        date.getFullYear() !== now.getFullYear()
+          ? "numeric"
+          : undefined,
+    });
+  } catch (error) {
+    console.error("getDateLabel error:", error);
+    return "";
   }
-  
-  // ALWAYS treat as UTC
-  if (!isoString.includes('Z') && !isoString.includes('+') && !isoString.includes('-')) {
-    isoString += 'Z';
-  }
-  
-  const date = new Date(isoString);
-  
-  if (isNaN(date.getTime())) return null;
-  
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const yesterday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-  
-  // Compare UTC dates
-  const dateStrUTC = date.toISOString().split('T')[0];
-  const todayStrUTC = today.toISOString().split('T')[0];
-  const yesterdayStrUTC = yesterday.toISOString().split('T')[0];
-  
-  if (dateStrUTC === todayStrUTC) return null;
-  if (dateStrUTC === yesterdayStrUTC) return "Yesterday";
-  
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric',
-    timeZone: 'UTC' // FORCE UTC
-  });
 };
  
 
