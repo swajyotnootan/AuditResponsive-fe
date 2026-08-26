@@ -1221,34 +1221,34 @@ export default function ThreadCard({
       ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
       : "");
 
-  const openLocation = async () => {
-    if (!mapUrl) {
-      Alert.alert("Location unavailable", "No valid location information was provided.");
-      return;
-    }
-
-    try {
-      if (Platform.OS === 'web') {
-        window.open(mapUrl, '_blank', 'noopener,noreferrer');
+ const openLocation = async () => {
+  if (!mapUrl) {
+    Alert.alert("Location unavailable", "No valid location information was provided.");
+    return;
+  }
+  try {
+    if (Platform.OS === 'web') {
+      // ✅ Opens in a new tab on web
+      window.open(mapUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // ✅ Uses native Linking for mobile
+      const supported = await Linking.canOpenURL(mapUrl);
+      if (supported) {
+        await Linking.openURL(mapUrl);
       } else {
-        const supported = await Linking.canOpenURL(mapUrl);
-        if (supported) {
-          await Linking.openURL(mapUrl);
-        } else {
-          await Linking.openURL(mapUrl).catch(() => {
-            Alert.alert("Unable to open location", "No map application is available on this device.");
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Open location error:", error);
-      if (Platform.OS === 'web') {
-        window.open(mapUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        Alert.alert("Error", "Unable to open location link.");
+        Alert.alert("Unable to open location", "No map application available");
       }
     }
-  };
+  } catch (error) {
+    console.error("Open location error:", error);
+    // Ultimate fallback for Web if the try block fails
+    if (Platform.OS === 'web') {
+      window.open(mapUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      Alert.alert("Error", "Unable to open location");
+    }
+  }
+};
 
   return (
     <Pressable

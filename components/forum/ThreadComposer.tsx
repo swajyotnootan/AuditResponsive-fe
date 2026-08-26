@@ -1388,6 +1388,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
 
     {/* Event Form Modal */}
 {/* Event Form Modal */}
+{/* Event Form Modal */}
 <Modal visible={eventForm.open} transparent animationType="fade">
   <View style={styles.modalOverlay}>
     <View style={styles.eventModalContent}>
@@ -1397,17 +1398,15 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         style={styles.eventInput}
         placeholder="Event title"
         value={eventForm.title}
-        onChangeText={(text) =>
-          setEventForm({ ...eventForm, title: text })
-        }
+        onChangeText={(text) => setEventForm({ ...eventForm, title: text })}
       />
-      
-      {/* Date/Time Picker - Platform Specific */}
+
+      {/* ✅ WEB: Native HTML5 datetime input */}
       {Platform.OS === 'web' ? (
         <input
           type="datetime-local"
           value={eventForm.datetime ? new Date(eventForm.datetime).toISOString().slice(0, 16) : ''}
-          onChange={(e) => {
+          onChange={(e: any) => {
             const selectedDateTime = new Date(e.target.value).toISOString();
             setEventForm({ ...eventForm, datetime: selectedDateTime });
           }}
@@ -1422,58 +1421,42 @@ const [selectedDate, setSelectedDate] = useState(new Date());
           }}
         />
       ) : (
+        /* ✅ MOBILE: TouchableOpacity triggering DateTimePicker */
         <TouchableOpacity
           style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
           onPress={() => setShowDatePicker(true)}
         >
           <Text style={{ color: eventForm.datetime ? '#000' : '#999' }}>
-            {eventForm.datetime
-              ? new Date(eventForm.datetime).toLocaleString()
-              : "Select Date & Time"}
+            {eventForm.datetime ? new Date(eventForm.datetime).toLocaleString() : "Select Date & Time"}
           </Text>
           <Ionicons name="calendar-outline" size={20} color="#6b7280" />
         </TouchableOpacity>
       )}
 
-      {/* Mobile DateTimePicker */}
+      {/* ✅ MOBILE: Native DateTimePicker (Safe Android Implementation) */}
       {Platform.OS !== 'web' && showDatePicker && (
         <DateTimePicker
           value={selectedDate}
           mode="datetime"
           display="default"
           onChange={(event, date) => {
-            setShowDatePicker(Platform.OS === 'ios');
-            if (date) {
-              setSelectedDate(date);
-              setEventForm({
-                ...eventForm,
-                datetime: date.toISOString()
-              });
+            // ✅ FIX: Handle Android dismissal safely to prevent "dismiss of undefined" crash
+            if (event.type === 'dismissed') {
+              setShowDatePicker(false);
+              return;
+            }
+            
+            const currentDate = date || selectedDate;
+            setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS until confirmed
+            
+            if (currentDate) {
+              setSelectedDate(currentDate);
+              setEventForm({ ...eventForm, datetime: currentDate.toISOString() });
             }
           }}
         />
       )}
 
-      {/* Location Field */}
-      <TextInput
-        style={styles.eventInput}
-        placeholder="Location (optional)"
-        value={eventForm.location || ""}
-        onChangeText={(text) =>
-          setEventForm({ ...eventForm, location: text })
-        }
-      />
-
-      {/* URL Field */}
-      <TextInput
-        style={styles.eventInput}
-        placeholder="Event URL (optional)"
-        value={eventForm.url || ""}
-        onChangeText={(text) =>
-          setEventForm({ ...eventForm, url: text })
-        }
-      />
-      
       <View style={styles.eventModalButtons}>
         <TouchableOpacity
           onPress={() => {
@@ -1481,40 +1464,31 @@ const [selectedDate, setSelectedDate] = useState(new Date());
               Alert.alert("Missing Information", "Please provide event title and date/time");
               return;
             }
-            
-            // ✅ FIX: Create event data with all fields
             const eventData = {
               title: eventForm.title,
               datetime: eventForm.datetime,
-              location: eventForm.location || "",
-              url: eventForm.url || "",
             };
-            
-            // ✅ FIX: Store as JSON string (not base64) for cross-platform compatibility
-            const jsonString = JSON.stringify(eventData);
-            
-            setContent(`📅 ${eventForm.title}`);
+            setContent(
+              `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
+            );
             setAttachments((prev) => [
               ...prev,
               {
                 fileName: "event.json",
                 fileType: "application/json",
-                fileSize: jsonString.length,
+                fileSize: JSON.stringify(eventData).length,
                 attachmentType: "EVENT",
-                eventData: eventData,
-                fileData: jsonString, // ✅ Store as JSON string, not base64
+                eventData,
               },
             ]);
-            setEventForm({ open: false, title: "", datetime: "", location: "", url: "" });
+            setEventForm({ open: false, title: "", datetime: "", location:"", url:""  });
           }}
           style={styles.eventSubmitBtn}
         >
           <Text style={styles.eventSubmitBtnText}>Add Event</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() =>
-            setEventForm({ open: false, title: "", datetime: "", location: "", url: "" })
-          }
+          onPress={() => setEventForm({ open: false, title: "", datetime: "", location:"", url:"" })}
           style={styles.eventCancelBtn}
         >
           <Text style={styles.eventCancelBtnText}>Cancel</Text>
