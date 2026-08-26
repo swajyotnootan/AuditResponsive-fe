@@ -1365,12 +1365,11 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         </View>
       </Modal>
 
-      {/* Event Form Modal */}
-     {/* Event Form Modal */}
-<Modal visible={eventForm.open} transparent animationType="fade">
+    <Modal visible={eventForm.open} transparent animationType="fade">
   <View style={styles.modalOverlay}>
     <View style={styles.eventModalContent}>
       <Text style={styles.eventModalTitle}>Create Event</Text>
+      
       <TextInput
         style={styles.eventInput}
         placeholder="Event title"
@@ -1380,7 +1379,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         }
       />
       
-      {/* Date/Time Picker Trigger */}
+      {/* ✅ Date/Time Picker Trigger */}
       <TouchableOpacity
         style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
         onPress={() => setShowDatePicker(true)}
@@ -1393,14 +1392,14 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         <Ionicons name="calendar-outline" size={20} color="#6b7280" />
       </TouchableOpacity>
 
-      {/* Native Date Picker */}
+      {/* ✅ Native Date Picker */}
       {showDatePicker && (
         <DateTimePicker
           value={selectedDate}
           mode="datetime"
           display="default"
           onChange={(event, date) => {
-            setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS until confirmed
+            setShowDatePicker(Platform.OS === 'ios');
             if (date) {
               setSelectedDate(date);
               setEventForm({
@@ -1415,7 +1414,10 @@ const [selectedDate, setSelectedDate] = useState(new Date());
       <View style={styles.eventModalButtons}>
         <TouchableOpacity
           onPress={() => {
-            if (!eventForm.title || !eventForm.datetime) return;
+            if (!eventForm.title || !eventForm.datetime) {
+              Alert.alert("Missing Information", "Please provide event title and date/time");
+              return;
+            }
             const eventData = {
               title: eventForm.title,
               datetime: eventForm.datetime,
@@ -1431,6 +1433,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
                 fileSize: JSON.stringify(eventData).length,
                 attachmentType: "EVENT",
                 eventData,
+                fileData: btoa(JSON.stringify(eventData)),
               },
             ]);
             setEventForm({ open: false, title: "", datetime: "" });

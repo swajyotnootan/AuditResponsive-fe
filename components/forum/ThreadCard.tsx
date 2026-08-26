@@ -1208,12 +1208,19 @@ const openLocation = async () => {
     return;
   }
   try {
-    console.log("Opening location URL:", mapUrl); // Debug log
-    const supported = await Linking.canOpenURL(mapUrl);
-    if (supported) {
-      await Linking.openURL(mapUrl);
+    console.log("Opening location URL:", mapUrl);
+    
+    if (Platform.OS === 'web') {
+      // ✅ Open in new tab for web
+      window.open(mapUrl, '_blank');
     } else {
-      Alert.alert("Unable to open location", "No app available to open maps");
+      // ✅ Use Linking for mobile
+      const supported = await Linking.canOpenURL(mapUrl);
+      if (supported) {
+        await Linking.openURL(mapUrl);
+      } else {
+        Alert.alert("Unable to open location", "No map application available");
+      }
     }
   } catch (error) {
     console.error("Open location error:", error);
