@@ -1,4 +1,6 @@
 ﻿import { LinearGradient } from "expo-linear-gradient";
+import { Path, Svg } from "react-native-svg";
+
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Activity,
@@ -206,39 +208,46 @@ interface ActivityItem {
 // ============================================================================
 // REUSABLE UI COMPONENTS
 // ============================================================================
-const KpiCard = ({
+const KpiCard = ({ title, value, icon, isDesktop }: KpiCardProps) => (
+  <AnimatedGlassCard
+    style={
+      isDesktop
+        ? [styles.kpiCard, { flex: 1 }]
+        : [styles.kpiCard, { width: "100%" }]
+    }
+  >
+    <View style={styles.kpiIconContainer}>{icon}</View>
+    <Text style={styles.kpiValue}>{value}</Text>
+    <Text style={styles.kpiTitle}>{title}</Text>
+  </AnimatedGlassCard>
+);
+
+// ============================================================================
+// REUSABLE UI COMPONENTS (UPDATED FOR MNC PROFESSIONAL LOOK)
+// ============================================================================
+
+// ============================================================================
+// REUSABLE UI COMPONENTS - PROFESSIONAL MNC STYLE
+// ============================================================================
+
+const SummaryStatCard = ({
   title,
   value,
-  icon,
-  isDesktop,
-}: KpiCardProps) => (
+  subtitle,
+  icon: Icon,
+  color,
+}: any) => (
   <AnimatedGlassCard
-    style={[
-      styles.kpiCard,
-      isDesktop
-        ? { flex: 1 }
-        : { width: "100%" },
-    ]}
+    style={[styles.summaryStatCard, { borderLeftColor: color }]}
   >
-    <View style={styles.kpiIconContainer}>
-      {icon}
+    <View style={styles.summaryStatHeader}>
+      <View style={[styles.summaryStatIcon, { backgroundColor: `${color}15` }]}>
+        <Icon size={20} color={color} />
+      </View>
+      <Text style={[styles.summaryStatValue, { color: color }]}>{value}</Text>
     </View>
-
-    <Text
-      style={styles.kpiValue}
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.7}
-    >
-      {value}
-    </Text>
-
-    <Text
-      style={styles.kpiTitle}
-      numberOfLines={2}
-    >
-      {title}
-    </Text>
+    <Text style={styles.summaryStatTitle}>{title}</Text>
+    {subtitle && <Text style={styles.summaryStatSubtitle}>{subtitle}</Text>}
   </AnimatedGlassCard>
 );
 
@@ -255,36 +264,53 @@ const CustomBarChart = ({
 }) => {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
   const hasData = data.some((d) => d.value > 0);
+  const totalAudits = data.reduce((sum, d) => sum + d.value, 0);
+
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 2 : 1, width: "100%" }}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardSubtitle}>{subtitle}</Text>
-      {!hasData ? (
-        <View style={styles.emptyChart}>
-          <Text style={styles.emptyText}>No data available</Text>
+      <View style={styles.chartInnerPadding}>
+        <View style={styles.chartHeader}>
+          <View>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardSubtitle}>{subtitle}</Text>
+          </View>
+          <View style={styles.chartTotalBadge}>
+            <Text style={styles.chartTotalValue}>{totalAudits}</Text>
+            <Text style={styles.chartTotalLabel}>Total Audits</Text>
+          </View>
         </View>
-      ) : (
-        <View style={styles.barChartContainer}>
-          {data.map((item, idx) => {
-            const heightPercent = (item.value / maxValue) * 100;
-            return (
-              <View key={idx} style={styles.barColumn}>
-                <Text style={styles.barValue}>{item.value}</Text>
-                <View style={styles.barTrack}>
-                  <View
-                    style={[styles.barFill, { height: `${heightPercent}%` }]}
-                  />
+
+        {!hasData ? (
+          <View style={styles.emptyChart}>
+            <Text style={styles.emptyText}>No data available</Text>
+          </View>
+        ) : (
+          <View style={styles.barChartContainer}>
+            {data.map((item, idx) => {
+              const heightPercent = (item.value / maxValue) * 100;
+              return (
+                <View key={idx} style={styles.barColumn}>
+                  <View style={styles.barWrapper}>
+                    <LinearGradient
+                      colors={["#3B82F6", "#1E40AF"]}
+                      style={[styles.barFill, { height: `${heightPercent}%` }]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                    />
+                  </View>
+                  <Text style={styles.barValue}>{item.value}</Text>
+                  <Text style={styles.barLabel} numberOfLines={1}>
+                    {item.label}
+                  </Text>
                 </View>
-                <Text style={styles.barLabel}>{item.label}</Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
+              );
+            })}
+          </View>
+        )}
+      </View>
     </AnimatedGlassCard>
   );
 };
-
 const CustomPieChart = ({
   data,
   title,
@@ -300,50 +326,93 @@ const CustomPieChart = ({
 }) => {
   const totalValue = data.reduce((sum, d) => sum + d.value, 0) || 1;
   const hasData = data.some((d) => d.value > 0);
+
+  const calculatePath = (startAngle: number, endAngle: number) => {
+    const radius = 50;
+    const innerRadius = 35;
+    const centerX = 60;
+    const centerY = 60;
+    const startRad = (startAngle - 90) * (Math.PI / 180);
+    const endRad = (endAngle - 90) * (Math.PI / 180);
+    const x1 = centerX + radius * Math.cos(startRad);
+    const y1 = centerY + radius * Math.sin(startRad);
+    const x2 = centerX + radius * Math.cos(endRad);
+    const y2 = centerY + radius * Math.sin(endRad);
+    const x3 = centerX + innerRadius * Math.cos(endRad);
+    const y3 = centerY + innerRadius * Math.sin(endRad);
+    const x4 = centerX + innerRadius * Math.cos(startRad);
+    const y4 = centerY + innerRadius * Math.sin(startRad);
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+  };
+
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 1 : 1, width: "100%" }}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardSubtitle}>{subtitle}</Text>
-      {!hasData ? (
-        <View style={styles.emptyChart}>
-          <Text style={styles.emptyText}>No data available</Text>
-        </View>
-      ) : (
-        <View>
-          <View style={styles.stackedBar}>
-            {data.map((item, idx) => (
-              <View
-                key={idx}
-                style={{
-                  width: `${(item.value / totalValue) * 100}%`,
-                  backgroundColor: item.color,
-                  height: 16,
-                  borderTopLeftRadius: idx === 0 ? 8 : 0,
-                  borderBottomLeftRadius: idx === 0 ? 8 : 0,
-                  borderTopRightRadius: idx === data.length - 1 ? 8 : 0,
-                  borderBottomRightRadius: idx === data.length - 1 ? 8 : 0,
-                }}
-              />
-            ))}
+      {/* ✅ ADDED: Padding wrapper */}
+      <View style={styles.chartInnerPadding}>
+        <View style={styles.chartHeader}>
+          <View>
+            <Text style={styles.cardTitle}>{title}</Text>
+            <Text style={styles.cardSubtitle}>{subtitle}</Text>
           </View>
-          <View style={styles.legendContainer}>
-            <Text style={styles.legendTotal}>{total || totalValue} Total</Text>
-            {data.map((item, idx) => (
-              <View key={idx} style={styles.legendItem}>
-                <View
-                  style={[styles.legendDot, { backgroundColor: item.color }]}
-                />
-                <Text style={styles.legendText}>{item.name}</Text>
-                <Text style={styles.legendValue}>{item.value}</Text>
+        </View>
+
+        {!hasData ? (
+          <View style={styles.emptyChart}>
+            <Text style={styles.emptyText}>No data available</Text>
+          </View>
+        ) : (
+          <View style={styles.pieChartContainer}>
+            {/* Donut Chart */}
+            <View style={styles.donutWrapper}>
+              <Svg width="180" height="180" viewBox="0 0 120 120">
+                {
+                  data.reduce(
+                    (acc, item, idx) => {
+                      const startAngle = acc.currentAngle;
+                      const angle = (item.value / totalValue) * 360;
+                      const endAngle = startAngle + angle;
+                      acc.elements.push(
+                        <Path
+                          key={idx}
+                          d={calculatePath(startAngle, endAngle)}
+                          fill={item.color}
+                        />,
+                      );
+                      acc.currentAngle = endAngle;
+                      return acc;
+                    },
+                    { elements: [] as any[], currentAngle: 0 },
+                  ).elements
+                }
+              </Svg>
+              {/* Center Text */}
+              <View style={styles.donutCenter}>
+                <Text style={styles.donutTotal}>{total || totalValue}</Text>
+                <Text style={styles.donutLabel}>Total</Text>
               </View>
-            ))}
+            </View>
+
+            {/* Legend */}
+            <View style={styles.legendContainer}>
+              {data.map((item, idx) => (
+                <View key={idx} style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: item.color }]}
+                  />
+                  <View style={styles.legendTextContainer}>
+                    <Text style={styles.legendText}>{item.name}</Text>
+                    <Text style={styles.legendValue}>{item.value}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </View>
     </AnimatedGlassCard>
   );
 };
-
 const DepartmentAnalysis = ({
   data,
   isDesktop,
@@ -352,27 +421,48 @@ const DepartmentAnalysis = ({
   isDesktop: boolean;
 }) => {
   const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const totalNCRs = data.reduce((sum, d) => sum + d.count, 0);
+
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 2 : 1, width: "100%" }}>
-      <Text style={styles.cardTitle}>NCR by Department</Text>
-      <Text style={styles.cardSubtitle}>Distribution across departments</Text>
-      <View style={{ gap: 12 }}>
-        {data.map((item, idx) => (
-          <View key={idx}>
-            <View style={styles.deptHeader}>
-              <Text style={styles.deptName}>{item.department}</Text>
-              <Text style={styles.deptCount}>{item.count}</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${(item.count / maxCount) * 100}%` },
-                ]}
-              />
-            </View>
+      {/* ✅ ADDED: Padding wrapper */}
+      <View style={styles.chartInnerPadding}>
+        <View style={styles.chartHeader}>
+          <View>
+            <Text style={styles.cardTitle}>NCR by Department</Text>
+            <Text style={styles.cardSubtitle}>
+              Distribution across departments
+            </Text>
           </View>
-        ))}
+          <View style={styles.chartTotalBadge}>
+            <Text style={styles.chartTotalValue}>{totalNCRs}</Text>
+            <Text style={styles.chartTotalLabel}>Total NCRs</Text>
+          </View>
+        </View>
+
+        <View style={{ gap: 16 }}>
+          {data.map((item, idx) => (
+            <View key={idx}>
+              <View style={styles.deptHeader}>
+                <Text style={styles.deptName} numberOfLines={1}>
+                  {item.department}
+                </Text>
+                <Text style={styles.deptCount}>{item.count}</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <LinearGradient
+                  colors={["#3B82F6", "#1E40AF"]}
+                  style={[
+                    styles.progressFill,
+                    { width: `${(item.count / maxCount) * 100}%` },
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
     </AnimatedGlassCard>
   );
@@ -386,37 +476,37 @@ const ActivityFeed = ({
   isDesktop: boolean;
 }) => (
   <AnimatedGlassCard style={{ flex: isDesktop ? 1 : 1, width: "100%" }}>
-    <View style={styles.feedHeader}>
-      <View>
-        <Text style={styles.cardTitle}>Recent Activity</Text>
-        <Text style={styles.cardSubtitle}>Latest updates</Text>
+    {/* ✅ ADDED: Padding wrapper */}
+    <View style={styles.chartInnerPadding}>
+      <View style={styles.feedHeader}>
+        <View>
+          <Text style={styles.cardTitle}>Recent Activity</Text>
+          <Text style={styles.cardSubtitle}>Latest updates and actions</Text>
+        </View>
+        <View style={styles.feedIconBox}>
+          <Activity size={18} color={COLORS.primary} />
+        </View>
       </View>
-      <View style={styles.feedIconBox}>
-        <Activity size={16} color={COLORS.primary} />
-      </View>
+
+      {activities.length === 0 ? (
+        <View style={styles.emptyChart}>
+          <Text style={styles.emptyText}>No recent activity</Text>
+        </View>
+      ) : (
+        <View style={{ gap: 16 }}>
+          {activities.map((activity, idx) => (
+            <View key={idx} style={styles.feedItem}>
+              <View style={styles.feedItemIcon}>{activity.icon}</View>
+              <View style={styles.feedItemContent}>
+                <Text style={styles.feedItemTitle}>{activity.title}</Text>
+                <Text style={styles.feedItemDesc}>{activity.description}</Text>
+              </View>
+              <Text style={styles.feedItemTime}>{activity.time}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
-    {activities.length === 0 ? (
-      <View style={styles.emptyChart}>
-        <Text style={styles.emptyText}>No recent activity</Text>
-      </View>
-    ) : (
-      <View style={{ gap: 16 }}>
-        {activities.map((activity, idx) => (
-          <View key={idx} style={styles.feedItem}>
-            <View style={styles.feedItemIcon}>
-              {React.cloneElement(activity.icon as any, {
-                color: COLORS.primary,
-              })}
-            </View>
-            <View style={styles.feedItemContent}>
-              <Text style={styles.feedItemTitle}>{activity.title}</Text>
-              <Text style={styles.feedItemDesc}>{activity.description}</Text>
-            </View>
-            <Text style={styles.feedItemTime}>{activity.time}</Text>
-          </View>
-        ))}
-      </View>
-    )}
   </AnimatedGlassCard>
 );
 
@@ -521,35 +611,33 @@ export default function AuditManagerDashboard() {
   const isCompactHeader = width < 900;
   const isVerySmall = width < 420;
   const isNarrowTablet = width >= 768 && width < 900;
-
   const { user } = useAuth();
 
-  // Replace the above function with these 3 functions:
+  const getFullNameWithTitle = () => {
+    const firstName = user?.firstName || "";
+    const lastName = user?.lastName || "";
+    const fullName = `${firstName} ${lastName}`.trim() || "User";
+    let title = user?.salutation || user?.title || "Mr.";
+    return `${title} ${fullName}`;
+  };
 
-const getFullNameWithTitle = () => {
-  const firstName = user?.firstName || '';
-  const lastName = user?.lastName || '';
-  const fullName = `${firstName} ${lastName}`.trim() || 'User';
-  let title = user?.salutation || user?.title || 'Mr.';
-  return `${title} ${fullName}`;
-};
+  const getDisplayName = () => {
+    if (user?.firstName) return user.firstName;
+    if (user?.name) return user.name.split(" ")[0];
+    if (user?.email) return user.email.split("@")[0];
+    return "User";
+  };
 
-const getDisplayName = () => {
-  if (user?.firstName) return user.firstName;
-  if (user?.name) return user.name.split(" ")[0];
-  if (user?.email) return user.email.split("@")[0];
-  return "User";
-};
-
-const getGreeting = () => {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good Morning";
-  if (hour < 17) return "Good Afternoon";
-  return "Good Evening";
-};
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
   const greeting = getGreeting();
-const displayName = getDisplayName();
-const fullDisplayName = getFullNameWithTitle();
+  const displayName = getDisplayName();
+  const fullDisplayName = getFullNameWithTitle();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -609,7 +697,7 @@ const fullDisplayName = getFullNameWithTitle();
     any[]
   >([]);
   const [loadingCompetent, setLoadingCompetent] = useState(false);
-   const [approvalAuditors, setApprovalAuditors] = useState<any[]>([]);
+  const [approvalAuditors, setApprovalAuditors] = useState<any[]>([]);
   const [approvalTeamInfo, setApprovalTeamInfo] = useState<{
     teamAuditorIds: number[];
   }>({ teamAuditorIds: [] });
@@ -733,7 +821,7 @@ const fullDisplayName = getFullNameWithTitle();
     }
   };
 
-    const fetchDepartmentTeamMembers = async (
+  const fetchDepartmentTeamMembers = async (
     departmentName: string,
     request?: any,
   ) => {
@@ -963,7 +1051,7 @@ const fullDisplayName = getFullNameWithTitle();
     setRefreshing(false);
   };
 
-   const handleViewRequest = (request: any) => {
+  const handleViewRequest = (request: any) => {
     console.log(
       "🚀 [DEBUG 0] handleViewRequest triggered. Full request object:",
       request,
@@ -1049,24 +1137,24 @@ const fullDisplayName = getFullNameWithTitle();
     }
   };
 
-    const openAuditForum = () => {
+  const openAuditForum = () => {
     // 1. Find all Top Management and Audit Manager users from the fetched list
     const topManagers = allUsersList.filter((u: any) =>
-      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
+      u.role?.toUpperCase().includes("TOP_MANAGEMENT"),
     );
     const auditManagers = allUsersList.filter((u: any) =>
-      u.role?.toUpperCase().includes('AUDIT_MANAGER')
+      u.role?.toUpperCase().includes("AUDIT_MANAGER"),
     );
 
     // 2. Build a unique list of member emails
     const memberEmails: string[] = [];
-    
+
     topManagers.forEach((tm: any) => {
       if (tm.email && !memberEmails.includes(tm.email)) {
         memberEmails.push(tm.email);
       }
     });
-    
+
     auditManagers.forEach((am: any) => {
       if (am.email && !memberEmails.includes(am.email)) {
         memberEmails.push(am.email);
@@ -1189,34 +1277,38 @@ const fullDisplayName = getFullNameWithTitle();
   const ncrDistributionData = useMemo(() => {
     if (allNcrs.length === 0) return [];
     const groups = {
-      Open: 0,
+      Pending: 0,
       "In Progress": 0,
-      "Pending Verification": 0,
-      Closed: 0,
+      "Approved / Closed": 0,
     };
     allNcrs.forEach((ncr: any) => {
       const status = (ncr.status || "").toUpperCase();
-      if (status === "CLOSED") groups["Closed"]++;
-      else if (status.includes("IN_PROGRESS")) groups["Pending Verification"]++;
-      else if (status === "OPEN" || status === "NEW") groups["Open"]++;
-      else groups["In Progress"]++;
+      if (
+        status === "CLOSED" ||
+        status === "APPROVED" ||
+        status === "NCR2_COMPLETED"
+      ) {
+        groups["Approved / Closed"]++;
+      } else if (status.includes("IN_PROGRESS")) {
+        groups["In Progress"]++;
+      } else {
+        groups["Pending"]++;
+      }
     });
     return [
-      { name: "Open", value: groups["Open"], color: COLORS.chartColors[0] },
+      { name: "Pending", value: groups["Pending"], color: COLORS.primary }, // Dark blue (#00529B)
       {
         name: "In Progress",
         value: groups["In Progress"],
-        color: COLORS.chartColors[2],
+        color: COLORS.secondary, // Medium blue (#3b82f6)
       },
       {
-        name: "Pending Verification",
-        value: groups["Pending Verification"],
-        color: COLORS.chartColors[4],
+        name: "Approved / Closed",
+        value: groups["Approved / Closed"],
+        color: COLORS.light, // Light blue (#60a5fa)
       },
-      { name: "Closed", value: groups["Closed"], color: COLORS.chartColors[6] },
     ].filter((item) => item.value > 0);
   }, [allNcrs]);
-
   const ncrByDepartmentData = useMemo(() => {
     if (allNcrs.length === 0) return [];
     const deptCounts: Record<string, number> = {};
@@ -1264,41 +1356,78 @@ const fullDisplayName = getFullNameWithTitle();
       case "dashboard":
         return (
           <View style={{ gap: 16 }}>
-            <View
-  style={{
-    width: "100%",
-    flexDirection: isDesktop ? "row" : "column",
-    gap: 16,
-  }}
->
-              <KpiCard
-                title="Total Audits"
-                value={stats.totalAudits}
-                icon={<Calendar size={24} color={COLORS.primary} />}
-                isDesktop={isDesktop}
-              />
-              <KpiCard
-                title="Completed"
-                value={stats.completedAudits}
-                icon={<CheckCircle size={24} color={COLORS.success} />}
-                isDesktop={isDesktop}
-              />
-              <KpiCard
-                title="Open NCRs"
-                value={stats.openNCRs}
-                icon={<AlertCircle size={24} color={COLORS.danger} />}
-                isDesktop={isDesktop}
-              />
-              <KpiCard
-                title="Pending Requests"
-                value={stats.pendingRequests}
-                icon={<MessageSquare size={24} color={COLORS.warning} />}
-                isDesktop={isDesktop}
-              />
-            </View>
+            {isDesktop ? (
+              // Desktop: Normal Row Layout
+              <View style={{ flexDirection: "row", gap: 16, flexWrap: "wrap" }}>
+                <KpiCard
+                  title="Total Audits"
+                  value={stats.totalAudits}
+                  icon={<Calendar size={24} color={COLORS.primary} />}
+                  isDesktop={isDesktop}
+                />
+                <KpiCard
+                  title="Completed"
+                  value={stats.completedAudits}
+                  icon={<CheckCircle size={24} color={COLORS.success} />}
+                  isDesktop={isDesktop}
+                />
+                <KpiCard
+                  title="Open NCRs"
+                  value={stats.openNCRs}
+                  icon={<AlertCircle size={24} color={COLORS.danger} />}
+                  isDesktop={isDesktop}
+                />
+                <KpiCard
+                  title="Pending Requests"
+                  value={stats.pendingRequests}
+                  icon={<MessageSquare size={24} color={COLORS.warning} />}
+                  isDesktop={isDesktop}
+                />
+              </View>
+            ) : (
+              // Mobile: Horizontal Scrollable Layout (Fixes vertical space issue)
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 16 }}
+              >
+                <View style={{ width: 160, marginRight: 16 }}>
+                  <KpiCard
+                    title="Total Audits"
+                    value={stats.totalAudits}
+                    icon={<Calendar size={24} color={COLORS.primary} />}
+                    isDesktop={isDesktop}
+                  />
+                </View>
+                <View style={{ width: 160, marginRight: 16 }}>
+                  <KpiCard
+                    title="Completed"
+                    value={stats.completedAudits}
+                    icon={<CheckCircle size={24} color={COLORS.success} />}
+                    isDesktop={isDesktop}
+                  />
+                </View>
+                <View style={{ width: 160, marginRight: 16 }}>
+                  <KpiCard
+                    title="Open NCRs"
+                    value={stats.openNCRs}
+                    icon={<AlertCircle size={24} color={COLORS.danger} />}
+                    isDesktop={isDesktop}
+                  />
+                </View>
+                <View style={{ width: 160, marginRight: 16 }}>
+                  <KpiCard
+                    title="Pending Requests"
+                    value={stats.pendingRequests}
+                    icon={<MessageSquare size={24} color={COLORS.warning} />}
+                    isDesktop={isDesktop}
+                  />
+                </View>
+              </ScrollView>
+            )}
+
             <View
               style={{
-                width: "100%",
                 flexDirection: isDesktop ? "row" : "column",
                 gap: 16,
               }}
@@ -1319,7 +1448,6 @@ const fullDisplayName = getFullNameWithTitle();
             </View>
             <View
               style={{
-                width: "100%",
                 flexDirection: isDesktop ? "row" : "column",
                 gap: 16,
               }}
@@ -1693,7 +1821,7 @@ const fullDisplayName = getFullNameWithTitle();
                 isDesktop={isDesktop}
               />
               <NcrCard
-                title="NCR Reports"
+                title="NCR Report"
                 description="View all Non-Conformance Reports"
                 icon={<AlertCircle size={24} />}
                 onPress={() => setActiveSection("ncr-dashboard")}
@@ -1865,7 +1993,7 @@ const fullDisplayName = getFullNameWithTitle();
         />
       );
     case "form9":
-      return <Form9View />;
+      return <Form9View onBack={() => setActiveSection("ncr")} />;
     default:
       break;
   }
@@ -1910,119 +2038,121 @@ const fullDisplayName = getFullNameWithTitle();
         contentContainerStyle={styles.scrollContent}
       >
         <View style={[styles.content, isDesktop && styles.contentDesktop]}>
+          {/* HEADER - Only show on main tab views */}
           {["dashboard", "schedules", "ncr", "requests"].includes(
-  activeSection,
-) && (
-  <AnimatedGlassCard
-    style={[
-      styles.header,
-      isSmallMobile && styles.headerSmall,
-      isCompactHeader && styles.headerCompact,
-    ]}
-  >
-    <View
-      style={[
-        styles.headerInner,
-        isCompactHeader && styles.headerInnerCompact,
-      ]}
-    >
-      {/* =========================================================
+            activeSection,
+          ) && (
+            <AnimatedGlassCard
+              style={[
+                styles.header,
+                isSmallMobile && styles.headerSmall,
+                isCompactHeader && styles.headerCompact,
+              ]}
+            >
+              <View
+                style={[
+                  styles.headerInner,
+                  isCompactHeader && styles.headerInnerCompact,
+                ]}
+              >
+                {/* =========================================================
           LEFT SIDE - GREETING
       ========================================================= */}
-      <View
-        style={[
-          styles.headerGreetingSection,
-          isCompactHeader && styles.headerGreetingSectionCompact,
-        ]}
-      >
-        <View style={styles.greetingRow}>
-          <Text
-            style={[
-              styles.greetingText,
-              isSmallMobile && styles.greetingTextSmall,
-              isCompactHeader && styles.greetingTextCompact,
-            ]}
-          >
-            {greeting},
-          </Text>
+                <View
+                  style={[
+                    styles.headerGreetingSection,
+                    isCompactHeader && styles.headerGreetingSectionCompact,
+                  ]}
+                >
+                  <View style={styles.greetingRow}>
+                    <Text
+                      style={[
+                        styles.greetingText,
+                        isSmallMobile && styles.greetingTextSmall,
+                        isCompactHeader && styles.greetingTextCompact,
+                      ]}
+                    >
+                      {greeting},
+                    </Text>
 
-          <Text
-            style={[
-              styles.greetingName,
-              isSmallMobile && styles.greetingNameSmall,
-              isCompactHeader && styles.greetingNameCompact,
-            ]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {displayName}
-          </Text>
-        </View>
+                    <Text
+                      style={[
+                        styles.greetingName,
+                        isSmallMobile && styles.greetingNameSmall,
+                        isCompactHeader && styles.greetingNameCompact,
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {displayName}
+                    </Text>
+                  </View>
 
-        <Text
-          style={[
-            styles.subGreetingText,
-            isSmallMobile && styles.subGreetingTextSmall,
-          ]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {fullDisplayName}
-        </Text>
-      </View>
+                  <Text
+                    style={[
+                      styles.subGreetingText,
+                      isSmallMobile && styles.subGreetingTextSmall,
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {fullDisplayName}
+                  </Text>
+                </View>
 
-      {/* =========================================================
+                {/* =========================================================
           RIGHT SIDE - YEAR + FORUM
       ========================================================= */}
-      <View
-        style={[
-          styles.headerActions,
-          isCompactHeader && styles.headerActionsCompact,
-          isVerySmall && styles.headerActionsVerySmall,
-        ]}
-      >
-        {/* YEAR FILTER */}
-        <View
-          style={[
-            styles.yearFilterWrapper,
-            isVerySmall && styles.yearFilterWrapperSmall,
-          ]}
-        >
-          <YearFilter
-            selectedYear={selectedYear}
-            onYearChange={setSelectedYear}
-            availableYears={availableYears}
-          />
-        </View>
+                <View
+                  style={[
+                    styles.headerActions,
+                    isCompactHeader && styles.headerActionsCompact,
+                    isVerySmall && styles.headerActionsVerySmall,
+                  ]}
+                >
+                  {/* YEAR FILTER */}
+                  <View
+                    style={[
+                      styles.yearFilterWrapper,
+                      isVerySmall && styles.yearFilterWrapperSmall,
+                    ]}
+                  >
+                    <YearFilter
+                      selectedYear={selectedYear}
+                      onYearChange={setSelectedYear}
+                      availableYears={availableYears}
+                    />
+                  </View>
 
-        {/* FORUM BUTTON */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={[
-            styles.forumBtn,
-            isVerySmall && styles.forumBtnSmall,
-            isCompactHeader && styles.forumBtnCompact,
-          ]}
-          onPress={openAuditForum}
-        >
-          <MessageSquare
-            size={isVerySmall ? 15 : 17}
-            color={COLORS.white}
-          />
+                  {/* FORUM BUTTON */}
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[
+                      styles.forumBtn,
+                      isVerySmall && styles.forumBtnSmall,
+                      isCompactHeader && styles.forumBtnCompact,
+                    ]}
+                    onPress={openAuditForum}
+                  >
+                    <MessageSquare
+                      size={isVerySmall ? 15 : 17}
+                      color={COLORS.white}
+                    />
 
-          <Text
-            style={[
-              styles.forumBtnText,
-              isVerySmall && styles.forumBtnTextSmall,
-            ]}
-          >
-            Forum
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </AnimatedGlassCard>
-)}
+                    <Text
+                      style={[
+                        styles.forumBtnText,
+                        isVerySmall && styles.forumBtnTextSmall,
+                      ]}
+                    >
+                      Forum
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </AnimatedGlassCard>
+          )}
+
           {/* MAIN CONTENT - Using renderContent function like Lead Auditor */}
           {renderContent()}
 
@@ -2177,7 +2307,7 @@ const fullDisplayName = getFullNameWithTitle();
         </View>
       </Modal>
 
-        <Modal
+      <Modal
         visible={showApproveModal}
         transparent
         animationType="fade"
@@ -2873,6 +3003,156 @@ const fullDisplayName = getFullNameWithTitle();
 // ============================================================================
 const styles = StyleSheet.create({
   // ... (keep all existing styles from your original code)
+
+  // ✅ NEW: Universal inner padding for all chart cards
+  chartInnerPadding: {
+    padding: 20, // ✅ This is the key fix - adds breathing room inside every card
+  },
+
+  // ✅ UPDATED: Better chart header spacing
+  chartHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 24, // ✅ Increased from 20
+    gap: 12,
+  },
+
+  // ✅ UPDATED: Better pie chart container spacing
+  pieChartContainer: {
+    alignItems: "center",
+    paddingVertical: 12, // ✅ Added vertical padding
+  },
+
+  // ✅ UPDATED: Better donut wrapper spacing
+  donutWrapper: {
+    width: 140,
+    height: 140,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24, // ✅ Increased from 16
+  },
+
+  // ✅ UPDATED: Better legend spacing
+  legendContainer: {
+    width: "100%",
+    gap: 12,
+    marginTop: 8, // ✅ Added top margin
+  },
+
+  // ✅ UPDATED: Better legend item spacing
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12, // ✅ Increased from 10
+    paddingVertical: 8, // ✅ Added vertical padding
+    paddingHorizontal: 4, // ✅ Added horizontal padding
+  },
+
+  // ✅ UPDATED: Better bar chart spacing
+  barChartContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    height: 180,
+    gap: 4, // Reduced gap for mobile
+    paddingTop: 8,
+    paddingHorizontal: 4, // Add horizontal padding
+  },
+
+  // ✅ UPDATED: Better mobile bar column spacing
+  mobileBarColumn: {
+    width: 65, // ✅ Increased from 60
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: 180,
+    marginRight: 16, // ✅ Increased from 12
+  },
+
+  // ✅ UPDATED: Better activity feed item spacing
+  feedItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 12, // ✅ Added vertical padding
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+
+  // ✅ UPDATED: Better feed header spacing
+  feedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20, // ✅ Increased from 16
+  },
+
+  // ✅ UPDATED: Better department header spacing
+  deptHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8, // ✅ Increased from 6
+  },
+
+  // ✅ UPDATED: Better progress track spacing
+  progressTrack: {
+    height: 10, // ✅ Increased from 8
+    backgroundColor: "#F1F5F9",
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+
+  // ✅ UPDATED: Better empty chart spacing
+  emptyChart: {
+    height: 200, // ✅ Increased from 180
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderStyle: "dashed",
+    marginVertical: 8, // ✅ Added vertical margin
+  },
+
+  donutCenter: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  donutTotal: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+  donutLabel: {
+    fontSize: 11,
+    color: COLORS.textSub,
+    marginTop: 2,
+  },
+
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendTextContainer: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  legendText: {
+    fontSize: 13,
+    color: COLORS.textMain,
+    flex: 1,
+  },
+  legendValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.primary,
+    marginLeft: 8,
+  },
+
   container: { flex: 1, backgroundColor: "#F8FAFC" },
   background: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   scrollView: { flex: 1 },
@@ -2904,308 +3184,395 @@ const styles = StyleSheet.create({
     color: COLORS.gray[500],
     fontWeight: "500",
   },
+
+  // Add these new styles to your StyleSheet
+
+  summaryStatCard: {
+    padding: 16,
+    borderLeftWidth: 4,
+    marginBottom: 12,
+  },
+  summaryStatHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  summaryStatIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  summaryStatValue: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  summaryStatTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.textMain,
+    marginBottom: 2,
+  },
+  summaryStatSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSub,
+  },
+
+  chartTotalBadge: {
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  chartTotalValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  chartTotalLabel: {
+    fontSize: 10,
+    color: COLORS.textSub,
+    fontWeight: "500",
+  },
+  barWrapper: {
+    width: "80%", // Full width of column
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 4, // Slightly smaller radius
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+
+  barColumn: {
+    flex: 1, // Each bar takes equal width
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: "100%",
+    minWidth: 0, // Prevent overflow
+  },
+  barValue: {
+    fontSize: 10, // Smaller font
+    fontWeight: "700",
+    color: COLORS.textMain,
+    marginBottom: 4,
+  },
+  barFill: {
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  barLabel: {
+    fontSize: 9, // Smaller font for mobile
+    color: COLORS.textSub,
+    marginTop: 6,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+
+  segmentedBar: {
+    flexDirection: "row",
+    height: 14,
+    borderRadius: 7,
+    overflow: "hidden",
+    marginBottom: 24,
+    backgroundColor: "#F1F5F9", // Subtle background for empty space
+  },
+  donutChart: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 20,
+    borderColor: "#3B82F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+    position: "relative",
+  },
+
+  legendGrid: {
+    width: "100%",
+    gap: 12,
+  },
+  legendItemModern: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
+  },
+
   glassCard: {
     backgroundColor: COLORS.glass.light,
-    borderRadius: 20,
+    borderRadius: 12, // ✅ Reduced from 20 for professional MNC look
     borderWidth: 1,
     borderColor: COLORS.glass.border,
     overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04, // ✅ Subtler, more professional shadow
+        shadowRadius: 8,
       },
-      android: { elevation: 4 },
+      android: { elevation: 2 },
     }),
   },
-  header: {
-  padding: 20,
-  marginBottom: 20,
-},
 
-headerSmall: {
-  padding: 14,
-  marginBottom: 16,
-},
-
-headerCompact: {
-  padding: 18,
-},
-
-headerInner: {
-  width: "100%",
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 20,
-},
-
-headerInnerCompact: {
-  flexDirection: "column",
-  alignItems: "stretch",
-  justifyContent: "flex-start",
-  gap: 14,
-},
-
-headerGreetingSection: {
-  flex: 1,
-  minWidth: 0,
-  justifyContent: "center",
-},
-
-headerGreetingSectionCompact: {
-  width: "100%",
-  flex: 0,
-},
-
-greetingRow: {
-  width: "100%",
-  flexDirection: "row",
-  alignItems: "center",
-  flexWrap: "nowrap",
-  minWidth: 0,
-},
-
-greetingText: {
-  fontSize: 22,
-  lineHeight: 28,
-  fontWeight: "700",
-  color: COLORS.primary,
-  letterSpacing: -0.5,
-  flexShrink: 0,
-},
-
-greetingName: {
-  flexShrink: 1,
-  minWidth: 0,
-  fontSize: 22,
-  lineHeight: 28,
-  fontWeight: "700",
-  color: COLORS.primary,
-  letterSpacing: -0.5,
-  marginLeft: 6,
-},
-
-greetingTextCompact: {
-  fontSize: 20,
-  lineHeight: 26,
-},
-
-greetingNameCompact: {
-  fontSize: 20,
-  lineHeight: 26,
-},
-
-greetingTextSmall: {
-  fontSize: 17,
-  lineHeight: 22,
-},
-
-greetingNameSmall: {
-  fontSize: 17,
-  lineHeight: 22,
-  marginLeft: 4,
-},
-
-subGreetingText: {
-  fontSize: 13,
-  lineHeight: 19,
-  color: COLORS.gray[500],
-  marginTop: 3,
-  flexShrink: 1,
-},
-
-subGreetingTextSmall: {
-  fontSize: 11,
-  lineHeight: 16,
-  marginTop: 2,
-},
-
-headerActions: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: 10,
-  flexShrink: 0,
-},
-
-headerActionsCompact: {
-  width: "100%",
-  justifyContent: "flex-start",
-  alignItems: "stretch",
-  flexDirection: "row",
-  flexWrap: "wrap",
-},
-
-headerActionsVerySmall: {
-  gap: 8,
-},
-
-yearFilterWrapper: {
-  minWidth: 120,
-  maxWidth: 180,
-  flexShrink: 0,
-},
-
-yearFilterWrapperSmall: {
-  flex: 1,
-  minWidth: 0,
-  maxWidth: undefined,
-},
-
-forumBtn: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  backgroundColor: COLORS.accent,
-  minHeight: 44,
-  paddingHorizontal: 14,
-  paddingVertical: 10,
-  borderRadius: 12,
-  flexShrink: 0,
-},
-
-forumBtnCompact: {
-  minWidth: 100,
-},
-
-forumBtnSmall: {
-  minHeight: 40,
-  minWidth: 84,
-  paddingHorizontal: 11,
-  paddingVertical: 8,
-  borderRadius: 10,
-},
-
-forumBtnText: {
-  color: COLORS.white,
-  fontSize: 14,
-  fontWeight: "600",
-},
-
-forumBtnTextSmall: {
-  fontSize: 12,
-},
-kpiCard: {
-  padding: 20,
-  marginBottom: 0,
-  minWidth: 0,
-},  kpiIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.bg,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  kpiValue: {
-  fontSize: 28,
-  fontWeight: "700",
-  color: COLORS.textMain,
-  marginBottom: 4,
-  flexShrink: 1,
-},
-  kpiTitle: {
-  fontSize: 12,
-  lineHeight: 16,
-  color: COLORS.textSub,
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-  flexShrink: 1,
-},
   cardTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "700",
     color: COLORS.textMain,
-    marginBottom: 4,
-    padding: 20
+    marginBottom: 5,
   },
-  cardSubtitle: { fontSize: 12, color: COLORS.textSub, marginBottom: 16, padding: 8 },
-  emptyChart: {
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    padding: 8
+  cardSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSub,
+    fontWeight: "500",
+    marginBottom: 5,
   },
-  emptyText: { color: COLORS.textSub, fontSize: 14 },
-  barChartContainer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    height: 200,
-    gap: 8,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    height: "100%",
-  },
-  barValue: { fontSize: 10, color: COLORS.textSub, marginBottom: 4 },
+
+  emptyText: { color: COLORS.textSub, fontSize: 13, fontWeight: "500" },
+
   barTrack: {
     width: "60%",
     flex: 1,
-    backgroundColor: "#f1f5f9",
-    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 6, // ✅ Reduced from 8
     justifyContent: "flex-end",
     overflow: "hidden",
   },
-  barFill: {
-    backgroundColor: COLORS.primary,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-  },
-  barLabel: { fontSize: 10, color: COLORS.textSub, marginTop: 8 },
+
   stackedBar: {
     flexDirection: "row",
-    height: 16,
-    borderRadius: 8,
+    height: 10,
+    borderRadius: 6,
     overflow: "hidden",
-    marginBottom: 16,
+    marginBottom: 20,
+    backgroundColor: "#F1F5F9",
   },
-  legendContainer: { gap: 12 },
-  legendTotal: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  legendDot: { width: 12, height: 12, borderRadius: 4 },
-  legendText: { flex: 1, fontSize: 12, color: COLORS.textMain },
-  legendValue: { fontSize: 12, fontWeight: "bold", color: COLORS.primary },
-  deptHeader: {
+
+  legendHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 6,
     marginBottom: 4,
-    padding: 8
   },
-  deptName: { fontSize: 12, color: COLORS.textMain },
-  deptCount: { fontSize: 12, fontWeight: "bold", color: COLORS.primary },
-  progressTrack: {
-    height: 8,
-    backgroundColor: "#f1f5f9",
-    borderRadius: 4,
-    overflow: "hidden",
-    padding: 8
+  legendTotal: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.primary,
   },
+  legendTotalLabel: {
+    fontSize: 12,
+    color: COLORS.textSub,
+    fontWeight: "500",
+  },
+
+  deptName: {
+    fontSize: 12,
+    color: COLORS.textMain,
+    fontWeight: "600",
+  },
+  deptCount: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
   progressFill: {
     height: "100%",
-    backgroundColor: COLORS.primary,
     borderRadius: 4,
-    padding: 8
   },
-  feedHeader: {
+  // Also update these for consistency:
+  kpiCard: { padding: 16, marginBottom: 0 },
+  kpiIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 10, // Reduced from 12
+    backgroundColor: COLORS.bg,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  workflowCard: {
+    padding: 16,
+    backgroundColor: COLORS.white,
+    borderRadius: 12, // Reduced from 16
+    borderWidth: 1,
+    borderColor: COLORS.gray[200],
+  },
+  header: { padding: 20, marginBottom: 20 },
+  headerSmall: { padding: 16, marginBottom: 16 },
+
+  headerCompact: {
+    padding: 18,
+  },
+
+  headerInner: {
+    width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    gap: 20,
   },
+
+  headerInnerCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    gap: 14,
+  },
+
+  headerGreetingSection: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+
+  headerGreetingSectionCompact: {
+    width: "100%",
+    flex: 0,
+  },
+
+  greetingRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    minWidth: 0,
+  },
+
+  greetingText: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: COLORS.primary,
+    letterSpacing: -0.5,
+    flexShrink: 0,
+  },
+
+  greetingName: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: COLORS.primary,
+    letterSpacing: -0.5,
+    marginLeft: 6,
+  },
+
+  greetingTextCompact: {
+    fontSize: 20,
+    lineHeight: 26,
+  },
+
+  greetingNameCompact: {
+    fontSize: 20,
+    lineHeight: 26,
+  },
+
+  greetingTextSmall: {
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  greetingNameSmall: {
+    fontSize: 17,
+    lineHeight: 22,
+    marginLeft: 4,
+  },
+
+  subGreetingText: { fontSize: 14, color: COLORS.gray[500], marginTop: 4 },
+
+  subGreetingTextSmall: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexShrink: 0,
+  },
+
+  headerActionsCompact: {
+    width: "100%",
+    justifyContent: "flex-start",
+    alignItems: "stretch",
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+
+  headerActionsVerySmall: {
+    gap: 8,
+  },
+
+  yearFilterWrapper: {
+    minWidth: 120,
+    maxWidth: 180,
+    flexShrink: 0,
+  },
+
+  yearFilterWrapperSmall: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: undefined,
+  },
+
+  forumBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: COLORS.accent,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    flexShrink: 0,
+  },
+
+  forumBtnCompact: {
+    minWidth: 100,
+  },
+
+  forumBtnSmall: {
+    minHeight: 40,
+    minWidth: 84,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+
+  forumBtnText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  forumBtnTextSmall: {
+    fontSize: 12,
+  },
+
+  kpiValue: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: COLORS.textMain,
+    marginBottom: 4,
+  },
+  kpiTitle: {
+    fontSize: 12,
+    color: COLORS.textSub,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
   feedIconBox: {
     width: 36,
     height: 36,
@@ -3214,14 +3581,7 @@ kpiCard: {
     justifyContent: "center",
     alignItems: "center",
   },
-  feedItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
+
   feedItemIcon: {
     width: 32,
     height: 32,
@@ -3270,13 +3630,7 @@ kpiCard: {
   },
   workflowGrid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
   workflowGridMobile: { gap: 12 },
-  workflowCard: {
-    padding: 16,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.gray[200],
-  },
+
   workflowCardLocked: { opacity: 0.6, backgroundColor: COLORS.gray[100] },
   workflowCardApproved: {
     borderColor: COLORS.successLight,
@@ -3502,8 +3856,7 @@ kpiCard: {
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12,padding:8 
- },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIcon: {
     width: 40,
     height: 40,
@@ -3512,15 +3865,15 @@ kpiCard: {
     justifyContent: "center",
     alignItems: "center",
   },
-  modalTitleV2: { fontSize: 18, fontWeight: "700", color: COLORS.textMain,  },
+  modalTitleV2: { fontSize: 18, fontWeight: "700", color: COLORS.textMain },
   modalSubtitle: { fontSize: 14, color: COLORS.textSub, marginTop: 2 },
   closeBtnV2: { padding: 8, borderRadius: 8 },
-  modalBodyV2: { padding: 12, maxHeight: "100%" },
+  modalBodyV2: { padding: 24, maxHeight: "90%" },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,
-    padding: 16,
+    padding: 20,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.white,

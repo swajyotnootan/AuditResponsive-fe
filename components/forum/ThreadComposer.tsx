@@ -127,6 +127,8 @@ const [selectedDate, setSelectedDate] = useState(new Date());
     open: false,
     title: "",
     datetime: "",
+    location: "",   // ✅ Added to fix TS error
+  url: "", 
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1365,7 +1367,8 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         </View>
       </Modal>
 
-    <Modal visible={eventForm.open} transparent animationType="fade">
+    {/* Event Form Modal */}
+<Modal visible={eventForm.open} transparent animationType="fade">
   <View style={styles.modalOverlay}>
     <View style={styles.eventModalContent}>
       <Text style={styles.eventModalTitle}>Create Event</Text>
@@ -1379,21 +1382,43 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         }
       />
       
-      {/* ✅ Date/Time Picker Trigger */}
-      <TouchableOpacity
-        style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-        onPress={() => setShowDatePicker(true)}
-      >
-        <Text style={{ color: eventForm.datetime ? '#000' : '#999' }}>
-          {eventForm.datetime
-            ? new Date(eventForm.datetime).toLocaleString()
-            : "Select Date & Time"}
-        </Text>
-        <Ionicons name="calendar-outline" size={20} color="#6b7280" />
-      </TouchableOpacity>
+      {/* Date/Time Picker - Platform Specific */}
+      {Platform.OS === 'web' ? (
+        // ✅ Web: Use HTML5 datetime input
+        <input
+          type="datetime-local"
+          value={eventForm.datetime ? new Date(eventForm.datetime).toISOString().slice(0, 16) : ''}
+          onChange={(e) => {
+            const selectedDateTime = new Date(e.target.value).toISOString();
+            setEventForm({ ...eventForm, datetime: selectedDateTime });
+          }}
+          style={{
+            borderWidth: 1,
+            borderColor: "#d1d5db",
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 12,
+            fontSize: 14,
+            width: "100%",
+          }}
+        />
+      ) : (
+        // ✅ Mobile: Use TouchableOpacity to trigger DateTimePicker
+        <TouchableOpacity
+          style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <Text style={{ color: eventForm.datetime ? '#000' : '#999' }}>
+            {eventForm.datetime
+              ? new Date(eventForm.datetime).toLocaleString()
+              : "Select Date & Time"}
+          </Text>
+          <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+        </TouchableOpacity>
+      )}
 
-      {/* ✅ Native Date Picker */}
-      {showDatePicker && (
+      {/* Mobile DateTimePicker */}
+      {Platform.OS !== 'web' && showDatePicker && (
         <DateTimePicker
           value={selectedDate}
           mode="datetime"
@@ -1411,6 +1436,26 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         />
       )}
 
+      {/* Location Field */}
+      <TextInput
+        style={styles.eventInput}
+        placeholder="Location (optional)"
+        value={eventForm.location || ""}
+        onChangeText={(text) =>
+          setEventForm({ ...eventForm, location: text })
+        }
+      />
+
+      {/* URL Field */}
+      <TextInput
+        style={styles.eventInput}
+        placeholder="Event URL (optional)"
+        value={eventForm.url || ""}
+        onChangeText={(text) =>
+          setEventForm({ ...eventForm, url: text })
+        }
+      />
+      
       <View style={styles.eventModalButtons}>
         <TouchableOpacity
           onPress={() => {
@@ -1421,9 +1466,11 @@ const [selectedDate, setSelectedDate] = useState(new Date());
             const eventData = {
               title: eventForm.title,
               datetime: eventForm.datetime,
+              location: eventForm.location,
+              url: eventForm.url,
             };
             setContent(
-              `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
+              `📅 ${eventForm.title}`,
             );
             setAttachments((prev) => [
               ...prev,
@@ -1436,7 +1483,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
                 fileData: btoa(JSON.stringify(eventData)),
               },
             ]);
-            setEventForm({ open: false, title: "", datetime: "" });
+            setEventForm({ open: false, title: "", datetime: "", location: "", url: "" });
           }}
           style={styles.eventSubmitBtn}
         >
@@ -1444,7 +1491,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() =>
-            setEventForm({ open: false, title: "", datetime: "" })
+            setEventForm({ open: false, title: "", datetime: "", location: "", url: "" })
           }
           style={styles.eventCancelBtn}
         >
@@ -1490,7 +1537,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() =>
-                setEventForm({ open: true, title: "", datetime: "" })
+    setEventForm({ open: true, title: "", datetime: "", location: "", url: "" }) // ✅ Added location & url
               }
               style={styles.menuItem}
             >

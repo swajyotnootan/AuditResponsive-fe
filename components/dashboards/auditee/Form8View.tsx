@@ -637,7 +637,7 @@ export default function Form8View({ initialParams, onClose }: any) {
     );
   }
 
-  if (showDetailView) {
+ if (showDetailView) {
     return (
       <Form8DetailView
         initialParams={{
@@ -645,7 +645,11 @@ export default function Form8View({ initialParams, onClose }: any) {
           type: isNCR2Mode ? "ncr2" : "form8",
         }}
         onClose={() => {
-          setShowDetailView(false); // Allows the user to go back to the form/dashboard if needed
+          if (onClose) {
+            onClose(); // Calls parent's onClose (e.g., if wrapped in a modal/manager)
+          } else {
+            router.replace(dashboardPath as any); // Safely replaces history to prevent back-button returning to form
+          }
         }}
       />
     );

@@ -1164,7 +1164,7 @@ export default function ThreadCard({
         />
       );
     }
-    if (attachment.attachmentType === "LOCATION") {
+   if (attachment.attachmentType === "LOCATION") {
   let location: any = {};
 
   try {
@@ -1175,61 +1175,53 @@ export default function ThreadCard({
     console.log("Location parse error:", error);
   }
 
-  const latitude = Number(
-    location.latitude ?? location.lat
-  );
-
-  const longitude = Number(
-    location.longitude ?? location.lng
-  );
-
-  const address =
-    location.address ||
-    location.name ||
-    "Shared location";
+  const latitude = Number(location.latitude ?? location.lat);
+  const longitude = Number(location.longitude ?? location.lng);
+  const address = location.address || location.name || "Shared location";
 
   const mapUrl =
     location.url ||
     location.mapUrl ||
-    (
-      Number.isFinite(latitude) &&
-      Number.isFinite(longitude)
-        ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
-        : ""
-    );
+    (Number.isFinite(latitude) && Number.isFinite(longitude)
+      ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+      : "");
 
-  // For LOCATION attachment - Fix the openLocation function
-const openLocation = async () => {
-  if (!mapUrl) {
-    Alert.alert(
-      "Location unavailable",
-      "No valid location information was provided."
-    );
-    return;
-  }
-  try {
-    console.log("Opening location URL:", mapUrl);
-    
-    if (Platform.OS === 'web') {
-      // ✅ Open in new tab for web
-      window.open(mapUrl, '_blank');
-    } else {
-      // ✅ Use Linking for mobile
-      const supported = await Linking.canOpenURL(mapUrl);
-      if (supported) {
-        await Linking.openURL(mapUrl);
+  // ✅ BULLETPROOF openLocation function
+  const openLocation = async () => {
+    console.log("📍 DEBUG: Parsed location object =", location);
+    console.log("📍 DEBUG: Final mapUrl =", mapUrl);
+
+    if (!mapUrl) {
+      Alert.alert("Location unavailable", "No valid location information was provided.");
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'web') {
+        // ✅ Web: Force open in a new tab (noopener prevents popup blockers)
+        window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {
-        Alert.alert("Unable to open location", "No map application available");
+        // ✅ Mobile: Use Expo Linking
+        const supported = await Linking.canOpenURL(mapUrl);
+        if (supported) {
+          await Linking.openURL(mapUrl);
+        } else {
+          // Fallback: If canOpenURL fails, try opening it anyway or alert
+          await Linking.openURL(mapUrl).catch(() => {
+            Alert.alert("Unable to open location", "No map application is available on this device.");
+          });
+        }
+      }
+    } catch (error) {
+      console.error("❌ Open location error:", error);
+      // ✅ Ultimate fallback for Web if the try block fails
+      if (Platform.OS === 'web') {
+        window.open(mapUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        Alert.alert("Error", "Unable to open location link.");
       }
     }
-  } catch (error) {
-    console.error("Open location error:", error);
-    Alert.alert("Error", "Unable to open location");
-  }
-};
-
-
-
+  };
 
   return (
     <Pressable
@@ -1244,12 +1236,7 @@ const openLocation = async () => {
         padding: 14,
       }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
         <View
           style={{
             width: 42,
@@ -1265,48 +1252,22 @@ const openLocation = async () => {
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "700",
-              color: "#1e3a8a",
-            }}
-          >
+          <Text style={{ fontSize: 13, fontWeight: "700", color: "#1e3a8a" }}>
             Shared location
           </Text>
 
-          <Text
-            style={{
-              marginTop: 3,
-              fontSize: 14,
-              color: "#374151",
-            }}
-            numberOfLines={2}
-          >
+          <Text style={{ marginTop: 3, fontSize: 14, color: "#374151" }} numberOfLines={2}>
             {address}
           </Text>
 
-          {Number.isFinite(latitude) &&
-            Number.isFinite(longitude) && (
-              <Text
-                style={{
-                  marginTop: 3,
-                  fontSize: 11,
-                  color: "#6b7280",
-                }}
-              >
-                {latitude.toFixed(5)}, {longitude.toFixed(5)}
-              </Text>
-            )}
+          {Number.isFinite(latitude) && Number.isFinite(longitude) && (
+            <Text style={{ marginTop: 3, fontSize: 11, color: "#6b7280" }}>
+              {latitude.toFixed(5)}, {longitude.toFixed(5)}
+            </Text>
+          )}
         </View>
 
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: "#2563eb",
-          }}
-        >
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563eb" }}>
           Open
         </Text>
       </View>

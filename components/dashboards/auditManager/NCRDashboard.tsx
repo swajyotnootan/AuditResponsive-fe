@@ -500,28 +500,26 @@ const NCRDashboard = ({
   }
 
 
-  return (
+   return (
     <SafeAreaView className="flex-1 bg-[#F8FAFC]" style={{ height: "100%" }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1 h-full"
         style={{ flex: 1 }}
       >
-        <ScrollView
-          className="flex-1"
-          style={{ flex: 1 }} // Explicit flex for web
-          showsVerticalScrollIndicator={true}
-          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }} // Forces content to fill space
-        >
-          <View className="p-6 max-w-[1400px] self-center w-full">
-            {/* Header */}
-            <Card className="p-6 mb-6">
-              <View className="flex-row flex-wrap items-center justify-between gap-4">
-                <View className="flex-row items-center gap-4">
+        {/* ✅ FULL-WIDTH HEADER - Outside ScrollView */}
+        <View className="w-full px-4 py-4 bg-white border-b border-[#E2E8F0] shadow-sm">
+          <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
+            <View
+              className="flex-row flex-wrap items-center justify-between"
+              style={{ gap: 16 }}
+            >
+              {/* Left Side: Back Button & Title */}
+              <View style={{ flex: 1, minWidth: 200 }}>
+                <View className="flex-row items-center" style={{ gap: 12 }}>
                   <Pressable
-                    // ✅ NEW: Safely calls onBack if provided, does nothing otherwise
                     onPress={() => onBack?.()}
-                    className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
+                    className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
                   >
                     {({ pressed }) => (
                       <Feather
@@ -531,33 +529,61 @@ const NCRDashboard = ({
                       />
                     )}
                   </Pressable>
-                  <View className="w-12 h-12 rounded-xl bg-[#EFF6FF] border border-[#DBEAFE] items-center justify-center">
-                    <Feather name="file-text" size={24} color={T.accent} />
-                  </View>
+
                   <View>
-                    <Text className="text-xl font-bold text-[#000000]">
-                      Form 7: Nonconformity Reports
+                    <Text className="text-xl font-bold text-[#1E293B]">
+                      Nonconformity Reports
                     </Text>
-                    <Text className="mt-1 text-sm text-[#6B7280]">
+                    <Text className="mt-1 text-sm text-[#64748B]">
                       View all NCRs raised by auditors
                     </Text>
                   </View>
                 </View>
+              </View>
+
+              {/* Right Side: Refresh Button */}
+              <View className="flex-row items-center" style={{ gap: 12 }}>
                 <Pressable
                   onPress={loadData}
-                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
+                  disabled={loading}
+                  className="flex-row items-center px-4 py-2.5 bg-white border border-[#E2E8F0] shadow-sm rounded-xl"
+                  style={{ opacity: loading ? 0.6 : 1 }}
                 >
                   {({ pressed }) => (
-                    <Feather
-                      name="refresh-cw"
-                      size={18}
-                      color={pressed ? T.accent : T.textMuted}
-                    />
+                    <>
+                      {loading ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={T.accent}
+                          style={{ marginRight: 8 }}
+                        />
+                      ) : (
+                        <Feather
+                          name="refresh-cw"
+                          size={16}
+                          color={pressed ? T.accent : "#475569"}
+                          style={{ marginRight: 8 }}
+                        />
+                      )}
+                      <Text className="text-sm font-semibold text-[#334155]">
+                        Refresh
+                      </Text>
+                    </>
                   )}
                 </Pressable>
               </View>
-            </Card>
+            </View>
+          </View>
+        </View>
 
+        {/* ✅ SCROLLABLE CONTENT */}
+        <ScrollView
+          className="flex-1"
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+        >
+          <View className="p-6 max-w-[1400px] self-center w-full">
             {/* Error Alert */}
             {error && (
               <View className="p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-xl mb-6 flex-row gap-3">

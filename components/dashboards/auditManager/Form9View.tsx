@@ -934,51 +934,84 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
     );
   }
 
-  return (
+ return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-[#F8FAFC]"
     >
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="max-w-[1400px] w-full mx-auto p-6">
-          {/* Header Card */}
-          <Card className="p-6 mb-6">
-            <View className="flex-row flex-wrap items-center justify-between gap-4">
-              <View className="flex-row items-center gap-4">
-                {/* ✅ FIXED: Back Button with hitSlop and safe navigation check */}
+      {/* ✅ FULL-WIDTH HEADER - Outside ScrollView */}
+      <View className="w-full px-4 py-4 bg-white border-b border-[#E2E8F0] shadow-sm">
+        <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
+          <View
+            className="flex-row flex-wrap items-center justify-between"
+            style={{ gap: 16 }}
+          >
+            {/* Left Side: Back Button & Title */}
+            <View style={{ flex: 1, minWidth: 200 }}>
+              <View className="flex-row items-center" style={{ gap: 12 }}>
                 <Pressable
-                  onPress={handleBackPress}
-                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center active:opacity-70"
+                  onPress={() => {
+                    if (onBack) {
+                      onBack(); // ✅ Preferred: Lets the parent component handle closing (e.g., setState)
+                    } else {
+                      navigation.goBack(); // ✅ Fallback: Uses React Navigation if no prop is passed
+                    }
+                  }}
+                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
                 >
-                  <Feather name="arrow-left" size={18} color={T.textMuted} />
+                  {({ pressed }) => (
+                    <Feather
+                      name="arrow-left"
+                      size={18}
+                      color={pressed ? T.accent : T.textMuted}
+                    />
+                  )}
                 </Pressable>
-
-                <View
-                  className={`w-12 h-12 rounded-xl bg-[${T.accentLight}] border border-[${T.accentBorder}] items-center justify-center`}
-                >
-                  <Feather name="file-text" size={24} color={T.accent} />
-                </View>
                 <View>
-                  <Text className="text-xl font-bold text-[#000000]">
-                    Form 9: Nonconformity Summary
+                  <Text className="text-xl font-bold text-[#1E293B]">
+                    Nonconformity Summary
                   </Text>
-                  <Text className="text-xs text-[#6B7280] mt-1">
+                  <Text className="mt-1 text-sm text-[#64748B]">
                     View all NCRs raised by auditors
                   </Text>
                 </View>
               </View>
-              <View className="flex-row items-center gap-3">
-                <Pressable
-                  onPress={fetchNCRSummary}
-                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] items-center justify-center"
-                >
-                  <Feather name="refresh-cw" size={18} color={T.textMuted} />
-                </Pressable>
-              </View>
             </View>
-          </Card>
 
+            {/* Right Side: Refresh Button */}
+            <View className="flex-row items-center" style={{ gap: 12 }}>
+              <Pressable
+                onPress={fetchNCRSummary}
+                disabled={loading}
+                className="flex-row items-center px-4 py-2.5 bg-white border border-[#E2E8F0] shadow-sm rounded-xl active:opacity-70"
+                style={{ opacity: loading ? 0.6 : 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={T.accent}
+                    style={{ marginRight: 8 }}
+                  />
+                ) : (
+                  <Feather
+                    name="refresh-cw"
+                    size={16}
+                    color={T.textMuted}
+                    style={{ marginRight: 8 }}
+                  />
+                )}
+                <Text className="text-sm font-semibold text-[#334155]">
+                  Refresh
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ✅ SCROLLABLE CONTENT */}
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View className="max-w-[1400px] w-full mx-auto p-6">
           {/* Alerts */}
           {success && (
             <View
