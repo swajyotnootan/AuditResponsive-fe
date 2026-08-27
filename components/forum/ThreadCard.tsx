@@ -1151,53 +1151,54 @@ export default function ThreadCard({
     const event = getAttachmentData(attachment) || {};
 
     const formatEventDateTime = (datetime: any): string => {
-      if (!datetime) return "No date set";
+  if (!datetime) return "No date set";
 
-      try {
-        let date: Date;
+  try {
+    let date: Date;
 
-        if (datetime instanceof Date) {
-          date = datetime;
-        } else if (typeof datetime === "number") {
-          date = new Date(datetime);
-        } else if (typeof datetime === "string") {
-          let isoString = datetime.replace(/^"|"$/g, "").trim();
+    if (datetime instanceof Date) {
+      date = datetime;
+    } else if (typeof datetime === "number") {
+      date = new Date(datetime);
+    } else if (typeof datetime === "string") {
+      let isoString = datetime.replace(/^"|"$/g, "").trim();
 
-          if (!isoString.includes("T")) {
-            isoString = isoString.replace(" ", "T");
-          }
-
-          if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
-            isoString += "Z";
-          }
-
-          date = new Date(isoString);
-        } else {
-          return "No date set";
-        }
-
-        if (isNaN(date.getTime())) return "Invalid date";
-
-        return (
-          date.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            timeZone: "UTC",
-          }) +
-          " at " +
-          date.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-            timeZone: "UTC",
-          })
-        );
-      } catch (error) {
-        return "No date set";
+      if (!isoString.includes("T")) {
+        isoString = isoString.replace(" ", "T");
       }
-    };
+
+      if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
+        isoString += "Z";
+      }
+
+      date = new Date(isoString);
+    } else {
+      return "No date set";
+    }
+
+    if (isNaN(date.getTime())) return "Invalid date";
+
+    // ✅ Shows LOCAL time (IST) - removed timeZone: "UTC"
+    return (
+      date.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        // timeZone: "UTC", ← REMOVED
+      }) +
+      " at " +
+      date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        // timeZone: "UTC", ← REMOVED
+      })
+    );
+  } catch (error) {
+    return "No date set";
+  }
+};
 
     return (
       <View

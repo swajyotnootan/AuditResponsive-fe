@@ -398,56 +398,138 @@ export default function Form8DetailView({
     setLoading(false);
   };
 
-  const downloadPDF = async () => {
+    const downloadPDF = async () => {
+
     if (!ncr?.id) {
+
       Alert.alert("Error", "NCR ID not found");
+
       return;
-    }
 
+    }
+ 
     setPdfDownloading(true);
+
     try {
+
       const token = await AsyncStorage.getItem("token");
+
       const endpoint = isNCR2Mode
+
         ? `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
+
         : `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf`;
+ 
+      if (Platform.OS === "web") {
 
-      // FIX: Cast FileSystem to 'any' to bypass strict TS documentDirectory errors
-      const fileSystem = FileSystem as any;
-      const fileUri = `${fileSystem.documentDirectory}${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`;
+        // ✅ Web-specific download logic using Fetch and Blob
 
-      const downloadResumable = fileSystem.createDownloadResumable(
-        endpoint,
-        fileUri,
-        { headers: { Authorization: token ? `Bearer ${token}` : "" } },
-      );
+        const response = await fetch(endpoint, {
 
-      const downloadResult = await downloadResumable.downloadAsync();
-      if (!downloadResult) throw new Error("Download failed");
+          headers: {
 
-      const { uri } = downloadResult;
+            Authorization: token ? `Bearer ${token}` : "",
 
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
+          },
+
+        });
+ 
+        if (!response.ok) throw new Error("Network response was not ok");
+ 
+        const blob = await response.blob();
+
+        const url = window.URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+
+        link.href = url;
+
+        link.setAttribute(
+
+          "download",
+
+          `${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`
+
+        );
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        link.parentNode?.removeChild(link);
+
+        window.URL.revokeObjectURL(url);
+
       } else {
-        Alert.alert("Success", "PDF saved to device.");
+
+        // ✅ Native-specific download logic (iOS/Android)
+
+        const fileSystem = FileSystem as any;
+
+        const fileUri = `${fileSystem.documentDirectory}${
+
+          isNCR2Mode ? "NCR2" : "Form8"
+
+        }_CA_${ncr.ncrNumber || ncr.id}.pdf`;
+ 
+        const downloadResumable = fileSystem.createDownloadResumable(
+
+          endpoint,
+
+          fileUri,
+
+          { headers: { Authorization: token ? `Bearer ${token}` : "" } }
+
+        );
+ 
+        const downloadResult = await downloadResumable.downloadAsync();
+
+        if (!downloadResult) throw new Error("Download failed");
+ 
+        const { uri } = downloadResult;
+ 
+        if (await Sharing.isAvailableAsync()) {
+
+          await Sharing.shareAsync(uri);
+
+        } else {
+
+          Alert.alert("Success", "PDF saved to device.");
+
+        }
+
       }
-
+ 
       const modalMsg = isNCR2Mode
-        ? `NCR2 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`
-        : `Form 8 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`;
-      setModalMessage(modalMsg);
-      setShowSuccessModal(true);
-    } catch (err) {
-      console.error("PDF download error:", err);
-      Alert.alert(
-        "Error",
-        "Failed to download PDF. Please check your network connection.",
-      );
-    } finally {
-      setPdfDownloading(false);
-    }
-  };
 
+        ? `NCR2 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`
+
+        : `Form 8 PDF for NCR ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`;
+
+      setModalMessage(modalMsg);
+
+      setShowSuccessModal(true);
+
+    } catch (err) {
+
+      console.error("PDF download error:", err);
+
+      Alert.alert(
+
+        "Error",
+
+        "Failed to download PDF. Please check your network connection."
+
+      );
+
+    } finally {
+
+      setPdfDownloading(false);
+
+    }
+
+  };
+ 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
