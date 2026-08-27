@@ -139,7 +139,7 @@ const getTimeOnly = (date: Date) => {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: "UTC",
+    // REMOVE timeZone: "UTC" - uses device local time
   });
 };
 
@@ -152,9 +152,23 @@ const formatDateAndTime = (dateString?: string) => {
     if (isNaN(date.getTime())) return "";
 
     const now = new Date();
-    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const messageDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000);
+
+    // Compare local calendar dates
+    const today = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const messageDate = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+
+    const diffDays = Math.floor(
+      (today.getTime() - messageDate.getTime()) / 86400000
+    );
 
     if (diffDays === 0) {
       return getTimeOnly(date);
@@ -167,7 +181,6 @@ const formatDateAndTime = (dateString?: string) => {
     if (diffDays < 7) {
       return `${date.toLocaleDateString("en-US", {
         weekday: "long",
-        timeZone: "UTC",
       })}, ${getTimeOnly(date)}`;
     }
 
@@ -175,7 +188,6 @@ const formatDateAndTime = (dateString?: string) => {
       month: "short",
       day: "numeric",
       year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
-      timeZone: "UTC",
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
     console.error("Date formatting error:", error);
