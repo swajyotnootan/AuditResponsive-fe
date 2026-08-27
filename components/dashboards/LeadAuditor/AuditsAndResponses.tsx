@@ -412,7 +412,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             <Icon name="eye" size={14} color="#6B7280" />
             <Text style={styles.responseActionText}>View</Text>
           </TouchableOpacity>
-          {item.status === "SUBMITTED" && (
+          {/* {item.status === "SUBMITTED" && (
             <TouchableOpacity
               style={[styles.responseActionButton, styles.reviewButton]}
               onPress={() => onReviewResponse(item)}
@@ -424,7 +424,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
                 Review
               </Text>
             </TouchableOpacity>
-          )}
+          )} */}
         </View>
       </View>
     );
@@ -533,84 +533,205 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   // ============================================================
   // AUDITS TAB
   // ============================================================
-// ============================================================
-// AUDITS TAB - FIXED (Horizontal + Vertical Scroll)
-// ============================================================
-if (activeTab === "audits") {
-  const scheduledAudits = getFilteredSchedules();
+  if (activeTab === "audits") {
+    const scheduledAudits = getFilteredSchedules();
 
-  return (
-    <View style={styles.tabContainer}>
-      {/* Search Bar - Stays Fixed */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Icon
-            name="search"
-            size={20}
-            color="#9CA3AF"
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search audits by department or auditee..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholderTextColor="#9CA3AF"
-          />
+    return (
+      <View style={styles.tabContainer}>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Icon
+              name="search"
+              size={20}
+              color="#9CA3AF"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search audits by department or auditee..."
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
         </View>
-      </View>
 
-      {scheduledAudits.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Icon name="calendar" size={40} color="#CBD5E1" />
-          <Text style={styles.emptyStateTitle}>No Scheduled Audits</Text>
-          <Text style={styles.emptyStateText}>
-            {searchTerm
-              ? `No scheduled audits match "${searchTerm}"`
-              : "No audits have been scheduled"}
-          </Text>
-        </View>
-      ) : (
-        <Card>
-          {/* ✅ VERTICAL SCROLL - Wraps everything */}
-          <ScrollView
-            style={{ maxHeight: height * 0.65 }}
-            showsVerticalScrollIndicator={true}
-          >
-            {/* ✅ HORIZONTAL SCROLL - For wide table */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={true}
-              contentContainerStyle={{ 
-                minWidth: '100%',
-                paddingHorizontal: 4,
-              }}
-            >
-              <View style={{ minWidth: 700 }}> {/* 👈 FORCES HORIZONTAL SCROLL */}
-                
-                {/* Table Header */}
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.headerCell, { width: 100, flexShrink: 0 }]}>
+        {scheduledAudits.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Icon name="calendar" size={40} color="#CBD5E1" />
+            <Text style={styles.emptyStateTitle}>No Scheduled Audits</Text>
+            <Text style={styles.emptyStateText}>
+              {searchTerm
+                ? `No scheduled audits match "${searchTerm}"`
+                : "No audits have been scheduled"}
+            </Text>
+          </View>
+        ) : (
+          <Card>
+            {isMobile ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.headerCell, styles.deptCell]}>
+                      Department
+                    </Text>
+                    <Text style={[styles.headerCell, styles.auditorCell]}>
+                      Auditor(s)
+                    </Text>
+                    <Text style={[styles.headerCell, styles.auditeeCell]}>
+                      Auditee
+                    </Text>
+                    <Text style={[styles.headerCell, styles.dateCell]}>
+                      Date & Time
+                    </Text>
+                    <Text style={[styles.headerCell, styles.statusCell]}>
+                      Status
+                    </Text>
+                    <Text style={[styles.headerCell, styles.overdueCell]}>
+                      Overdue
+                    </Text>
+                  </View>
+                  {scheduledAudits.map((s) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    let isOverdue = false;
+                    if (
+                      s.scheduledDate &&
+                      s.status !== "COMPLETED" &&
+                      s.status !== "APPROVED" &&
+                      s.status !== "REJECTED"
+                    ) {
+                      const scheduledDate = new Date(s.scheduledDate);
+                      scheduledDate.setHours(0, 0, 0, 0);
+                      isOverdue = scheduledDate < today;
+                    }
+                    const statusColors = getStatusBadge(s.status);
+                    const primaryAuditorName = getAuditorName(s.auditorId);
+                    const leadAuditorName = s.leadAuditorName;
+                    let auditorDisplay = primaryAuditorName;
+                    if (
+                      leadAuditorName &&
+                      leadAuditorName !== primaryAuditorName
+                    ) {
+                      auditorDisplay += ` (Lead: ${leadAuditorName})`;
+                    }
+                    const formatDateTime = () => {
+                      if (!s.scheduledDate) return "Not Scheduled";
+                      const date = format(
+                        new Date(s.scheduledDate),
+                        "dd MMM yyyy",
+                      );
+                      if (s.startTime && s.endTime)
+                        return `${date} • ${s.startTime} - ${s.endTime}`;
+                      return date;
+                    };
+
+                    return (
+                      <View key={String(s.id)} style={styles.tableRow}>
+                        <Text
+                          style={[styles.tableCell, styles.deptCell]}
+                          numberOfLines={1}
+                        >
+                          {s.department || "N/A"}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.auditorCell]}
+                          numberOfLines={1}
+                        >
+                          {auditorDisplay}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.auditeeCell]}
+                          numberOfLines={1}
+                        >
+                          {s.auditeeName || "N/A"}
+                        </Text>
+                        <Text
+                          style={[styles.tableCell, styles.dateCell]}
+                          numberOfLines={1}
+                        >
+                          {formatDateTime()}
+                        </Text>
+                        <View style={[styles.tableCell, styles.statusCell]}>
+                          <View
+                            style={[
+                              styles.badge,
+                              { backgroundColor: statusColors.bg },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.badgeText,
+                                { color: statusColors.text },
+                              ]}
+                            >
+                              {s.status || "DRAFT"}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.tableCell, styles.overdueCell]}>
+                          {isOverdue ? (
+                            <View style={[styles.badge, styles.overdueBadge]}>
+                              <Icon
+                                name="alert-circle"
+                                size={10}
+                                color="#FFFFFF"
+                              />
+                              <Text style={styles.overdueText}>Overdue</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.dashText}>—</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            ) : (
+              <View>
+                <View style={styles.tableHeaderDesktop}>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.deptCellDesktop]}
+                  >
                     Department
                   </Text>
-                  <Text style={[styles.headerCell, { width: 130, flexShrink: 0 }]}>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.auditorCellDesktop,
+                    ]}
+                  >
                     Auditor(s)
                   </Text>
-                  <Text style={[styles.headerCell, { width: 100, flexShrink: 0 }]}>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.auditeeCellDesktop,
+                    ]}
+                  >
                     Auditee
                   </Text>
-                  <Text style={[styles.headerCell, { width: 150, flexShrink: 0 }]}>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.dateCellDesktop]}
+                  >
                     Date & Time
                   </Text>
-                  <Text style={[styles.headerCell, { width: 80, flexShrink: 0 }]}>
+                  <Text
+                    style={[styles.headerCellDesktop, styles.statusCellDesktop]}
+                  >
                     Status
                   </Text>
-                  <Text style={[styles.headerCell, { width: 80, flexShrink: 0 }]}>
+                  <Text
+                    style={[
+                      styles.headerCellDesktop,
+                      styles.overdueCellDesktop,
+                    ]}
+                  >
                     Overdue
                   </Text>
                 </View>
 
-                {/* Table Rows */}
                 {scheduledAudits.map((s) => {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
@@ -642,78 +763,119 @@ if (activeTab === "audits") {
                       "dd MMM yyyy",
                     );
                     if (s.startTime && s.endTime)
-                      return `${date} • ${s.startTime} - ${s.endTime}`;
+                      return `${date}  •  ${s.startTime} - ${s.endTime}`;
                     return date;
                   };
 
                   return (
-                    <View key={String(s.id)} style={styles.tableRow}>
+                    <View key={String(s.id)} style={styles.tableRowDesktop}>
                       <Text
-                        style={[styles.tableCell, { width: 100, flexShrink: 0 }]}
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.deptCellDesktop,
+                        ]}
                         numberOfLines={1}
                       >
                         {s.department || "N/A"}
                       </Text>
                       <Text
-                        style={[styles.tableCell, { width: 130, flexShrink: 0 }]}
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.auditorCellDesktop,
+                        ]}
                         numberOfLines={2}
                       >
                         {auditorDisplay}
                       </Text>
                       <Text
-                        style={[styles.tableCell, { width: 100, flexShrink: 0 }]}
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.auditeeCellDesktop,
+                        ]}
                         numberOfLines={1}
                       >
                         {s.auditeeName || "N/A"}
                       </Text>
                       <Text
-                        style={[styles.tableCell, { width: 150, flexShrink: 0 }]}
+                        style={[
+                          styles.tableCellDesktop,
+                          styles.dateCellDesktop,
+                        ]}
                         numberOfLines={1}
                       >
                         {formatDateTime()}
                       </Text>
-                      <View style={[styles.tableCell, { width: 80, flexShrink: 0 }]}>
+                      <View style={[styles.statusCellDesktop]}>
                         <View
                           style={[
                             styles.badge,
-                            { backgroundColor: statusColors.bg },
+                            {
+                              backgroundColor: statusColors.bg,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            },
                           ]}
                         >
                           <Text
                             style={[
                               styles.badgeText,
-                              { color: statusColors.text },
+                              {
+                                color: statusColors.text,
+                                fontSize: 11,
+                                fontWeight: "600",
+                              },
                             ]}
                           >
                             {s.status || "DRAFT"}
                           </Text>
                         </View>
                       </View>
-                      <View style={[styles.tableCell, { width: 80, flexShrink: 0 }]}>
+                      <View style={[styles.overdueCellDesktop]}>
                         {isOverdue ? (
-                          <View style={[styles.badge, styles.overdueBadge]}>
+                          <View
+                            style={[
+                              styles.badge,
+                              styles.overdueBadge,
+                              {
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                              },
+                            ]}
+                          >
                             <Icon
                               name="alert-circle"
-                              size={10}
+                              size={12}
                               color="#FFFFFF"
                             />
-                            <Text style={styles.overdueText}>Overdue</Text>
+                            <Text
+                              style={[styles.overdueText, { fontSize: 11 }]}
+                            >
+                              Overdue
+                            </Text>
                           </View>
                         ) : (
-                          <Text style={styles.dashText}>—</Text>
+                          <Text
+                            style={[
+                              styles.dashText,
+                              { fontSize: 16, color: "#CBD5E1" },
+                            ]}
+                          >
+                            —
+                          </Text>
                         )}
                       </View>
                     </View>
                   );
                 })}
               </View>
-            </ScrollView>
-          </ScrollView>
-        </Card>
-      )}
-    </View>
-  );
-}
+            )}
+          </Card>
+        )}
+      </View>
+    );
+  }
 
   // ============================================================
   // RESPONSES TAB
@@ -1116,38 +1278,33 @@ const styles = StyleSheet.create({
   // ============================================================================
   // TABLE STYLES (Mobile)
   // ============================================================================
-  // Add these to your styles object
-tableHeader: {
-  flexDirection: "row",
-  backgroundColor: "#F8FAFC",
-  borderBottomWidth: 2,
-  borderBottomColor: "#E2E8F0",
-  paddingVertical: 12,
-  paddingHorizontal: 8,
-  minWidth: 700, // 👈 MATCHES THE INNER VIEW
-},
-tableRow: {
-  flexDirection: "row",
-  borderBottomWidth: 1,
-  borderBottomColor: "#F1F5F9",
-  paddingVertical: 12,
-  paddingHorizontal: 8,
-  alignItems: "center",
-  minWidth: 700, // 👈 MATCHES THE INNER VIEW
-},
-headerCell: {
-  fontSize: 11,
-  fontWeight: "700",
-  color: "#64748B",
-  textTransform: "uppercase",
-  letterSpacing: 0.5,
-  paddingHorizontal: 4,
-},
-tableCell: {
-  fontSize: 13,
-  color: "#334155",
-  paddingHorizontal: 4,
-},
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    paddingVertical: 8,
+  },
+  headerCell: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  tableCell: {
+    fontSize: 11,
+    color: "#1F2937",
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
   deptCell: { width: isMobile ? 60 : 80 },
   auditorCell: { width: isMobile ? 80 : 100 },
   auditeeCell: { width: isMobile ? 60 : 80 },
