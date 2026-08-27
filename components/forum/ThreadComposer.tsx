@@ -731,26 +731,34 @@ const [selectedDate, setSelectedDate] = useState(new Date());
 
   const handleLocation = async () => {
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    const { status } =
+      await Location.requestForegroundPermissionsAsync();
+
     if (status !== "granted") {
-      Alert.alert("Permission Denied", "Location access is required.");
+      Alert.alert(
+        "Permission Denied",
+        "Location access is required."
+      );
       return;
     }
 
     const location = await Location.getCurrentPositionAsync({});
     const { latitude, longitude } = location.coords;
-    const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-    // ✅ FIX: Store location data as JSON string (not base64)
+    const url =
+      `https://www.google.com/maps?q=${latitude},${longitude}`;
+
     const locationData = {
-      latitude: latitude,
-      longitude: longitude,
-      url: url,
+      latitude,
+      longitude,
+      url,
       name: "Shared location",
     };
+
     const jsonString = JSON.stringify(locationData);
 
     setContent("📍 Shared location");
+
     setAttachments((prev) => [
       ...prev,
       {
@@ -759,11 +767,15 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         fileSize: jsonString.length,
         attachmentType: "LOCATION",
         locationUrl: url,
-        fileData: jsonString, // ✅ Store as JSON string
+
+        // IMPORTANT: 8D backend expects Base64
+        fileData: btoa(jsonString),
       },
     ]);
+
     setShowAttachmentMenu(false);
   } catch (err) {
+    console.error("Location error:", err);
     Alert.alert("Error", "Failed to get location");
   }
 };

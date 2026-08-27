@@ -1,5 +1,5 @@
 ﻿// components/forum/ThreadCard.tsx
-// FINAL VERSION - First Message Menu Fixed, Event Date Picker Support, Location Zoom, No Extra Spacing
+// FINAL VERSION - Fixed Location & Event Attachments with JSON parsing
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import { Audio, ResizeMode, Video } from "expo-av";
@@ -112,16 +112,10 @@ const getProfileImageUrl = (userId?: string | number | null, existingImage?: str
   return null;
 };
 
-const isProductionBackend = () => {
-  const url = API_BASE_URL || '';
-  return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
-};
-
-// ✅ NEW CODE (Always treat backend as UTC)
 // =====================================================
-// DATE/TIME HELPERS
+// DATE/TIME HELPERS - FORCE UTC DISPLAY
 // Backend stores/sends timestamps in UTC.
-// Frontend converts them to the device's LOCAL timezone.
+// Frontend displays them in UTC (not local timezone).
 // =====================================================
 
 const parseBackendDate = (dateString: string): Date => {
@@ -129,34 +123,25 @@ const parseBackendDate = (dateString: string): Date => {
 
   let isoString = String(dateString).trim();
 
-  // Handle: "2026-08-26 08:45:00"
   if (!isoString.includes("T")) {
     isoString = isoString.replace(" ", "T");
   }
 
-  // If backend gives a timestamp without timezone information,
-  // treat it as UTC.
-  if (
-    !isoString.endsWith("Z") &&
-    !/[+-]\d{2}:\d{2}$/.test(isoString)
-  ) {
+  if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
     isoString += "Z";
   }
 
   return new Date(isoString);
 };
 
-
-// Display time in the user's/device's local timezone.
-// On your Indian device this will automatically use IST (UTC+5:30).
 const getTimeOnly = (date: Date) => {
   return date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "UTC",
   });
 };
-
 
 const formatDateAndTime = (dateString?: string) => {
   if (!dateString) return "";
@@ -167,23 +152,9 @@ const formatDateAndTime = (dateString?: string) => {
     if (isNaN(date.getTime())) return "";
 
     const now = new Date();
-
-    // Compare local calendar dates.
-    const today = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-
-    const messageDate = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate()
-    );
-
-    const diffDays = Math.floor(
-      (today.getTime() - messageDate.getTime()) / 86400000
-    );
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const messageDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const diffDays = Math.floor((today.getTime() - messageDate.getTime()) / 86400000);
 
     if (diffDays === 0) {
       return getTimeOnly(date);
@@ -196,110 +167,19 @@ const formatDateAndTime = (dateString?: string) => {
     if (diffDays < 7) {
       return `${date.toLocaleDateString("en-US", {
         weekday: "long",
+        timeZone: "UTC",
       })}, ${getTimeOnly(date)}`;
     }
 
     return `${date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year:
-        date.getFullYear() !== now.getFullYear()
-          ? "numeric"
-          : undefined,
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+      timeZone: "UTC",
     })}, ${getTimeOnly(date)}`;
   } catch (error) {
     console.error("Date formatting error:", error);
     return "";
-  }
-};
-
-// ✅ FIX: Ultra-robust date parser for events with debug logging
-const parseEventDate = (dateInput: any): string => {
-  if (!dateInput) return "No date set";
-
-  try {
-    let date: Date;
-
-    if (dateInput instanceof Date) {
-      date = dateInput;
-    } else if (typeof dateInput === "number") {
-      date = new Date(dateInput);
-    } else if (typeof dateInput === "string") {
-      const cleanStr = dateInput.replace(/^"|"$/g, "").trim();
-
-      let isoString = cleanStr;
-
-      if (!isoString.includes("T")) {
-        isoString = isoString.replace(" ", "T");
-      }
-
-      if (
-        !isoString.endsWith("Z") &&
-        !/[+-]\d{2}:\d{2}$/.test(isoString)
-      ) {
-        isoString += "Z";
-      }
-
-      date = new Date(isoString);
-    } else {
-      return "Invalid date format";
-    }
-
-    if (isNaN(date.getTime())) {
-      return "Invalid date";
-    }
-
-    return (
-      date.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }) +
-      " at " +
-      date.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      })
-    );
-  } catch (error) {
-    return "Invalid date";
-  }
-};
-
-// For EVENT attachment - Better date parsing
-const parseEventDateTime = (datetimeValue: any): string => {
-  if (!datetimeValue) return "No date";
-  
-  try {
-    let date: Date;
-    
-    if (datetimeValue instanceof Date) {
-      date = datetimeValue;
-    } else if (typeof datetimeValue === "number") {
-      date = new Date(datetimeValue);
-    } else if (typeof datetimeValue === "string") {
-      // Try multiple formats
-      const cleanStr = datetimeValue.replace(/^"|"$/g, "").trim();
-      
-      if (!isNaN(Date.parse(cleanStr))) {
-        date = new Date(cleanStr);
-      } else {
-        return datetimeValue; // Return as-is if can't parse
-      }
-    } else {
-      return "No date";
-    }
-    
-    if (isNaN(date.getTime())) {
-      return "Invalid date";
-    }
-    
-    return formatDateAndTime(date.toISOString());
-  } catch (error) {
-    console.error("Event date parse error:", error);
-    return "No date";
   }
 };
 
@@ -372,9 +252,8 @@ const WebVideoPlayer = ({ url, onClose }: { url: string; onClose: () => void }) 
   );
 };
 
-
 // =====================================================
-// WEB AUDIO PLAYER (FIXED - Button Toggle Issue)
+// WEB AUDIO PLAYER
 // =====================================================
 const WebAudioPlayer = ({
   uri,
@@ -399,7 +278,6 @@ const WebAudioPlayer = ({
     const audio = audioRef.current;
     if (!audio || !uri) return;
 
-    // Reset state when URI changes
     setIsPlaying(false);
     setIsLoading(true);
     setCurrentTime(0);
@@ -436,7 +314,6 @@ const WebAudioPlayer = ({
       setIsLoading(false);
     };
 
-    // Add all event listeners
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("ended", handleEnded);
@@ -444,11 +321,9 @@ const WebAudioPlayer = ({
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("error", handleError);
 
-    // Load the audio
     audio.load();
 
     return () => {
-      // Cleanup
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("ended", handleEnded);
@@ -467,10 +342,8 @@ const WebAudioPlayer = ({
     try {
       if (isPlaying) {
         await audio.pause();
-        // State will be updated by the 'pause' event listener
       } else {
         await audio.play();
-        // State will be updated by the 'play' event listener
       }
     } catch (err) {
       console.error("Play/Pause error:", err);
@@ -543,7 +416,7 @@ const WebAudioPlayer = ({
 };
 
 // =====================================================
-// NATIVE AUDIO PLAYER (INLINE - NO REDIRECT)
+// NATIVE AUDIO PLAYER
 // =====================================================
 const NativeAudioPlayer = ({
   uri,
@@ -581,7 +454,6 @@ const NativeAudioPlayer = ({
         setIsLoading(true);
         setError(null);
 
-        // ✅ Pass callback directly to createAsync (Type-safe & prevents loops)
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri },
           {
@@ -596,7 +468,6 @@ const NativeAudioPlayer = ({
               setPosition(status.positionMillis || 0);
               setIsPlaying(status.isPlaying);
 
-              // ✅ Cleanly handle end without triggering a replay loop
               if (status.didJustFinish) {
                 setIsPlaying(false);
                 setPosition(0);
@@ -625,7 +496,7 @@ const NativeAudioPlayer = ({
     return () => {
       isMounted = false;
       if (sound) {
-        sound.stopAsync(); // ✅ Force stop before unloading to prevent ghost audio
+        sound.stopAsync();
         sound.unloadAsync();
       }
     };
@@ -638,7 +509,6 @@ const NativeAudioPlayer = ({
         await sound.pauseAsync();
         setIsPlaying(false);
       } else {
-        // ✅ If it already finished, restart from 0, otherwise resume
         const status = await sound.getStatusAsync();
         if (status.isLoaded && status.didJustFinish) {
           await sound.setPositionAsync(0);
@@ -699,13 +569,12 @@ const NativeAudioPlayer = ({
 };
 
 // =====================================================
-// INLINE VIDEO PLAYER (WORKS ON BOTH WEB & MOBILE)
+// INLINE VIDEO PLAYER
 // =====================================================
 const InlineVideoPlayer = ({ uri }: { uri: string }) => {
   const videoRef = useRef<Video>(null);
   const webVideoRef = useRef<HTMLVideoElement>(null);
 
-  // ✅ Web: Use native HTML5 <video> tag for perfect inline playback
   if (Platform.OS === "web") {
     return (
       <View style={styles.videoPreview}>
@@ -726,7 +595,6 @@ const InlineVideoPlayer = ({ uri }: { uri: string }) => {
     );
   }
 
-  // ✅ Mobile: Use expo-av Video component
   return (
     <View style={styles.videoPreview}>
       <Video
@@ -771,6 +639,9 @@ const PDFViewerModal = ({ url, onClose, fileName }: { url: string; onClose: () =
   );
 };
 
+// =====================================================
+// URL REGEX & MESSAGE CONTENT
+// =====================================================
 const URL_REGEX =
   /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?)/gi;
 
@@ -814,7 +685,7 @@ const MessageContent = ({
 };
 
 // =====================================================
-// COMPONENT
+// MAIN COMPONENT
 // =====================================================
 export default function ThreadCard({ 
   thread, 
@@ -848,42 +719,135 @@ export default function ThreadCard({
   const [showMenu, setShowMenu] = useState(false);
   const [showReactionDetail, setShowReactionDetail] = useState<string | null>(null);
   const [extraAttachmentData, setExtraAttachmentData] = useState<Record<string, any>>({});
+  
+  const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
 
-useEffect(() => {
-  if (!thread.attachments) return;
-  thread.attachments.forEach((att) => {
+  // =====================================================
+  // ATTACHMENT DATA PARSER (FIXED)
+  // =====================================================
+  const getAttachmentData = (attachment: Attachment) => {
+    // 1. If fileData is an object, use it directly
+    if (attachment.fileData && typeof attachment.fileData === "object") {
+      return attachment.fileData;
+    }
+
+    // 2. If fileData is a JSON string, parse it
     if (
-      (att.attachmentType === "LOCATION" || att.attachmentType === "EVENT") &&
-      att.id &&
-      !att.fileData &&
-      !extraAttachmentData[att.id]
+      attachment.fileData &&
+      typeof attachment.fileData === "string" &&
+      attachment.fileData.trim().startsWith("{")
     ) {
-      const fetchFileData = async () => {
-        try {
-          const url = `${API_BASE_URL}/api/forum/8d/files/${att.id}`;
-          const response = await fetch(url);
-          if (response.ok) {
+      try {
+        return JSON.parse(attachment.fileData);
+      } catch (error) {
+        console.log("JSON parse error:", error);
+      }
+    }
+
+    // 3. If fileData is base64 encoded JSON
+    if (attachment.fileData && typeof attachment.fileData === "string") {
+      try {
+        // Try base64 decode
+        let decoded;
+        if (Platform.OS === "web") {
+          decoded = atob(attachment.fileData);
+        } else {
+          try {
+            // React Native fallback
+            decoded = Buffer.from(attachment.fileData, 'base64').toString('utf-8');
+          } catch (e) {
+            // If Buffer fails, try alternative approach
+            decoded = decodeURIComponent(escape(atob(attachment.fileData)));
+          }
+        }
+        if (decoded && decoded.trim().startsWith("{")) {
+          return JSON.parse(decoded);
+        }
+      } catch (error) {
+        console.log("Base64 decode error:", error);
+      }
+    }
+
+    // 4. Check cached extraAttachmentData
+    if (attachment.id && extraAttachmentData[attachment.id]) {
+      return extraAttachmentData[attachment.id];
+    }
+
+    return null;
+  };
+
+  // =====================================================
+  // FETCH ATTACHMENT DATA FOR LOCATION/EVENT
+  // =====================================================
+  useEffect(() => {
+    if (!thread.attachments?.length) return;
+
+    thread.attachments.forEach((att) => {
+      if (
+        (att.attachmentType === "LOCATION" || att.attachmentType === "EVENT") &&
+        att.id &&
+        !extraAttachmentData[att.id]
+      ) {
+        const fetchAttachmentData = async () => {
+          try {
+            const url = `${API_BASE_URL}/api/forum/8d/files/${att.id}`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+              console.error("Failed to fetch attachment:", response.status);
+              return;
+            }
+
             const blob = await response.blob();
             const reader = new FileReader();
+
             reader.onloadend = () => {
-              const result = reader.result as string;
-              const base64 = result.split(",")[1];
-              if (base64) {
-                const decoded = JSON.parse(atob(base64));
-                setExtraAttachmentData((prev) => ({ ...prev, [att.id!]: decoded }));
+              try {
+                const result = reader.result as string;
+                const base64 = result.split(",")[1];
+
+                if (!base64) {
+                  console.error("No Base64 data found for attachment:", att.id);
+                  return;
+                }
+
+                let decodedText;
+                if (Platform.OS === "web") {
+                  decodedText = atob(base64);
+                } else {
+                  try {
+                    decodedText = Buffer.from(base64, 'base64').toString('utf-8');
+                  } catch (e) {
+                    decodedText = decodeURIComponent(escape(atob(base64)));
+                  }
+                }
+
+                const parsedData = JSON.parse(decodedText);
+                console.log("✅ Attachment data loaded:", att.attachmentType, parsedData);
+
+                setExtraAttachmentData((prev) => ({
+                  ...prev,
+                  [att.id!]: parsedData,
+                }));
+              } catch (error) {
+                console.error("❌ Failed to decode attachment data:", error);
               }
             };
+
+            reader.onerror = () => {
+              console.error("❌ FileReader error for attachment:", att.id);
+            };
+
             reader.readAsDataURL(blob);
+          } catch (error) {
+            console.error("❌ Error fetching attachment data:", error);
           }
-        } catch (error) {
-          console.error("Error fetching attachment data:", error);
-        }
-      };
-      fetchFileData();
-    }
-  });
-}, [thread.attachments]);
-  const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🙏', '👏'];
+        };
+
+        fetchAttachmentData();
+      }
+    });
+  }, [thread.attachments]);
 
   const currentEmail = currentUser?.email || currentUsername;
   const isOwnMessage = thread.createdBy === currentEmail;
@@ -1073,452 +1037,359 @@ useEffect(() => {
     finally { setProfileLoading(false); }
   };
 
-   const renderAttachment = (attachment: any, index: number) => {
-    if (!attachment) return null;
-    if (attachment.attachmentType === "IMAGE") {
-      let imageUri = attachment.uri || "";
-      if (attachment.hasValidFileData && attachment.fileData)
-        imageUri = base64ToUri(
-          attachment.fileData,
-          attachment.fileType || "image/jpeg",
-        );
-      else if (attachment.id && imageDataCache[attachment.id])
-        imageUri = imageDataCache[attachment.id];
-      else if (
-        attachment.id &&
-        !imageErrors[attachment.id] &&
-        !loadingImages[attachment.id]
-      )
-        loadImageData(attachment);
-      if (loadingImages[attachment.id] && !imageUri)
-        return (
-          <View key={index} style={styles.attachmentContainer}>
-            <View
-              style={[
-                styles.imagePreview,
-                { justifyContent: "center", alignItems: "center" },
-              ]}
-            >
-              <ActivityIndicator size="large" color="#4a90d9" />
-              <Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>
-                Loading...
-              </Text>
-            </View>
-          </View>
-        );
-      if (!imageUri || imageErrors[attachment.id])
-        return (
-          <View key={index} style={styles.attachmentContainer}>
-            <View
-              style={[
-                styles.imagePreview,
-                {
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#f3f4f6",
-                },
-              ]}
-            >
-              <Text style={{ fontSize: 40 }}>🖼️</Text>
-              <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                {attachment.fileName || "Image"}
-              </Text>
-              {imageErrors[attachment.id] && (
-                <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>
-                  Failed to load
-                </Text>
-              )}
-            </View>
-          </View>
-        );
-      return (
-        <View key={index} style={styles.attachmentContainer}>
-          <Pressable onPress={() => openImagePreview(imageUri)}>
-            <Image
-              source={{ uri: imageUri }}
-              style={styles.imagePreview}
-              resizeMode="cover"
-              onError={() => {
-                if (attachment.id)
-                  setImageErrors((prev) => ({
-                    ...prev,
-                    [attachment.id!]: true,
-                  }));
-              }}
-            />
-          </Pressable>
-          <View style={styles.fileInfo}>
-            <Text style={styles.fileName} numberOfLines={1}>
-              {attachment.fileName || "Image"}
-            </Text>
-            <Pressable onPress={() => downloadFile(attachment)}>
-              <Download size={18} color="green" />
-            </Pressable>
-          </View>
-        </View>
-      );
-    }
-    if (attachment.attachmentType === "VIDEO") {
-      let videoUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100)
-        videoUri = base64ToUri(
-          attachment.fileData,
-          attachment.fileType || "video/mp4",
-        );
-      else if (attachment.id)
-        videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+  // =====================================================
+  // LOCATION RENDERER (FIXED)
+  // =====================================================
+  const renderLocation = (attachment: any, index: number) => {
+    const location = getAttachmentData(attachment) || {};
 
-      // ✅ Unified Inline Video Player for BOTH Web and Mobile (No new window/screen)
-      return (
-        <View key={index} style={styles.attachmentContainer}>
-          <InlineVideoPlayer uri={videoUri} />
-          <View style={styles.fileInfo}>
-            <Text style={styles.fileName} numberOfLines={1}>
-              {attachment.fileName || "Video"}
-            </Text>
-            <Text style={styles.fileSize}>
-              {formatFileSize(attachment.fileSize)}
-            </Text>
-          </View>
-        </View>
-      );
-    }
-    if (attachment.attachmentType === "AUDIO") {
-      let audioUri = attachment.uri || "";
-      if (attachment.fileData && attachment.fileData.length > 100)
-        audioUri = base64ToUri(
-          attachment.fileData,
-          attachment.fileType || "audio/mpeg",
-        );
-      else if (Platform.OS === "web" && attachment.id)
-        audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
-      return (
-        <AudioPlayer
-          key={index}
-          uri={audioUri}
-          fileName={attachment.fileName}
-        />
-      );
-    }
-if (attachment.attachmentType === "LOCATION") {
-  let location: any = {};
-  try {
-    if (attachment.fileData) {
-      if (typeof attachment.fileData === 'string') {
-        // ✅ Handle both plain JSON string and Base64 encoded string
-        if (attachment.fileData.startsWith('{')) {
-          location = JSON.parse(attachment.fileData);
-        } else {
-          location = JSON.parse(atob(attachment.fileData));
-        }
+    const latitude = Number(location.latitude ?? location.lat);
+    const longitude = Number(location.longitude ?? location.lng);
+    const address = location.address || location.name || "Shared location";
+
+    const mapUrl =
+      location.url ||
+      location.mapUrl ||
+      (Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+        : "");
+
+    const openLocation = async () => {
+      if (!mapUrl) {
+        Alert.alert("Location unavailable", "No valid location information was provided.");
+        return;
       }
-    }
-  } catch (error) {
-    console.log("Location parse error:", error);
-  }
 
-  const latitude = Number(location.latitude ?? location.lat);
-  const longitude = Number(location.longitude ?? location.lng);
-  const address = location.address || location.name || "Shared location";
-
-  const mapUrl =
-    location.url ||
-    location.mapUrl ||
-    (Number.isFinite(latitude) && Number.isFinite(longitude)
-      ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
-      : "");
-
-  // ✅ BULLETPROOF openLocation function
-  const openLocation = async () => {
-    if (!mapUrl) {
-      Alert.alert("Location unavailable", "No valid location information was provided.");
-      return;
-    }
-    try {
-      if (Platform.OS === 'web') {
-        // ✅ Web: Force open in a new tab (bypasses React Native Linking issues)
-        window.open(mapUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        // ✅ Mobile: Use Expo Linking
-        const supported = await Linking.canOpenURL(mapUrl);
-        if (supported) {
-          await Linking.openURL(mapUrl);
+      try {
+        if (Platform.OS === "web") {
+          window.open(mapUrl, "_blank", "noopener,noreferrer");
         } else {
-          Alert.alert("Unable to open location", "No map application available");
-        }
-      }
-    } catch (error) {
-      console.error("Open location error:", error);
-      // Ultimate fallback for Web if the try block fails
-      if (Platform.OS === 'web') {
-        window.open(mapUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        Alert.alert("Error", "Unable to open location");
-      }
-    }
-  };
-
-  return (
-    <Pressable
-      key={index}
-      onPress={openLocation}
-      style={{
-        marginTop: 8,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: "#bfdbfe",
-        backgroundColor: "#eff6ff",
-        padding: 14,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <View
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: "#dbeafe",
-            alignItems: "center",
-            justifyContent: "center",
-            marginRight: 12,
-          }}
-        >
-          <MapPin size={21} color="#2563eb" />
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#1e3a8a" }}>
-            Shared location
-          </Text>
-
-          <Text style={{ marginTop: 3, fontSize: 14, color: "#374151" }} numberOfLines={2}>
-            {address}
-          </Text>
-
-          {Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0 && longitude !== 0 && (
-            <Text style={{ marginTop: 3, fontSize: 11, color: "#6b7280" }}>
-              📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
-            </Text>
-          )}
-        </View>
-
-        <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563eb" }}>
-          Open
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
- if (attachment.attachmentType === "EVENT") {
-  let event: any = {};
-
-  try {
-    if (attachment.fileData) {
-      if (typeof attachment.fileData === 'string') {
-        // ✅ Check if it's already a JSON string
-        if (attachment.fileData.startsWith('{')) {
-          event = JSON.parse(attachment.fileData);
-        } else {
-          // Might be base64 encoded - try to decode
-          try {
-            let decoded;
-            if (Platform.OS === 'web') {
-              decoded = atob(attachment.fileData);
-            } else {
-              try {
-                decoded = Buffer.from(attachment.fileData, 'base64').toString('utf-8');
-              } catch (e) {
-                decoded = decodeURIComponent(escape(atob(attachment.fileData)));
-              }
-            }
-            if (decoded && decoded.startsWith('{')) {
-              event = JSON.parse(decoded);
-            }
-          } catch (e) {
-            console.log("Event decode error:", e);
-            try {
-              event = JSON.parse(attachment.fileData);
-            } catch (e2) {
-              event = {};
-            }
+          const supported = await Linking.canOpenURL(mapUrl);
+          if (supported) {
+            await Linking.openURL(mapUrl);
+          } else {
+            Alert.alert("Unable to open location", "No map application available");
           }
         }
+      } catch (error) {
+        console.error("Open location error:", error);
+        Alert.alert("Error", "Unable to open location");
       }
-    }
-  } catch (error) {
-    console.log("Event parse error:", error);
-    event = {};
-  }
+    };
 
-  // ✅ Format event date with UTC
-  const formatEventDateTime = (datetime: any): string => {
-    if (!datetime) return "No date set";
-    
-    try {
-      let date: Date;
-      
-      if (datetime instanceof Date) {
-        date = datetime;
-      } else if (typeof datetime === "number") {
-        date = new Date(datetime);
-      } else if (typeof datetime === "string") {
-        let isoString = datetime.replace(/^"|"$/g, "").trim();
-        if (!isoString.includes("T")) {
-          isoString = isoString.replace(" ", "T");
-        }
-        if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
-          isoString += "Z";
-        }
-        date = new Date(isoString);
-      } else {
-        return "No date set";
-      }
-      
-      if (isNaN(date.getTime())) return "Invalid date";
-      
-      return date.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      }) + " at " + date.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: "UTC",
-      });
-    } catch (error) {
-      return "No date set";
-    }
-  };
-
-  return (
-    <View
-      key={index}
-      style={{
-        marginTop: 8,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: "#c4b5fd",
-        backgroundColor: "#faf5ff",
-        overflow: "hidden",
-      }}
-    >
-      <View
+    return (
+      <Pressable
+        key={index}
+        onPress={openLocation}
         style={{
-          backgroundColor: "#7c3aed",
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          flexDirection: "row",
-          alignItems: "center",
+          marginTop: 8,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#bfdbfe",
+          backgroundColor: "#eff6ff",
+          padding: 14,
         }}
       >
-        <Calendar size={18} color="#fff" />
-        <Text
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 21,
+              backgroundColor: "#dbeafe",
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 12,
+            }}
+          >
+            <MapPin size={21} color="#2563eb" />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#1e3a8a" }}>
+              📍 Shared location
+            </Text>
+
+            <Text
+              style={{ marginTop: 3, fontSize: 14, color: "#374151" }}
+              numberOfLines={2}
+            >
+              {address}
+            </Text>
+
+            {Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0 && longitude !== 0 && (
+              <Text style={{ marginTop: 3, fontSize: 11, color: "#6b7280" }}>
+                📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
+              </Text>
+            )}
+          </View>
+
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563eb" }}>
+            Open
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  // =====================================================
+  // EVENT RENDERER (FIXED)
+  // =====================================================
+  const renderEvent = (attachment: any, index: number) => {
+    const event = getAttachmentData(attachment) || {};
+
+    const formatEventDateTime = (datetime: any): string => {
+      if (!datetime) return "No date set";
+
+      try {
+        let date: Date;
+
+        if (datetime instanceof Date) {
+          date = datetime;
+        } else if (typeof datetime === "number") {
+          date = new Date(datetime);
+        } else if (typeof datetime === "string") {
+          let isoString = datetime.replace(/^"|"$/g, "").trim();
+
+          if (!isoString.includes("T")) {
+            isoString = isoString.replace(" ", "T");
+          }
+
+          if (!isoString.endsWith("Z") && !/[+-]\d{2}:\d{2}$/.test(isoString)) {
+            isoString += "Z";
+          }
+
+          date = new Date(isoString);
+        } else {
+          return "No date set";
+        }
+
+        if (isNaN(date.getTime())) return "Invalid date";
+
+        return (
+          date.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            timeZone: "UTC",
+          }) +
+          " at " +
+          date.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: "UTC",
+          })
+        );
+      } catch (error) {
+        return "No date set";
+      }
+    };
+
+    return (
+      <View
+        key={index}
+        style={{
+          marginTop: 8,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#c4b5fd",
+          backgroundColor: "#faf5ff",
+          overflow: "hidden",
+        }}
+      >
+        <View
           style={{
-            marginLeft: 8,
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: "800",
+            backgroundColor: "#7c3aed",
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            flexDirection: "row",
+            alignItems: "center",
           }}
         >
-          EVENT
-        </Text>
-      </View>
-
-      <View style={{ padding: 14 }}>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: "#111827",
-          }}
-        >
-          {event.title || "Event"}
-        </Text>
-
-        <Text
-          style={{
-            marginTop: 8,
-            fontSize: 13,
-            color: "#374151",
-          }}
-        >
-          📅 {formatEventDateTime(event.datetime)}
-        </Text>
-
-        {event.location ? (
+          <Calendar size={18} color="#fff" />
           <Text
             style={{
-              marginTop: 6,
+              marginLeft: 8,
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: "800",
+            }}
+          >
+            EVENT
+          </Text>
+        </View>
+
+        <View style={{ padding: 14 }}>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "700",
+              color: "#111827",
+            }}
+          >
+            {event.title || "Event"}
+          </Text>
+
+          <Text
+            style={{
+              marginTop: 8,
               fontSize: 13,
               color: "#374151",
             }}
           >
-            📍 {event.location}
+            📅 {formatEventDateTime(event.datetime)}
           </Text>
-        ) : null}
 
-        {event.url ? (
-          <TouchableOpacity
-            onPress={() => Linking.openURL(event.url)}
-            style={{
-              marginTop: 12,
-              alignSelf: "flex-start",
-              backgroundColor: "#7c3aed",
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 8,
-            }}
-          >
+          {event.location ? (
             <Text
               style={{
-                color: "#fff",
+                marginTop: 6,
                 fontSize: 13,
-                fontWeight: "700",
+                color: "#374151",
               }}
             >
-              Open Event →
+              📍 {event.location}
             </Text>
-          </TouchableOpacity>
-        ) : null}
+          ) : null}
+
+          {event.url ? (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(event.url)}
+              style={{
+                marginTop: 12,
+                alignSelf: "flex-start",
+                backgroundColor: "#7c3aed",
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
+              >
+                Open Event →
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
-    </View>
-  );
-}
-    const isPDF =
-      attachment.fileName?.toLowerCase().endsWith(".pdf") ||
-      attachment.fileType === "application/pdf";
+    );
+  };
+
+  // =====================================================
+  // ATTACHMENT RENDERER
+  // =====================================================
+  const renderAttachment = (attachment: any, index: number) => {
+    if (!attachment) return null;
+
+    // IMAGE
+    if (attachment.attachmentType === "IMAGE") {
+      let imageUri = attachment.uri || "";
+      if (attachment.hasValidFileData && attachment.fileData)
+        imageUri = base64ToUri(attachment.fileData, attachment.fileType || "image/jpeg");
+      else if (attachment.id && imageDataCache[attachment.id])
+        imageUri = imageDataCache[attachment.id];
+      else if (attachment.id && !imageErrors[attachment.id] && !loadingImages[attachment.id])
+        loadImageData(attachment);
+
+      if (loadingImages[attachment.id] && !imageUri)
+        return (
+          <View key={index} style={styles.attachmentContainer}>
+            <View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center" }]}>
+              <ActivityIndicator size="large" color="#4a90d9" />
+              <Text style={{ marginTop: 8, color: "#666", fontSize: 12 }}>Loading...</Text>
+            </View>
+          </View>
+        );
+
+      if (!imageUri || imageErrors[attachment.id])
+        return (
+          <View key={index} style={styles.attachmentContainer}>
+            <View style={[styles.imagePreview, { justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6" }]}>
+              <Text style={{ fontSize: 40 }}>🖼️</Text>
+              <Text style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>{attachment.fileName || "Image"}</Text>
+              {imageErrors[attachment.id] && <Text style={{ color: "#ef4444", fontSize: 11, marginTop: 4 }}>Failed to load</Text>}
+            </View>
+          </View>
+        );
+
+      return (
+        <View key={index} style={styles.attachmentContainer}>
+          <Pressable onPress={() => openImagePreview(imageUri)}>
+            <Image source={{ uri: imageUri }} style={styles.imagePreview} resizeMode="cover" />
+          </Pressable>
+          <View style={styles.fileInfo}>
+            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Image"}</Text>
+            <Pressable onPress={() => downloadFile(attachment)}><Download size={18} color="green" /></Pressable>
+          </View>
+        </View>
+      );
+    }
+
+    // VIDEO
+    if (attachment.attachmentType === "VIDEO") {
+      let videoUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100)
+        videoUri = base64ToUri(attachment.fileData, attachment.fileType || "video/mp4");
+      else if (attachment.id)
+        videoUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+
+      return (
+        <View key={index} style={styles.attachmentContainer}>
+          <InlineVideoPlayer uri={videoUri} />
+          <View style={styles.fileInfo}>
+            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "Video"}</Text>
+            <Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text>
+          </View>
+        </View>
+      );
+    }
+
+    // AUDIO
+    if (attachment.attachmentType === "AUDIO") {
+      let audioUri = attachment.uri || "";
+      if (attachment.fileData && attachment.fileData.length > 100)
+        audioUri = base64ToUri(attachment.fileData, attachment.fileType || "audio/mpeg");
+      else if (Platform.OS === "web" && attachment.id)
+        audioUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
+      return <AudioPlayer key={index} uri={audioUri} fileName={attachment.fileName} />;
+    }
+
+    // LOCATION
+    if (attachment.attachmentType === "LOCATION") {
+      return renderLocation(attachment, index);
+    }
+
+    // EVENT
+    if (attachment.attachmentType === "EVENT") {
+      return renderEvent(attachment, index);
+    }
+
+    // PDF
+    const isPDF = attachment.fileName?.toLowerCase().endsWith(".pdf") || attachment.fileType === "application/pdf";
     let fileUri = attachment.uri || "";
     if (isPDF) {
       if (attachment.fileData && attachment.fileData.length > 100)
-        fileUri = base64ToUri(
-          attachment.fileData,
-          attachment.fileType || "application/pdf",
-        );
+        fileUri = base64ToUri(attachment.fileData, attachment.fileType || "application/pdf");
       else if (Platform.OS === "web" && attachment.id)
         fileUri = `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`;
       return (
         <View key={index} style={styles.documentContainer}>
           <FileText size={32} color="#dc2626" />
           <View style={{ flex: 1 }}>
-            <Text style={styles.fileName} numberOfLines={1}>
-              {attachment.fileName || "PDF Document"}
-            </Text>
-            <Text style={styles.fileSize}>
-              {formatFileSize(attachment.fileSize)}
-            </Text>
+            <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "PDF Document"}</Text>
+            <Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text>
           </View>
           <TouchableOpacity
             onPress={() => {
-              if (fileUri)
-                openPdfPreview(fileUri, attachment.fileName || "document.pdf");
-              else if (attachment.id)
-                openPdfPreview(
-                  `${API_BASE_URL}/api/forum/8d/files/${attachment.id}`,
-                  "document.pdf",
-                );
+              if (fileUri) openPdfPreview(fileUri, attachment.fileName || "document.pdf");
+              else if (attachment.id) openPdfPreview(`${API_BASE_URL}/api/forum/8d/files/${attachment.id}`, "document.pdf");
             }}
             style={{ padding: 8 }}
           >
@@ -1531,17 +1402,13 @@ if (attachment.attachmentType === "LOCATION") {
       );
     }
 
-    
+    // DEFAULT FILE
     return (
       <View key={index} style={styles.documentContainer}>
         <FileText size={32} color="#555" />
         <View style={{ flex: 1 }}>
-          <Text style={styles.fileName} numberOfLines={1}>
-            {attachment.fileName || "File"}
-          </Text>
-          <Text style={styles.fileSize}>
-            {formatFileSize(attachment.fileSize)}
-          </Text>
+          <Text style={styles.fileName} numberOfLines={1}>{attachment.fileName || "File"}</Text>
+          <Text style={styles.fileSize}>{formatFileSize(attachment.fileSize)}</Text>
         </View>
         <TouchableOpacity onPress={() => downloadFile(attachment)}>
           <Download size={20} color="green" />
@@ -1549,7 +1416,6 @@ if (attachment.attachmentType === "LOCATION") {
       </View>
     );
   };
-
 
   const getAvatarUserId = () => {
     if (isOwnMessage) return currentUser?.id;
@@ -1565,19 +1431,17 @@ if (attachment.attachmentType === "LOCATION") {
   };
 
   const openLink = async (url: string) => {
-  try {
-    let finalUrl = url.trim();
-
-    if (!/^https?:\/\//i.test(finalUrl)) {
-      finalUrl = `https://${finalUrl}`;
+    try {
+      let finalUrl = url.trim();
+      if (!/^https?:\/\//i.test(finalUrl)) {
+        finalUrl = `https://${finalUrl}`;
+      }
+      await Linking.openURL(finalUrl);
+    } catch (error) {
+      console.error("Open link error:", error);
+      Alert.alert("Unable to open link");
     }
-
-    await Linking.openURL(finalUrl);
-  } catch (error) {
-    console.error("Open link error:", error);
-    Alert.alert("Unable to open link");
-  }
-};
+  };
 
   const avatarUserId = getAvatarUserId();
   const avatar = isOwnMessage ? getProfileImageUrl(currentUser?.id, currentUser?.profileImage) : getProfileImageUrl(avatarUserId, thread.createdByProfileImage);
@@ -1586,9 +1450,22 @@ if (attachment.attachmentType === "LOCATION") {
     <>
       {loading && (<View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#ffffff" /><Text style={styles.loadingText}>Downloading...</Text></View>)}
 
-      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}><View style={styles.imageModal}><Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>{imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}</View></Modal>
-      {Platform.OS === "web" && (<Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide"><WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} /></Modal>)}
-      <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}><PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} /></Modal>
+      <Modal visible={imageModal.open} transparent animationType="fade" onRequestClose={closeImagePreview}>
+        <View style={styles.imageModal}>
+          <Pressable style={styles.closeButton} onPress={closeImagePreview}><X size={30} color="white" /></Pressable>
+          {imageModal.url && <Image source={{ uri: imageModal.url }} style={styles.fullImage} resizeMode="contain" />}
+        </View>
+      </Modal>
+
+      {Platform.OS === "web" && (
+        <Modal visible={videoModal.open} onRequestClose={closeVideoPreview} animationType="slide">
+          <WebVideoPlayer url={videoModal.url} onClose={closeVideoPreview} />
+        </Modal>
+      )}
+
+      <Modal visible={pdfModal.open} onRequestClose={closePdfPreview}>
+        <PDFViewerModal url={pdfModal.url} onClose={closePdfPreview} fileName={pdfModal.fileName} />
+      </Modal>
 
       <Modal visible={profileModalOpen} transparent animationType="fade" onRequestClose={() => setProfileModalOpen(false)}>
         <Pressable style={styles.profileModalBackdrop} onPress={() => setProfileModalOpen(false)}>
@@ -1625,21 +1502,20 @@ if (attachment.attachmentType === "LOCATION") {
         </Pressable>
       </Modal>
 
-      {/* ✅ FIX: Removed messageRowPadded to eliminate "too much space" issue */}
-      <View style={[
-        styles.messageRow, 
-        isOwnMessage ? styles.rightAlign : styles.leftAlign
-      ]}>
-        
+      <View style={[styles.messageRow, isOwnMessage ? styles.rightAlign : styles.leftAlign]}>
         {showReactionBar && (
           <>
             <Pressable style={styles.popupBackdrop} onPress={() => setShowReactionBar(false)} />
             <View style={[styles.reactionBarContainer, isOwnMessage ? styles.reactionBarRight : styles.reactionBarLeft]}>
               <View style={styles.reactionBar}>
                 {QUICK_REACTIONS.map((emoji) => (
-                  <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}><Text style={{ fontSize: 22 }}>{emoji}</Text></TouchableOpacity>
+                  <TouchableOpacity key={emoji} onPress={() => handleReactionSelect(emoji)} style={styles.reactionBarItem}>
+                    <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                  </TouchableOpacity>
                 ))}
-                <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}><X size={16} color="#666" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowReactionBar(false)} style={styles.reactionBarItem}>
+                  <X size={16} color="#666" />
+                </TouchableOpacity>
               </View>
             </View>
           </>
@@ -1663,12 +1539,11 @@ if (attachment.attachmentType === "LOCATION") {
           )}
           
           {processedAttachments.length > 0 && processedAttachments.map((attachment, index) => renderAttachment(attachment, index))}
-{thread.content && thread.messageType !== "EVENT" && (
-  <MessageContent
-    content={thread.content}
-    onOpenLink={openLink}
-  />
-)}          
+          
+          {thread.content && thread.messageType !== "EVENT" && (
+            <MessageContent content={thread.content} onOpenLink={openLink} />
+          )}
+          
           <View style={[styles.timeRow, isOwnMessage ? styles.timeRight : styles.timeLeft]}>
             <Text style={styles.timeText}>{formatDateAndTime(thread.createdAt)}</Text>
             {thread.isEdited && <Text style={styles.editedText}>(edited)</Text>}
@@ -1688,7 +1563,6 @@ if (attachment.attachmentType === "LOCATION") {
             )}
           </View>
 
-          {/* ✅ FIX: Menu positioned tightly above the bubble (bottom: 100%, marginBottom: 4) with no extra row padding */}
           {showMenu && isOwnMessage && (
             <>
               <Pressable style={styles.popupBackdrop} onPress={() => setShowMenu(false)} />
@@ -1706,27 +1580,15 @@ if (attachment.attachmentType === "LOCATION") {
           )}
 
           {Object.keys(groupedReactions).length > 0 && (
-            <View style={{ 
-              marginTop: 6, 
-              flexDirection: 'row', 
-              flexWrap: 'wrap', 
-              gap: 4, 
-              justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' 
-            }}>
+            <View style={{ marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: isOwnMessage ? 'flex-end' : 'flex-start' }}>
               {Object.entries(groupedReactions).map(([emoji, data]) => (
                 <View key={emoji} style={{ alignItems: isOwnMessage ? 'flex-end' : 'flex-start' }}>
                   <TouchableOpacity
                     onPress={() => setShowReactionDetail(showReactionDetail === emoji ? null : emoji)}
-                    style={[
-                      styles.reactionBadge, 
-                      data.hasReacted && styles.reactionBadgeActive
-                    ]}
+                    style={[styles.reactionBadge, data.hasReacted && styles.reactionBadgeActive]}
                   >
                     <Text style={{ fontSize: 14 }}>{emoji}</Text>
-                    <Text style={[
-                      styles.reactionCount, 
-                      data.hasReacted && styles.reactionCountActive
-                    ]}>
+                    <Text style={[styles.reactionCount, data.hasReacted && styles.reactionCountActive]}>
                       {data.count}
                     </Text>
                   </TouchableOpacity>
@@ -1759,14 +1621,11 @@ if (attachment.attachmentType === "LOCATION") {
 const styles = StyleSheet.create({
   loadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", zIndex: 999 },
   loadingText: { color: "#fff", marginTop: 10, fontSize: 14 },
-  
-  // ✅ FIX: Removed messageRowPadded to eliminate the "too much space" gap
   messageRow: { flexDirection: "row", marginVertical: 8, paddingHorizontal: 12, alignItems: "flex-end" },
-  
   leftAlign: { justifyContent: "flex-start" },
   rightAlign: { justifyContent: "flex-end" },
-messageBubble: {
-    maxWidth: "80%", // Slightly adjusted for better mobile fit
+  messageBubble: {
+    maxWidth: "80%",
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1774,7 +1633,8 @@ messageBubble: {
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 1,
-  },  myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
+  },
+  myMessage: { backgroundColor: "#dcf8c6", borderBottomRightRadius: 4 },
   otherMessage: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#eeeeee" },
   messageText: { fontSize: 15, color: "#222", lineHeight: 21 },
   senderName: { fontSize: 12, fontWeight: "600", color: "#00529B", marginBottom: 4, textDecorationLine: 'underline' },
@@ -1784,36 +1644,32 @@ messageBubble: {
   timeText: { fontSize: 10, color: "#777" },
   editedText: { fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 },
   statusIcon: { marginLeft: 4, alignItems: 'center', justifyContent: 'center', minWidth: 16 },
-  
   actionIconBtn: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
-  
   avatarContainer: { marginHorizontal: 6 },
   avatar: { height: 34, width: 34, borderRadius: 17 },
   defaultAvatar: { height: 34, width: 34, borderRadius: 17, backgroundColor: "#ddd", justifyContent: "center", alignItems: "center" },
   attachmentContainer: { marginTop: 8 },
-imagePreview: {
-    width: "100%", // ✅ Changed from fixed 220
-    maxWidth: 300, // ✅ Caps size on desktop
-    aspectRatio: 4 / 3, // ✅ Maintains consistent shape
+  imagePreview: {
+    width: "100%",
+    maxWidth: 300,
+    aspectRatio: 4 / 3,
     borderRadius: 12,
     backgroundColor: "#f3f4f6",
     overflow: "hidden",
-  },  fileInfo: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  },
+  fileInfo: { flexDirection: "row", alignItems: "center", marginTop: 6 },
   fileName: { fontSize: 14, fontWeight: "600", color: "#333", flex: 1 },
   fileSize: { fontSize: 12, color: "#777", marginTop: 2 },
-videoPreview: {
-    width: "100%", // ✅ Changed from fixed 220
-    maxWidth: 300, // ✅ Caps size on desktop
-    // aspectRatio: 16 / 9, // ✅ Perfect responsive video scaling
+  videoPreview: {
+    width: "100%",
+    maxWidth: 300,
     borderRadius: 12,
     height: 150,
     backgroundColor: "#111",
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-  },  videoPlayIconContainer: { width: 60, height: 60, borderRadius: 30, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
-  videoLabel: { color: "white", marginTop: 8, fontSize: 12, fontWeight: "500" },
-  videoSize: { color: "rgba(255,255,255,0.7)", fontSize: 10, marginTop: 2 },
+  },
   videoModalContainer: { flex: 1, backgroundColor: "black" },
   videoModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16, backgroundColor: "rgba(0,0,0,0.9)", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.1)" },
   videoModalClose: { padding: 8 },
@@ -1828,15 +1684,16 @@ videoPreview: {
   videoModalControls: { flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: "rgba(0,0,0,0.9)", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" },
   videoModalPlayBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginRight: 12 },
   videoModalStatus: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
- audioContainer: {
+  audioContainer: {
     backgroundColor: "#f0f0f0",
     padding: 12,
     borderRadius: 12,
     marginTop: 8,
-    width: "100%", // ✅ Changed from fixed 260
-    minHeight: 64, // ✅ Changed from fixed 'height: 50' to prevent clipping on mobile
+    width: "100%",
+    minHeight: 64,
     justifyContent: "center",
-  },  audioRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  },
+  audioRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   audioPlayButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#4a90d9", justifyContent: "center", alignItems: "center" },
   audioInfo: { flex: 1 },
   audioFileName: { fontSize: 12, fontWeight: "500", color: "#333", marginBottom: 4 },
@@ -1847,15 +1704,6 @@ videoPreview: {
   audioFileSize: { fontSize: 10, color: "#999" },
   audioError: { fontSize: 11, color: "red", marginTop: 4 },
   documentContainer: { flexDirection: "row", alignItems: "center", backgroundColor: "#f3f3f3", padding: 10, borderRadius: 10, marginTop: 8, gap: 10 },
-  
-  locationContainer: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fef2f2", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#fecaca" },
-  locationText: { fontSize: 14, fontWeight: "500", color: "#991b1b" },
-  locationSubtext: { fontSize: 11, color: "#dc2626", marginTop: 2 },
-  eventContainer: { flexDirection: "row", alignItems: "flex-start", gap: 10, backgroundColor: "#faf5ff", padding: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#e9d5ff" },
-  eventTitle: { fontWeight: "600", fontSize: 14, color: "#6b21a8" },
-  eventDate: { fontSize: 12, color: "#7e22ce", marginTop: 2 },
-  eventDescription: { fontSize: 11, color: "#9333ea", marginTop: 4, fontStyle: 'italic' },
-
   imageModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" },
   fullImage: { width: Dimensions.get("window").width, height: Dimensions.get("window").height * 0.85 },
   closeButton: { position: "absolute", top: 50, right: 20, zIndex: 10 },
@@ -1875,15 +1723,11 @@ videoPreview: {
   profileAvatarInitials: { fontSize: 36, fontWeight: "bold", color: "#00529B" },
   profileModalName: { fontSize: 20, fontWeight: "700", color: "#111", marginTop: 12, textAlign: "center" },
   profileModalRole: { fontSize: 14, color: "#666", marginTop: 4, textAlign: "center" },
-  profileErrorText: { fontSize: 12, color: "#dc2626", marginTop: 8, textAlign: "center" },
   profileDetailsContainer: { padding: 20 },
   profileDetailRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   profileDetailLabel: { fontSize: 14, fontWeight: "600", color: "#555", marginLeft: 12, width: 90 },
   profileDetailValue: { flex: 1, fontSize: 14, color: "#111", fontWeight: "500" },
-  
   popupBackdrop: { position: 'absolute', top: -1000, left: -1000, right: -1000, bottom: -1000, zIndex: 50 },
-  
-  // ✅ FIX: Adjusted to -35 for cleaner floating without overlapping or pushing layout
   reactionBarContainer: { position: 'absolute', top: -20, zIndex: 100, paddingHorizontal: 12 },
   reactionBarLeft: { left: 0 },
   reactionBarRight: { right: 0 },
@@ -1894,8 +1738,6 @@ videoPreview: {
   reactionCount: { fontSize: 12, fontWeight: '600', color: '#6b7280', marginLeft: 4 },
   reactionCountActive: { color: '#2563eb' },
   reactionDetailPopup: { backgroundColor: '#ffffff', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3, minWidth: 120 },
-  
-  // ✅ FIX: Tight positioning (bottom: 100%, marginBottom: 4) eliminates extra space while keeping it visible
   menuPopup: { position: 'absolute', top: -20, backgroundColor: 'white', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', shadowColor: '#000', shadowOffset: {width:0, height:1}, shadowOpacity: 0.1, shadowRadius: 4, elevation: 5, zIndex: 100, minWidth: 150 },
   menuPopupRight: { right: 10 },
   menuPopupLeft: { left: 10 },
