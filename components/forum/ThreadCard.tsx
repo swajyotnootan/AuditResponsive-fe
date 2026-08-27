@@ -1200,13 +1200,18 @@ useEffect(() => {
         />
       );
     }
- if (attachment.attachmentType === "LOCATION") {
+if (attachment.attachmentType === "LOCATION") {
   let location: any = {};
   try {
     if (attachment.fileData) {
-      location = JSON.parse(atob(attachment.fileData));
-    } else if (attachment.id && extraAttachmentData[attachment.id]) {
-      location = extraAttachmentData[attachment.id];
+      if (typeof attachment.fileData === 'string') {
+        // ✅ Handle both plain JSON string and Base64 encoded string
+        if (attachment.fileData.startsWith('{')) {
+          location = JSON.parse(attachment.fileData);
+        } else {
+          location = JSON.parse(atob(attachment.fileData));
+        }
+      }
     }
   } catch (error) {
     console.log("Location parse error:", error);
@@ -1223,6 +1228,7 @@ useEffect(() => {
       ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
       : "");
 
+  // ✅ BULLETPROOF openLocation function
   const openLocation = async () => {
     if (!mapUrl) {
       Alert.alert("Location unavailable", "No valid location information was provided.");
@@ -1230,8 +1236,10 @@ useEffect(() => {
     }
     try {
       if (Platform.OS === 'web') {
+        // ✅ Web: Force open in a new tab (bypasses React Native Linking issues)
         window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {
+        // ✅ Mobile: Use Expo Linking
         const supported = await Linking.canOpenURL(mapUrl);
         if (supported) {
           await Linking.openURL(mapUrl);
@@ -1241,6 +1249,7 @@ useEffect(() => {
       }
     } catch (error) {
       console.error("Open location error:", error);
+      // Ultimate fallback for Web if the try block fails
       if (Platform.OS === 'web') {
         window.open(mapUrl, '_blank', 'noopener,noreferrer');
       } else {

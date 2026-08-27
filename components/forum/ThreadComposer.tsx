@@ -1389,6 +1389,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
     {/* Event Form Modal */}
 {/* Event Form Modal */}
 {/* Event Form Modal */}
+{/* Event Form Modal */}
 <Modal visible={eventForm.open} transparent animationType="fade">
   <View style={styles.modalOverlay}>
     <View style={styles.eventModalContent}>
@@ -1468,9 +1469,7 @@ const [selectedDate, setSelectedDate] = useState(new Date());
               title: eventForm.title,
               datetime: eventForm.datetime,
             };
-            setContent(
-              `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
-            );
+            setContent(`📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`);
             setAttachments((prev) => [
               ...prev,
               {
@@ -1479,9 +1478,10 @@ const [selectedDate, setSelectedDate] = useState(new Date());
                 fileSize: JSON.stringify(eventData).length,
                 attachmentType: "EVENT",
                 eventData,
+                fileData: btoa(JSON.stringify(eventData)), // ✅ Ensures backend gets valid base64
               },
             ]);
-            setEventForm({ open: false, title: "", datetime: "", location:"", url:""  });
+            setEventForm({ open: false, title: "", datetime: "",location:"",url:"" });
           }}
           style={styles.eventSubmitBtn}
         >
