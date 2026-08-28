@@ -1618,7 +1618,7 @@ const getDateLabel = (dateString?: string) => {
           {/* Composer */}
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={0}
+            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
             style={{ width: "100%" }}
           >
             <View className="bg-white border-t border-gray-200">
