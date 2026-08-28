@@ -465,11 +465,12 @@ const AuditCheckSheetNCRForumModal: React.FC<
             onPress={onClose}
           />
 
+          
           <KeyboardAvoidingView
-  behavior={Platform.OS === "ios" ? "padding" : undefined}
-  keyboardVerticalOffset={Platform.OS === "ios" ? insets.bottom : 0}
-  style={styles.drawerContainer}
->
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+            style={styles.drawerContainer}
+          >
   
   
             <View style={[styles.drawer, { paddingBottom: insets.bottom }]}>

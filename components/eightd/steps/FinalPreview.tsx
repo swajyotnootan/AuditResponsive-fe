@@ -1,7 +1,8 @@
 /// <reference types="nativewind/types" />
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import * as FileSystem from "expo-file-system";
+import { ResizeMode, Video } from "expo-av";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
   CalendarDays,
@@ -484,45 +485,71 @@ export default function FinalPreview({
     mimeType: string,
     fileName: string,
   ) => {
+    const fileUrl = getEightDFileUrl(fileId);
+
     try {
-      const fileUrl = getEightDFileUrl(fileId);
       if (Platform.OS === "web") {
+        // Web: Use blob URL
         const response = await axios.get(fileUrl, { responseType: "blob" });
         const blobUrl = URL.createObjectURL(response.data);
         setPreviewUrl(blobUrl);
         setPreviewFile({ mimeType, fileName });
       } else {
-        const fs = FileSystem as any;
-        const directory = fs.cacheDirectory || fs.documentDirectory || "";
+        // Mobile: Use FileSystem.downloadAsync
+        const directory =
+          FileSystem.cacheDirectory || FileSystem.documentDirectory;
+
         if (!directory) {
           Alert.alert(
             "Error",
-            "File system directory not available on this device.",
+            "Storage not available. Please restart the app.",
           );
           return;
         }
-        const fileUri = `${directory}${fileId}_${fileName}`;
-        await FileSystem.downloadAsync(fileUrl, fileUri);
+
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const fileUri = `${directory}${fileId}_${safeFileName}`;
+
+        // Download file natively
+        const downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
+
+        // ✅ FIXED: Only check downloadResult.status (no statusText)
+        if (downloadResult.status !== 200) {
+          Alert.alert(
+            "Error",
+            `Failed to download file (Status: ${downloadResult.status})`,
+          );
+          return;
+        }
+
+        // Verify file was actually saved
+        const fileInfo = await FileSystem.getInfoAsync(fileUri);
+        if (!fileInfo.exists || fileInfo.size === 0) {
+          Alert.alert("Error", "Downloaded file is empty or corrupted.");
+          return;
+        }
+
         setPreviewUrl(fileUri);
         setPreviewFile({ mimeType, fileName });
       }
     } catch (err: any) {
-      console.error("Error fetching file:", err);
-      Alert.alert("Error", "Failed to load file.");
+      console.error("Error loading file:", err);
+      Alert.alert(
+        "Error",
+        `Failed to load file: ${err.message || "Unknown error"}`,
+      );
     }
   };
-
   const closePreview = () => {
     setPreviewUrl(undefined);
     setPreviewFile(null);
   };
 
-  // 👇 ADD THIS HELPER FUNCTION
-  const handleDownloadOrShare = async () => {
+  const handleDownloadFile = async () => {
     if (!previewUrl || !previewFile) return;
 
     if (Platform.OS === "web") {
-      // On Web, trigger a direct download using a hidden anchor tag
+      // Web: Direct download
       const link = document.createElement("a");
       link.href = previewUrl;
       link.download = previewFile.fileName;
@@ -530,17 +557,27 @@ export default function FinalPreview({
       link.click();
       document.body.removeChild(link);
     } else {
-      // On Native (iOS/Android), use Expo Sharing
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(previewUrl);
-      } else {
-        Alert.alert(
-          "Info",
-          "File saved to cache. Sharing not available on this platform.",
-        );
+      // Mobile: "Downloading" on mobile means saving to device via Share sheet
+      try {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(previewUrl, {
+            mimeType: previewFile.mimeType,
+            dialogTitle: `Save ${previewFile.fileName}`,
+          });
+        } else {
+          Alert.alert("Info", `File is saved in app cache:\n${previewUrl}`);
+        }
+      } catch (err: any) {
+        Alert.alert("Error", `Failed to save file: ${err.message}`);
       }
     }
+  };
+
+  const handleDownloadOrShare = async () => {
+    // On mobile, sharing IS the way to download/save.
+    // We just reuse the same logic for the "Share" button.
+    await handleDownloadFile();
   };
 
   const handleApprove = async () => {
@@ -1297,47 +1334,60 @@ export default function FinalPreview({
           animationType="fade"
           onRequestClose={closePreview}
         >
-          <View className="items-center justify-center flex-1 p-4 bg-black/70">
-            {/* 👇 FIXED: Added max-w-4xl to constrain width on desktop, and shadow-2xl for depth */}
-            <View className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
-              {/* Header */}
-              <View className="flex-row items-center justify-between px-4 py-3 bg-gray-800">
-                <Text
-                  className="flex-1 mr-2 text-sm font-semibold text-white truncate"
-                  numberOfLines={1}
-                >
-                  {previewFile?.fileName}
-                </Text>
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    onPress={handleDownloadOrShare}
-                    className="p-1 rounded active:bg-gray-700"
-                  >
-                    <Download size={20} color="white" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={closePreview}
-                    className="p-1 rounded active:bg-gray-700"
-                  >
-                    <X size={24} color="white" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Media Preview Area */}
-              <View
-                className="items-center justify-center flex-1 bg-gray-900" // ✅ flex-1 fills the remaining height
-                style={{ minHeight: 400 }} // Keeps it from collapsing on tiny screens
+          <View className="flex-1 bg-black/90">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-4 py-3 bg-gray-800">
+              <Text
+                className="flex-1 mr-2 text-sm font-semibold text-white truncate"
+                numberOfLines={1}
               >
-                {previewFile?.mimeType?.startsWith("image/") ? (
-                  <Image
-                    source={{ uri: previewUrl }}
-                    className="w-full h-full"
-                    resizeMode="contain"
-                  />
-                ) : previewFile?.mimeType?.startsWith("video/") &&
-                  Platform.OS === "web" ? (
-                  // Native HTML5 Video Player for Web
+                {previewFile?.fileName}
+              </Text>
+              <View className="flex-row gap-2">
+                {/* Download Button */}
+                <TouchableOpacity
+                  onPress={handleDownloadFile}
+                  className="p-2 bg-blue-600 rounded-full active:bg-blue-700"
+                >
+                  <Download size={20} color="white" />
+                </TouchableOpacity>
+                {/* Share Button */}
+                <TouchableOpacity
+                  onPress={handleDownloadOrShare}
+                  className="p-2 bg-gray-700 rounded-full active:bg-gray-600"
+                >
+                  <Users size={20} color="white" />
+                </TouchableOpacity>
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={closePreview}
+                  className="p-2 bg-gray-700 rounded-full active:bg-gray-600"
+                >
+                  <X size={24} color="white" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Media Preview Area */}
+            <View className="flex-1 bg-black">
+              {previewFile?.mimeType?.startsWith("image/") ? (
+                <Image
+                  source={{ uri: previewUrl }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                  }}
+                  resizeMode="contain"
+                  onLoadStart={() => console.log(" Image loading...")}
+                  onLoad={() => console.log("✅ Image loaded successfully")}
+                  onError={(e) => {
+                    console.error("❌ Image load error:", e.nativeEvent.error);
+                    Alert.alert("Error", "Failed to display image");
+                  }}
+                />
+              ) : previewFile?.mimeType?.startsWith("video/") ? (
+                Platform.OS === "web" ? (
+                  // Web: HTML5 Video
                   <video
                     src={previewUrl}
                     controls
@@ -1349,48 +1399,96 @@ export default function FinalPreview({
                       backgroundColor: "#000",
                     }}
                   />
-                ) : previewFile?.mimeType === "application/pdf" ? (
-                  <View className="items-center justify-center flex-1 p-4">
-                    <File size={48} color="#DC2626" />
-                    <Text className="mt-4 text-lg font-semibold text-center text-white">
-                      {previewFile?.fileName}
-                    </Text>
-                    <Text className="px-4 mt-2 text-center text-gray-300">
-                      Native PDF preview is not supported. Tap below to
-                      download.
-                    </Text>
-                    <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 mt-6 bg-indigo-600 rounded-lg active:bg-indigo-700"
-                      onPress={handleDownloadOrShare}
-                    >
-                      <Download size={18} color="white" />
-                      <Text className="font-medium text-white">
-                        {Platform.OS === "web"
-                          ? "Download PDF"
-                          : "Open / Share PDF"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
                 ) : (
-                  <View className="items-center p-4">
-                    <File size={48} color="#9CA3AF" />
-                    <Text className="mt-2 text-sm text-center text-gray-300">
-                      This file type cannot be previewed directly.
-                    </Text>
+                  // Mobile: Native Video Player with expo-av
+                  // Mobile: Native Video Player with expo-av
+                  <View className="items-center justify-center flex-1 bg-black">
+                    <Video
+                      source={{ uri: previewUrl as string }}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                      }}
+                      useNativeControls
+                      resizeMode={ResizeMode.CONTAIN}
+                      isLooping={false}
+                      shouldPlay={true}
+                      onError={(e) => {
+                        console.error("Video error:", e);
+                        Alert.alert("Error", "Failed to play video");
+                      }}
+                    />
+                  </View>
+                )
+              ) : previewFile?.mimeType === "application/pdf" ? (
+                <View className="items-center justify-center flex-1 p-6">
+                  <View className="items-center justify-center w-24 h-24 mb-6 bg-red-600 rounded-full">
+                    <File size={48} color="white" />
+                  </View>
+                  <Text className="mb-2 text-xl font-semibold text-center text-white">
+                    PDF Document
+                  </Text>
+                  <Text
+                    className="px-4 mb-6 text-sm text-center text-gray-300"
+                    numberOfLines={2}
+                  >
+                    {previewFile?.fileName}
+                  </Text>
+                  <View className="flex-row gap-3">
                     <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 mt-4 bg-blue-600 rounded-lg active:bg-blue-700"
+                      className="flex-row items-center gap-2 px-6 py-3 bg-blue-600 rounded-xl active:bg-blue-700"
+                      onPress={handleDownloadFile}
+                    >
+                      <Download size={20} color="white" />
+                      <Text className="text-base font-semibold text-white">
+                        Download
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="flex-row items-center gap-2 px-6 py-3 bg-indigo-600 rounded-xl active:bg-indigo-700"
                       onPress={handleDownloadOrShare}
                     >
-                      <Download size={18} color="white" />
-                      <Text className="font-medium text-white">
-                        {Platform.OS === "web"
-                          ? "Download File"
-                          : "Download / Share File"}
+                      <Users size={20} color="white" />
+                      <Text className="text-base font-semibold text-white">
+                        Share
                       </Text>
                     </TouchableOpacity>
                   </View>
-                )}
-              </View>
+                </View>
+              ) : (
+                // Other file types
+                <View className="items-center justify-center flex-1 p-6">
+                  <View className="items-center justify-center w-24 h-24 mb-6 bg-gray-600 rounded-full">
+                    <File size={48} color="white" />
+                  </View>
+                  <Text
+                    className="px-4 mb-6 text-base text-center text-gray-300"
+                    numberOfLines={2}
+                  >
+                    {previewFile?.fileName}
+                  </Text>
+                  <View className="flex-row gap-3">
+                    <TouchableOpacity
+                      className="flex-row items-center gap-2 px-6 py-3 bg-blue-600 rounded-xl active:bg-blue-700"
+                      onPress={handleDownloadFile}
+                    >
+                      <Download size={20} color="white" />
+                      <Text className="text-base font-semibold text-white">
+                        Download
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="flex-row items-center gap-2 px-6 py-3 bg-indigo-600 rounded-xl active:bg-indigo-700"
+                      onPress={handleDownloadOrShare}
+                    >
+                      <Users size={20} color="white" />
+                      <Text className="text-base font-semibold text-white">
+                        Share
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </Modal>

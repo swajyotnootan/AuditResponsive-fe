@@ -23,7 +23,6 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
-import { BarChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Icons
@@ -293,6 +292,114 @@ const StatusProgress = ({
     </View>
   </View>
 );
+
+const StepProgress = ({
+  data,
+  completionRate,
+}: {
+  data: { step: string; count: number }[];
+  completionRate: number;
+}) => {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isDesktop = width >= 768;
+
+  // 1. Dynamic chart height based on screen size
+  const chartHeight = isMobile ? 150 : 180;
+
+  // 2. Prevent division by zero if all counts are 0
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+
+  return (
+    <View
+      className="bg-white border shadow-sm rounded-2xl border-slate-100"
+      style={{
+        padding: isMobile ? 16 : 24,
+        flex: isDesktop ? 1 : undefined,
+        width: isDesktop ? "50%" : "100%",
+        maxWidth: isDesktop ? undefined : width - 32, // Prevents overflow on small mobile screens
+      }}
+    >
+      {/* Header */}
+      <View className="flex-row items-center justify-between mb-6">
+        <View className="flex-row items-center gap-2">
+          <View className="p-2 rounded-lg bg-emerald-50">
+            <BarChart3 size={20} color="#10b981" />
+          </View>
+          <Text className="text-base font-bold text-slate-800">
+            Step Progress
+          </Text>
+        </View>
+        <View className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
+          <Text className="text-xs font-bold text-emerald-600">
+            {completionRate}% Done
+          </Text>
+        </View>
+      </View>
+
+      {/* Chart Area */}
+      <View style={{ width: "100%" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            height: chartHeight,
+            paddingBottom: 28, // Reserved space at the bottom for the text labels
+          }}
+        >
+          {data.map((item, index) => {
+            // 3. CRITICAL FIX: Calculate height in PIXELS, not percentages
+            const maxBarHeight = chartHeight - 28;
+            const barHeight = Math.max(
+              (item.count / maxCount) * maxBarHeight,
+              4, // Minimum 4px height so empty steps still show a tiny baseline
+            );
+
+            return (
+              <View
+                key={index}
+                style={{
+                  flex: 1,
+                  marginHorizontal: isMobile ? 2 : 4,
+                  alignItems: "center",
+                  height: "100%",
+                  justifyContent: "flex-end",
+                }}
+              >
+                {/* The Bar */}
+                <View
+                  style={{
+                    height: barHeight,
+                    width: isMobile ? "65%" : "50%", // Thinner bars on desktop for a cleaner look
+                    backgroundColor: item.count > 0 ? "#6366F1" : "#E0E7FF",
+                    borderTopLeftRadius: 6,
+                    borderTopRightRadius: 6,
+                  }}
+                />
+
+                {/* The Label (D0, D1, etc.) */}
+                <Text
+                  style={{
+                    position: "absolute",
+                    bottom: 0,
+                    textAlign: "center",
+                    color: "#64748B",
+                    fontWeight: "600",
+                    fontSize: isMobile ? 10 : 12,
+                    width: "100%",
+                  }}
+                >
+                  {item.step}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+};
 
 export interface LandingPageProps {
   type?: "fresh" | "ncr" | "all" | string;
@@ -700,15 +807,12 @@ export default function LandingPage({ type }: LandingPageProps) {
         }`}
         style={{
           backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
-          // ✅ Vertical spacing for mobile (desktop uses gap instead)
           marginBottom: isDesktop ? 0 : 16,
-          // ✅ 31% width ensures 3 cards + gaps fit perfectly without wrapping on smaller desktops
-          width: isDesktop ? "31%" : "100%",
-          // ✅ Prevent cards from becoming comically wide on ultra-wide monitors
-          maxWidth: isDesktop ? 500 : undefined,
-          // ✅ Ensures cards stretch to match the height of the tallest card in the same row
+          // Better width calculation for 3 columns
+          width: isDesktop ? `${(100 - 24) / 3}%` : "100%", // Account for gap
+          maxWidth: isDesktop ? 400 : undefined,
           alignSelf: "stretch",
-          marginLeft: isDesktop ? 15 : 0,
+          marginLeft: isDesktop ? 0 : 0,
         }}
       >
         {isApprovalPending && (
@@ -1226,68 +1330,16 @@ export default function LandingPage({ type }: LandingPageProps) {
           {/* ... Keep the rest of your Step Progress and Status Breakdown charts exactly as they were ... */}
 
           <View className={`gap-4 mb-6 ${isDesktop ? "flex-row" : "flex-col"}`}>
-            <View
-              className="p-4 bg-white border shadow-sm rounded-2xl border-slate-100"
-              style={{
-                flex: isDesktop ? 1 : undefined,
-                width: isDesktop ? "50%" : "100%",
-              }}
-            >
-              <View className="flex-row items-center justify-between mb-4">
-                <View className="flex-row items-center gap-2">
-                  <View className="p-1.5 rounded-lg bg-green-50">
-                    <BarChart3 size={18} color="#10b981" />
-                  </View>
-                  <Text className="text-sm font-bold text-slate-800">
-                    Step Progress
-                  </Text>
-                </View>
-                <View className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-100">
-                  <Text className="text-xs font-bold text-slate-600">
-                    {completionRate}% Done
-                  </Text>
-                </View>
-              </View>
-              <View className="justify-center h-48">
-                <BarChart
-                  data={steps.map((s) => ({
-                    value: stepCounts.find((sc) => sc.step === s)?.count || 0,
-                    label: s,
-                    frontColor: "#6366f1",
-                    gradientColor: "rgba(99, 102, 241, 0.3)",
-                    roundedTop: true,
-                  }))}
-                  barWidth={isDesktop ? 32 : 20}
-                  barBorderRadius={4}
-                  spacing={isDesktop ? 16 : 8}
-                  hideRules
-                  hideYAxisText
-                  yAxisThickness={0}
-                  xAxisThickness={1}
-                  xAxisColor="#e2e8f0"
-                  noOfSections={4}
-                  showValuesAsTopLabel
-                  topLabelContainerStyle={{ marginTop: -8 }}
-                  topLabelTextStyle={{
-                    fontSize: 10,
-                    color: "#64748b",
-                    fontWeight: "700",
-                  }}
-                  width={chartWidth}
-                  height={180}
-                  initialSpacing={10}
-                  showVerticalLines={isDesktop}
-                  verticalLinesColor="#f1f5f9"
-                  verticalLinesStrokeDashArray={[4, 4]}
-                />
-              </View>
-            </View>
+            {/* Step Progress Chart */}
+            <StepProgress data={stepCounts} completionRate={completionRate} />
 
+            {/* Status Breakdown Chart - Keep as is */}
             <View
               className="p-4 bg-white border shadow-sm rounded-2xl border-slate-100"
               style={{
                 flex: isDesktop ? 1 : undefined,
                 width: isDesktop ? "50%" : "100%",
+                maxWidth: isDesktop ? undefined : width - 32,
               }}
             >
               <View className="flex-row items-center justify-between mb-4">
@@ -1495,19 +1547,19 @@ export default function LandingPage({ type }: LandingPageProps) {
                 data={limitedFiltered}
                 renderItem={({ item }) => renderEventCard(item)}
                 keyExtractor={(item) => item.eventNo}
-                // ✅ Dynamic key forces proper re-render when switching between mobile/desktop
                 key={isDesktop ? "desktop-3-col-grid" : "mobile-1-col-list"}
                 numColumns={isDesktop ? 3 : 1}
-
-                // ✅ CRITICAL FIX: Only pass columnWrapperStyle on desktop!
-                // Passing it on mobile (numColumns=1) causes the Invariant Violation error.
                 columnWrapperStyle={
-                  isDesktop ? { justifyContent: "flex-start" } : undefined
+                  isDesktop
+                    ? {
+                        justifyContent: "space-between",
+                        gap: 12, // Add gap between columns
+                      }
+                    : undefined
                 }
-
                 contentContainerStyle={{
                   paddingBottom: 20,
-                  gap: 10, // Handles vertical spacing between rows cleanly
+                  // Remove gap here since we're using columnWrapperStyle
                 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}

@@ -1,5 +1,15 @@
 ﻿import { LinearGradient } from "expo-linear-gradient";
-import { Path, Svg } from "react-native-svg";
+import {
+  Circle,
+  Defs,
+  G,
+  Line, // ✅ Aliased to avoid conflict
+  Path,
+  Stop,
+  Svg,
+  LinearGradient as SvgLinearGradient,
+  Text as SvgText, // ✅ Aliased to avoid conflict with React Native Text
+} from "react-native-svg";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -28,6 +38,7 @@ import {
   Easing,
   Modal,
   Platform,
+  Pressable, // ✅ ADD THIS
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -262,6 +273,7 @@ const CustomBarChart = ({
   subtitle: string;
   isDesktop: boolean;
 }) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const maxValue = Math.max(...data.map((d) => d.value), 1);
   const hasData = data.some((d) => d.value > 0);
   const totalAudits = data.reduce((sum, d) => sum + d.value, 0);
@@ -279,30 +291,118 @@ const CustomBarChart = ({
             <Text style={styles.chartTotalLabel}>Total Audits</Text>
           </View>
         </View>
-
         {!hasData ? (
           <View style={styles.emptyChart}>
             <Text style={styles.emptyText}>No data available</Text>
           </View>
         ) : (
-          <View style={styles.barChartContainer}>
+          <View style={[styles.barChartContainer, { overflow: "visible" }]}>
             {data.map((item, idx) => {
               const heightPercent = (item.value / maxValue) * 100;
               return (
-                <View key={idx} style={styles.barColumn}>
+                <Pressable
+                  key={idx}
+                  style={styles.barColumn}
+                  // ✅ Desktop Hover Events
+                  onHoverIn={() => setActiveIndex(idx)}
+                  onHoverOut={() => setActiveIndex(null)}
+                  // ✅ Mobile Touch Events
+                  onPressIn={() => setActiveIndex(idx)}
+                  onPressOut={() => setActiveIndex(null)}
+                >
+                  {/* ✅ FLOATING TOOLTIP */}
+                  {activeIndex === idx && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        bottom: "100%",
+                        marginBottom: 8,
+                        backgroundColor: "#1E293B",
+                        borderRadius: 8,
+                        padding: 8,
+                        minWidth: 100,
+                        alignItems: "center",
+                        zIndex: 50,
+                      }}
+                      pointerEvents="none"
+                    >
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 12,
+                          fontWeight: "bold",
+                          marginBottom: 4,
+                        }}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={{
+                          color: "#93C5FD",
+                          fontSize: 14,
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {item.value}
+                      </Text>
+                      {/* Little arrow pointing down */}
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: -4,
+                          left: "50%",
+                          marginLeft: -4,
+                          width: 8,
+                          height: 8,
+                          backgroundColor: "#1E293B",
+                          transform: [{ rotate: "45deg" }],
+                        }}
+                      />
+                    </View>
+                  )}
+
                   <View style={styles.barWrapper}>
                     <LinearGradient
                       colors={["#3B82F6", "#1E40AF"]}
-                      style={[styles.barFill, { height: `${heightPercent}%` }]}
+                      style={[
+                        styles.barFill,
+                        {
+                          height: `${heightPercent}%`,
+                          // ✅ Dim other bars when one is active
+                          opacity:
+                            activeIndex !== null && activeIndex !== idx
+                              ? 0.4
+                              : 1,
+                        },
+                      ]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 0, y: 1 }}
                     />
                   </View>
-                  <Text style={styles.barValue}>{item.value}</Text>
-                  <Text style={styles.barLabel} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.barValue,
+                      {
+                        opacity:
+                          activeIndex !== null && activeIndex !== idx ? 0.4 : 1,
+                      },
+                    ]}
+                  >
+                    {item.value}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.barLabel,
+                      {
+                        opacity:
+                          activeIndex !== null && activeIndex !== idx ? 0.4 : 1,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {item.label}
                   </Text>
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -311,6 +411,7 @@ const CustomBarChart = ({
     </AnimatedGlassCard>
   );
 };
+
 const CustomPieChart = ({
   data,
   title,
@@ -324,8 +425,14 @@ const CustomPieChart = ({
   total?: number;
   isDesktop: boolean;
 }) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const totalValue = data.reduce((sum, d) => sum + d.value, 0) || 1;
   const hasData = data.some((d) => d.value > 0);
+
+  // ✅ Dynamic center text based on hover/touch
+  const activeItem = activeIndex !== null ? data[activeIndex] : null;
+  const displayTotal = activeItem ? activeItem.value : total || totalValue;
+  const displayLabel = activeItem ? activeItem.name : "Total";
 
   const calculatePath = (startAngle: number, endAngle: number) => {
     const radius = 50;
@@ -348,7 +455,6 @@ const CustomPieChart = ({
 
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 1 : 1, width: "100%" }}>
-      {/* ✅ ADDED: Padding wrapper */}
       <View style={styles.chartInnerPadding}>
         <View style={styles.chartHeader}>
           <View>
@@ -356,14 +462,12 @@ const CustomPieChart = ({
             <Text style={styles.cardSubtitle}>{subtitle}</Text>
           </View>
         </View>
-
         {!hasData ? (
           <View style={styles.emptyChart}>
             <Text style={styles.emptyText}>No data available</Text>
           </View>
         ) : (
           <View style={styles.pieChartContainer}>
-            {/* Donut Chart */}
             <View style={styles.donutWrapper}>
               <Svg width="180" height="180" viewBox="0 0 120 120">
                 {
@@ -377,6 +481,15 @@ const CustomPieChart = ({
                           key={idx}
                           d={calculatePath(startAngle, endAngle)}
                           fill={item.color}
+                          // ✅ Dim other slices when one is active
+                          opacity={
+                            activeIndex !== null && activeIndex !== idx
+                              ? 0.4
+                              : 1
+                          }
+                          // ✅ Mobile Touch & Basic Web Click
+                          onPressIn={() => setActiveIndex(idx)}
+                          onPressOut={() => setActiveIndex(null)}
                         />,
                       );
                       acc.currentAngle = endAngle;
@@ -386,17 +499,29 @@ const CustomPieChart = ({
                   ).elements
                 }
               </Svg>
-              {/* Center Text */}
-              <View style={styles.donutCenter}>
-                <Text style={styles.donutTotal}>{total || totalValue}</Text>
-                <Text style={styles.donutLabel}>Total</Text>
+              {/* ✅ CENTER TEXT (Updates dynamically) */}
+              <View style={styles.donutCenter} pointerEvents="none">
+                <Text style={styles.donutTotal}>{displayTotal}</Text>
+                <Text style={styles.donutLabel} numberOfLines={2}>
+                  {displayLabel}
+                </Text>
               </View>
             </View>
 
-            {/* Legend */}
+            {/* ✅ LEGEND (Also interactive) */}
             <View style={styles.legendContainer}>
               {data.map((item, idx) => (
-                <View key={idx} style={styles.legendItem}>
+                <Pressable
+                  key={idx}
+                  style={[
+                    styles.legendItem,
+                    activeIndex === idx && { backgroundColor: "#E2E8F0" },
+                  ]}
+                  onHoverIn={() => setActiveIndex(idx)}
+                  onHoverOut={() => setActiveIndex(null)}
+                  onPressIn={() => setActiveIndex(idx)}
+                  onPressOut={() => setActiveIndex(null)}
+                >
                   <View
                     style={[styles.legendDot, { backgroundColor: item.color }]}
                   />
@@ -404,7 +529,7 @@ const CustomPieChart = ({
                     <Text style={styles.legendText}>{item.name}</Text>
                     <Text style={styles.legendValue}>{item.value}</Text>
                   </View>
-                </View>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -413,19 +538,50 @@ const CustomPieChart = ({
     </AnimatedGlassCard>
   );
 };
-const DepartmentAnalysis = ({
+
+const DepartmentLineChart = ({
   data,
   isDesktop,
 }: {
   data: DeptDataItem[];
   isDesktop: boolean;
 }) => {
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
   const totalNCRs = data.reduce((sum, d) => sum + d.count, 0);
+  const hasData = data.length > 0 && totalNCRs > 0;
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+
+  // SVG dimensions
+  const svgWidth = 500;
+  const svgHeight = 280;
+  const padding = { top: 20, right: 20, bottom: 50, left: 50 };
+  const chartWidth = svgWidth - padding.left - padding.right;
+  const chartHeight = svgHeight - padding.top - padding.bottom;
+
+  // Calculate Y-axis ticks (5 levels)
+  const yTicks = 5;
+  const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) =>
+    Math.round((maxCount / yTicks) * i),
+  );
+
+  // Calculate points for the line
+  const points = data.map((item, idx) => {
+    const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
+    const y = padding.top + chartHeight - (item.count / maxCount) * chartHeight;
+    return { x, y, label: item.department, value: item.count };
+  });
+
+  // Build SVG path for the line
+  const linePath = points
+    .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+    .join(" ");
+
+  // Build area fill path (gradient under the line)
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${
+    padding.top + chartHeight
+  } L ${points[0].x} ${padding.top + chartHeight} Z`;
 
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 2 : 1, width: "100%" }}>
-      {/* ✅ ADDED: Padding wrapper */}
       <View style={styles.chartInnerPadding}>
         <View style={styles.chartHeader}>
           <View>
@@ -439,30 +595,159 @@ const DepartmentAnalysis = ({
             <Text style={styles.chartTotalLabel}>Total NCRs</Text>
           </View>
         </View>
+        {!hasData ? (
+          <View style={styles.emptyChart}>
+            <Text style={styles.emptyText}>No department data available</Text>
+          </View>
+        ) : (
+          <View style={{ alignItems: "center", paddingVertical: 8 }}>
+            <Svg
+              width="100%"
+              height={svgHeight}
+              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            >
+              <Defs>
+                {/* ✅ Use SvgLinearGradient here */}
+                <SvgLinearGradient
+                  id="areaGradient"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <Stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
+                  <Stop offset="100%" stopColor="#3B82F6" stopOpacity="0.02" />
+                </SvgLinearGradient>
+                <SvgLinearGradient
+                  id="lineGradient"
+                  x1="0"
+                  y1="0"
+                  x2="1"
+                  y2="0"
+                >
+                  <Stop offset="0%" stopColor="#1E40AF" />
+                  <Stop offset="100%" stopColor="#3B82F6" />
+                </SvgLinearGradient>
+              </Defs>
 
-        <View style={{ gap: 16 }}>
-          {data.map((item, idx) => (
-            <View key={idx}>
-              <View style={styles.deptHeader}>
-                <Text style={styles.deptName} numberOfLines={1}>
-                  {item.department}
-                </Text>
-                <Text style={styles.deptCount}>{item.count}</Text>
-              </View>
-              <View style={styles.progressTrack}>
-                <LinearGradient
-                  colors={["#3B82F6", "#1E40AF"]}
-                  style={[
-                    styles.progressFill,
-                    { width: `${(item.count / maxCount) * 100}%` },
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                />
-              </View>
-            </View>
-          ))}
-        </View>
+              {/* Y-axis grid lines and labels */}
+              {yTickValues.map((val, idx) => {
+                const y =
+                  padding.top + chartHeight - (val / maxCount) * chartHeight;
+                return (
+                  <G key={`y-${idx}`}>
+                    <Line
+                      x1={padding.left}
+                      y1={y}
+                      x2={svgWidth - padding.right}
+                      y2={y}
+                      stroke="#E2E8F0"
+                      strokeWidth="1"
+                      strokeDasharray="4,4"
+                    />
+                    {/* ✅ Use SvgText here */}
+                    <SvgText
+                      x={padding.left - 10}
+                      y={y + 4}
+                      textAnchor="end"
+                      fontSize="11"
+                      fill="#64748B"
+                      fontWeight="500"
+                    >
+                      {val}
+                    </SvgText>
+                  </G>
+                );
+              })}
+
+              {/* X-axis baseline */}
+              <Line
+                x1={padding.left}
+                y1={padding.top + chartHeight}
+                x2={svgWidth - padding.right}
+                y2={padding.top + chartHeight}
+                stroke="#CBD5E1"
+                strokeWidth="1.5"
+              />
+
+              {/* Y-axis line */}
+              <Line
+                x1={padding.left}
+                y1={padding.top}
+                x2={padding.left}
+                y2={padding.top + chartHeight}
+                stroke="#CBD5E1"
+                strokeWidth="1.5"
+              />
+
+              {/* Area fill under line */}
+              <Path d={areaPath} fill="url(#areaGradient)" />
+
+              {/* Main line */}
+              <Path
+                d={linePath}
+                fill="none"
+                stroke="url(#lineGradient)"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Data points and X-axis labels */}
+              {points.map((p, idx) => (
+                <G key={`point-${idx}`}>
+                  {/* Outer glow circle */}
+                  <Circle
+                    cx={p.x}
+                    cy={p.y}
+                    r="12"
+                    fill="#3B82F6"
+                    opacity="0.15"
+                  />
+                  {/* White border circle */}
+                  <Circle
+                    cx={p.x}
+                    cy={p.y}
+                    r="7"
+                    fill="#FFFFFF"
+                    stroke="#1E40AF"
+                    strokeWidth="2.5"
+                  />
+                  {/* Inner dot */}
+                  <Circle cx={p.x} cy={p.y} r="3.5" fill="#1E40AF" />
+
+                  {/* Value label above point */}
+                  {/* ✅ Use SvgText here */}
+                  <SvgText
+                    x={p.x}
+                    y={p.y - 16}
+                    textAnchor="middle"
+                    fontSize="12"
+                    fontWeight="700"
+                    fill="#1E40AF"
+                  >
+                    {p.value}
+                  </SvgText>
+
+                  {/* X-axis label (department name) */}
+                  {/* ✅ Use SvgText here */}
+                  <SvgText
+                    x={p.x}
+                    y={padding.top + chartHeight + 20}
+                    textAnchor="middle"
+                    fontSize="10"
+                    fill="#475569"
+                    fontWeight="600"
+                  >
+                    {p.label.length > 10
+                      ? p.label.substring(0, 9) + "..."
+                      : p.label}
+                  </SvgText>
+                </G>
+              ))}
+            </Svg>
+          </View>
+        )}
       </View>
     </AnimatedGlassCard>
   );
@@ -1452,7 +1737,7 @@ export default function AuditManagerDashboard() {
                 gap: 16,
               }}
             >
-              <DepartmentAnalysis
+              <DepartmentLineChart
                 data={ncrByDepartmentData}
                 isDesktop={isDesktop}
               />
@@ -1851,7 +2136,7 @@ export default function AuditManagerDashboard() {
                 total={allNcrs.length}
                 isDesktop={isDesktop}
               />
-              <DepartmentAnalysis
+              <DepartmentLineChart
                 data={ncrByDepartmentData}
                 isDesktop={isDesktop}
               />
@@ -3040,23 +3325,32 @@ const styles = StyleSheet.create({
     marginTop: 8, // ✅ Added top margin
   },
 
-  // ✅ UPDATED: Better legend item spacing
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12, // ✅ Increased from 10
-    paddingVertical: 8, // ✅ Added vertical padding
-    paddingHorizontal: 4, // ✅ Added horizontal padding
-  },
-
   // ✅ UPDATED: Better bar chart spacing
+  // ✅ Ensure bar columns can show tooltips without clipping
   barChartContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
     height: 180,
-    gap: 4, // Reduced gap for mobile
+    gap: 4,
     paddingTop: 8,
-    paddingHorizontal: 4, // Add horizontal padding
+    paddingHorizontal: 4,
+    overflow: "visible", // Critical for tooltips
+  },
+  barColumn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: "100%",
+    minWidth: 0,
+  },
+  // ✅ Add hover background to legend items
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
 
   // ✅ UPDATED: Better mobile bar column spacing
@@ -3246,13 +3540,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  barColumn: {
-    flex: 1, // Each bar takes equal width
-    alignItems: "center",
-    justifyContent: "flex-end",
-    height: "100%",
-    minWidth: 0, // Prevent overflow
-  },
   barValue: {
     fontSize: 10, // Smaller font
     fontWeight: "700",
@@ -3510,19 +3797,26 @@ const styles = StyleSheet.create({
   },
 
   headerActionsVerySmall: {
-    gap: 8,
+    gap: 30,
   },
 
   yearFilterWrapper: {
-    minWidth: 120,
-    maxWidth: 180,
+    minWidth: 100, // Reduced from 120
+    maxWidth: 160, // Reduced from 180
     flexShrink: 0,
   },
 
   yearFilterWrapperSmall: {
-    flex: 1,
-    minWidth: 0,
-    maxWidth: undefined,
+    flex: 0, // Changed from flex: 1
+    minWidth: 80, // Added specific minWidth
+    maxWidth: 160, // Added maxWidth constraint
+  },
+
+  // Also update for very small screens
+  yearFilterWrapperVerySmall: {
+    minWidth: 70,
+    maxWidth: 100,
+    flexShrink: 0,
   },
 
   forumBtn: {

@@ -30,6 +30,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -38,14 +39,13 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Path, Svg } from "react-native-svg"; // ✅ ADD THIS IMPORT
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 import DeptPlanDetailsModal from "./topManagement/DeptPlanDetailsModal";
 import PlanDetailsModal from "./topManagement/PlanDetailsModal";
 import RejectModal from "./topManagement/RejectModal";
-
-
 
 // ============================================================================
 // CONFIGURATION & CONSTANTS
@@ -105,6 +105,29 @@ const AUDIT_ELEMENTS_MAP: Record<string, string> = {
   "5S Audit": "C",
   "Process Audit": "D",
   "Product Audit": "E",
+};
+
+const normalizeMonth = (monthVal: any): string => {
+  if (!monthVal) return "";
+  const str = String(monthVal).toLowerCase().trim();
+
+  // 1. Check if it's already in monthOrder (e.g., "apr", "may")
+  const foundOrder = monthOrder.find((m) => m.toLowerCase() === str);
+  if (foundOrder) return foundOrder;
+
+  // 2. Check full month name (e.g., "april", "september")
+  for (const [abbr, full] of Object.entries(monthDisplay)) {
+    if (full.toLowerCase() === str) return abbr;
+  }
+
+  // 3. Check month number (e.g., "4", "04")
+  const num = parseInt(str);
+  if (num >= 1 && num <= 12) {
+    const jsMonth = num - 1; // 0-11
+    return monthOrder[jsMonth >= 3 ? jsMonth - 3 : jsMonth + 9];
+  }
+
+  return str;
 };
 
 const getAuditElementCode = (element: string | undefined | null): string => {
@@ -175,10 +198,6 @@ const AnalyticsCard = ({ title, subtitle, children, className = "" }: any) => (
     {children}
   </View>
 );
-
-// ============================================================================
-// SIMPLE CHART COMPONENTS
-// ============================================================================
 const NativeGroupedBarChart = ({
   data,
   title,
@@ -186,59 +205,134 @@ const NativeGroupedBarChart = ({
   keys,
   colors,
 }: any) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
   const maxValue = Math.max(
-    ...data.map((d: any) => Math.max(...keys.map((k: string) => d[k] || 0))),
+    ...data.map((d: any) =>
+      Math.max(...keys.map((k: string) => Number(d[k] || 0))),
+    ),
     1,
   );
 
+  const isAllZero = data.every((d: any) =>
+    keys.every((k: string) => !d[k] || Number(d[k]) === 0),
+  );
+
   return (
-    <View className="flex-1 p-4 bg-white rounded-xl">
+    <View
+      className="flex-1 p-4 bg-white rounded-xl"
+      style={{ overflow: "visible" }}
+    >
       <Text className="mb-1 font-bold text-slate-800">{title}</Text>
       <Text className="mb-4 text-xs text-slate-500">{subtitle}</Text>
-      <View className="flex-row items-end h-48 gap-2 px-2">
-        {data.map((item: any, idx: number) => (
-          <View key={idx} className="items-center justify-end flex-1 h-full">
-            <View className="flex-row items-end justify-center w-full gap-1">
-              {keys.map((key: string, kIdx: number) => (
+
+      {isAllZero ? (
+        <View className="items-center justify-center h-48 border border-dashed rounded-lg bg-slate-50 border-slate-200">
+          <Text className="text-sm font-medium text-slate-400">
+            No data available for this period
+          </Text>
+        </View>
+      ) : (
+        <>
+          <View
+            className="flex-row items-end h-48 gap-2 px-2"
+            style={{ overflow: "visible" }}
+          >
+            {data.map((item: any, idx: number) => (
+              // ✅ CHANGED <View> TO <Pressable>
+              <Pressable
+                key={idx}
+                className="items-center justify-end flex-1 h-full"
+                // ✅ Web Hover Events
+                onHoverIn={() => setActiveIndex(idx)}
+                onHoverOut={() => setActiveIndex(null)}
+                // ✅ Mobile Touch Events
+                onPressIn={() => setActiveIndex(idx)}
+                onPressOut={() => setActiveIndex(null)}
+              >
+                {/* FLOATING TOOLTIP */}
+                {activeIndex === idx && (
+                  <View
+                    className="absolute z-50 px-3 py-2 mb-2 rounded-lg shadow-xl bg-slate-800"
+                    style={{ bottom: "100%", minWidth: 120 }}
+                    pointerEvents="none"
+                  >
+                    <Text className="mb-1 text-xs font-bold text-center text-white">
+                      {item.name || item.month}
+                    </Text>
+                    {keys.map((key: string, kIdx: number) => (
+                      <View
+                        key={key}
+                        className="flex-row items-center justify-between gap-2 mt-0.5"
+                      >
+                        <View className="flex-row items-center gap-1">
+                          <View
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: colors[kIdx] }}
+                          />
+                          <Text className="text-[10px] text-slate-300">
+                            {key}
+                          </Text>
+                        </View>
+                        <Text className="text-[11px] font-bold text-white">
+                          {item[key] || 0}
+                        </Text>
+                      </View>
+                    ))}
+                    <View className="absolute w-2 h-2 -ml-1 rotate-45 bg-slate-800 -bottom-1 left-1/2" />
+                  </View>
+                )}
+
+                {/* BARS */}
+                <View className="flex-row items-end justify-center flex-1 w-full gap-1">
+                  {keys.map((key: string, kIdx: number) => (
+                    <View
+                      key={key}
+                      style={{
+                        height: `${Math.max((Number(item[key] || 0) / maxValue) * 100, 4)}%`,
+                        backgroundColor: colors[kIdx],
+                        width: 16,
+                        borderTopLeftRadius: 4,
+                        borderTopRightRadius: 4,
+                        opacity:
+                          activeIndex !== null && activeIndex !== idx ? 0.4 : 1,
+                      }}
+                    />
+                  ))}
+                </View>
+                <Text
+                  className="text-[10px] text-slate-500 mt-2 text-center"
+                  numberOfLines={1}
+                >
+                  {item.name || item.month}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* LEGEND */}
+          <View className="flex-row justify-center gap-4 mt-4">
+            {keys.map((key: string, kIdx: number) => (
+              <View key={key} className="flex-row items-center gap-1">
                 <View
-                  key={key}
-                  style={{
-                    height: `${Math.max(((item[key] || 0) / maxValue) * 100, 4)}%`,
-                    backgroundColor: colors[kIdx],
-                    width: 16,
-                    borderTopLeftRadius: 4,
-                    borderTopRightRadius: 4,
-                  }}
+                  className="w-3 h-3 rounded-sm"
+                  style={{ backgroundColor: colors[kIdx] }}
                 />
-              ))}
-            </View>
-            <Text
-              className="text-[10px] text-slate-500 mt-2 text-center"
-              numberOfLines={1}
-            >
-              {item.name || item.month}
-            </Text>
+                <Text className="text-xs text-slate-600">{key}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
-      <View className="flex-row justify-center gap-4 mt-4">
-        {keys.map((key: string, kIdx: number) => (
-          <View key={key} className="flex-row items-center gap-1">
-            <View
-              className="w-3 h-3 rounded-sm"
-              style={{ backgroundColor: colors[kIdx] }}
-            />
-            <Text className="text-xs text-slate-600">{key}</Text>
-          </View>
-        ))}
-      </View>
+        </>
+      )}
     </View>
   );
 };
 
 const NativePieChart = ({ data, title, subtitle, total }: any) => {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const totalValue =
     data.reduce((sum: number, d: any) => sum + d.value, 0) || 1;
+  const hasData = data.some((d: any) => d.value > 0);
   const chartColors = [
     COLORS.primary,
     COLORS.secondary,
@@ -248,48 +342,131 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
     COLORS.dark,
   ];
 
+  const activeItem = activeIndex !== null ? data[activeIndex] : null;
+  const displayTotal = activeItem ? activeItem.value : total || totalValue;
+  const displayLabel = activeItem
+    ? activeItem.fullName || activeItem.name
+    : "Total";
+
+  const calculatePath = (startAngle: number, endAngle: number) => {
+    const radius = 50;
+    const innerRadius = 35;
+    const centerX = 60;
+    const centerY = 60;
+    const startRad = (startAngle - 90) * (Math.PI / 180);
+    const endRad = (endAngle - 90) * (Math.PI / 180);
+    const x1 = centerX + radius * Math.cos(startRad);
+    const y1 = centerY + radius * Math.sin(startRad);
+    const x2 = centerX + radius * Math.cos(endRad);
+    const y2 = centerY + radius * Math.sin(endRad);
+    const x3 = centerX + innerRadius * Math.cos(endRad);
+    const y3 = centerY + innerRadius * Math.sin(endRad);
+    const x4 = centerX + innerRadius * Math.cos(startRad);
+    const y4 = centerY + innerRadius * Math.sin(startRad);
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+  };
+
   return (
     <View className="flex-1 p-4 bg-white rounded-xl">
       <Text className="mb-1 font-bold text-slate-800">{title}</Text>
       <Text className="mb-4 text-xs text-slate-500">{subtitle}</Text>
-      <View className="flex-row h-4 mb-4 overflow-hidden rounded-full">
-        {data.map((item: any, idx: number) => (
-          <View
-            key={idx}
-            style={{
-              width: `${(item.value / totalValue) * 100}%`,
-              backgroundColor: chartColors[idx % chartColors.length],
-            }}
-          />
-        ))}
-      </View>
-      <View className="gap-2">
-        <Text className="mb-2 text-lg font-bold text-slate-800">
-          {total || totalValue} Total
-        </Text>
-        {data.map((item: any, idx: number) => (
-          <View key={idx} className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1 gap-2">
-              <View
-                className="w-3 h-3 rounded-full"
-                style={{
-                  backgroundColor: chartColors[idx % chartColors.length],
-                }}
-              />
-              <Text className="flex-1 text-sm text-slate-700" numberOfLines={1}>
-                {item.fullName || item.name}
+
+      {!hasData ? (
+        <View className="items-center justify-center h-48 border border-dashed rounded-lg bg-slate-50 border-slate-200">
+          <Text className="text-sm font-medium text-slate-400">
+            No data available
+          </Text>
+        </View>
+      ) : (
+        <View className="items-center py-3">
+          {/* Donut Chart SVG */}
+          <View className="items-center justify-center mb-6 w-36 h-36">
+            <Svg width="144" height="144" viewBox="0 0 120 120">
+              {
+                data.reduce(
+                  (acc: any, item: any, idx: number) => {
+                    const startAngle = acc.currentAngle;
+                    const angle = (item.value / totalValue) * 360;
+                    const endAngle = startAngle + angle;
+                    acc.elements.push(
+                      <Path
+                        key={idx}
+                        d={calculatePath(startAngle, endAngle)}
+                        fill={chartColors[idx % chartColors.length]}
+                        opacity={
+                          activeIndex !== null && activeIndex !== idx ? 0.4 : 1
+                        }
+                        // ✅ Mobile Touch & Basic Web Click (Safe from TS errors)
+                        onPressIn={() => setActiveIndex(idx)}
+                        onPressOut={() => setActiveIndex(null)}
+                        // ❌ REMOVED: style={{ cursor: "pointer" }} (Not supported by PathProps)
+                      />,
+                    );
+                    acc.currentAngle = endAngle;
+                    return acc;
+                  },
+                  { elements: [], currentAngle: 0 },
+                ).elements
+              }
+            </Svg>
+            {/* Center Text (Updates dynamically) */}
+            <View
+              className="absolute items-center justify-center"
+              pointerEvents="none"
+            >
+              <Text className="text-2xl font-bold text-slate-800">
+                {displayTotal}
+              </Text>
+              <Text
+                className="px-2 text-xs text-center text-slate-500"
+                numberOfLines={2}
+              >
+                {displayLabel}
               </Text>
             </View>
-            <Text className="text-sm font-semibold text-slate-800">
-              {item.value}
-            </Text>
           </View>
-        ))}
-      </View>
+
+          {/* Legend (Changed <View> to <Pressable> for Web Hover & Mobile Touch) */}
+          <View className="w-full gap-2 mt-2">
+            {data.map((item: any, idx: number) => (
+              <Pressable
+                key={idx}
+                className={`flex-row items-center justify-between px-2 py-2 rounded-lg ${
+                  activeIndex === idx ? "bg-slate-200" : "bg-slate-50"
+                }`}
+                // ✅ Web Hover Events
+                onHoverIn={() => setActiveIndex(idx)}
+                onHoverOut={() => setActiveIndex(null)}
+                // ✅ Mobile Touch Events
+                onPressIn={() => setActiveIndex(idx)}
+                onPressOut={() => setActiveIndex(null)}
+              >
+                <View className="flex-row items-center flex-1 gap-2">
+                  <View
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      backgroundColor: chartColors[idx % chartColors.length],
+                    }}
+                  />
+                  <Text
+                    className="flex-1 text-sm text-slate-700"
+                    numberOfLines={1}
+                  >
+                    {item.fullName || item.name}
+                  </Text>
+                </View>
+                <Text className="text-sm font-semibold text-slate-800">
+                  {item.value}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 };
-
 // ============================================================================
 // PLAN SECTION CARD
 // ============================================================================
@@ -802,12 +979,6 @@ export default function TopManagementDashboard() {
   }, [params?.tab]);
 
   const [loading, setLoading] = useState(true);
-const [annualLoading, setAnnualLoading] = useState(false);
-const [deptLoading, setDeptLoading] = useState(false);
-const [weekLoading, setWeekLoading] = useState(false);
-const [dailyLoading, setDailyLoading] = useState(false);
-
-const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("pending");
 
@@ -910,7 +1081,6 @@ const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   const [completionTrendData, setCompletionTrendData] = useState<any[]>([]);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
 
-
   const pendingCounts = useMemo(
     () => ({
       annual: pendingPlans.length,
@@ -925,237 +1095,430 @@ const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set());
   // API CALLS
   // ============================================================================
   const fetchAllUsers = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/users`, {
-      method: "GET",
-      credentials: "include",
-    });
-    if (response.ok) {
-      const data = await response.json();
-      setAllUsersList(data || []);
-      console.log(`✅ Fetched ${data.length} users for forum`);
-    } else {
-      console.error("Failed to fetch users:", response.status);
-    }
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    setAllUsersList([]);
-  }
-};
- // ✅ OPTIMIZED: Fetch only current year
-const fetchAnnualPlans = async () => {
-  try {
-    const currentYear = new Date().getFullYear();
-    const years = [currentYear]; // Only current year
-
-    let allPlans: any[] = [];
-    for (const year of years) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/audit-plan/${year}`, {
-          method: "GET",
-          credentials: "include",
-        });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
+        method: "GET",
+        credentials: "include",
+      });
+      if (response.ok) {
         const data = await response.json();
-        if (data && data.planItems && data.planItems.length > 0) {
-          allPlans.push({
-            year,
-            ...data,
-            approvalStatus: data.approvalStatus || "PENDING_APPROVAL",
-            preparedBy: data.preparedBy || data.preparedByName || "N/A",
-            preparedAt: data.preparedAt || data.createdAt || new Date().toISOString(),
-            planItems: data.planItems || [],
-          });
-        }
-      } catch (err) {
-        console.error(`Error fetching annual plan for year ${year}:`, err);
+
+        setAllUsersList(data || []);
+        console.log(`✅ Fetched ${data.length} users for forum`);
+      } else {
+        console.error("Failed to fetch users:", response.status);
       }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      setAllUsersList([]);
     }
+  };
+  const fetchAnnualPlans = async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const years = [];
+      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
 
-    const pending = allPlans.filter((p) => p.approvalStatus === "PENDING_APPROVAL");
-    const approved = allPlans.filter((p) => p.approvalStatus === "APPROVED");
+      let allPlans: any[] = [];
+      for (const year of years) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/api/audit-plan/${year}`,
+            {
+              method: "GET",
+              credentials: "include",
+            },
+          );
+          const data = await response.json();
 
-    setPendingPlans(pending);
-    setApprovedPlans(approved);
+          if (data) {
+            allPlans.push({
+              year,
+              ...data,
+              approvalStatus: data.approvalStatus || "PENDING_APPROVAL",
+              preparedBy: data.preparedBy || data.preparedByName || "N/A",
+              preparedAt:
+                data.preparedAt || data.createdAt || new Date().toISOString(),
+              // Fallback for different API key names
+              planItems:
+                data.planItems ||
+                data.items ||
+                data.schedules ||
+                data.audits ||
+                [],
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching annual plan for year ${year}:`, err);
+        }
+      }
 
-    let totalPlanned = 0, totalCompleted = 0;
-    approved.forEach((plan: any) => {
-      plan.planItems?.forEach((item: any) => {
-        item.months?.forEach((month: any) => {
-          if (month?.status === "PLANNED") totalPlanned++;
-          if (month?.status === "COMPLETED") totalCompleted++;
+      const pending = allPlans.filter((p) =>
+        (p.approvalStatus || "").toUpperCase().includes("PENDING"),
+      );
+      const approved = allPlans.filter((p) =>
+        (p.approvalStatus || "").toUpperCase().includes("APPROVED"),
+      );
+      setPendingPlans(pending);
+      setApprovedPlans(approved);
+
+      let totalPlanned = 0,
+        totalCompleted = 0;
+      approved.forEach((plan: any) => {
+        plan.planItems?.forEach((item: any) => {
+          item.months?.forEach((month: any) => {
+            if (month?.status === "PLANNED") totalPlanned++;
+            if (month?.status === "COMPLETED") totalCompleted++;
+          });
         });
       });
-    });
 
-    return { totalPlanned, totalCompleted, allPlans, pending, approved };
-  } catch (error) {
-    console.error("Error fetching annual plans:", error);
-    return { totalPlanned: 0, totalCompleted: 0, allPlans: [], pending: [], approved: [] };
-  }
-};
-
-  // ✅ OPTIMIZED: Fetch only current year
-const fetchDepartmentPlans = async () => {
-  try {
-    const currentYear = new Date().getFullYear();
-    const years = [currentYear]; // Only current year
-
-    let allDeptPlans: any[] = [];
-    for (const year of years) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/department-plan/${year}`, {
-          method: "GET",
-          credentials: "include",
-        });
-        const data = await response.json();
-        if (data && data.planItems && data.planItems.length > 0)
-          allDeptPlans.push({ year, ...data });
-      } catch (err) {
-        console.error(`Error fetching dept plan for year ${year}:`, err);
-      }
+      return { totalPlanned, totalCompleted, allPlans, pending, approved };
+    } catch (error) {
+      console.error("Error fetching annual plans:", error);
+      return {
+        totalPlanned: 0,
+        totalCompleted: 0,
+        allPlans: [],
+        pending: [],
+        approved: [],
+      };
     }
+  };
 
-    const pending = allDeptPlans.filter((p) => p.approvalStatus === "PENDING_APPROVAL");
-    const approved = allDeptPlans.filter((p) => p.approvalStatus === "APPROVED");
+  const fetchDepartmentPlans = async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const years = [];
+      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
 
-    setPendingDeptPlans(pending);
-    setApprovedDeptPlans(approved);
+      let allDeptPlans: any[] = [];
+      for (const year of years) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/api/department-plan/${year}`,
+            {
+              method: "GET",
+              credentials: "include",
+            },
+          );
+          const data = await response.json();
+          if (data) {
+            allDeptPlans.push({
+              year,
+              ...data,
+              approvalStatus: data.approvalStatus || "PENDING_APPROVAL",
+              preparedBy: data.preparedBy || data.preparedByName || "N/A",
+              preparedAt:
+                data.preparedAt || data.createdAt || new Date().toISOString(),
+              // Fallback for different API key names
+              planItems:
+                data.planItems ||
+                data.items ||
+                data.schedules ||
+                data.audits ||
+                [],
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching dept plan for year ${year}:`, err);
+        }
+      }
 
-    return { pendingCount: pending.length, approvedCount: approved.length, allPlans: allDeptPlans, pending, approved };
-  } catch (error) {
-    console.error("Error fetching department plans:", error);
-    return { pendingCount: 0, approvedCount: 0, allPlans: [], pending: [], approved: [] };
-  }
-};
+      const pending = allDeptPlans.filter(
+        (p) => p.approvalStatus === "PENDING_APPROVAL",
+      );
+      const approved = allDeptPlans.filter(
+        (p) => p.approvalStatus === "APPROVED",
+      );
 
- // ✅ OPTIMIZED: Fetch only current year
-const fetchForm5Plans = async () => {
-  try {
-    const currentYear = new Date().getFullYear();
-    const years = [currentYear]; // Only current year
+      setPendingDeptPlans(pending);
+      setApprovedDeptPlans(approved);
 
-    let allPendingApprovals: any[] = [];
-    let allApproved: any[] = [];
+      return {
+        pendingCount: pending.length,
+        approvedCount: approved.length,
+        allPlans: allDeptPlans,
+        pending,
+        approved,
+      };
+    } catch (error) {
+      console.error("Error fetching department plans:", error);
+      return {
+        pendingCount: 0,
+        approvedCount: 0,
+        allPlans: [],
+        pending: [],
+        approved: [],
+      };
+    }
+  };
 
-    for (const year of years) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {
-          method: "GET",
-          credentials: "include",
-        });
-        const allSchedules = await response.json();
-        const weekSchedules = allSchedules.filter((s: any) => !s.scheduledDate);
+  const fetchForm5Plans = async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const years = [];
+      for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
 
-        if (weekSchedules.length > 0) {
-          const monthMap = new Map();
-          weekSchedules.forEach((schedule: any) => {
-            const month = schedule.month;
-            if (!monthMap.has(month)) {
-              monthMap.set(month, {
-                year, month,
-                approvalStatus: schedule.approvalStatus || "DRAFT",
-                preparedBy: schedule.preparedByName,
-                approvedBy: schedule.approvedByName,
-                approvedAt: schedule.approvedAt,
-                rejectionReason: schedule.rejectionReason,
-                leadAuditorId: schedule.leadAuditorId,
-                leadAuditorName: schedule.leadAuditorName,
-                scheduleCount: 0,
-                schedules: [],
-              });
+      let allPendingApprovals: any[] = [];
+      let allApproved: any[] = [];
+
+      for (const year of years) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/api/audit-schedule/year/${year}`,
+            {
+              method: "GET",
+              credentials: "include",
+            },
+          );
+          const allSchedules = await response.json();
+          const weekSchedules = allSchedules.filter(
+            (s: any) => !s.scheduledDate,
+          );
+
+          if (weekSchedules.length > 0) {
+            const monthMap = new Map();
+            weekSchedules.forEach((schedule: any) => {
+              const month = schedule.month;
+              if (!monthMap.has(month)) {
+                monthMap.set(month, {
+                  year,
+                  month,
+                  approvalStatus: schedule.approvalStatus || "DRAFT",
+                  preparedBy: schedule.preparedByName,
+                  approvedBy: schedule.approvedByName,
+                  approvedAt: schedule.approvedAt,
+                  rejectionReason: schedule.rejectionReason,
+                  leadAuditorId: schedule.leadAuditorId,
+                  leadAuditorName: schedule.leadAuditorName,
+                  scheduleCount: 0,
+                  schedules: [],
+                });
+              }
+              const monthData = monthMap.get(month);
+              monthData.scheduleCount++;
+              monthData.schedules.push(schedule);
+            });
+
+            for (const [month, monthData] of monthMap) {
+              if (monthData.approvalStatus === "PENDING_APPROVAL")
+                allPendingApprovals.push(monthData);
+              else if (monthData.approvalStatus === "APPROVED")
+                allApproved.push(monthData);
             }
-            const monthData = monthMap.get(month);
-            monthData.scheduleCount++;
-            monthData.schedules.push(schedule);
-          });
+          }
+        } catch (err) {
+          console.error(`Error fetching form 5 plan for year ${year}:`, err);
+        }
+      }
 
-          for (const [month, monthData] of monthMap) {
-            if (monthData.approvalStatus === "PENDING_APPROVAL") allPendingApprovals.push(monthData);
-            else if (monthData.approvalStatus === "APPROVED") allApproved.push(monthData);
+      setPendingForm5Plans(allPendingApprovals);
+      setApprovedForm5Plans(allApproved);
+
+      return {
+        pendingCount: allPendingApprovals.length,
+        approvedCount: allApproved.length,
+        pending: allPendingApprovals,
+        approved: allApproved,
+      };
+    } catch (error) {
+      console.error("Error fetching Form 5 plans:", error);
+      return { pendingCount: 0, approvedCount: 0, pending: [], approved: [] };
+    }
+  };
+
+  const fetchDetailedPlans = useCallback(async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const years: number[] = [];
+      for (let i = currentYear - 5; i <= currentYear + 2; i++) years.push(i);
+
+      let allDailySchedules: any[] = [];
+      for (const year of years) {
+        for (const month of monthOrder) {
+          try {
+            // ✅ FIX: Handle both cases — if API returns raw array OR AxiosResponse
+            const response = await auditScheduleApi.getDateSchedulesByMonth(
+              year,
+              month as any,
+            );
+            const rawData = Array.isArray(response) ? response : response?.data;
+            // ADD THIS
+            const schedules: any[] = Array.isArray(rawData) ? rawData : [];
+
+            schedules.forEach((schedule: any) => {
+              schedule.planYear = year;
+              schedule.month = month;
+              if (!schedule.preparedByName && schedule.preparedBy)
+                schedule.preparedByName = schedule.preparedBy;
+              if (!schedule.approvedByName && schedule.approvedBy)
+                schedule.approvedByName = schedule.approvedBy;
+              if (!schedule.detailedApprovalStatus && schedule.approvalStatus)
+                schedule.detailedApprovalStatus = schedule.approvalStatus;
+            });
+
+            allDailySchedules.push(...schedules);
+          } catch (err) {
+            console.error(
+              `Error fetching detailed plan for ${year} ${month}:`,
+              err,
+            );
           }
         }
-      } catch (err) {
-        console.error(`Error fetching form 5 plan for year ${year}:`, err);
       }
-    }
 
-    setPendingForm5Plans(allPendingApprovals);
-    setApprovedForm5Plans(allApproved);
+      setAllDetailedSchedules(allDailySchedules);
 
-    return { pendingCount: allPendingApprovals.length, approvedCount: allApproved.length, pending: allPendingApprovals, approved: allApproved };
-  } catch (error) {
-    console.error("Error fetching Form 5 plans:", error);
-    return { pendingCount: 0, approvedCount: 0, pending: [], approved: [] };
-  }
-};
+      // --- Grouping logic ---
+      const monthMap = new Map<string, any>();
+      allDailySchedules.forEach((schedule: any) => {
+        const year = schedule.planYear;
+        const month = schedule.month;
+        const key = `${year}-${month}`;
 
-  // ✅ OPTIMIZED: Fetch only current month (1 API call instead of 132)
-const fetchDetailedPlans = useCallback(async () => {
-  try {
-    const currentYear = new Date().getFullYear();
-    const currentMonthIndex = new Date().getMonth();
-    const currentMonthAbbr = monthOrder[currentMonthIndex >= 3 ? currentMonthIndex - 3 : currentMonthIndex + 9];
+        if (!monthMap.has(key)) {
+          monthMap.set(key, {
+            year,
+            month,
+            preparedBySet: new Set(),
+            approvedBySet: new Set(),
+            approvedAt: null,
+            leadAuditorName: schedule.leadAuditorName,
+            schedules: [],
+          });
+        }
 
-    // ✅ Only 1 API call
-    const response = await auditScheduleApi.getDateSchedulesByMonth(currentYear, currentMonthAbbr as any);
-    const rawData = Array.isArray(response) ? response : response?.data;
-    const schedules: any[] = Array.isArray(rawData) ? rawData : [];
+        const monthData = monthMap.get(key);
 
-    schedules.forEach((schedule: any) => {
-      schedule.planYear = currentYear;
-      schedule.month = currentMonthAbbr;
-      if (!schedule.preparedByName && schedule.preparedBy) schedule.preparedByName = schedule.preparedBy;
-      if (!schedule.approvedByName && schedule.approvedBy) schedule.approvedByName = schedule.approvedBy;
-      if (!schedule.detailedApprovalStatus && schedule.approvalStatus) schedule.detailedApprovalStatus = schedule.approvalStatus;
-    });
+        if (
+          schedule.preparedBy &&
+          schedule.preparedBy !== "N/A" &&
+          schedule.preparedBy !== "null"
+        )
+          monthData.preparedBySet.add(schedule.preparedBy);
+        else if (schedule.preparedByName && schedule.preparedByName !== "N/A")
+          monthData.preparedBySet.add(schedule.preparedByName);
 
-    setAllDetailedSchedules(schedules);
+        if (
+          schedule.approvedBy &&
+          schedule.approvedBy !== "N/A" &&
+          schedule.approvedBy !== "null"
+        )
+          monthData.approvedBySet.add(schedule.approvedBy);
+        else if (schedule.approvedByName && schedule.approvedByName !== "N/A")
+          monthData.approvedBySet.add(schedule.approvedByName);
 
-    // Group into pending/approved for current month
-    const getStatus = (s: any) => s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
-    const pendingSchedules = schedules.filter((s: any) => getStatus(s) === "PENDING_APPROVAL" || getStatus(s) === "CHANGE_REQUESTED");
-    const approvedSchedules = schedules.filter((s: any) => getStatus(s) === "APPROVED");
+        const approvalDate = schedule.approvedAt || schedule.approvedDate;
+        if (
+          approvalDate &&
+          (!monthData.approvedAt ||
+            new Date(approvalDate) > new Date(monthData.approvedAt))
+        )
+          monthData.approvedAt = approvalDate;
 
-    const monthData = {
-      year: currentYear,
-      month: currentMonthAbbr,
-      preparedBy: schedules[0]?.preparedByName || "N/A",
-      approvedBy: schedules[0]?.approvedByName || "Not approved yet",
-      leadAuditorName: schedules[0]?.leadAuditorName,
-      schedules,
-    };
-
-    let pendingMonths: any[] = [];
-    let approvedMonths: any[] = [];
-
-    if (pendingSchedules.length > 0) {
-      pendingMonths.push({
-        ...monthData,
-        scheduleCount: schedules.length,
-        pendingCount: pendingSchedules.length,
-        changeRequestedCount: pendingSchedules.filter((s: any) => getStatus(s) === "CHANGE_REQUESTED").length,
-        isChangeRequested: pendingSchedules.some((s: any) => getStatus(s) === "CHANGE_REQUESTED"),
-        rejectedCount: schedules.filter((s: any) => getStatus(s) === "REJECTED").length,
-        schedules,
+        monthData.schedules.push(schedule);
       });
-    } else if (approvedSchedules.length > 0) {
-      approvedMonths.push({
-        ...monthData,
-        scheduleCount: schedules.length,
-        approvedCount: approvedSchedules.length,
-        schedules,
-      });
+
+      const pendingMonths: any[] = [];
+      const approvedMonths: any[] = [];
+
+      for (const [, monthData] of monthMap) {
+        const schedules = monthData.schedules;
+        const uniquePreparedBy = Array.from(monthData.preparedBySet);
+        const uniqueApprovedBy = Array.from(monthData.approvedBySet);
+
+        monthData.displayPreparedBy =
+          uniquePreparedBy.length > 0
+            ? uniquePreparedBy.join(", ")
+            : "Not available";
+        monthData.displayApprovedBy =
+          uniqueApprovedBy.length > 0
+            ? uniqueApprovedBy.join(", ")
+            : "Not approved yet";
+
+        const getStatus = (s: any) =>
+          s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
+
+        const allApproved =
+          schedules.length > 0 &&
+          schedules.every((s: any) => getStatus(s) === "APPROVED");
+        const hasPending = schedules.some(
+          (s: any) => getStatus(s) === "PENDING_APPROVAL",
+        );
+        const hasChangeRequested = schedules.some(
+          (s: any) => getStatus(s) === "CHANGE_REQUESTED",
+        );
+        const hasRejected = schedules.some(
+          (s: any) => getStatus(s) === "REJECTED",
+        );
+
+        if (hasPending || hasChangeRequested) {
+          pendingMonths.push({
+            ...monthData,
+            preparedBy: monthData.displayPreparedBy,
+            approvedBy: monthData.displayApprovedBy,
+            scheduleCount: schedules.length,
+            pendingCount: schedules.filter(
+              (s: any) => getStatus(s) === "PENDING_APPROVAL",
+            ).length,
+            changeRequestedCount: schedules.filter(
+              (s: any) => getStatus(s) === "CHANGE_REQUESTED",
+            ).length,
+            isChangeRequested: hasChangeRequested,
+            rejectedCount: schedules.filter(
+              (s: any) => getStatus(s) === "REJECTED",
+            ).length,
+            schedules,
+          });
+        } else if (allApproved && schedules.length > 0) {
+          approvedMonths.push({
+            ...monthData,
+            preparedBy: monthData.displayPreparedBy,
+            approvedBy: monthData.displayApprovedBy,
+            scheduleCount: schedules.length,
+            approvedCount: schedules.length,
+            approvedAt: monthData.approvedAt,
+            schedules,
+          });
+        } else if (hasRejected) {
+          approvedMonths.push({
+            ...monthData,
+            preparedBy: monthData.displayPreparedBy,
+            approvedBy: monthData.displayApprovedBy,
+            scheduleCount: schedules.length,
+            rejectedCount: schedules.filter(
+              (s: any) => getStatus(s) === "REJECTED",
+            ).length,
+            approvedCount: schedules.filter(
+              (s: any) => getStatus(s) === "APPROVED",
+            ).length,
+            schedules,
+          });
+        }
+      }
+
+      setPendingDetailedPlans(pendingMonths);
+      setApprovedDetailedPlans(approvedMonths);
+
+      return {
+        pendingCount: pendingMonths.length,
+        approvedCount: approvedMonths.length,
+        pending: pendingMonths,
+        approved: approvedMonths,
+        allSchedules: allDailySchedules,
+      };
+    } catch (error) {
+      console.error("Error fetching detailed plans:", error);
+      return {
+        pendingCount: 0,
+        approvedCount: 0,
+        pending: [],
+        approved: [],
+        allSchedules: [],
+      };
     }
-
-    setPendingDetailedPlans(pendingMonths);
-    setApprovedDetailedPlans(approvedMonths);
-
-    return { pendingCount: pendingMonths.length, approvedCount: approvedMonths.length, pending: pendingMonths, approved: approvedMonths, allSchedules: schedules };
-  } catch (error) {
-    console.error("Error fetching detailed plans:", error);
-    return { pendingCount: 0, approvedCount: 0, pending: [], approved: [], allSchedules: [] };
-  }
-}, []);
+  }, []);
 
   const prepareAnalyticsData = useCallback(
     (annualData: any, deptData: any, form5Data: any, detailedData: any) => {
@@ -1179,9 +1542,16 @@ const fetchDetailedPlans = useCallback(async () => {
               plan.planItems.forEach((item: any) => {
                 if (item.months) {
                   item.months.forEach((month: any) => {
-                    if (month.month === monthAbbr) {
-                      if (month.status === "PLANNED") planned++;
-                      if (month.status === "COMPLETED") completed++;
+                    if (normalizeMonth(month.month) === monthAbbr) {
+                      const status = (month.status || "").toUpperCase();
+                      if (status === "PLANNED" || status === "PENDING")
+                        planned++;
+                      if (
+                        status === "COMPLETED" ||
+                        status === "APPROVED" ||
+                        status === "DONE"
+                      )
+                        completed++;
                     }
                   });
                 }
@@ -1190,14 +1560,20 @@ const fetchDetailedPlans = useCallback(async () => {
           });
 
           detailedData.allSchedules.forEach((schedule: any) => {
-            if (schedule.planYear === year && schedule.month === monthAbbr) {
-              const status =
-                schedule.detailedApprovalStatus || schedule.approvalStatus;
-              if (status === "APPROVED") completed++;
-              else if (
-                status === "PENDING_APPROVAL" ||
-                status === "CHANGE_REQUESTED"
-              )
+            // ✅ Use normalizeMonth here too
+            if (
+              schedule.planYear === year &&
+              normalizeMonth(schedule.month) === monthAbbr
+            ) {
+              const status = (
+                schedule.detailedApprovalStatus ||
+                schedule.approvalStatus ||
+                ""
+              ).toUpperCase();
+
+              if (status.includes("APPROVED") || status.includes("COMPLETED"))
+                completed++;
+              else if (status.includes("PENDING") || status.includes("CHANGE"))
                 planned++;
             }
           });
@@ -1280,45 +1656,48 @@ const fetchDetailedPlans = useCallback(async () => {
     [],
   );
 
- const fetchDashboardData = async () => {
-  try {
-    setLoading(true);
-    
-    // ✅ Only fetch current year data for overview
-    const [annualData, deptData, form5Data, detailedData] = await Promise.all([
-      fetchAnnualPlans(),
-      fetchDepartmentPlans(),
-      fetchForm5Plans(),
-      fetchDetailedPlans(),
-    ]);
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const [annualData, deptData, form5Data, detailedData] = await Promise.all(
+        [
+          fetchAnnualPlans(),
+          fetchDepartmentPlans(),
+          fetchForm5Plans(),
+          fetchDetailedPlans(),
+        ],
+      );
 
-    const statsData = {
-      totalAudits: annualData.totalPlanned,
-      completedAudits: annualData.totalCompleted,
-      pendingApproval: annualData.pending.length,
-      approvedPlans: annualData.approved.length,
-      pendingDeptApproval: deptData.pending.length,
-      approvedDeptPlans: deptData.approved.length,
-      pendingForm5Approval: form5Data.pending.length,
-      approvedForm5Plans: form5Data.approved.length,
-      pendingDetailedApproval: detailedData.pending.length,
-      approvedDetailedPlans: detailedData.approved.length,
-      overallCompletion: annualData.totalPlanned > 0
-        ? parseFloat(((annualData.totalCompleted / annualData.totalPlanned) * 100).toFixed(1))
-        : 0,
-    };
+      const statsData = {
+        totalAudits: annualData.totalPlanned,
+        completedAudits: annualData.totalCompleted,
+        pendingApproval: annualData.pending.length,
+        approvedPlans: annualData.approved.length,
+        pendingDeptApproval: deptData.pending.length,
+        approvedDeptPlans: deptData.approved.length,
+        pendingForm5Approval: form5Data.pending.length,
+        approvedForm5Plans: form5Data.approved.length,
+        pendingDetailedApproval: detailedData.pending.length,
+        approvedDetailedPlans: detailedData.approved.length,
+        overallCompletion:
+          annualData.totalPlanned > 0
+            ? parseFloat(
+                (
+                  (annualData.totalCompleted / annualData.totalPlanned) *
+                  100
+                ).toFixed(1),
+              )
+            : 0,
+      };
 
-    setStats(statsData);
-    prepareAnalyticsData(annualData, deptData, form5Data, detailedData);
-    
-    // ✅ Mark all as loaded after initial fetch
-    setLoadedTabs(new Set(["overview", "annual", "dept", "week", "daily"]));
-  } catch (error) {
-    toast.error("Failed to load dashboard data");
-  } finally {
-    setLoading(false);
-  }
-};
+      setStats(statsData);
+      prepareAnalyticsData(annualData, deptData, form5Data, detailedData);
+    } catch (error) {
+      toast.error("Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -1328,7 +1707,7 @@ const fetchDetailedPlans = useCallback(async () => {
   };
 
   useEffect(() => {
-      fetchAllUsers(); // ✅ ADD THIS
+    fetchAllUsers(); // ✅ ADD THIS
     fetchDashboardData();
   }, []);
 
@@ -1692,53 +2071,54 @@ const fetchDetailedPlans = useCallback(async () => {
   };
 
   const openAuditForum = (auditData: any) => {
-  const memberEmails: string[] = [];
-  
-  // Add current user
-  if (user?.email) memberEmails.push(user.email);
-  
-  // Try to find auditor by ID
-  if (auditData.auditorId) {
-    const auditor = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditorId) ||
-      String(u.id) === String(auditData.auditorId)
-    );
-    if (auditor?.email) {
-      memberEmails.push(auditor.email);
-      auditData.auditorName = auditor.name;
-    }
-  }
-  
-  // Try to find auditee by ID
-  if (auditData.auditeeId) {
-    const auditee = allUsersList.find((u: any) => 
-      Number(u.id) === Number(auditData.auditeeId) ||
-      String(u.id) === String(auditData.auditeeId)
-    );
-    if (auditee?.email) {
-      memberEmails.push(auditee.email);
-      auditData.auditeeName = auditee.name;
-    }
-  }
-  
-  // Add HOD
-  if (auditData.hodEmail) memberEmails.push(auditData.hodEmail);
-  
-  // Add memberEmails
-  if (auditData.memberEmails) {
-    const emails = Array.isArray(auditData.memberEmails) 
-      ? auditData.memberEmails 
-      : [auditData.memberEmails];
-    memberEmails.push(...emails);
-  }
-  
-  // Remove duplicates
-  auditData.memberEmails = [...new Set(memberEmails)];
-  
-  setSelectedAuditForForum(auditData);
-  setShowForumModal(true);
-};
+    const memberEmails: string[] = [];
 
+    // Add current user
+    if (user?.email) memberEmails.push(user.email);
+
+    // Try to find auditor by ID
+    if (auditData.auditorId) {
+      const auditor = allUsersList.find(
+        (u: any) =>
+          Number(u.id) === Number(auditData.auditorId) ||
+          String(u.id) === String(auditData.auditorId),
+      );
+      if (auditor?.email) {
+        memberEmails.push(auditor.email);
+        auditData.auditorName = auditor.name;
+      }
+    }
+
+    // Try to find auditee by ID
+    if (auditData.auditeeId) {
+      const auditee = allUsersList.find(
+        (u: any) =>
+          Number(u.id) === Number(auditData.auditeeId) ||
+          String(u.id) === String(auditData.auditeeId),
+      );
+      if (auditee?.email) {
+        memberEmails.push(auditee.email);
+        auditData.auditeeName = auditee.name;
+      }
+    }
+
+    // Add HOD
+    if (auditData.hodEmail) memberEmails.push(auditData.hodEmail);
+
+    // Add memberEmails
+    if (auditData.memberEmails) {
+      const emails = Array.isArray(auditData.memberEmails)
+        ? auditData.memberEmails
+        : [auditData.memberEmails];
+      memberEmails.push(...emails);
+    }
+
+    // Remove duplicates
+    auditData.memberEmails = [...new Set(memberEmails)];
+
+    setSelectedAuditForForum(auditData);
+    setShowForumModal(true);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -2039,66 +2419,76 @@ const fetchDetailedPlans = useCallback(async () => {
               </Text>
             </View>
             <View className="flex-row items-center self-start gap-3 md:self-auto">
-             <TouchableOpacity
-  onPress={() => {
+              <TouchableOpacity
+                onPress={() => {
+                  const getFullName = (u: any) => {
+                    if (!u) return "Unknown User";
+                    if (u.name) return u.name;
+                    return (
+                      `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+                      u.email ||
+                      "Unknown User"
+                    );
+                  };
 
-    const getFullName = (u: any) => {
-      if (!u) return "Unknown User";
-      if (u.name) return u.name;
-      return `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email || "Unknown User";
-    };
-    
-    // Find Audit Manager
-    const auditManager = allUsersList.find((u: any) => 
-      u.role?.toUpperCase().includes('AUDIT_MANAGER')
-    );
-    
-    // Find Top Management
-    const topManagement = allUsersList.find((u: any) => 
-      u.role?.toUpperCase().includes('TOP_MANAGEMENT')
-    );
-    
-    // Build member emails - ONLY Audit Manager and Top Management
-    const memberEmails: string[] = [];
-    if (auditManager?.email) memberEmails.push(auditManager.email);
-    if (topManagement?.email && topManagement.email !== auditManager?.email) {
-      memberEmails.push(topManagement.email);
-    }
-    
-    // Add current user if they are either Audit Manager or Top Management
-    if (user?.email && !memberEmails.includes(user.email)) {
-      const userRole = user.role?.toUpperCase() || '';
-      if (userRole.includes('AUDIT_MANAGER') || userRole.includes('TOP_MANAGEMENT')) {
-        memberEmails.push(user.email);
-      }
-    }
-    
-    const forumData = {
-      id: "general-forum", // ✅ Keep this static so messages persist
-      auditNumber: "TOP-MGMT-FORUM",
-      auditType: "Management Discussion",
-      department: "Management",
-      auditorId: auditManager?.id || user?.id,
-      auditorName: getFullName(auditManager || user), // ✅ GUARANTEED NAME
-      auditeeId: topManagement?.id,
-      auditeeName: getFullName(topManagement), // ✅ GUARANTEED NAME
-      hodEmail: null,
-      hodName: null,
-      memberEmails: memberEmails,
-      auditStatus: "ACTIVE",
-      auditTitle: "Top Management Communication Forum"
-    };
-    
-    // ✅ USE THE FUNCTION instead of inline code
-    openAuditForum(forumData);
-  }}
-  className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
-  style={{ backgroundColor: COLORS.primary }}
-  activeOpacity={0.8}
->
-  <MessageCircle size={18} color="#ffffff" />
-  <Text className="text-sm font-semibold text-white">Forum</Text>
-</TouchableOpacity>
+                  // Find Audit Manager
+                  const auditManager = allUsersList.find((u: any) =>
+                    u.role?.toUpperCase().includes("AUDIT_MANAGER"),
+                  );
+
+                  // Find Top Management
+                  const topManagement = allUsersList.find((u: any) =>
+                    u.role?.toUpperCase().includes("TOP_MANAGEMENT"),
+                  );
+
+                  // Build member emails - ONLY Audit Manager and Top Management
+                  const memberEmails: string[] = [];
+                  if (auditManager?.email)
+                    memberEmails.push(auditManager.email);
+                  if (
+                    topManagement?.email &&
+                    topManagement.email !== auditManager?.email
+                  ) {
+                    memberEmails.push(topManagement.email);
+                  }
+
+                  // Add current user if they are either Audit Manager or Top Management
+                  if (user?.email && !memberEmails.includes(user.email)) {
+                    const userRole = user.role?.toUpperCase() || "";
+                    if (
+                      userRole.includes("AUDIT_MANAGER") ||
+                      userRole.includes("TOP_MANAGEMENT")
+                    ) {
+                      memberEmails.push(user.email);
+                    }
+                  }
+
+                  const forumData = {
+                    id: "general-forum", // ✅ Keep this static so messages persist
+                    auditNumber: "TOP-MGMT-FORUM",
+                    auditType: "Management Discussion",
+                    department: "Management",
+                    auditorId: auditManager?.id || user?.id,
+                    auditorName: getFullName(auditManager || user), // ✅ GUARANTEED NAME
+                    auditeeId: topManagement?.id,
+                    auditeeName: getFullName(topManagement), // ✅ GUARANTEED NAME
+                    hodEmail: null,
+                    hodName: null,
+                    memberEmails: memberEmails,
+                    auditStatus: "ACTIVE",
+                    auditTitle: "Top Management Communication Forum",
+                  };
+
+                  // ✅ USE THE FUNCTION instead of inline code
+                  openAuditForum(forumData);
+                }}
+                className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
+                style={{ backgroundColor: COLORS.primary }}
+                activeOpacity={0.8}
+              >
+                <MessageCircle size={18} color="#ffffff" />
+                <Text className="text-sm font-semibold text-white">Forum</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleRefresh}
                 disabled={refreshing}
@@ -2819,33 +3209,41 @@ const fetchDetailedPlans = useCallback(async () => {
         />
       )}
 
-     {showForumModal && selectedAuditForForum && (
-  <AuditCheckSheetNCRForumModal
-    isOpen={showForumModal}
-    onClose={() => {
-      setShowForumModal(false);
-      setSelectedAuditForForum(null);
-    }}
-    auditId={selectedAuditForForum.id || selectedAuditForForum.auditId || "demo"}
-    auditNumber={selectedAuditForForum.auditNumber || "AUD-001"}
-    auditTitle={selectedAuditForForum.auditTitle || selectedAuditForForum.auditType || "Audit Discussion"}
-    auditStatus={selectedAuditForForum.auditStatus || "IN_PROGRESS"}
-    auditType={selectedAuditForForum.auditType || "System Audit"}
-    department={selectedAuditForForum.department || "Quality"}
-    auditorId={selectedAuditForForum.auditorId || user?.id}
-    auditorName={selectedAuditForForum.auditorName || user?.name || user?.email || "Unknown"}
-    auditeeId={selectedAuditForForum.auditeeId}
-    auditeeName={selectedAuditForForum.auditeeName}
-    hodEmail={selectedAuditForForum.hodEmail}
-    hodName={selectedAuditForForum.hodName}
-    memberEmails={selectedAuditForForum.memberEmails || []}
-    currentUser={user}
-    allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST - THIS IS THE KEY FIX
-  />
-)}
-
-
-
+      {showForumModal && selectedAuditForForum && (
+        <AuditCheckSheetNCRForumModal
+          isOpen={showForumModal}
+          onClose={() => {
+            setShowForumModal(false);
+            setSelectedAuditForForum(null);
+          }}
+          auditId={
+            selectedAuditForForum.id || selectedAuditForForum.auditId || "demo"
+          }
+          auditNumber={selectedAuditForForum.auditNumber || "AUD-001"}
+          auditTitle={
+            selectedAuditForForum.auditTitle ||
+            selectedAuditForForum.auditType ||
+            "Audit Discussion"
+          }
+          auditStatus={selectedAuditForForum.auditStatus || "IN_PROGRESS"}
+          auditType={selectedAuditForForum.auditType || "System Audit"}
+          department={selectedAuditForForum.department || "Quality"}
+          auditorId={selectedAuditForForum.auditorId || user?.id}
+          auditorName={
+            selectedAuditForForum.auditorName ||
+            user?.name ||
+            user?.email ||
+            "Unknown"
+          }
+          auditeeId={selectedAuditForForum.auditeeId}
+          auditeeName={selectedAuditForForum.auditeeName}
+          hodEmail={selectedAuditForForum.hodEmail}
+          hodName={selectedAuditForForum.hodName}
+          memberEmails={selectedAuditForForum.memberEmails || []}
+          currentUser={user}
+          allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST - THIS IS THE KEY FIX
+        />
+      )}
 
       {showForm5Details && selectedForm5Plan && (
         <Modal visible={true} transparent animationType="fade">
@@ -3258,7 +3656,7 @@ const fetchDetailedPlans = useCallback(async () => {
             <Modal visible={true} transparent animationType="slide">
               <View className="items-center justify-center flex-1 p-4 bg-black/50">
                 <View className="w-full max-w-6xl bg-white shadow-2xl rounded-2xl flex-1 max-h-[90%]">
-                  <View className="p-6 border-b border-slate-100">
+                  <View className="p-3 border-b border-slate-100">
                     <View className="flex-row items-center justify-between mb-4">
                       <View>
                         <Text className="text-xl font-bold text-slate-800">
@@ -3286,7 +3684,7 @@ const fetchDetailedPlans = useCallback(async () => {
                     <View className="flex-row border-b border-slate-200">
                       <TouchableOpacity
                         onPress={() => setActiveTab("pending")}
-                        className={`py-2 px-3 ${activeTab === "pending" ? "border-b-2 border-teal-600" : ""}`}
+                        className={`py-2 px-2 ${activeTab === "pending" ? "border-b-2 border-teal-600" : ""}`}
                       >
                         <View className="flex-row items-center gap-2">
                           <Clock

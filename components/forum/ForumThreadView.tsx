@@ -1557,6 +1557,7 @@ const getDateLabel = (dateString?: string) => {
             <FlatList
               ref={flatListRef}
               data={visiblePosts}
+               keyboardShouldPersistTaps="handled"
                 keyExtractor={(item, index) => item?.id || String(index)}
               renderItem={({ item, index }) => {
                 let dateLabel = null;
@@ -1614,8 +1615,13 @@ const getDateLabel = (dateString?: string) => {
           )}
 
           {/* Composer */}
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <View className="border-t border-gray-200 bg-white">
+          {/* Composer */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+            style={{ width: "100%" }}
+          >
+            <View className="bg-white border-t border-gray-200">
               <ThreadComposer
                 groupId={groupId}
                 onThreadCreated={handleComposerSubmit}

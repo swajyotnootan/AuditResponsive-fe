@@ -988,40 +988,47 @@ export default function CalendarView() {
         {/* ✅ RESTORED: Wrapper for all calendar views */}
         <View style={styles.calendarContainer}>
           {view === "month" && (
-            <Calendar
-              current={currentDate}
-              markingType="multi-dot"
-              markedDates={markedDates}
-              enableSwipeMonths
-              onDayPress={handleDayPress}
-              onMonthChange={(month: any) => {
-                if (month.dateString !== currentDate)
-                  setCurrentDate(month.dateString);
-              }}
-              dayComponent={CustomDay}
-              theme={{
-                todayTextColor: "#00529B",
-                selectedDayBackgroundColor: "#00529B",
-                selectedDayTextColor: "#FFFFFF",
-                arrowColor: "#00529B",
-                textMonthFontWeight: "700",
-                textMonthFontSize: fontMedium,
-                calendarBackground: "#FFFFFF",
-                backgroundColor: "#FFFFFF",
-                dayTextColor: "#1F2937",
-                textDisabledColor: "#D1D5DB",
-                textDayFontWeight: "500",
-                textDayFontSize: fontSmall + 2,
-                dotColor: "#00529B",
-                selectedDotColor: "#FFFFFF",
-              }}
-              style={[
-                styles.calendar,
-                {
-                  paddingHorizontal: 4,
-                },
-              ]}
-            />
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <Calendar
+                current={currentDate}
+                markingType="multi-dot"
+                markedDates={markedDates}
+                enableSwipeMonths={true} // ✅ Explicitly enable horizontal swipe
+                onDayPress={handleDayPress}
+                onMonthChange={(month: any) => {
+                  if (month.dateString !== currentDate)
+                    setCurrentDate(month.dateString);
+                }}
+                dayComponent={CustomDay}
+                theme={{
+                  todayTextColor: "#00529B",
+                  selectedDayBackgroundColor: "#00529B",
+                  selectedDayTextColor: "#FFFFFF",
+                  arrowColor: "#00529B",
+                  textMonthFontWeight: "700",
+                  textMonthFontSize: fontMedium,
+                  calendarBackground: "#FFFFFF",
+                  backgroundColor: "#FFFFFF",
+                  dayTextColor: "#1F2937",
+                  textDisabledColor: "#D1D5DB",
+                  textDayFontWeight: "500",
+                  textDayFontSize: fontSmall + 2,
+                  dotColor: "#00529B",
+                  selectedDotColor: "#FFFFFF",
+                }}
+                style={[
+                  styles.calendar,
+                  {
+                    paddingHorizontal: 4,
+                  },
+                ]}
+              />
+            </ScrollView>
           )}
 
           {(view === "week" || view === "day") && (
@@ -1665,7 +1672,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
 
-      calendar: {
+  calendar: {
     borderRadius: 8,
     elevation: 2,
     width: "100%",
@@ -1674,12 +1681,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
 
-      dayContainer: {
+  dayContainer: {
     // flex: 1,             // ❌ REMOVE THIS (it causes compression)
-    height: 80,             // ✅ ADD THIS (forces a fixed tall cell)
+    height: 80, // ✅ ADD THIS (forces a fixed tall cell)
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 4,     // ✅ REDUCED slightly since we have fixed height
+    paddingVertical: 4, // ✅ REDUCED slightly since we have fixed height
     paddingHorizontal: 4,
     // minHeight: 50,       // ❌ REMOVE THIS
     minWidth: 42,
@@ -1698,13 +1705,13 @@ const styles = StyleSheet.create({
   },
 
   // ✅ Update dots container spacing
-      dayDotsContainer: {
+  dayDotsContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6,           // ✅ Space between number and dots
+    marginTop: 6, // ✅ Space between number and dots
     gap: 3,
-    height: 16,             // ✅ Fixed height for dots area
+    height: 16, // ✅ Fixed height for dots area
   },
 
   dayDot: {
@@ -1866,7 +1873,6 @@ const styles = StyleSheet.create({
   dayWithEvents: {
     backgroundColor: "rgba(0, 82, 155, 0.08)",
     borderRadius: 8,
-    
   },
 
   dayToday: {

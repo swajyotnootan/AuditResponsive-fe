@@ -1050,7 +1050,7 @@ export default function ThreadCard({
   };
 
   // =====================================================
-  // LOCATION RENDERER (FIXED)
+  // LOCATION RENDERER (FULL WIDTH FOR MOBILE)
   // =====================================================
   const renderLocation = (attachment: any, index: number) => {
     const location = getAttachmentData(attachment) || {};
@@ -1068,7 +1068,10 @@ export default function ThreadCard({
 
     const openLocation = async () => {
       if (!mapUrl) {
-        Alert.alert("Location unavailable", "No valid location information was provided.");
+        Alert.alert(
+          "Location unavailable",
+          "No valid location information was provided.",
+        );
         return;
       }
 
@@ -1080,7 +1083,10 @@ export default function ThreadCard({
           if (supported) {
             await Linking.openURL(mapUrl);
           } else {
-            Alert.alert("Unable to open location", "No map application available");
+            Alert.alert(
+              "Unable to open location",
+              "No map application available",
+            );
           }
         }
       } catch (error) {
@@ -1095,54 +1101,97 @@ export default function ThreadCard({
         onPress={openLocation}
         style={{
           marginTop: 8,
-          borderRadius: 14,
+          borderRadius: 12,
           borderWidth: 1,
           borderColor: "#bfdbfe",
           backgroundColor: "#eff6ff",
-          padding: 14,
+          // ✅ FULL WIDTH - Takes entire available space
+          width: "100%",
+          padding: 12,
         }}
       >
+        {/* Main Row */}
         <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {/* Icon */}
           <View
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 21,
-              backgroundColor: "#dbeafe",
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: "#3b82f6",
               alignItems: "center",
               justifyContent: "center",
               marginRight: 12,
+              flexShrink: 0,
             }}
           >
-            <MapPin size={21} color="#2563eb" />
+            <MapPin size={22} color="#fff" />
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#1e3a8a" }}>
-              📍 Shared location
+          {/* Text Content - Takes remaining space */}
+          <View style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: "700",
+                color: "#1e40af",
+                marginBottom: 3,
+              }}
+              numberOfLines={1}
+            >
+              Shared Live Location
             </Text>
 
             <Text
-              style={{ marginTop: 3, fontSize: 14, color: "#374151" }}
-              numberOfLines={2}
+              style={{
+                fontSize: 12,
+                color: "#4b5563",
+                marginBottom: 2,
+              }}
+              numberOfLines={1}
             >
               {address}
             </Text>
 
-            {Number.isFinite(latitude) && Number.isFinite(longitude) && latitude !== 0 && longitude !== 0 && (
-              <Text style={{ marginTop: 3, fontSize: 11, color: "#6b7280" }}>
-                📍 {latitude.toFixed(5)}, {longitude.toFixed(5)}
-              </Text>
-            )}
+            {Number.isFinite(latitude) &&
+              Number.isFinite(longitude) &&
+              latitude !== 0 &&
+              longitude !== 0 && (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: "#6b7280",
+                  }}
+                  numberOfLines={1}
+                >
+                  {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                </Text>
+              )}
           </View>
 
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#2563eb" }}>
-            Open
-          </Text>
+          {/* Open Button */}
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#2563eb",
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 8,
+              flexShrink: 0,
+            }}
+            onPress={(e) => {
+              e.stopPropagation();
+              openLocation();
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
+              Open
+            </Text>
+          </TouchableOpacity>
         </View>
       </Pressable>
     );
   };
+
 
   // =====================================================
   // EVENT RENDERER (FIXED)

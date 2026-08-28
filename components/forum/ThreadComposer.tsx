@@ -2,7 +2,7 @@
 // FINAL FIXED: Android video recording, document handling, Emoji Picker (with library), and Edit Mode
 
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Audio, ResizeMode, Video } from "expo-av";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
@@ -118,17 +118,19 @@ export default function ThreadComposer({
 
   const [audioSound, setAudioSound] = useState<Audio.Sound | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
- 
-const [showDatePicker, setShowDatePicker] = useState(false);
-const [selectedDate, setSelectedDate] = useState(new Date());
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false); // ✅ ADD THIS
+  const [datePickerMode, setDatePickerMode] = useState<"date" | "time">("date"); // ✅ ADD THIS
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [eventForm, setEventForm] = useState({
     open: false,
     title: "",
     datetime: "",
-    location: "",   // ✅ Added to fix TS error
-  url: "", 
+    location: "", // ✅ Added to fix TS error
+    url: "",
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -730,55 +732,135 @@ const [selectedDate, setSelectedDate] = useState(new Date());
   };
 
   const handleLocation = async () => {
-  try {
-    const { status } =
-      await Location.requestForegroundPermissionsAsync();
+    try {
+      console.log("📍 Starting live location request...");
 
-    if (status !== "granted") {
+      // Step 1: Request permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Location permission is needed. Please grant it in Settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
+      // Step 2: Check if location services are enabled
+      const hasServices = await Location.hasServicesEnabledAsync();
+      if (!hasServices) {
+        Alert.alert(
+          "GPS Disabled",
+          "Please turn on Location/GPS in your device settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
       Alert.alert(
-        "Permission Denied",
-        "Location access is required."
+        "Getting Live Location",
+        "Please wait while we get your exact GPS coordinates...",
       );
-      return;
+
+      console.log("Fetching current position with Highest accuracy...");
+
+      // ✅ FIX: Added mayShowUserSettingsDialog to prompt Android users to enable High Accuracy mode
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+        mayShowUserSettingsDialog: true, // Prompts user to enable high accuracy on Android
+      });
+
+      if (!location?.coords) {
+        throw new Error("No location data received");
+      }
+
+      const { latitude, longitude } = location.coords;
+
+      console.log("✅ LIVE DEVICE LOCATION RECEIVED:", { latitude, longitude });
+
+      // ✅ CHECK: Detect if the device is returning the hardcoded Android Emulator default
+      // Using a small threshold for floating-point comparison safety
+      const isEmulatorDefault =
+        Math.abs(latitude - 37.422) < 0.001 &&
+        Math.abs(longitude - -122.0841) < 0.001;
+
+      if (isEmulatorDefault) {
+        console.warn("⚠️ Default Android Emulator location detected.");
+        Alert.alert(
+          "Emulator Default Location Detected",
+          "Your device is returning the default Android Emulator coordinates (Mountain View, CA).\n\n" +
+            "• If on Emulator: Open Extended Controls (...) > Location, and set a custom point.\n" +
+            "• If on Real Device: Ensure 'Precise Location' is enabled in App Settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return; // Prevents sharing a fake location
+      }
+
+      if (typeof latitude !== "number" || typeof longitude !== "number") {
+        throw new Error("Invalid coordinates");
+      }
+
+      const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+      const locationData = {
+        latitude,
+        longitude,
+        url,
+        name: "Shared live location",
+        timestamp: new Date().toISOString(),
+      };
+
+      const jsonString = JSON.stringify(locationData);
+
+      setContent("📍 Shared live location");
+
+      setAttachments((prev) => [
+        ...prev,
+        {
+          fileName: "location.json",
+          fileType: "application/json",
+          fileSize: jsonString.length,
+          attachmentType: "LOCATION",
+          locationUrl: url,
+          eventData: { latitude, longitude },
+          fileData: btoa(jsonString),
+        },
+      ]);
+
+      setShowAttachmentMenu(false);
+      Alert.alert("Success", "Live location shared successfully!");
+    } catch (err) {
+      console.error("Location error details:", err);
+
+      let errorMessage = "Failed to get live location";
+      let errorTitle = "Location Error";
+
+      if (err instanceof Error) {
+        if (
+          err.message.includes("timeout") ||
+          err.message.includes("unavailable")
+        ) {
+          errorTitle = "GPS Signal Weak";
+          errorMessage =
+            "Could not get a GPS lock. Please step outside or near a window, ensure Wi-Fi/Bluetooth scanning is ON, and try again.";
+        }
+      }
+
+      Alert.alert(errorTitle, errorMessage, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Retry", onPress: () => handleLocation() },
+      ]);
     }
-
-    const location = await Location.getCurrentPositionAsync({});
-    const { latitude, longitude } = location.coords;
-
-    const url =
-      `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-    const locationData = {
-      latitude,
-      longitude,
-      url,
-      name: "Shared location",
-    };
-
-    const jsonString = JSON.stringify(locationData);
-
-    setContent("📍 Shared location");
-
-    setAttachments((prev) => [
-      ...prev,
-      {
-        fileName: "location.json",
-        fileType: "application/json",
-        fileSize: jsonString.length,
-        attachmentType: "LOCATION",
-        locationUrl: url,
-
-        // IMPORTANT: 8D backend expects Base64
-        fileData: btoa(jsonString),
-      },
-    ]);
-
-    setShowAttachmentMenu(false);
-  } catch (err) {
-    console.error("Location error:", err);
-    Alert.alert("Error", "Failed to get location");
-  }
-};
+  };
 
   const startVoiceRecording = async () => {
     try {
@@ -967,111 +1049,112 @@ const [selectedDate, setSelectedDate] = useState(new Date());
   }, [previewMedia]);
 
   // ========== SUBMIT ==========
- const handleSubmit = async () => {
-  if (isSubmitting) return;
-  if (!content.trim() && attachments.length === 0 && !editingPost) return;
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (!content.trim() && attachments.length === 0 && !editingPost) return;
 
-  setIsSubmitting(true);
+    setIsSubmitting(true);
 
-  try {
-    let messageType = "TEXT";
-    if (attachments.length > 0) {
-      const firstAtt = attachments[0];
-      if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
-      else if (firstAtt.attachmentType === "VIDEO") messageType = "VIDEO";
-      else if (firstAtt.attachmentType === "AUDIO") messageType = "AUDIO";
-      else if (firstAtt.attachmentType === "LOCATION") messageType = "LOCATION";
-      else if (firstAtt.attachmentType === "EVENT") messageType = "EVENT";
+    try {
+      let messageType = "TEXT";
+      if (attachments.length > 0) {
+        const firstAtt = attachments[0];
+        if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
+        else if (firstAtt.attachmentType === "VIDEO") messageType = "VIDEO";
+        else if (firstAtt.attachmentType === "AUDIO") messageType = "AUDIO";
+        else if (firstAtt.attachmentType === "LOCATION")
+          messageType = "LOCATION";
+        else if (firstAtt.attachmentType === "EVENT") messageType = "EVENT";
+      }
+
+      const resolvedAttachments = await Promise.all(
+        attachments.map(async (att) => {
+          // If fileData already exists, use it
+          if (att.fileData) {
+            return {
+              fileName: att.fileName,
+              fileType: att.fileType,
+              fileSize: att.fileSize,
+              attachmentType: att.attachmentType,
+              fileData: att.fileData,
+            };
+          }
+
+          // If we have a URI but no fileData, read it
+          if (att.uri && !att.fileData) {
+            const base64 = await readFileAsBase64(att.uri);
+            return {
+              fileName: att.fileName,
+              fileType: att.fileType,
+              fileSize: att.fileSize,
+              attachmentType: att.attachmentType,
+              fileData: base64,
+            };
+          }
+
+          // ✅ FIX: Location - Use JSON string directly (not base64)
+          if (att.attachmentType === "LOCATION") {
+            const locationData = {
+              latitude: att.eventData?.latitude || 0,
+              longitude: att.eventData?.longitude || 0,
+              url: att.locationUrl || "",
+            };
+            return {
+              fileName: "location.json",
+              fileType: "application/json",
+              fileSize: JSON.stringify(locationData).length,
+              attachmentType: "LOCATION",
+              fileData: JSON.stringify(locationData), // ✅ JSON string, not base64
+            };
+          }
+
+          // ✅ FIX: Event - Use JSON string directly (not base64)
+          if (att.attachmentType === "EVENT") {
+            const eventData = att.eventData || {};
+            return {
+              fileName: "event.json",
+              fileType: "application/json",
+              fileSize: JSON.stringify(eventData).length,
+              attachmentType: "EVENT",
+              fileData: JSON.stringify(eventData), // ✅ JSON string, not base64
+            };
+          }
+
+          return att;
+        }),
+      );
+
+      const userEmail = username || "anonymous@jws.com";
+      const payload: any = {
+        content: content.trim() || " ",
+        createdBy: userEmail,
+        messageType,
+        attachments: resolvedAttachments,
+      };
+
+      if (editingPost) {
+        payload.id = editingPost.id;
+        payload.isEdit = true;
+      }
+
+      onThreadCreated(payload);
+
+      setContent("");
+      setAttachments([]);
+      setError("");
+      setShowAttachmentMenu(false);
+      setShowEmojiPicker(false);
+
+      if (editingPost) {
+        onCancelEdit?.();
+      }
+    } catch (err) {
+      console.error("Submit error:", err);
+      setError("Failed to send message");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const resolvedAttachments = await Promise.all(
-      attachments.map(async (att) => {
-        // If fileData already exists, use it
-        if (att.fileData) {
-          return {
-            fileName: att.fileName,
-            fileType: att.fileType,
-            fileSize: att.fileSize,
-            attachmentType: att.attachmentType,
-            fileData: att.fileData,
-          };
-        }
-
-        // If we have a URI but no fileData, read it
-        if (att.uri && !att.fileData) {
-          const base64 = await readFileAsBase64(att.uri);
-          return {
-            fileName: att.fileName,
-            fileType: att.fileType,
-            fileSize: att.fileSize,
-            attachmentType: att.attachmentType,
-            fileData: base64,
-          };
-        }
-
-        // ✅ FIX: Location - Use JSON string directly (not base64)
-        if (att.attachmentType === "LOCATION") {
-          const locationData = {
-            latitude: att.eventData?.latitude || 0,
-            longitude: att.eventData?.longitude || 0,
-            url: att.locationUrl || "",
-          };
-          return {
-            fileName: "location.json",
-            fileType: "application/json",
-            fileSize: JSON.stringify(locationData).length,
-            attachmentType: "LOCATION",
-            fileData: JSON.stringify(locationData), // ✅ JSON string, not base64
-          };
-        }
-
-        // ✅ FIX: Event - Use JSON string directly (not base64)
-        if (att.attachmentType === "EVENT") {
-          const eventData = att.eventData || {};
-          return {
-            fileName: "event.json",
-            fileType: "application/json",
-            fileSize: JSON.stringify(eventData).length,
-            attachmentType: "EVENT",
-            fileData: JSON.stringify(eventData), // ✅ JSON string, not base64
-          };
-        }
-
-        return att;
-      }),
-    );
-
-    const userEmail = username || "anonymous@jws.com";
-    const payload: any = {
-      content: content.trim() || " ",
-      createdBy: userEmail,
-      messageType,
-      attachments: resolvedAttachments,
-    };
-
-    if (editingPost) {
-      payload.id = editingPost.id;
-      payload.isEdit = true;
-    }
-
-    onThreadCreated(payload);
-
-    setContent("");
-    setAttachments([]);
-    setError("");
-    setShowAttachmentMenu(false);
-    setShowEmojiPicker(false);
-
-    if (editingPost) {
-      onCancelEdit?.();
-    }
-  } catch (err) {
-    console.error("Submit error:", err);
-    setError("Failed to send message");
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   const handleInputChange = (text: string) => {
     setContent(text);
@@ -1398,117 +1481,169 @@ const [selectedDate, setSelectedDate] = useState(new Date());
         </View>
       </Modal>
 
-    {/* Event Form Modal */}
-{/* Event Form Modal */}
-{/* Event Form Modal */}
-{/* Event Form Modal */}
-<Modal visible={eventForm.open} transparent animationType="fade">
-  <View style={styles.modalOverlay}>
-    <View style={styles.eventModalContent}>
-      <Text style={styles.eventModalTitle}>Create Event</Text>
-      
-      <TextInput
-        style={styles.eventInput}
-        placeholder="Event title"
-        value={eventForm.title}
-        onChangeText={(text) => setEventForm({ ...eventForm, title: text })}
-      />
+      <Modal visible={eventForm.open} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.eventModalContent}>
+            <Text style={styles.eventModalTitle}>Create Event</Text>
 
-      {/* ✅ WEB: Native HTML5 datetime input */}
-      {Platform.OS === 'web' ? (
-        <input
-          type="datetime-local"
-          value={eventForm.datetime ? new Date(eventForm.datetime).toISOString().slice(0, 16) : ''}
-          onChange={(e: any) => {
-            const selectedDateTime = new Date(e.target.value).toISOString();
-            setEventForm({ ...eventForm, datetime: selectedDateTime });
-          }}
-          style={{
-            borderWidth: 1,
-            borderColor: "#d1d5db",
-            borderRadius: 8,
-            padding: 12,
-            marginBottom: 12,
-            fontSize: 14,
-            width: "100%",
-          }}
-        />
-      ) : (
-        /* ✅ MOBILE: TouchableOpacity triggering DateTimePicker */
-        <TouchableOpacity
-          style={[styles.eventInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Text style={{ color: eventForm.datetime ? '#000' : '#999' }}>
-            {eventForm.datetime ? new Date(eventForm.datetime).toLocaleString() : "Select Date & Time"}
-          </Text>
-          <Ionicons name="calendar-outline" size={20} color="#6b7280" />
-        </TouchableOpacity>
-      )}
+            <TextInput
+              style={styles.eventInput}
+              placeholder="Event title"
+              value={eventForm.title}
+              onChangeText={(text) =>
+                setEventForm({ ...eventForm, title: text })
+              }
+            />
 
-      {/* ✅ MOBILE: Native DateTimePicker (Safe Android Implementation) */}
-      {Platform.OS !== 'web' && showDatePicker && (
-        <DateTimePicker
-          value={selectedDate}
-          mode="datetime"
-          display="default"
-          onChange={(event, date) => {
-            // ✅ FIX: Handle Android dismissal safely to prevent "dismiss of undefined" crash
-            if (event.type === 'dismissed') {
-              setShowDatePicker(false);
-              return;
-            }
-            
-            const currentDate = date || selectedDate;
-            setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS until confirmed
-            
-            if (currentDate) {
-              setSelectedDate(currentDate);
-              setEventForm({ ...eventForm, datetime: currentDate.toISOString() });
-            }
-          }}
-        />
-      )}
+            {/* WEB: Native HTML5 datetime input */}
+            {Platform.OS === "web" ? (
+              <div style={{ width: "100%", marginBottom: 12 }}>
+                <input
+                  type="datetime-local"
+                  value={
+                    eventForm.datetime
+                      ? new Date(eventForm.datetime).toISOString().slice(0, 16)
+                      : ""
+                  }
+                  onChange={(e: any) => {
+                    const selectedDateTime = new Date(
+                      e.target.value,
+                    ).toISOString();
+                    setEventForm({ ...eventForm, datetime: selectedDateTime });
+                  }}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    borderWidth: 1,
+                    borderColor: "#d1d5db",
+                    borderRadius: 8,
+                    padding: "12px",
+                    fontSize: 14,
+                    fontFamily: "inherit",
+                    outline: "none",
+                  }}
+                />
+              </div>
+            ) : (
+              /* MOBILE: TouchableOpacity triggering DateTimePicker */
+              <TouchableOpacity
+                style={[
+                  styles.eventInput,
+                  {
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  },
+                ]}
+                onPress={() => {
+                  const initialDate = eventForm.datetime
+                    ? new Date(eventForm.datetime)
+                    : new Date();
+                  setSelectedDate(initialDate);
+                  setDatePickerMode("date");
+                  setShowDatePicker(true);
+                }}
+              >
+                <Text style={{ color: eventForm.datetime ? "#000" : "#999" }}>
+                  {eventForm.datetime
+                    ? new Date(eventForm.datetime).toLocaleString()
+                    : "Select Date & Time"}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            )}
 
-      <View style={styles.eventModalButtons}>
-        <TouchableOpacity
-          onPress={() => {
-            if (!eventForm.title || !eventForm.datetime) {
-              Alert.alert("Missing Information", "Please provide event title and date/time");
-              return;
-            }
-            const eventData = {
-              title: eventForm.title,
-              datetime: eventForm.datetime,
-            };
-            setContent(`📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`);
-            setAttachments((prev) => [
-              ...prev,
-              {
-                fileName: "event.json",
-                fileType: "application/json",
-                fileSize: JSON.stringify(eventData).length,
-                attachmentType: "EVENT",
-                eventData,
-                fileData: btoa(JSON.stringify(eventData)), // ✅ Ensures backend gets valid base64
-              },
-            ]);
-            setEventForm({ open: false, title: "", datetime: "",location:"",url:"" });
-          }}
-          style={styles.eventSubmitBtn}
-        >
-          <Text style={styles.eventSubmitBtnText}>Add Event</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setEventForm({ open: false, title: "", datetime: "", location:"", url:"" })}
-          style={styles.eventCancelBtn}
-        >
-          <Text style={styles.eventCancelBtnText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
+            {Platform.OS !== "web" && (showDatePicker || showTimePicker) && (
+              <DateTimePicker
+                value={selectedDate}
+                mode={datePickerMode}
+                display="default"
+                onChange={(event, date) => {
+                  if (event?.type === "dismissed") {
+                    setShowDatePicker(false);
+                    setShowTimePicker(false);
+                    setDatePickerMode("date");
+                    return;
+                  }
+
+                  const currentDate = date || selectedDate;
+
+                  if (datePickerMode === "date") {
+                    setSelectedDate(currentDate);
+                    setShowDatePicker(false);
+                    setShowTimePicker(true);
+                    setDatePickerMode("time");
+                  } else {
+                    setSelectedDate(currentDate);
+                    setEventForm({
+                      ...eventForm,
+                      datetime: currentDate.toISOString(),
+                    });
+                    setShowTimePicker(false);
+                    setDatePickerMode("date");
+                  }
+                }}
+              />
+            )}
+
+            <View style={styles.eventModalButtons}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!eventForm.title || !eventForm.datetime) {
+                    Alert.alert(
+                      "Missing Information",
+                      "Please provide event title and date/time",
+                    );
+                    return;
+                  }
+                  const eventData = {
+                    title: eventForm.title,
+                    datetime: eventForm.datetime,
+                  };
+                  setContent(
+                    `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
+                  );
+                  setAttachments((prev) => [
+                    ...prev,
+                    {
+                      fileName: "event.json",
+                      fileType: "application/json",
+                      fileSize: JSON.stringify(eventData).length,
+                      attachmentType: "EVENT",
+                      eventData,
+                      fileData: btoa(JSON.stringify(eventData)),
+                    },
+                  ]);
+                  setEventForm({
+                    open: false,
+                    title: "",
+                    datetime: "",
+                    location: "",
+                    url: "",
+                  });
+                }}
+                style={styles.eventSubmitBtn}
+              >
+                <Text style={styles.eventSubmitBtnText}>Add Event</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  setEventForm({
+                    open: false,
+                    title: "",
+                    datetime: "",
+                    location: "",
+                    url: "",
+                  })
+                }
+                style={styles.eventCancelBtn}
+              >
+                <Text style={styles.eventCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {/* Attachment Menu */}
       <Modal visible={showAttachmentMenu} transparent animationType="fade">
         <TouchableOpacity
@@ -1543,8 +1678,15 @@ const [selectedDate, setSelectedDate] = useState(new Date());
               <Text style={styles.menuItemText}>Location</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() =>
-    setEventForm({ open: true, title: "", datetime: "", location: "", url: "" }) // ✅ Added location & url
+              onPress={
+                () =>
+                  setEventForm({
+                    open: true,
+                    title: "",
+                    datetime: "",
+                    location: "",
+                    url: "",
+                  }) // ✅ Added location & url
               }
               style={styles.menuItem}
             >
@@ -2031,12 +2173,20 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 12,
     padding: 20,
-    width: SCREEN_WIDTH - 40,
+    width: Platform.OS === "web" ? "90%" : SCREEN_WIDTH - 40,
+    maxWidth: 500, // Added max-width constraint
+    alignSelf: "center", // Center the modal
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   eventModalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
-    marginBottom: 16,
+    marginBottom: 20,
+    textAlign: "center",
   },
   eventInput: {
     borderWidth: 1,
@@ -2045,31 +2195,36 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     fontSize: 14,
+    width: "100%", // Ensure full width
   },
   eventModalButtons: {
     flexDirection: "row",
-    gap: 8,
+    gap: 12,
+    marginTop: 8,
   },
   eventSubmitBtn: {
     flex: 1,
     backgroundColor: "#3b82f6",
-    paddingVertical: 10,
-    borderRadius: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: "center",
   },
   eventSubmitBtnText: {
     color: "white",
     fontWeight: "600",
+    fontSize: 14,
   },
   eventCancelBtn: {
     flex: 1,
     backgroundColor: "#e5e7eb",
-    paddingVertical: 10,
-    borderRadius: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: "center",
   },
   eventCancelBtnText: {
     color: "#374151",
+    fontWeight: "600",
+    fontSize: 14,
   },
   menuOverlay: {
     flex: 1,

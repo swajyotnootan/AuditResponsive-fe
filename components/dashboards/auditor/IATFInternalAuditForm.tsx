@@ -45,7 +45,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 // // ✅ DYNAMIC API BASE
 
-
 // ============================================================================
 // COLOR PALETTE & CONSTANTS
 // ============================================================================
@@ -307,9 +306,12 @@ export default function IATFInternalAuditForm(props: any) {
   const fetchScheduleDetails = async () => {
     if (!scheduleId) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/audit-schedule/${scheduleId}`, {
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/audit-schedule/${scheduleId}`,
+        {
+          credentials: "include",
+        },
+      );
       if (response.ok) {
         const schedule = await response.json();
         if (schedule.auditeeName && !editId) {
@@ -338,9 +340,12 @@ export default function IATFInternalAuditForm(props: any) {
     const deptUpper = department.toUpperCase().trim();
     if (deptUpper === "QA/QC" || deptUpper === "QC" || deptUpper === "Q.C") {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/templates/type/IATF_16949`, {
-          credentials: "include",
-        });
+        const res = await fetch(
+          `${API_BASE_URL}/api/templates/type/IATF_16949`,
+          {
+            credentials: "include",
+          },
+        );
         if (res.ok) {
           const allForms = await res.json();
           return allForms.filter((form: any) => form.department === "QA");
@@ -440,9 +445,12 @@ export default function IATFInternalAuditForm(props: any) {
   const loadSheetQuestions = async (sheet: any) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/templates/${sheet.id}`, {
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/templates/${sheet.id}`,
+        {
+          credentials: "include",
+        },
+      );
       if (!response.ok) throw new Error("Failed to fetch template");
       const fullSheet = await response.json();
       setCurrentCheckSheet(fullSheet);
@@ -610,7 +618,8 @@ export default function IATFInternalAuditForm(props: any) {
     if (editId && questions.length > 0 && !currentCheckSheet) loadAuditData();
   }, [editId, questions]);
 
-    useEffect(() => {
+  // ✅ ADD KEYBOARD NAVIGATION FOR STEP 2 (WEB ONLY)
+  useEffect(() => {
     if (Platform.OS !== "web") return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1524,7 +1533,10 @@ export default function IATFInternalAuditForm(props: any) {
 
             {/* Step Progress Bar */}
             <FadeInView delay={150}>
-              <View className="flex-row items-start justify-between w-full max-w-3xl px-2 mb-8">
+              <View
+                className="flex-row items-start justify-between w-full px-4 mb-8"
+                style={{ maxWidth: 900, alignSelf: "center" }}
+              >
                 {steps.map((step, idx) => {
                   const Icon = step.icon;
                   const isActive = currentStep === step.number;
@@ -2272,13 +2284,6 @@ export default function IATFInternalAuditForm(props: any) {
                         </Text>
                       </View>
                     </View>
-                    <Text className="text-sm font-medium text-slate-600">
-                      <Text className="font-bold text-slate-800">
-                        {stats.completed}
-                      </Text>{" "}
-                      / <Text className="text-slate-500">{stats.total}</Text>{" "}
-                      completed
-                    </Text>
                   </View>
                   {!allCheckpointsRated && (
                     <View className="p-3 mt-4 border rounded-xl bg-amber-50 border-amber-200">
@@ -2397,14 +2402,17 @@ export default function IATFInternalAuditForm(props: any) {
                     {stats.minorNC + stats.majorNC > 0 &&
                       ncrFindings.length > 0 && (
                         <View className="p-5 mb-6 border rounded-xl bg-rose-50 border-rose-200">
-                          <View className="flex-row items-center justify-between gap-3 mb-3">
-                            <Text className="text-sm font-bold text-rose-800">
-                              ⚠️ NCR Required for audit report{" "}
-                              {formData.documentNumber}
-                            </Text>
+                          <View className="flex-row items-start justify-between gap-3 mb-3">
+                            <View style={{ flex: 1, flexShrink: 1 }}>
+                              <Text className="text-sm font-bold text-rose-800">
+                                ⚠️ NCR Required for audit report{" "}
+                                {formData.documentNumber}
+                              </Text>
+                            </View>
                             <TouchableOpacity
                               onPress={() => goToNcrForm(responseId)}
                               className="flex-row items-center gap-2 px-3 py-1.5 bg-rose-600 rounded-lg shadow-sm"
+                              style={{ flexShrink: 0 }}
                             >
                               <AlertCircle size={14} color="#ffffff" />
                               <Text className="text-xs font-medium text-white">
