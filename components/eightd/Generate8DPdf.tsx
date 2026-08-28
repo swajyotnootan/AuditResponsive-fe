@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import React, { useState } from "react";
 import { Alert, Platform, Pressable, Text, View } from "react-native";

@@ -602,7 +602,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
             gap: isMobile ? 12 : 16,
           }}>
             {/* Title Section */}
-            <View style={{ flex: 1, minWidth: isMobile ? "100%" : 200 }}>
+            <View style={{ minWidth: isMobile ? "100%" : 200 }}>
               <Text style={{
                 fontSize: isMobile ? 18 : 24,
                 fontWeight: "bold",
