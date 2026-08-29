@@ -539,6 +539,9 @@ const CustomPieChart = ({
   );
 };
 
+// =====================================================
+// DepartmentLineChart - FIXED VERSION
+// =====================================================
 const DepartmentLineChart = ({
   data,
   isDesktop,
@@ -557,28 +560,27 @@ const DepartmentLineChart = ({
   const chartWidth = svgWidth - padding.left - padding.right;
   const chartHeight = svgHeight - padding.top - padding.bottom;
 
-  // Calculate Y-axis ticks (5 levels)
+  // ✅ Y-axis ticks (5 levels)
   const yTicks = 5;
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) =>
     Math.round((maxCount / yTicks) * i),
   );
 
-  // Calculate points for the line
-  const points = data.map((item, idx) => {
+  // ✅ SAFE: Calculate points only if data exists
+  const points = hasData ? data.map((item, idx) => {
     const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
     const y = padding.top + chartHeight - (item.count / maxCount) * chartHeight;
     return { x, y, label: item.department, value: item.count };
-  });
+  }) : [];
 
-  // Build SVG path for the line
-  const linePath = points
-    .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
+  // ✅ SAFE: Build paths only if points exist
+  const linePath = points.length > 0
+    ? points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
+    : "";
 
-  // Build area fill path (gradient under the line)
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${
-    padding.top + chartHeight
-  } L ${points[0].x} ${padding.top + chartHeight} Z`;
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
+    : "";
 
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 2 : 1, width: "100%" }}>
@@ -607,7 +609,6 @@ const DepartmentLineChart = ({
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             >
               <Defs>
-                {/* ✅ Use SvgLinearGradient here */}
                 <SvgLinearGradient
                   id="areaGradient"
                   x1="0"
@@ -645,7 +646,6 @@ const DepartmentLineChart = ({
                       strokeWidth="1"
                       strokeDasharray="4,4"
                     />
-                    {/* ✅ Use SvgText here */}
                     <SvgText
                       x={padding.left - 10}
                       y={y + 4}
@@ -680,18 +680,21 @@ const DepartmentLineChart = ({
                 strokeWidth="1.5"
               />
 
-              {/* Area fill under line */}
-              <Path d={areaPath} fill="url(#areaGradient)" />
+              {/* ✅ SAFE: Only render path if it exists */}
+              {areaPath && (
+                <Path d={areaPath} fill="url(#areaGradient)" />
+              )}
 
-              {/* Main line */}
-              <Path
-                d={linePath}
-                fill="none"
-                stroke="url(#lineGradient)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              {linePath && (
+                <Path
+                  d={linePath}
+                  fill="none"
+                  stroke="url(#lineGradient)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
 
               {/* Data points and X-axis labels */}
               {points.map((p, idx) => (
@@ -717,7 +720,6 @@ const DepartmentLineChart = ({
                   <Circle cx={p.x} cy={p.y} r="3.5" fill="#1E40AF" />
 
                   {/* Value label above point */}
-                  {/* ✅ Use SvgText here */}
                   <SvgText
                     x={p.x}
                     y={p.y - 16}
@@ -730,7 +732,6 @@ const DepartmentLineChart = ({
                   </SvgText>
 
                   {/* X-axis label (department name) */}
-                  {/* ✅ Use SvgText here */}
                   <SvgText
                     x={p.x}
                     y={padding.top + chartHeight + 20}
