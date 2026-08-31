@@ -694,15 +694,30 @@ const handleGoBack = () => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
+<TouchableOpacity
   onPress={() => {
     setShowSuccessModal(false);
     // Navigate directly without setTimeout
     if (onClose && typeof onClose === 'function') {
       onClose();
     } else {
-      const dashboardPath = getDashboardPath(user) || "/";
-      router.replace(dashboardPath as any);
+      // ✅ Route to NCR view based on role
+      const role = user?.role?.toUpperCase() || "";
+      let ncrRoute = "/";
+      
+      if (role === "AUDITEE") {
+        ncrRoute = "/(app)/(tabs)/auditee?tab=my-ncrs";
+      } else if (role === "AUDITOR") {
+        ncrRoute = "/(app)/(tabs)/auditor?tab=ncr-list";
+      } else if (role === "AUDIT_MANAGER") {
+        ncrRoute = "/(app)/(tabs)/audit-manager?tab=ncr";
+      } else if (role === "LEAD_AUDITOR") {
+        ncrRoute = "/(app)/(tabs)/lead-auditor?tab=ncrs";
+      } else {
+        ncrRoute = getDashboardPath(user) || "/";
+      }
+      
+      router.replace(ncrRoute as any);
     }
   }}
   className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"
