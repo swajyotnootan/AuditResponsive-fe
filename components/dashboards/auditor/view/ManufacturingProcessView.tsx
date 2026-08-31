@@ -757,86 +757,98 @@ export default function ManufacturingProcessView({
         </View>
 
         {/* Audit Information */}
-        <View className="p-6 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-          <View className="flex-row items-center gap-2 mb-4">
-            <Settings size={18} color={NAVBAR_COLORS.primary} />
-            <Text className="text-base font-bold text-slate-800">
-              Audit Information
+        {/* Audit Information */}
+<View className="p-6 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+  <View className="flex-row items-center gap-2 mb-4">
+    <Settings size={18} color={NAVBAR_COLORS.primary} />
+    <Text className="text-base font-bold text-slate-800">
+      Audit Information
+    </Text>
+  </View>
+  <View className="flex-row flex-wrap -mx-2">
+    {[
+      {
+        icon: Settings,
+        label: "Department Name",
+        value: (departmentName || answers.department || "-").substring(0, 25),
+      },
+      {
+        icon: Package,
+        label: "Part Name & Number",
+        value: (answers.partNumber || "-").substring(0, 25),
+      },
+      {
+        icon: Wrench, 
+        label: "Machine", 
+        value: (answers.machine || "-").substring(0, 25) 
+      },
+      {
+        icon: User,
+        label: "Auditor Name",
+        value: (auditorName || answers.auditorName || "N/A").substring(0, 25),
+      },
+      {
+        icon: User,
+        label: "Auditee Name",
+        value: (auditeeName || answers.auditeeName || "N/A").substring(0, 25),
+      },
+      {
+        icon: MapPin,
+        label: "Location",
+        value: (answers.location || "-").substring(0, 25),
+      },
+      {
+        icon: Settings,
+        label: "Shift",
+        value: audit.shift || answers.shift || "-",
+      },
+      {
+        icon: Calendar,
+        label: "Date",
+        value: answers.date || formatDate(audit.auditDate),
+      },
+      { 
+        icon: Clock, 
+        label: "Time", 
+        value: answers.time || "-" 
+      },
+    ].map((item, idx) => (
+      <View key={idx} className="w-full px-2 mb-4 md:w-1/2 lg:w-1/3">
+        <View className="flex-row items-start gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100 min-h-[60px]">
+          <item.icon size={16} color="#94a3b8" className="flex-shrink-0 mt-0.5" />
+          <View className="flex-1 min-w-0">
+            <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              {item.label}
+            </Text>
+            <Text 
+              className="text-sm font-semibold text-slate-800 break-words"
+              numberOfLines={2}
+            >
+              {item.value}
             </Text>
           </View>
-          <View className="flex-row flex-wrap -mx-2">
-            {[
-              {
-                icon: Settings,
-                label: "Department Name",
-                value: departmentName || answers.department || "-",
-              },
-              {
-                icon: Package,
-                label: "Part Name & Number",
-                value: answers.partNumber || "-",
-              },
-              { icon: Wrench, label: "Machine", value: answers.machine || "-" },
-              {
-                icon: User,
-                label: "Auditor Name",
-                value: auditorName || answers.auditorName || "N/A",
-              },
-              {
-                icon: User,
-                label: "Auditee Name",
-                value: auditeeName || answers.auditeeName || "N/A",
-              },
-              {
-                icon: MapPin,
-                label: "Location",
-                value: answers.location || "-",
-              },
-              {
-                icon: Settings,
-                label: "Shift",
-                value: audit.shift || answers.shift || "-",
-              },
-              {
-                icon: Calendar,
-                label: "Date",
-                value: answers.date || formatDate(audit.auditDate),
-              },
-              { icon: Clock, label: "Time", value: answers.time || "-" },
-            ].map((item, idx) => (
-              <View key={idx} className="w-full px-2 mb-4 md:w-1/2 lg:w-1/3">
-                <View className="flex-row items-center gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100">
-                  <item.icon size={16} color="#94a3b8" />
-                  <View>
-                    <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      {item.label}
-                    </Text>
-                    <Text className="text-sm font-semibold text-slate-800">
-                      {item.value}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-            <View className="w-full px-2 mb-4 md:w-1/2 lg:w-1/3">
-              <View className="flex-row items-center gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100">
-                <View className="w-4 h-4" />
-                <View>
-                  <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Status
-                  </Text>
-                  <View
-                    className={`px-2.5 py-1 rounded-lg self-start border ${getStatusBadge(currentStatus)}`}
-                  >
-                    <Text className="text-xs font-medium">
-                      {currentStatus || "DRAFT"}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
+        </View>
+      </View>
+    ))}
+    <View className="w-full px-2 mb-4 md:w-1/2 lg:w-1/3">
+      <View className="flex-row items-start gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100 min-h-[60px]">
+        <View className="w-4 h-4 flex-shrink-0" />
+        <View className="flex-1 min-w-0">
+          <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            Status
+          </Text>
+          <View
+            className={`px-2.5 py-1 rounded-lg self-start border ${getStatusBadge(currentStatus)}`}
+          >
+            <Text className="text-xs font-medium">
+              {currentStatus || "DRAFT"}
+            </Text>
           </View>
         </View>
+      </View>
+    </View>
+  </View>
+</View>
 
         {/* Summary Cards */}
         <View className="flex-row flex-wrap mb-6 -mx-2">
