@@ -789,35 +789,75 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
                   <Switch value={formData.active} onValueChange={(v) => updateField('active', v)} />
                 </View>
 
-                {/* Profile Photo */}
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 8 }}>Profile Photo</Text>
-                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#e5e7eb' }}>
-                    {profilePhoto ? <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} onError={() => setProfilePhoto(null)} /> : <Camera size={24} color="#9ca3af" />}
-                  </View>
-                  <View style={{ gap: 8 }}>
-                    <TouchableOpacity onPress={() => pickImage(setProfilePhoto)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#1e3a5f', borderRadius: 8 }}><Upload size={14} color="white" /><Text style={{ color: 'white', fontSize: 12, marginLeft: 6 }}>Choose Photo</Text></TouchableOpacity>
-                    {Platform.OS !== 'web' && (
-                      <TouchableOpacity onPress={takePhoto} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}>
-                        <Camera size={14} color="#374151" />
-                        <Text style={{ color: '#374151', fontSize: 12, marginLeft: 6 }}>Take Photo</Text>
-                      </TouchableOpacity>
-                    )}
-                    {profilePhoto && <TouchableOpacity onPress={() => setProfilePhoto(null)}><Text style={{ color: '#ef4444', fontSize: 12 }}>Remove</Text></TouchableOpacity>}
-                  </View>
-                </View>
+              {/* Profile Photo */}
+<Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8, marginTop: 8 }}>Profile Photo</Text>
+<View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#e5e7eb' }}>
+    {profilePhoto ? (
+      <Image 
+        source={{ uri: profilePhoto }} 
+        style={{ width: '100%', height: '100%' }} 
+        onError={() => setProfilePhoto(null)} 
+      />
+    ) : (
+      <Camera size={24} color="#9ca3af" />
+    )}
+  </View>
+  <View style={{ gap: 8 }}>
+    <TouchableOpacity 
+      onPress={() => pickImage(setProfilePhoto)} 
+      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#1e3a5f', borderRadius: 8 }}
+    >
+      <Upload size={14} color="white" />
+      <Text style={{ color: 'white', fontSize: 12, marginLeft: 6 }}>Choose Photo</Text>
+    </TouchableOpacity>
+    {Platform.OS !== 'web' && (
+      <TouchableOpacity 
+        onPress={takePhoto} 
+        style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f3f4f6', borderRadius: 8 }}
+      >
+        <Camera size={14} color="#374151" />
+        <Text style={{ color: '#374151', fontSize: 12, marginLeft: 6 }}>Take Photo</Text>
+      </TouchableOpacity>
+    )}
+    {profilePhoto && (
+      <TouchableOpacity onPress={() => setProfilePhoto(null)}>
+        <Text style={{ color: '#ef4444', fontSize: 12 }}>Remove Photo</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+</View>
 
-                {/* Signature */}
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Digital Signature</Text>
-                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-                  <View style={{ width: 140, height: 60, borderRadius: 8, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
-                    {signature ? <Image source={{ uri: signature }} style={{ width: '100%', height: '100%' }} resizeMode="contain" /> : <Text style={{ color: '#9ca3af', fontSize: 11 }}>No signature</Text>}
-                  </View>
-                  <View style={{ gap: 8 }}>
-                    <TouchableOpacity onPress={() => pickImage(setSignature)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#7c3aed', borderRadius: 8 }}><Upload size={14} color="white" /><Text style={{ color: 'white', fontSize: 12, marginLeft: 6 }}>Upload Signature</Text></TouchableOpacity>
-                    {signature && <TouchableOpacity onPress={() => setSignature(null)}><Text style={{ color: '#ef4444', fontSize: 12 }}>Remove</Text></TouchableOpacity>}
-                  </View>
-                </View>
+{/* Signature */}
+<Text style={{ fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Digital Signature</Text>
+<View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+  <View style={{ width: 140, height: 60, borderRadius: 8, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' }}>
+    {signature ? (
+      <Image 
+        source={{ uri: signature }} 
+        style={{ width: '100%', height: '100%' }} 
+        resizeMode="contain"
+        onError={() => setSignature(null)}
+      />
+    ) : (
+      <Text style={{ color: '#9ca3af', fontSize: 11 }}>No signature</Text>
+    )}
+  </View>
+  <View style={{ gap: 8 }}>
+    <TouchableOpacity 
+      onPress={() => pickImage(setSignature)} 
+      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#7c3aed', borderRadius: 8 }}
+    >
+      <Upload size={14} color="white" />
+      <Text style={{ color: 'white', fontSize: 12, marginLeft: 6 }}>Upload Signature</Text>
+    </TouchableOpacity>
+    {signature && (
+      <TouchableOpacity onPress={() => setSignature(null)}>
+        <Text style={{ color: '#ef4444', fontSize: 12 }}>Remove Signature</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+</View>
               </>
             )}
 
