@@ -1693,16 +1693,52 @@ export default function Form5DetailedView({
     ]);
   };
 
-  const handleDelete = async (id: number) => {
-    const scheduleToDelete = auditSchedules.find((s) => s.id === id);
-    if (scheduleToDelete?.detailedApprovalStatus === "APPROVED") {
-      showToast("Cannot delete an approved schedule", "warning");
+ // =====================================================
+// ✅ FIXED: handleDelete function (Works on Web + Mobile)
+// =====================================================
+const handleDelete = (id: number) => {
+  console.log("🗑️ Delete function called for ID:", id);
+  
+  if (!id) {
+    showToast("Invalid schedule ID", "error");
+    return;
+  }
+
+  const scheduleToDelete = auditSchedules.find((s) => s.id === id);
+  console.log("📋 Schedule found:", scheduleToDelete);
+
+  if (!scheduleToDelete) {
+    showToast("Schedule not found", "error");
+    return;
+  }
+
+  // Check if schedule can be deleted
+  if (scheduleToDelete.detailedApprovalStatus === "APPROVED") {
+    showToast("Cannot delete an approved schedule", "warning");
+    return;
+  }
+
+  if (scheduleToDelete.detailedApprovalStatus === "PENDING_APPROVAL") {
+    showToast("Cannot delete a schedule pending approval", "warning");
+    return;
+  }
+
+  // ✅ Confirmation dialog - works on BOTH web and mobile
+  const confirmAndDelete = () => {
+    console.log("🗑️ Confirming delete for schedule:", id);
+    
+    // ✅ WEB: Use browser confirm
+    if (Platform.OS === "web") {
+      const isConfirmed = window.confirm(
+        "Are you sure you want to delete this schedule?"
+      );
+      if (isConfirmed) {
+        performDelete(id);
+      }
       return;
     }
-    if (scheduleToDelete?.detailedApprovalStatus === "PENDING_APPROVAL") {
-      showToast("Cannot delete a schedule pending approval", "warning");
-      return;
-    }
+
+    // ✅ MOBILE: Use Alert
     Alert.alert(
       "Confirm Delete",
       "Are you sure you want to delete this schedule?",
@@ -1711,20 +1747,30 @@ export default function Form5DetailedView({
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await auditScheduleApi.delete(id);
-              showToast("Schedule deleted successfully!", "success");
-              await fetchDetailedSchedules();
-            } catch (error) {
-              console.error("Error deleting schedule:", error);
-              showToast("Failed to delete schedule", "error");
-            }
-          },
+          onPress: () => performDelete(id),
         },
-      ],
+      ]
     );
   };
+
+  confirmAndDelete();
+};
+
+// ✅ Separate function to perform the actual API call
+const performDelete = async (id: number) => {
+  console.log("🗑️ Performing delete for ID:", id);
+  try {
+    await auditScheduleApi.delete(id);
+    showToast("✅ Schedule deleted successfully!", "success");
+    await fetchDetailedSchedules();
+  } catch (error: any) {
+    console.error("❌ Error deleting schedule:", error);
+    showToast(
+      error.response?.data?.message || "Failed to delete schedule",
+      "error"
+    );
+  }
+};
 
   const handleSubmitScheduleForApproval = async (scheduleId: number) => {
     setSubmitting(true);
@@ -3039,19 +3085,26 @@ return (
                                           color={COLORS.accent}
                                         />
                                       </TouchableOpacity>
-                                      <TouchableOpacity
-                                        onPress={() =>
-                                          handleDelete(schedule.id!)
-                                        }
-                                        delayPressIn={0} // ← ADD THIS
-                                        activeOpacity={0.7} // ← ADD THIS
-                                        className="items-center justify-center w-8 h-8 border border-red-200 rounded bg-red-50"
-                                      >
-                                        <Trash2
-                                          size={14}
-                                          color={COLORS.error}
-                                        />
-                                      </TouchableOpacity>
+                                      {/* ✅ DELETE BUTTON - FIXED */}
+<TouchableOpacity
+  onPress={() => {
+    console.log("👆 Delete button clicked for schedule:", schedule.id);
+    handleDelete(schedule.id!);
+  }}
+  activeOpacity={0.7}
+  style={{
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  <Trash2 size={14} color={COLORS.error} />
+</TouchableOpacity>
                                       {isSubmittableDraft(
                                         schedule.detailedApprovalStatus,
                                       ) && (
