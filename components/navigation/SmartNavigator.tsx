@@ -42,58 +42,98 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     }
   };
 
-  const isActive = (item: any) => {
-    const itemBaseRoute = item.route.split("?")[0];
-    const currentPath = "/" + segments.filter(Boolean).join("/");
+  // ✅ FIXED: Extract the base route from URL
+  const getBaseRoute = (route: string) => {
+    // Remove query params
+    const base = route.split("?")[0];
+    // Remove expo router groups like (app)/(tabs)/
+    const clean = base.replace(/\([^)]*\)\//g, "");
+    return clean;
+  };
 
-    // ✅ ROBUST PARAM EXTRACTION: Digs through deeply nested Expo Router params
-    const getParam = (key: string) => {
-      const p = params as any;
-
-      // Level 1: Direct param
-      if (p[key]) return Array.isArray(p[key]) ? p[key][0] : p[key];
-
-      // Level 2: Nested inside params.params
-      if (p.params && typeof p.params === "object") {
-        if (p.params[key])
-          return Array.isArray(p.params[key])
-            ? p.params[key][0]
-            : p.params[key];
-
-        // Level 3: Deeply nested (common in Modals/Drawers)
-        if (p.params.params && typeof p.params.params === "object") {
-          if (p.params.params[key])
-            return Array.isArray(p.params.params[key])
-              ? p.params.params[key][0]
-              : p.params.params[key];
+  // ✅ FIXED: Extract tab/section from URL
+  const getParam = (key: string) => {
+    const p = params as any;
+    
+    // Level 1: Direct param
+    if (p[key]) return Array.isArray(p[key]) ? p[key][0] : p[key];
+    
+    // Level 2: Nested inside params.params
+    if (p.params && typeof p.params === "object") {
+      if (p.params[key]) {
+        return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
+      }
+      
+      // Level 3: Deeply nested
+      if (p.params.params && typeof p.params.params === "object") {
+        if (p.params.params[key]) {
+          return Array.isArray(p.params.params[key]) 
+            ? p.params.params[key][0] 
+            : p.params.params[key];
         }
       }
-      return undefined;
-    };
-
-    const currentTab = getParam("tab");
-    const currentSection = getParam("section");
-
-    // Optional: Uncomment to verify it finally found the tab!
-    // console.log(`[Check] ${item.title} | Path: ${currentPath} | Tab: ${currentTab} === ${item.tab}`);
-
-    // 1. Tab-based navigation
-    if (item.tab) {
-      const pathMatch = currentPath.includes(itemBaseRoute);
-      const tabMatch = String(currentTab) === String(item.tab);
-      return pathMatch && tabMatch;
     }
-
-    // 2. Section-based navigation
-    if (item.action) {
-      const pathMatch = currentPath.includes(itemBaseRoute);
-      const sectionMatch = String(currentSection) === String(item.action);
-      return pathMatch && sectionMatch;
+    
+    // Level 4: Check URL string directly
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has(key)) {
+        return urlParams.get(key);
+      }
     }
-
-    // 3. Regular routes
-    return currentPath.includes(itemBaseRoute);
+    
+    return undefined;
   };
+
+  // ✅ FIXED: Better isActive function
+  // ✅ FIXED: Only highlight the item that matches BOTH route AND tab
+const isActive = (item: any): boolean => {
+  // Get current path
+  const currentPath = "/" + segments.filter(Boolean).join("/");
+  
+  // Get clean base route for the navigation item
+  const itemBaseRoute = getBaseRoute(item.route);
+  
+  // Get current tab from URL
+  const currentTab = getParam("tab");
+  const currentSection = getParam("section");
+
+  // ✅ CASE 1: Items with TAB parameter (most common)
+  if (item.tab) {
+    // Must match BOTH: base route AND tab
+    const routeMatches = currentPath.includes(itemBaseRoute) || 
+                         currentPath === itemBaseRoute;
+    const tabMatches = String(currentTab) === String(item.tab);
+    
+    // ✅ BOTH must be true for active state
+    return routeMatches && tabMatches;
+  }
+  
+  // ✅ CASE 2: Items with ACTION parameter (for Master/Admin)
+  if (item.action) {
+    const routeMatches = currentPath.includes(itemBaseRoute) || 
+                         currentPath === itemBaseRoute;
+    const sectionMatches = String(currentSection) === String(item.action);
+    return routeMatches && sectionMatches;
+  }
+
+  // ✅ CASE 3: Items with NO tab/action (like Calendar, Dashboard Home)
+  // These should only be active when exactly on that route
+  if (currentPath === itemBaseRoute) {
+    return true;
+  }
+  
+  // ✅ CASE 4: Partial match for nested routes
+  if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
+    // For items like "Dashboard" that don't have tabs
+    // BUT only if no tab is selected (prevents double highlighting)
+    if (!currentTab && !currentSection) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
   const getIcon = (iconName: string) => {
     const iconMap: any = {
@@ -129,9 +169,15 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       FilePlus: Icons.FilePlus,
       LogOut: Icons.LogOut,
       Search: Icons.Search,
+      List: Icons.List,
     };
     return iconMap[iconName] || Icons.Circle;
   };
+
+  // ✅ DEBUG: Remove in production
+  console.log("📍 Current path:", "/" + segments.filter(Boolean).join("/"));
+  console.log("📍 Current tab:", getParam("tab"));
+  console.log("📍 Current section:", getParam("section"));
 
   return (
     <View
@@ -166,6 +212,9 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
         {navigationItems.map((item, index) => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
+          
+          // ✅ DEBUG: Remove in production
+          console.log(`📌 ${item.title}: active=${active}, tab=${item.tab || 'none'}`);
 
           return (
             <TouchableOpacity
@@ -180,7 +229,6 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
                 marginHorizontal: 12,
                 marginBottom: 8,
                 borderRadius: 12,
-                // ✅ Exact match to React web active state
                 backgroundColor: active ? "#2563EB" : "transparent",
                 shadowColor: active ? "#2563EB" : "transparent",
                 shadowOffset: { width: 0, height: 4 },
