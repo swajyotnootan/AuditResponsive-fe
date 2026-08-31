@@ -1453,175 +1453,241 @@ const getDateLabel = (dateString?: string) => {
 
   // ========== MAIN RENDER ==========
   return (
-    <View className="flex-1 bg-white">
-      {/* Header */}
-            {/* Header */}
-            {/* Header with Safe Area Spacing */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        backgroundColor: '#1e3a8a', 
-        paddingHorizontal: 12, 
-        paddingTop: insets.top + 10,  // ✅ Space for status bar / notch
-        paddingBottom: 10,
-      }}>
-        
-        {/* Left Side: Back & Title */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
-          {onBack && (
-            <TouchableOpacity onPress={onBack} style={{ padding: 4, marginRight: 4 }}>
-              <ArrowLeft size={20} color="white" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity 
-            onPress={() => setShowMembersSidebar(!showMembersSidebar)} 
-            style={{ flex: 1 }}
-          >
-            <Text style={{ color: 'white', fontWeight: '600', fontSize: 15 }} numberOfLines={1}>
-              {displayGroupName}
-            </Text>
-            <Text style={{ color: '#bfdbfe', fontSize: 11 }} numberOfLines={1}>
-              {Array.isArray(groupMembers) ? groupMembers.length : 0} members • {Array.isArray(posts) ? posts.length : 0} messages
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Right Side: Scrollable Icons */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={{ flex: 0.4 }}
-          contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 4, }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      // ✅ TERNARY 1: iOS needs 'padding', Android needs 'height' (to push content up)
+      behavior={Platform.OS === "ios" ? "position" : "height"}
+      keyboardVerticalOffset={isInDrawer ? 0 : 60}
+    >
+      <View className="flex-1 bg-white">
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "#1e3a8a",
+            paddingHorizontal: 12,
+            paddingTop: insets.top + 10, // ✅ Space for status bar / notch
+            paddingBottom: 10,
+          }}
         >
-          <TouchableOpacity onPress={() => setShowEmailModal(true)} style={{ padding: 6 }}>
-            <Mail size={18} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowMembersSidebar(!showMembersSidebar)} style={{ padding: 6 }}>
-            <Users size={18} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setIsSearching(!isSearching)} style={{ padding: 6 }}>
-            <Search size={18} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowSettingsModal(true)} style={{ padding: 6 }}>
-            <Settings size={18} color="white" />
-          </TouchableOpacity>
-        </ScrollView>
-
-      </View>
-
-      {/* Search Bar */}
-      {isSearching && <SearchBar />}
-
-      {/* Status Bar */}
-      {!isSearching && (
-        <View className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex-row justify-between items-center">
-          <View className="flex-row items-center gap-2">
-            <View className="w-5 h-5 rounded-full bg-gray-200 items-center justify-center">
-              <User size={10} color="#6b7280" />
-            </View>
-            <Text className="text-xs font-medium text-gray-600">{displayName}</Text>
-            {isTyping && <Text className="text-xs text-blue-600">typing...</Text>}
-            {unreadCount > 0 && (
-              <View className="bg-red-500 rounded-full px-2 py-0.5">
-                <Text className="text-white text-xs">{unreadCount} new</Text>
-              </View>
+          {/* Left Side: Back & Title */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              flex: 1,
+              marginRight: 8,
+            }}
+          >
+            {onBack && (
+              <TouchableOpacity
+                onPress={onBack}
+                style={{ padding: 4, marginRight: 4 }}
+              >
+                <ArrowLeft size={20} color="white" />
+              </TouchableOpacity>
             )}
-          </View>
-          <View className="flex-row items-center gap-2">
-            {activeUsers.length > 0 && <Text className="text-green-600 text-xs">{activeUsers.length} in call</Text>}
-            <TouchableOpacity onPress={loadPosts}>
-              <RefreshCw size={14} color="#6b7280" />
+            <TouchableOpacity
+              onPress={() => setShowMembersSidebar(!showMembersSidebar)}
+              style={{ flex: 1 }}
+            >
+              <Text
+                style={{ color: "white", fontWeight: "600", fontSize: 15 }}
+                numberOfLines={1}
+              >
+                {displayGroupName}
+              </Text>
+              <Text
+                style={{ color: "#bfdbfe", fontSize: 11 }}
+                numberOfLines={1}
+              >
+                {Array.isArray(groupMembers) ? groupMembers.length : 0} members
+                • {Array.isArray(posts) ? posts.length : 0} messages
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
 
-      {/* Main Content */}
-      <View className="flex-1 flex-row">
-        <View className="flex-1">
-          {loading && posts.length === 0 ? (
-            <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color="#00529B" />
-              <Text className="text-gray-500 mt-3">Loading messages...</Text>
+          {/* Right Side: Scrollable Icons */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 0.4 }}
+            contentContainerStyle={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowEmailModal(true)}
+              style={{ padding: 6 }}
+            >
+              <Mail size={18} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowMembersSidebar(!showMembersSidebar)}
+              style={{ padding: 6 }}
+            >
+              <Users size={18} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setIsSearching(!isSearching)}
+              style={{ padding: 6 }}
+            >
+              <Search size={18} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowSettingsModal(true)}
+              style={{ padding: 6 }}
+            >
+              <Settings size={18} color="white" />
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Search Bar */}
+        {isSearching && <SearchBar />}
+
+        {/* Status Bar */}
+        {!isSearching && (
+          <View className="flex-row items-center justify-between px-3 py-2 border-b border-gray-200 bg-gray-50">
+            <View className="flex-row items-center gap-2">
+              <View className="items-center justify-center w-5 h-5 bg-gray-200 rounded-full">
+                <User size={10} color="#6b7280" />
+              </View>
+              <Text className="text-xs font-medium text-gray-600">
+                {displayName}
+              </Text>
+              {isTyping && (
+                <Text className="text-xs text-blue-600">typing...</Text>
+              )}
+              {unreadCount > 0 && (
+                <View className="bg-red-500 rounded-full px-2 py-0.5">
+                  <Text className="text-xs text-white">{unreadCount} new</Text>
+                </View>
+              )}
             </View>
-          ) : error ? (
-            <View className="flex-1 items-center justify-center p-4">
-              <AlertCircle size={32} color="#ef4444" />
-              <Text className="text-red-500 mt-2 text-center">{error}</Text>
-              <TouchableOpacity onPress={loadPosts} className="mt-3 bg-blue-900 px-4 py-2 rounded-lg">
-                <Text className="text-white text-sm">Retry</Text>
+            <View className="flex-row items-center gap-2">
+              {activeUsers.length > 0 && (
+                <Text className="text-xs text-green-600">
+                  {activeUsers.length} in call
+                </Text>
+              )}
+              <TouchableOpacity onPress={loadPosts}>
+                <RefreshCw size={14} color="#6b7280" />
               </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              ref={flatListRef}
-              data={visiblePosts}
-               keyboardShouldPersistTaps="handled"
+          </View>
+        )}
+
+        {/* Main Content */}
+        <View className="flex-row flex-1">
+          <View style={{ flex: 1, flexDirection: "column" }}>
+            {loading && posts.length === 0 ? (
+              <View className="items-center justify-center flex-1">
+                <ActivityIndicator size="large" color="#00529B" />
+                <Text className="mt-3 text-gray-500">Loading messages...</Text>
+              </View>
+            ) : error ? (
+              <View className="items-center justify-center flex-1 p-4">
+                <AlertCircle size={32} color="#ef4444" />
+                <Text className="mt-2 text-center text-red-500">{error}</Text>
+                <TouchableOpacity
+                  onPress={loadPosts}
+                  className="px-4 py-2 mt-3 bg-blue-900 rounded-lg"
+                >
+                  <Text className="text-sm text-white">Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                ref={flatListRef}
+                data={visiblePosts}
+                keyboardShouldPersistTaps="handled"
                 keyExtractor={(item, index) => item?.id || String(index)}
-              renderItem={({ item, index }) => {
-                let dateLabel = null;
-                if (index === 0) {
-                  dateLabel = getDateLabel(item.createdAt);
-                } else {
-                  const prevItem = visiblePosts[index - 1];
-                  if (prevItem) {
-                    const prevDate = new Date(prevItem.createdAt).toDateString();
-                    const currDate = new Date(item.createdAt).toDateString();
-                    if (prevDate !== currDate) {
-                      dateLabel = getDateLabel(item.createdAt);
+                renderItem={({ item, index }) => {
+                  let dateLabel = null;
+                  if (index === 0) {
+                    dateLabel = getDateLabel(item.createdAt);
+                  } else {
+                    const prevItem = visiblePosts[index - 1];
+                    if (prevItem) {
+                      const prevDate = new Date(
+                        prevItem.createdAt,
+                      ).toDateString();
+                      const currDate = new Date(item.createdAt).toDateString();
+                      if (prevDate !== currDate) {
+                        dateLabel = getDateLabel(item.createdAt);
+                      }
                     }
                   }
-                }
 
-                return (
-                  <>
-                    {dateLabel && (
-                      <View style={{ alignItems: 'center', marginVertical: 12 }}>
-                        <View style={{ backgroundColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '500' }}>{dateLabel}</Text>
+                  return (
+                    <>
+                      {dateLabel && (
+                        <View
+                          style={{ alignItems: "center", marginVertical: 12 }}
+                        >
+                          <View
+                            style={{
+                              backgroundColor: "#e5e7eb",
+                              paddingHorizontal: 12,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#6b7280",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {dateLabel}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    )}
-                    <ThreadCard
-                      thread={item}
-                      currentUser={currentUser}
-                      currentUsername={currentUserEmail}
-                      allUsers={allUsers}
-                      reactions={getReactionsForThread(item.id)}
-                      onReact={handleReactToPost}
-                      onEdit={setEditingPost}
-                      onDelete={handleDeletePost}
-                      onRetry={handleRetry}
-                    />
-                  </>
-                );
-              }}
-              className="flex-1 bg-gray-50"
-              contentContainerStyle={{ paddingVertical: 8 }}
-              ListEmptyComponent={
-                <View className="items-center py-20">
-                  <MessageCircle size={48} color="#d1d5db" />
-                  <Text className="text-gray-400 mt-3">
-                    {isSearching ? "No messages found" : "No messages yet"}
-                  </Text>
-                </View>
-              }
-              onContentSizeChange={() => {
-                if (!isSearching)
-                  flatListRef.current?.scrollToEnd({ animated: false });
-              }}
-            />
-          )}
+                      )}
+                      <ThreadCard
+                        thread={item}
+                        currentUser={currentUser}
+                        currentUsername={currentUserEmail}
+                        allUsers={allUsers}
+                        reactions={getReactionsForThread(item.id)}
+                        onReact={handleReactToPost}
+                        onEdit={setEditingPost}
+                        onDelete={handleDeletePost}
+                        onRetry={handleRetry}
+                      />
+                    </>
+                  );
+                }}
+                className="flex-1"
+                contentContainerStyle={{ paddingVertical: 8, flexGrow: 1 }}
+                ListEmptyComponent={
+                  <View className="items-center py-20">
+                    <MessageCircle size={48} color="#d1d5db" />
+                    <Text className="mt-3 text-gray-400">
+                      {isSearching ? "No messages found" : "No messages yet"}
+                    </Text>
+                  </View>
+                }
+                onContentSizeChange={() => {
+                  if (!isSearching)
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                }}
+              />
+            )}
 
-          {/* Composer */}
-          {/* Composer */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-            style={{ width: "100%" }}
-          >
-            <View className="bg-white border-t border-gray-200">
+            <View
+              style={{
+                backgroundColor: "white",
+                borderTopWidth: 1,
+                borderTopColor: "#e5e7eb",
+                // paddingBottom: Platform.OS === "ios" && isInDrawer ? 8 : 4,
+              }}
+            >
               <ThreadComposer
                 groupId={groupId}
                 onThreadCreated={handleComposerSubmit}
@@ -1632,36 +1698,36 @@ const getDateLabel = (dateString?: string) => {
                 onCancelEdit={() => setEditingPost(null)}
               />
             </View>
-          </KeyboardAvoidingView>
+          </View>
+
+          {/* Members Sidebar */}
+          {showMembersSidebar && <MembersSidebar />}
         </View>
 
-        {/* Members Sidebar */}
-        {showMembersSidebar && <MembersSidebar />}
-      </View>
-
-      {/* Modals */}
-      <IncomingCallModal />
-      <MediaSettingsModal
-        visible={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-        selectedMic={selectedMic}
-        selectedCamera={selectedCamera}
-        selectedSpeaker={selectedSpeaker}
-        setSelectedMic={setSelectedMic}
-        setSelectedCamera={setSelectedCamera}
-        setSelectedSpeaker={setSelectedSpeaker}
-      />
-
-      {/* Email Notification Modal */}
-      {showEmailModal && (
-        <EmailNotificationModal
-          isOpen={true}
-          onClose={() => setShowEmailModal(false)}
-          inspectionId={inspectionId || String(groupId)}
-          onProceed={handleProceedAfterEmail}
+        {/* Modals */}
+        <IncomingCallModal />
+        <MediaSettingsModal
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          selectedMic={selectedMic}
+          selectedCamera={selectedCamera}
+          selectedSpeaker={selectedSpeaker}
+          setSelectedMic={setSelectedMic}
+          setSelectedCamera={setSelectedCamera}
+          setSelectedSpeaker={setSelectedSpeaker}
         />
-      )}
-    </View>
+
+        {/* Email Notification Modal */}
+        {showEmailModal && (
+          <EmailNotificationModal
+            isOpen={true}
+            onClose={() => setShowEmailModal(false)}
+            inspectionId={inspectionId || String(groupId)}
+            onProceed={handleProceedAfterEmail}
+          />
+        )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

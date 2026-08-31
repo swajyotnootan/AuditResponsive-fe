@@ -2,18 +2,15 @@
 // COMPLETE FIXED VERSION WITH ALL FEATURES
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Icon from "react-native-vector-icons/Feather";
 import { forumApi } from "../../services/auditScheduleApi";
 import ForumThreadView from "../forum/ForumThreadView";
 import { User } from "../types/audit.types";
@@ -450,73 +447,40 @@ const AuditCheckSheetNCRForumModal: React.FC<
   if (!isOpen) return null;
 
   return (
-    <>
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="none"
-        onRequestClose={onClose}
-        statusBarTranslucent
-      >
-        <View style={styles.modalContainer}>
-          <TouchableOpacity
-            style={styles.backdrop}
-            activeOpacity={1}
-            onPress={onClose}
-          />
-
-          
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
-            style={styles.drawerContainer}
-          >
-  
-  
-            <View style={[styles.drawer, { paddingBottom: insets.bottom }]}>
-              {/* Header */}
-
-              {loading && (
-                <View style={styles.centerContent}>
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                  <Text style={styles.loadingText}>Loading discussions...</Text>
-                </View>
-              )}
-
-              {error && (
-                <View style={styles.centerContent}>
-                  <Icon name="alert-circle" size={32} color="#EF4444" />
-                  <Text style={styles.errorTitle}>Failed to load forum</Text>
-                  <Text style={styles.errorText}>{error}</Text>
-                  <TouchableOpacity
-                    style={styles.retryButton}
-                    onPress={initializeAuditForum}
-                  >
-                    <Text style={styles.retryButtonText}>Try Again</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {!loading && !error && forumReady && forumGroupId && (
-                <View style={styles.forumContent}>
-                  <ForumThreadView
-                    groupId={forumGroupId}
-                    groupName={`${auditNumber}`}
-                    isInDrawer={true}
-                    setForumDrawerOpen={onClose}
-                    username={user?.email || ""}
-                    currentUser={user}
-                    allUsers={allUsers}
-                    onBack={onClose}
-                    memberEmails={forumMembers}
-                  />
-                </View>
-              )}
-            </View>
-          </KeyboardAvoidingView>
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.modalContainer}>
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View style={styles.drawerContainer}>
+          <View style={[styles.drawer]}>
+            {!loading && !error && forumReady && forumGroupId && (
+              <View style={styles.forumWrapper}>
+                <ForumThreadView
+                  groupId={forumGroupId}
+                  groupName={`${auditNumber}`}
+                  isInDrawer={true} // ✅ This flag is the key!
+                  setForumDrawerOpen={onClose}
+                  username={user?.email || ""}
+                  currentUser={user}
+                  allUsers={allUsers}
+                  onBack={onClose}
+                  memberEmails={forumMembers}
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </Modal>
-    </>
+      </View>
+    </Modal>
   );
 };
 
@@ -571,6 +535,8 @@ const styles = StyleSheet.create({
     },
   }),
 },
+
+ forumWrapper: { flex: 1, minHeight: 0 },
 
   // Header Styles
   header: {

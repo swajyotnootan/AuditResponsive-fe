@@ -1779,8 +1779,8 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "white",
     paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
+    paddingTop: 8, // ✅ Keep top padding for breathing room
+    paddingBottom: 4,  },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
