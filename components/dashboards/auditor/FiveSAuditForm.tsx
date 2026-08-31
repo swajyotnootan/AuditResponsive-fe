@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditAPI } from "@/services/api";
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import {
   auditScheduleApi,
   EvidenceFile,
@@ -186,6 +187,15 @@ export default function FiveSAuditForm(props: any) {
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
+  const {
+  markDirty,
+  resetDirty,
+  confirmDiscard,
+  showDiscardModal,
+  cancelDiscard,
+  discardChanges,
+} = useUnsavedChanges();
+
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // ✅ Supports both Expo Router (params) and Conditional Rendering (props)

@@ -568,21 +568,22 @@ export default function Form7View({ initialParams, onClose }: any) {
 
   // ✅ FIXED: Function to go back/dismiss - same as Back button
   // ✅ FIXED: Function to go back/dismiss - same as Back button
+// ✅ FIXED: Properly navigate back to parent dashboard
 const handleGoBack = () => {
   // Close modal first if it's open
   if (showSuccessModal) {
     setShowSuccessModal(false);
   }
   
-  // Then navigate back
+  // ✅ If onClose is provided (coming from AuditorDashboard via onRaiseNcr), call it to close Form7
   if (onClose && typeof onClose === 'function') {
     onClose();
   } else {
+    // Fallback: Navigate to dashboard based on role
     const dashboardPath = getDashboardPath(user) || "/";
     router.replace(dashboardPath as any);
   }
 };
-
   // ============================================================================
   // SUCCESS MODAL
   // ============================================================================
@@ -697,27 +698,13 @@ const handleGoBack = () => {
 <TouchableOpacity
   onPress={() => {
     setShowSuccessModal(false);
-    // Navigate directly without setTimeout
+    // ✅ Close the form and go back to parent dashboard
     if (onClose && typeof onClose === 'function') {
       onClose();
     } else {
-      // ✅ Route to NCR view based on role
-      const role = user?.role?.toUpperCase() || "";
-      let ncrRoute = "/";
-      
-      if (role === "AUDITEE") {
-        ncrRoute = "/(app)/(tabs)/auditee?tab=my-ncrs";
-      } else if (role === "AUDITOR") {
-        ncrRoute = "/(app)/(tabs)/auditor?tab=ncr-list";
-      } else if (role === "AUDIT_MANAGER") {
-        ncrRoute = "/(app)/(tabs)/audit-manager?tab=ncr";
-      } else if (role === "LEAD_AUDITOR") {
-        ncrRoute = "/(app)/(tabs)/lead-auditor?tab=ncrs";
-      } else {
-        ncrRoute = getDashboardPath(user) || "/";
-      }
-      
-      router.replace(ncrRoute as any);
+      // ✅ Use replace to clear navigation stack
+      const dashboardPath = getDashboardPath(user) || "/";
+      router.replace(dashboardPath as any);
     }
   }}
   className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"

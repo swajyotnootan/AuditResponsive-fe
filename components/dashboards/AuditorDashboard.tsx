@@ -2236,19 +2236,20 @@ const renderActiveForm = () => {
 };
 
   // ✅ ADD THIS NEW FUNCTION
-  const renderActiveNcrForm = () => {
-    if (!activeNcrConfig) return null;
+  // ✅ FIXED: Properly close NCR form and return to dashboard
+const renderActiveNcrForm = () => {
+  if (!activeNcrConfig) return null;
 
-    return (
-      <Form7View
-        initialParams={activeNcrConfig}
-        onClose={() => {
-          setActiveNcrConfig(null); // Closes the form
-          handleRefresh(); // Refreshes dashboard to update NCR stats/lists
-        }}
-      />
-    );
-  };
+  return (
+    <Form7View
+      initialParams={activeNcrConfig}
+      onClose={() => {
+        setActiveNcrConfig(null); // ✅ This clears the NCR form state
+        handleRefresh(); // ✅ Refresh the dashboard data
+      }}
+    />
+  );
+};
 
   const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
