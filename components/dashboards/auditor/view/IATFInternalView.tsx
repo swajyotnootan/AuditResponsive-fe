@@ -811,8 +811,7 @@ export default function IATFInternalView({
           )}
         </View>
 
-        {/* Audit Information */}
-        {/* Audit Information */}
+{/* Audit Information */}
 <View className="p-6 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
   <View className="flex-row items-center gap-2 mb-4">
     <FileText size={18} color={NAVBAR_COLORS.primary} />
@@ -845,7 +844,7 @@ export default function IATFInternalView({
       {
         icon: MapPin,
         label: "Location",
-        value: (answers.location || "-").substring(0, 20), // ✅ Truncate long location names
+        value: answers.location || "-",
       },
       {
         icon: Clock,
@@ -855,12 +854,12 @@ export default function IATFInternalView({
       {
         icon: Building,
         label: "Department",
-        value: (departmentName || answers.departmentName || "-").substring(0, 20), // ✅ Truncate long department names
+        value: departmentName || answers.departmentName || "-",
       },
       {
         icon: Layers,
         label: "Process",
-        value: (processName || answers.processName || "-").substring(0, 20), // ✅ Truncate long process names
+        value: processName || answers.processName || "-",
       },
     ].map((item, idx) => (
       <View key={idx} className="w-full px-2 mb-4 md:w-1/2 lg:w-1/4">
@@ -871,8 +870,9 @@ export default function IATFInternalView({
               {item.label}
             </Text>
             <Text 
-              className="text-sm font-semibold text-slate-800 break-words"
+              className="text-sm font-semibold text-slate-800"
               numberOfLines={2}
+              ellipsizeMode="tail"
             >
               {item.value}
             </Text>
@@ -882,9 +882,9 @@ export default function IATFInternalView({
     ))}
     {finalPercentage > 0 && (
       <View className="w-full px-2 mb-4 md:w-1/2 lg:w-1/4">
-        <View className="flex-row items-center gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100">
-          <Award size={16} color="#94a3b8" />
-          <View>
+        <View className="flex-row items-start gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100 min-h-[60px]">
+          <Award size={16} color="#94a3b8" className="flex-shrink-0 mt-0.5" />
+          <View className="flex-1 min-w-0">
             <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Score
             </Text>

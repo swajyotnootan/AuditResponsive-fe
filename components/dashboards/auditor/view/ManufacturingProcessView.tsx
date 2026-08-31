@@ -758,6 +758,7 @@ export default function ManufacturingProcessView({
 
         {/* Audit Information */}
         {/* Audit Information */}
+{/* Audit Information */}
 <View className="p-6 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
   <View className="flex-row items-center gap-2 mb-4">
     <Settings size={18} color={NAVBAR_COLORS.primary} />
@@ -770,32 +771,32 @@ export default function ManufacturingProcessView({
       {
         icon: Settings,
         label: "Department Name",
-        value: (departmentName || answers.department || "-").substring(0, 25),
+        value: departmentName || answers.department || "-",
       },
       {
         icon: Package,
         label: "Part Name & Number",
-        value: (answers.partNumber || "-").substring(0, 25),
+        value: answers.partNumber || "-",
       },
       {
         icon: Wrench, 
         label: "Machine", 
-        value: (answers.machine || "-").substring(0, 25) 
+        value: answers.machine || "-",
       },
       {
         icon: User,
         label: "Auditor Name",
-        value: (auditorName || answers.auditorName || "N/A").substring(0, 25),
+        value: auditorName || answers.auditorName || "N/A",
       },
       {
         icon: User,
         label: "Auditee Name",
-        value: (auditeeName || answers.auditeeName || "N/A").substring(0, 25),
+        value: auditeeName || answers.auditeeName || "N/A",
       },
       {
         icon: MapPin,
         label: "Location",
-        value: (answers.location || "-").substring(0, 25),
+        value: answers.location || "-",
       },
       {
         icon: Settings,
@@ -810,7 +811,7 @@ export default function ManufacturingProcessView({
       { 
         icon: Clock, 
         label: "Time", 
-        value: answers.time || "-" 
+        value: answers.time || "-",
       },
     ].map((item, idx) => (
       <View key={idx} className="w-full px-2 mb-4 md:w-1/2 lg:w-1/3">
@@ -821,8 +822,9 @@ export default function ManufacturingProcessView({
               {item.label}
             </Text>
             <Text 
-              className="text-sm font-semibold text-slate-800 break-words"
+              className="text-sm font-semibold text-slate-800"
               numberOfLines={2}
+              ellipsizeMode="tail"
             >
               {item.value}
             </Text>
