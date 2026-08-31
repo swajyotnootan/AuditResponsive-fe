@@ -316,27 +316,10 @@ class NotificationSound {
 // ROUTE MAPPER HELPER FUNCTIONS
 // ==========================================
 
-// ✅ Helper function to get default route for each role
-const getDefaultRouteForRole = (role: string | null): string => {
-  const roleUpper = (role || '').toUpperCase();
-  
-  switch (roleUpper) {
-    case 'TOP_MANAGEMENT':
-      return '/(app)/(tabs)/top-management?tab=overview';
-    case 'AUDIT_MANAGER':
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    case 'AUDITOR':
-      return '/(app)/(tabs)/auditor?tab=my-audits';
-    case 'AUDITEE':
-      return '/(app)/(tabs)/auditee?tab=my-audits';
-    case 'MASTER':
-      return '/(app)/(tabs)/master?section=user-management';
-    case 'LEAD_AUDITOR':
-      return '/(app)/(tabs)/lead-auditor?tab=overview';
-    default:
-      return '/(app)/(tabs)';
-  }
-};
+// ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
+// ==========================================
+// TOP MANAGEMENT ROUTE MAPPER (FIXED)
+// ==========================================
 
 // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
 const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
@@ -359,51 +342,87 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   if (roleUpper === 'TOP_MANAGEMENT') {
     console.log('📍 Top Management route mapping for:', backendRoute);
     
-    // Check for specific tabs
-    if (routeLower.includes('annual') || routeLower.includes('form3')) {
+    // ✅ First check: Direct form mappings (highest priority)
+    // Annual Plan → form3
+    if (routeLower.includes('form3') || routeLower.includes('annual') || 
+        routeLower.includes('annual-plan') || routeLower.includes('annualplan')) {
+      console.log('   → Routing to Annual Plan (tab=annual)');
       return '/(app)/(tabs)/top-management?tab=annual';
     }
-    if (routeLower.includes('dept') || routeLower.includes('form4')) {
+    
+    // Department Plan → form4
+    if (routeLower.includes('form4') || routeLower.includes('dept') || 
+        routeLower.includes('department-plan') || routeLower.includes('deptplan')) {
+      console.log('   → Routing to Department Plan (tab=dept)');
       return '/(app)/(tabs)/top-management?tab=dept';
     }
-    if (routeLower.includes('week') || routeLower.includes('form5-dashboard') || routeLower.includes('form5')) {
+    
+    // Week Schedule → form5-dashboard
+    if (routeLower.includes('form5-dashboard') || routeLower.includes('week') || 
+        routeLower.includes('week-schedule') || routeLower.includes('weekschedule')) {
+      console.log('   → Routing to Week Schedule (tab=week)');
       return '/(app)/(tabs)/top-management?tab=week';
     }
-    if (routeLower.includes('daily') || routeLower.includes('form5-detailed')) {
+    
+    // Daily Schedule → form5-detailed
+    if (routeLower.includes('form5-detailed') || routeLower.includes('daily') || 
+        routeLower.includes('daily-schedule') || routeLower.includes('dailyschedule')) {
+      console.log('   → Routing to Daily Schedule (tab=daily)');
       return '/(app)/(tabs)/top-management?tab=daily';
     }
     
-    // Check for exact route matches
+    // ✅ Check for form5 (generic)
+    if (routeLower.includes('form5')) {
+      console.log('   → Routing to Week Schedule (tab=week) - default form5');
+      return '/(app)/(tabs)/top-management?tab=week';
+    }
+    
+    // ✅ Calendar route
+    if (routeLower.includes('calendar')) {
+      console.log('   → Routing to Calendar');
+      return '/(app)/(tabs)/calendar';
+    }
+    
+    // ✅ NCR routes - go to overview
+    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
+      console.log('   → Routing to Overview (NCR related)');
+      return '/(app)/(tabs)/top-management?tab=overview';
+    }
+    
+    // ✅ Audit Manager routes - redirect to Top Management overview
+    if (routeLower.includes('audit-manager') || routeLower.includes('/audit-manager')) {
+      console.log('   → Routing to Overview (Audit Manager redirect)');
+      return '/(app)/(tabs)/top-management?tab=overview';
+    }
+    
+    // ✅ Check for top-management route with existing tab
     if (cleanRoute === '/top-management' || cleanRoute === 'top-management' || 
         routeLower.includes('/top-management') || routeLower.includes('top-management')) {
+      // Check if there's a tab parameter
       if (backendRoute.includes('tab=')) {
         const tabMatch = backendRoute.match(/tab=([^&]+)/);
         if (tabMatch) {
           const tab = tabMatch[1];
+          console.log(`   → Routing to Top Management with existing tab: ${tab}`);
+          // Valid tabs for Top Management
           if (tab === 'annual' || tab === 'dept' || tab === 'week' || tab === 'daily' || tab === 'overview') {
             return `/(app)/(tabs)/top-management?tab=${tab}`;
           }
         }
       }
+      console.log('   → Routing to Overview (default)');
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
-    // NCR routes for Top Management
-    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
+    // ✅ Check if route contains 'schedule' or 'plan' but not matched above
+    if (routeLower.includes('schedule') || routeLower.includes('plan')) {
+      // Default to overview for any other schedule/plan related notifications
+      console.log('   → Routing to Overview (schedule/plan default)');
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
-    // Calendar route
-    if (routeLower.includes('calendar')) {
-      return '/(app)/(tabs)/calendar';
-    }
-    
-    // Audit Manager routes - redirect to Top Management overview
-    if (routeLower.includes('audit-manager') || routeLower.includes('/audit-manager')) {
-      return '/(app)/(tabs)/top-management?tab=overview';
-    }
-    
-    // Default fallback for Top Management
+    // ✅ Default fallback for Top Management
+    console.log('   → Routing to Overview (default fallback)');
     return '/(app)/(tabs)/top-management?tab=overview';
   }
 
@@ -535,6 +554,28 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   // 🔄 FALLBACK - Role-specific default dashboards
   // ==========================================
   return getDefaultRouteForRole(role);
+};
+
+// ✅ Helper function to get default route for each role
+const getDefaultRouteForRole = (role: string | null): string => {
+  const roleUpper = (role || '').toUpperCase();
+  
+  switch (roleUpper) {
+    case 'TOP_MANAGEMENT':
+      return '/(app)/(tabs)/top-management?tab=overview';
+    case 'AUDIT_MANAGER':
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    case 'AUDITOR':
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    case 'AUDITEE':
+      return '/(app)/(tabs)/auditee?tab=my-audits';
+    case 'MASTER':
+      return '/(app)/(tabs)/master?section=user-management';
+    case 'LEAD_AUDITOR':
+      return '/(app)/(tabs)/lead-auditor?tab=overview';
+    default:
+      return '/(app)/(tabs)';
+  }
 };
 
 // ==========================================
