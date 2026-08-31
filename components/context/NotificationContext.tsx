@@ -924,8 +924,6 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
     }
   }, []);
 
-  // ✅ Mark as Read with persistence
-    // ✅ Mark as Read with persistence & Expo Router Navigation
   // ✅ Mark as Read with persistence & Expo Router Navigation
 const markAsReadAndNavigate = async (notification: Notification) => {
   if (!notification.read) {
