@@ -316,13 +316,35 @@ class NotificationSound {
 // ROUTE MAPPER HELPER FUNCTIONS
 // ==========================================
 
-// ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
-// ==========================================
-// TOP MANAGEMENT ROUTE MAPPER (FIXED)
-// ==========================================
+// ✅ Helper function to get default route for each role
+const getDefaultRouteForRole = (role: string | null): string => {
+  const roleUpper = (role || '').toUpperCase();
+  
+  switch (roleUpper) {
+    case 'TOP_MANAGEMENT':
+      return '/(app)/(tabs)/top-management?tab=overview';
+    case 'AUDIT_MANAGER':
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    case 'AUDITOR':
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    case 'AUDITEE':
+      return '/(app)/(tabs)/auditee?tab=my-audits';
+    case 'MASTER':
+      return '/(app)/(tabs)/master?section=user-management';
+    case 'LEAD_AUDITOR':
+      return '/(app)/(tabs)/lead-auditor?tab=overview';
+    default:
+      return '/(app)/(tabs)';
+  }
+};
 
 // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
-const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
+// Updated to also check title for better routing
+const mapBackendRouteToExpoRouter = (
+  backendRoute: string | undefined, 
+  role: string | null,
+  notificationTitle?: string  // ✅ Added optional title parameter
+): string => {
   if (!backendRoute) {
     return getDefaultRouteForRole(role);
   }
@@ -335,43 +357,39 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
   const roleUpper = (role || '').toUpperCase();
   const routeLower = backendRoute.toLowerCase();
+  const titleLower = (notificationTitle || '').toLowerCase();
 
   // ==========================================
-  // 🎯 1. TOP MANAGEMENT ROUTES (FIXED)
+  // 🎯 1. TOP MANAGEMENT ROUTES (FIXED with title detection)
   // ==========================================
   if (roleUpper === 'TOP_MANAGEMENT') {
-    console.log('📍 Top Management route mapping for:', backendRoute);
+    console.log('📍 Top Management route mapping for:', backendRoute, 'title:', notificationTitle);
     
     // ✅ First check: Direct form mappings (highest priority)
-    // Annual Plan → form3
     if (routeLower.includes('form3') || routeLower.includes('annual') || 
         routeLower.includes('annual-plan') || routeLower.includes('annualplan')) {
       console.log('   → Routing to Annual Plan (tab=annual)');
       return '/(app)/(tabs)/top-management?tab=annual';
     }
     
-    // Department Plan → form4
     if (routeLower.includes('form4') || routeLower.includes('dept') || 
         routeLower.includes('department-plan') || routeLower.includes('deptplan')) {
       console.log('   → Routing to Department Plan (tab=dept)');
       return '/(app)/(tabs)/top-management?tab=dept';
     }
     
-    // Week Schedule → form5-dashboard
     if (routeLower.includes('form5-dashboard') || routeLower.includes('week') || 
         routeLower.includes('week-schedule') || routeLower.includes('weekschedule')) {
       console.log('   → Routing to Week Schedule (tab=week)');
       return '/(app)/(tabs)/top-management?tab=week';
     }
     
-    // Daily Schedule → form5-detailed
     if (routeLower.includes('form5-detailed') || routeLower.includes('daily') || 
         routeLower.includes('daily-schedule') || routeLower.includes('dailyschedule')) {
       console.log('   → Routing to Daily Schedule (tab=daily)');
       return '/(app)/(tabs)/top-management?tab=daily';
     }
     
-    // ✅ Check for form5 (generic)
     if (routeLower.includes('form5')) {
       console.log('   → Routing to Week Schedule (tab=week) - default form5');
       return '/(app)/(tabs)/top-management?tab=week';
@@ -395,29 +413,41 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
-    // ✅ Check for top-management route with existing tab
+    // ✅ Check for top-management route - use title to determine tab
     if (cleanRoute === '/top-management' || cleanRoute === 'top-management' || 
         routeLower.includes('/top-management') || routeLower.includes('top-management')) {
-      // Check if there's a tab parameter
+      
+      // ✅ SMART DETECTION: Use title to determine the correct tab
+      if (titleLower.includes('annual') || titleLower.includes('annual plan')) {
+        console.log('   → Routing to Annual Plan (tab=annual) based on title');
+        return '/(app)/(tabs)/top-management?tab=annual';
+      }
+      if (titleLower.includes('department') || titleLower.includes('dept') || titleLower.includes('dept plan')) {
+        console.log('   → Routing to Department Plan (tab=dept) based on title');
+        return '/(app)/(tabs)/top-management?tab=dept';
+      }
+      if (titleLower.includes('week') || titleLower.includes('week schedule')) {
+        console.log('   → Routing to Week Schedule (tab=week) based on title');
+        return '/(app)/(tabs)/top-management?tab=week';
+      }
+      if (titleLower.includes('date') || titleLower.includes('daily') || titleLower.includes('daily schedule')) {
+        console.log('   → Routing to Date/Daily Schedule (tab=daily) based on title');
+        return '/(app)/(tabs)/top-management?tab=daily';
+      }
+      
+      // Check if there's a tab parameter in the URL
       if (backendRoute.includes('tab=')) {
         const tabMatch = backendRoute.match(/tab=([^&]+)/);
         if (tabMatch) {
           const tab = tabMatch[1];
           console.log(`   → Routing to Top Management with existing tab: ${tab}`);
-          // Valid tabs for Top Management
           if (tab === 'annual' || tab === 'dept' || tab === 'week' || tab === 'daily' || tab === 'overview') {
             return `/(app)/(tabs)/top-management?tab=${tab}`;
           }
         }
       }
+      
       console.log('   → Routing to Overview (default)');
-      return '/(app)/(tabs)/top-management?tab=overview';
-    }
-    
-    // ✅ Check if route contains 'schedule' or 'plan' but not matched above
-    if (routeLower.includes('schedule') || routeLower.includes('plan')) {
-      // Default to overview for any other schedule/plan related notifications
-      console.log('   → Routing to Overview (schedule/plan default)');
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
@@ -432,7 +462,6 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   if (roleUpper === 'AUDIT_MANAGER') {
     console.log('📍 Audit Manager route mapping for:', backendRoute);
     
-    // Check for specific tabs in the route
     if (routeLower.includes('requests') || routeLower.includes('pending')) {
       return '/(app)/(tabs)/audit-manager?tab=requests';
     }
@@ -447,7 +476,6 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
       return '/(app)/(tabs)/audit-manager?tab=dashboard';
     }
     
-    // Check for exact audit-manager route
     if (cleanRoute === '/audit-manager' || cleanRoute === 'audit-manager' || 
         routeLower.includes('/audit-manager') || routeLower.includes('audit-manager')) {
       if (backendRoute.includes('tab=')) {
@@ -462,17 +490,14 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
       return '/(app)/(tabs)/audit-manager?tab=dashboard';
     }
     
-    // Top Management routes - redirect to Audit Manager schedules
     if (routeLower.includes('top-management')) {
       return '/(app)/(tabs)/audit-manager?tab=schedules';
     }
     
-    // Calendar route
     if (routeLower.includes('calendar')) {
       return '/(app)/(tabs)/calendar';
     }
     
-    // Default fallback for Audit Manager
     return '/(app)/(tabs)/audit-manager?tab=dashboard';
   }
 
@@ -556,28 +581,6 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   return getDefaultRouteForRole(role);
 };
 
-// ✅ Helper function to get default route for each role
-const getDefaultRouteForRole = (role: string | null): string => {
-  const roleUpper = (role || '').toUpperCase();
-  
-  switch (roleUpper) {
-    case 'TOP_MANAGEMENT':
-      return '/(app)/(tabs)/top-management?tab=overview';
-    case 'AUDIT_MANAGER':
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    case 'AUDITOR':
-      return '/(app)/(tabs)/auditor?tab=my-audits';
-    case 'AUDITEE':
-      return '/(app)/(tabs)/auditee?tab=my-audits';
-    case 'MASTER':
-      return '/(app)/(tabs)/master?section=user-management';
-    case 'LEAD_AUDITOR':
-      return '/(app)/(tabs)/lead-auditor?tab=overview';
-    default:
-      return '/(app)/(tabs)';
-  }
-};
-
 // ==========================================
 // NOTIFICATION PROVIDER
 // ==========================================
@@ -615,30 +618,23 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     
     const normalizedUserRole = userRole.toUpperCase().trim();
     
-    // If no role specified in notification, allow access (backward compatibility)
     if (!notification.role && !notification.targetRoles) {
       return true;
     }
     
-    // Check single role
     if (notification.role) {
       const normalizedNotifRole = notification.role.toUpperCase().trim();
       const hasAccess = normalizedNotifRole === normalizedUserRole;
-      
       console.log(`🔍 Role check: ${notification.role} vs ${userRole} = ${hasAccess}`);
-      
       return hasAccess;
     }
     
-    // Check multiple target roles
     if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
       const hasAccess = notification.targetRoles.some(targetRole => {
         const normalizedTargetRole = targetRole.toUpperCase().trim();
         return normalizedTargetRole === normalizedUserRole;
       });
-      
       console.log(`🔍 Multi-role check: ${JSON.stringify(notification.targetRoles)} vs ${userRole} = ${hasAccess}`);
-      
       return hasAccess;
     }
     
@@ -861,7 +857,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [userId, userRole, loadNotifications, fetchAndUpdateNotifications, clearNotificationCache]);
 
-  // ✅ ENHANCED: Add Notification with proper role targeting
+  // ✅ ENHANCED: Add Notification with proper role targeting and smart tab detection
   const addNotification = (
     title: string,
     message: string,
@@ -871,10 +867,32 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     const { navigateTo, location, actionText, role, targetRoles, senderRole, ...restMetadata } = metadata;
 
     const finalTargetRoles = targetRoles || (role ? [role] : undefined);
-    
-    // ✅ If no target roles specified, use the current user's role
     const effectiveTargetRoles = finalTargetRoles || (userRole ? [userRole] : undefined);
     
+    // ✅ SMART TAB DETECTION: If navigateTo is "/top-management", detect the correct tab from title
+    let finalNavigateTo = navigateTo;
+    if (navigateTo === '/top-management' || navigateTo === 'top-management' || navigateTo === '') {
+      const titleLower = title.toLowerCase();
+      
+      // Detect which tab based on title
+      if (titleLower.includes('annual') || titleLower.includes('annual plan')) {
+        finalNavigateTo = '/top-management?tab=annual';
+        console.log('🔍 Detected Annual Plan notification → routing to tab=annual');
+      } else if (titleLower.includes('department') || titleLower.includes('dept') || titleLower.includes('dept plan')) {
+        finalNavigateTo = '/top-management?tab=dept';
+        console.log('🔍 Detected Department Plan notification → routing to tab=dept');
+      } else if (titleLower.includes('week') || titleLower.includes('week schedule')) {
+        finalNavigateTo = '/top-management?tab=week';
+        console.log('🔍 Detected Week Schedule notification → routing to tab=week');
+      } else if (titleLower.includes('date') || titleLower.includes('daily') || titleLower.includes('daily schedule')) {
+        finalNavigateTo = '/top-management?tab=daily';
+        console.log('🔍 Detected Date/Daily Schedule notification → routing to tab=daily');
+      } else {
+        finalNavigateTo = '/top-management?tab=overview';
+        console.log('🔍 Default overview routing');
+      }
+    }
+
     const newNotification: Notification = {
       id: Date.now(),
       title,
@@ -882,7 +900,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
       type,
       timestamp: new Date().toISOString(),
       read: false,
-      navigateTo: navigateTo || '',
+      navigateTo: finalNavigateTo || '',
       location: location || '',
       actionText: actionText || 'Review & Take Action',
       role: role || userRole || undefined,
@@ -893,10 +911,11 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
 
     console.log('📤 Creating notification:', {
       title,
+      originalNavigateTo: navigateTo,
+      finalNavigateTo: finalNavigateTo,
       role: newNotification.role,
       targetRoles: newNotification.targetRoles,
-      currentUserRole: userRole,
-      navigateTo: newNotification.navigateTo
+      currentUserRole: userRole
     });
 
     if (hasRoleAccess(newNotification)) {
@@ -923,24 +942,24 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     if (userId) {
       if (effectiveTargetRoles && effectiveTargetRoles.length > 0) {
         effectiveTargetRoles.forEach(targetRole => {
-          console.log(`📡 Sending notification to role: ${targetRole}`);
+          console.log(`📡 Sending notification to role: ${targetRole} with navigateTo: ${finalNavigateTo}`);
           notificationAPI.sendToRole(
             targetRole,
             title,
             message,
             type,
-            navigateTo || '',
+            finalNavigateTo || '',
             location || ''
           ).catch(err => console.error(`Failed to send to role ${targetRole}:`, err));
         });
       } else {
-        console.log(`📡 Sending notification to user: ${userId}`);
+        console.log(`📡 Sending notification to user: ${userId} with navigateTo: ${finalNavigateTo}`);
         notificationAPI.sendToUser(
           String(userId),
           title,
           message,
           type,
-          navigateTo || '',
+          finalNavigateTo || '',
           location || ''
         ).catch(err => console.error('Failed to send to user:', err));
       }
@@ -979,7 +998,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  // ✅ Mark as Read with persistence & Expo Router Navigation
+  // ✅ Mark as Read with persistence & Expo Router Navigation (with title support)
   const markAsReadAndNavigate = async (notification: Notification) => {
     if (!notification.read) {
       try {
@@ -1004,10 +1023,15 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     if (notification.navigateTo) {
       setTimeout(() => {
         try {
-          // ✅ Translate the backend route using our mapper
-          const targetRoute = mapBackendRouteToExpoRouter(notification.navigateTo, userRole);
+          // ✅ Pass the notification title to help with routing
+          const targetRoute = mapBackendRouteToExpoRouter(
+            notification.navigateTo, 
+            userRole,
+            notification.title  // ✅ Pass title for smart routing
+          );
           console.log('🧭 Navigating from backend route:', notification.navigateTo, '-> expo route:', targetRoute);
           console.log('👤 User role:', userRole);
+          console.log('📝 Notification title:', notification.title);
           
           router.push(targetRoute as any);
         } catch (error) {
@@ -1373,7 +1397,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // ==========================================
-  // UI COMPONENTS
+  // UI COMPONENTS (SAME AS BEFORE)
   // ==========================================
 
   const SoundControlPanel: FC = () => (
