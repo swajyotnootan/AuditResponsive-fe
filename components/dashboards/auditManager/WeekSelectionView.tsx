@@ -1,27 +1,27 @@
+import YearFilter from "@/components/common/YearFilter"; // Adjust the path if your folder structure is different
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    ArrowLeft,
-    Calendar,
-    CheckCircle,
-    ChevronRight,
-    Clock,
-    Edit2,
-    RefreshCw,
+  ArrowLeft,
+  Calendar,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  RefreshCw,
 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ Changed from apiClient
+import { auditScheduleApi } from "@/services/auditScheduleApi";
 import { useAuth } from "../../context/AuthContext";
 
 // ═════ MNC STANDARD PALETTE ═════
@@ -101,7 +101,7 @@ interface WeekSelectionViewProps {
     week: string;
     startDate: string;
     endDate: string;
-  }) => void; // ✅ ADD THIS
+  }) => void;
 }
 
 // ═════ MAIN COMPONENT ═════
@@ -126,7 +126,6 @@ export default function WeekSelectionView({
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"months" | "weeks">("months");
 
-  // Helper function to get number of weeks in a month
   const getWeeksForMonth = (year: number, month: string) => {
     const monthMap: Record<string, number> = {
       Apr: 3,
@@ -151,7 +150,6 @@ export default function WeekSelectionView({
     return Math.ceil((daysInMonth + firstDay) / 7);
   };
 
-  // Get date range for a specific week
   const getWeekDateRange = (year: number, month: string, week: string) => {
     const monthMap: Record<string, number> = {
       Apr: 3,
@@ -223,10 +221,7 @@ export default function WeekSelectionView({
   const fetchAvailableMonths = async () => {
     setLoading(true);
     try {
-      // ✅ Use auditScheduleApi.getAvailableMonths
       const response = await auditScheduleApi.getAvailableMonths(selectedYear);
-
-      // ✅ Extract array from response
       const months = Array.isArray(response) ? response : response?.data || [];
       const approvedMonths = months.filter(
         (month: any) =>
@@ -244,20 +239,15 @@ export default function WeekSelectionView({
   const fetchWeeklyData = async (month: string) => {
     setLoading(true);
     try {
-      // ✅ Use auditScheduleApi.getByYearAndMonth with string month
       const response = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
-        month as any, // The API expects string month like "Apr" but type says number
+        month as any,
       );
-
-      // ✅ Extract array from response
       let schedules: any[] = [];
       if (Array.isArray(response)) {
         schedules = response;
       } else if (response?.data) {
-        if (Array.isArray(response.data)) {
-          schedules = response.data;
-        }
+        if (Array.isArray(response.data)) schedules = response.data;
       }
 
       const approvedSchedules = schedules.filter(
@@ -290,6 +280,7 @@ export default function WeekSelectionView({
       setLoading(false);
     }
   };
+
   useEffect(() => {
     fetchAvailableMonths();
   }, [selectedYear]);
@@ -301,6 +292,16 @@ export default function WeekSelectionView({
     }
   }, [selectedMonth]);
 
+  useEffect(() => {
+    if (params?.year) {
+      setSelectedYear(parseInt(params.year as string));
+    }
+  }, [params?.year]);
+
+  // ✅ Sync state if prop changes
+  useEffect(() => {
+    if (propYear) setSelectedYear(propYear);
+  }, [propYear]);
   const handleMonthClick = (month: string) => setSelectedMonth(month);
   const handleBackToMonths = () => {
     setSelectedMonth(null);
@@ -321,7 +322,6 @@ export default function WeekSelectionView({
       return;
     }
 
-    // Use the callback if provided, otherwise use router.push
     if (onWeekSelect) {
       onWeekSelect({
         month: selectedMonth!,
@@ -345,10 +345,10 @@ export default function WeekSelectionView({
 
   if (loading && viewMode === "months") {
     return (
-      <View style={styles.loadingContainer}>
+      <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading schedule...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -362,7 +362,135 @@ export default function WeekSelectionView({
     : null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* ═════ NEW FORM5-STYLE HEADER ═════ */}
+      <View
+        style={{
+          width: "100%",
+          paddingHorizontal: isDesktop ? 24 : 16,
+          paddingTop: isDesktop ? 25 : 16,
+          paddingBottom: isDesktop ? 20 : 16,
+          backgroundColor: "#FFFFFF",
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        }}
+      >
+        <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
+          <View
+            style={{
+              flexDirection: isDesktop ? "row" : "column",
+              alignItems: isDesktop ? "center" : "stretch",
+              justifyContent: isDesktop ? "space-between" : "flex-start",
+              gap: isDesktop ? 24 : 16,
+            }}
+          >
+            {/* Left Side: Back, Icon, Title, Subtitle */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                flexShrink: 1,
+              }}
+            >
+              <TouchableOpacity
+                onPress={onBack || (() => router.back())}
+                style={{
+                  width: 40,
+                  height: 40,
+                  marginRight: 12,
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ArrowLeft size={20} color="#6b7280" />
+              </TouchableOpacity>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  backgroundColor: COLORS.primaryLight,
+                  borderWidth: 1,
+                  borderColor: COLORS.primaryBorder,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Calendar size={22} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text
+                  style={{
+                    fontSize: isDesktop ? 20 : 18,
+                    fontWeight: "700",
+                    color: "#111827",
+                  }}
+                  numberOfLines={1}
+                >
+                  Audit Schedule Calendar
+                </Text>
+                <Text
+                  style={{
+                    fontSize: isDesktop ? 14 : 12,
+                    color: "#6B7280",
+                    marginTop: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {viewMode === "months"
+                    ? "Select a month to view weekly schedules"
+                    : `${monthDisplay[selectedMonth!]} ${selectedYear} - Weekly Schedule`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Right Side: Year & Refresh */}
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: isDesktop ? "flex-end" : "flex-start",
+              }}
+            >
+              <YearFilter
+                selectedYear={selectedYear}
+                onYearChange={(newYear) => {
+                  setSelectedYear(newYear);
+                  // Optional: Updates the URL so the year persists if the user refreshes
+                  router.setParams({ year: newYear.toString() });
+                }}
+                availableYears={Array.from(
+                  { length: 11 },
+                  (_, i) => new Date().getFullYear() - 5 + i,
+                )}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  viewMode === "months"
+                    ? fetchAvailableMonths()
+                    : fetchWeeklyData(selectedMonth!)
+                }
+                style={{
+                  width: isDesktop ? 40 : 36,
+                  height: isDesktop ? 40 : 36,
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <RefreshCw size={isDesktop ? 18 : 16} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ═════ SCROLLABLE CONTENT ═════ */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -376,66 +504,6 @@ export default function WeekSelectionView({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.headerCard}>
-          <View
-            style={[
-              styles.headerTop,
-              !isDesktop && {
-                flexDirection: "column",
-                alignItems: "flex-start",
-              },
-            ]}
-          >
-            <View style={[styles.headerLeft, !isDesktop && { width: "100%" }]}>
-              <TouchableOpacity
-                onPress={onBack || (() => router.back())}
-                style={styles.backButton}
-              >
-                <ArrowLeft size={18} color={COLORS.textMuted} />
-              </TouchableOpacity>
-              <View style={styles.headerIconBox}>
-                <Calendar size={24} color={COLORS.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.headerTitle}>Audit Schedule Calendar</Text>
-                <Text style={styles.headerSubtitle}>
-                  {viewMode === "months"
-                    ? "Select a month to view weekly schedules"
-                    : `${monthDisplay[selectedMonth!]} ${selectedYear} - Weekly Schedule`}
-                </Text>
-              </View>
-            </View>
-
-            <View
-              style={[
-                styles.headerRight,
-                !isDesktop && {
-                  width: "100%",
-                  marginTop: 12,
-                  justifyContent: "flex-end",
-                },
-              ]}
-            >
-              <View style={styles.yearDropdown}>
-                <Text style={styles.yearText}>
-                  {selectedYear} - {selectedYear + 1}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  viewMode === "months"
-                    ? fetchAvailableMonths()
-                    : fetchWeeklyData(selectedMonth!)
-                }
-                style={styles.iconButton}
-              >
-                <RefreshCw size={16} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
         {/* Month Grid View */}
         {viewMode === "months" && (
           <>
@@ -589,23 +657,11 @@ export default function WeekSelectionView({
                   >
                     {monthDisplay[selectedMonth]} {selectedYear}
                   </Text>
-                  <Text style={styles.subtitle}>
+                  <Text style={styles.subtitle} numberOfLines={1}>
                     Select a week to create or view daily schedules
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                onPress={() =>
-                  router.push({
-                    pathname: "/form5",
-                    params: { year: selectedYear, month: selectedMonth },
-                  } as any)
-                }
-                style={styles.editButton}
-              >
-                <Edit2 size={16} color="#FFF" />
-                <Text style={styles.editButtonText}>Edit Week Schedule</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Weeks Grid */}
@@ -772,7 +828,7 @@ export default function WeekSelectionView({
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -788,70 +844,6 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 12, color: COLORS.textMuted, fontSize: 14 },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
-
-  headerCard: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  headerTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-  },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 16, flex: 1 },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: COLORS.primaryBorder,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.textMain },
-  headerSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 4 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  yearDropdown: {
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "#F8FAFC",
-    justifyContent: "center",
-  },
-  yearText: { fontSize: 14, fontWeight: "500", color: COLORS.textMuted },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    justifyContent: "center",
-    alignItems: "center",
-  },
 
   emptyCard: {
     backgroundColor: COLORS.card,
@@ -961,16 +953,6 @@ const styles = StyleSheet.create({
   },
   weekViewHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 16 },
   weekViewTitle: { fontSize: 20, fontWeight: "700" },
-  editButton: {
-    height: 40,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  editButtonText: { fontSize: 14, fontWeight: "600", color: "#FFF" },
 
   weekCard: {
     backgroundColor: COLORS.card,

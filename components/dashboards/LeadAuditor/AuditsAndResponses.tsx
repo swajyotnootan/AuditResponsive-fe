@@ -569,125 +569,194 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
         ) : (
           <Card>
             {isMobile ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View>
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.headerCell, styles.deptCell]}>
-                      Department
-                    </Text>
-                    <Text style={[styles.headerCell, styles.auditorCell]}>
-                      Auditor(s)
-                    </Text>
-                    <Text style={[styles.headerCell, styles.auditeeCell]}>
-                      Auditee
-                    </Text>
-                    <Text style={[styles.headerCell, styles.dateCell]}>
-                      Date & Time
-                    </Text>
-                    <Text style={[styles.headerCell, styles.statusCell]}>
-                      Status
-                    </Text>
-                    <Text style={[styles.headerCell, styles.overdueCell]}>
-                      Overdue
-                    </Text>
-                  </View>
-                  {scheduledAudits.map((s) => {
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    let isOverdue = false;
-                    if (
-                      s.scheduledDate &&
-                      s.status !== "COMPLETED" &&
-                      s.status !== "APPROVED" &&
-                      s.status !== "REJECTED"
-                    ) {
-                      const scheduledDate = new Date(s.scheduledDate);
-                      scheduledDate.setHours(0, 0, 0, 0);
-                      isOverdue = scheduledDate < today;
-                    }
-                    const statusColors = getStatusBadge(s.status);
-                    const primaryAuditorName = getAuditorName(s.auditorId);
-                    const leadAuditorName = s.leadAuditorName;
-                    let auditorDisplay = primaryAuditorName;
-                    if (
-                      leadAuditorName &&
-                      leadAuditorName !== primaryAuditorName
-                    ) {
-                      auditorDisplay += ` (Lead: ${leadAuditorName})`;
-                    }
-                    const formatDateTime = () => {
-                      if (!s.scheduledDate) return "Not Scheduled";
-                      const date = format(
-                        new Date(s.scheduledDate),
-                        "dd MMM yyyy",
-                      );
-                      if (s.startTime && s.endTime)
-                        return `${date} • ${s.startTime} - ${s.endTime}`;
-                      return date;
-                    };
+              <View style={styles.mobileTableContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  contentContainerStyle={styles.mobileTableContent}
+                >
+                  <View style={styles.mobileTableWrapper}>
+                    {/* Header */}
+                    <View style={styles.mobileTableHeader}>
+                      <Text
+                        style={[styles.mobileHeaderCell, styles.mobileDeptCell]}
+                      >
+                        DEPARTMENT
+                      </Text>
+                      <Text
+                        style={[
+                          styles.mobileHeaderCell,
+                          styles.mobileAuditorCell,
+                        ]}
+                      >
+                        AUDITOR(S)
+                      </Text>
+                      <Text
+                        style={[
+                          styles.mobileHeaderCell,
+                          styles.mobileAuditeeCell,
+                        ]}
+                      >
+                        AUDITEE
+                      </Text>
+                      <Text
+                        style={[styles.mobileHeaderCell, styles.mobileDateCell]}
+                      >
+                        DATE & TIME
+                      </Text>
+                      <Text
+                        style={[
+                          styles.mobileHeaderCell,
+                          styles.mobileStatusCell,
+                        ]}
+                      >
+                        STATUS
+                      </Text>
+                      <Text
+                        style={[
+                          styles.mobileHeaderCell,
+                          styles.mobileOverdueCell,
+                        ]}
+                      >
+                        OVERDUE
+                      </Text>
+                    </View>
 
-                    return (
-                      <View key={String(s.id)} style={styles.tableRow}>
-                        <Text
-                          style={[styles.tableCell, styles.deptCell]}
-                          numberOfLines={1}
-                        >
-                          {s.department || "N/A"}
-                        </Text>
-                        <Text
-                          style={[styles.tableCell, styles.auditorCell]}
-                          numberOfLines={1}
-                        >
-                          {auditorDisplay}
-                        </Text>
-                        <Text
-                          style={[styles.tableCell, styles.auditeeCell]}
-                          numberOfLines={1}
-                        >
-                          {s.auditeeName || "N/A"}
-                        </Text>
-                        <Text
-                          style={[styles.tableCell, styles.dateCell]}
-                          numberOfLines={1}
-                        >
-                          {formatDateTime()}
-                        </Text>
-                        <View style={[styles.tableCell, styles.statusCell]}>
+                    {/* Rows */}
+                    {scheduledAudits.map((s) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      let isOverdue = false;
+                      if (
+                        s.scheduledDate &&
+                        s.status !== "COMPLETED" &&
+                        s.status !== "APPROVED" &&
+                        s.status !== "REJECTED"
+                      ) {
+                        const scheduledDate = new Date(s.scheduledDate);
+                        scheduledDate.setHours(0, 0, 0, 0);
+                        isOverdue = scheduledDate < today;
+                      }
+                      const statusColors = getStatusBadge(s.status);
+                      const primaryAuditorName = getAuditorName(s.auditorId);
+                      const leadAuditorName = s.leadAuditorName;
+                      let auditorDisplay = primaryAuditorName;
+                      if (
+                        leadAuditorName &&
+                        leadAuditorName !== primaryAuditorName
+                      ) {
+                        auditorDisplay += ` (Lead: ${leadAuditorName})`;
+                      }
+                      const formatDateTime = () => {
+                        if (!s.scheduledDate) return "Not Scheduled";
+                        const date = format(
+                          new Date(s.scheduledDate),
+                          "dd MMM yyyy",
+                        );
+                        if (s.startTime && s.endTime)
+                          return `${date}\n${s.startTime} - ${s.endTime}`;
+                        return date;
+                      };
+
+                      return (
+                        <View key={String(s.id)} style={styles.mobileTableRow}>
+                          <View
+                            style={[styles.mobileCell, styles.mobileDeptCell]}
+                          >
+                            <Text
+                              style={styles.mobileCellText}
+                              numberOfLines={2}
+                            >
+                              {s.department || "N/A"}
+                            </Text>
+                          </View>
                           <View
                             style={[
-                              styles.badge,
-                              { backgroundColor: statusColors.bg },
+                              styles.mobileCell,
+                              styles.mobileAuditorCell,
                             ]}
                           >
                             <Text
-                              style={[
-                                styles.badgeText,
-                                { color: statusColors.text },
-                              ]}
+                              style={styles.mobileCellText}
+                              numberOfLines={2}
                             >
-                              {s.status || "DRAFT"}
+                              {auditorDisplay}
                             </Text>
                           </View>
-                        </View>
-                        <View style={[styles.tableCell, styles.overdueCell]}>
-                          {isOverdue ? (
-                            <View style={[styles.badge, styles.overdueBadge]}>
-                              <Icon
-                                name="alert-circle"
-                                size={10}
-                                color="#FFFFFF"
-                              />
-                              <Text style={styles.overdueText}>Overdue</Text>
+                          <View
+                            style={[
+                              styles.mobileCell,
+                              styles.mobileAuditeeCell,
+                            ]}
+                          >
+                            <Text
+                              style={styles.mobileCellText}
+                              numberOfLines={2}
+                            >
+                              {s.auditeeName || "N/A"}
+                            </Text>
+                          </View>
+                          <View
+                            style={[styles.mobileCell, styles.mobileDateCell]}
+                          >
+                            <Text
+                              style={styles.mobileCellText}
+                              numberOfLines={3}
+                            >
+                              {formatDateTime()}
+                            </Text>
+                          </View>
+                          <View
+                            style={[styles.mobileCell, styles.mobileStatusCell]}
+                          >
+                            <View
+                              style={[
+                                styles.mobileBadge,
+                                { backgroundColor: statusColors.bg },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.mobileBadgeText,
+                                  { color: statusColors.text },
+                                ]}
+                              >
+                                {s.status || "DRAFT"}
+                              </Text>
                             </View>
-                          ) : (
-                            <Text style={styles.dashText}>—</Text>
-                          )}
+                          </View>
+                          <View
+                            style={[
+                              styles.mobileCell,
+                              styles.mobileOverdueCell,
+                            ]}
+                          >
+                            {isOverdue ? (
+                              <View
+                                style={[
+                                  styles.mobileBadge,
+                                  styles.mobileOverdueBadge,
+                                ]}
+                              >
+                                <Icon
+                                  name="alert-circle"
+                                  size={12}
+                                  color="#FFFFFF"
+                                />
+                                <Text style={styles.mobileOverdueText}>
+                                  Overdue
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.mobileDashText}>—</Text>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </ScrollView>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
             ) : (
               <View>
                 <View style={styles.tableHeaderDesktop}>
@@ -1706,6 +1775,82 @@ const styles = StyleSheet.create({
   verticalActionText: {
     fontSize: 11,
     color: "#6B7280",
+  },
+  
+ mobileTableContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  mobileTableContent: {
+    minWidth: "100%",
+  },
+  mobileTableWrapper: {
+    minWidth: 700, // Ensures horizontal scroll on small screens
+  },
+  mobileTableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderBottomWidth: 2,
+    borderBottomColor: "#E2E8F0",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  mobileHeaderCell: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingHorizontal: 6,
+  },
+  mobileTableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  mobileCell: {
+    paddingHorizontal: 6,
+    justifyContent: "center",
+  },
+  mobileCellText: {
+    fontSize: 11,
+    color: "#334155",
+    lineHeight: 16,
+  },
+  mobileDeptCell: { width: 90 },
+  mobileAuditorCell: { width: 120 },
+  mobileAuditeeCell: { width: 100 },
+  mobileDateCell: { width: 130 },
+  mobileStatusCell: { width: 90, alignItems: "center" },
+  mobileOverdueCell: { width: 80, alignItems: "center" },
+  mobileBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  mobileBadgeText: {
+    fontSize: 9,
+    fontWeight: "600",
+  },
+  mobileOverdueBadge: {
+    backgroundColor: "#EF4444",
+  },
+  mobileOverdueText: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  mobileDashText: {
+    color: "#CBD5E1",
+    fontSize: 16,
   },
 });
 

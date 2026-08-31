@@ -1,11 +1,10 @@
 // components/Navbar.tsx
 import { useSidebar } from "@/components/context/SidebarContext";
-import { API_BASE_URL } from '@/config/apiConfig';
+import { API_BASE_URL } from "@/config/apiConfig";
 import type { NavigationProp, RouteProp } from "@react-navigation/native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { router } from "expo-router";
 import {
-  ArrowLeft,
   Bell,
   Building2,
   Calendar,
@@ -16,7 +15,7 @@ import {
   MoreVertical,
   Shield,
   User,
-  X,
+  X
 } from "lucide-react-native";
 import React, { ReactNode, useEffect, useRef, useState } from "react";
 import {
@@ -142,6 +141,10 @@ const Navbar: React.FC<NavbarProps> = ({
     logout: () => Promise<void>;
   };
 
+  const userRole = user?.role?.toUpperCase() || "";
+  const isHrAdmin = userRole === "HR_ADMIN";
+  const isHrAdminOrMaster = isHrAdmin || userRole === "MASTER";
+
   const currentBlobUrlRef = useRef<string | null>(null);
 
   // ✅ Dynamic logo from backend
@@ -237,7 +240,7 @@ const Navbar: React.FC<NavbarProps> = ({
     currentPathLower === "top-management" ||
     currentPathLower === "hr-admin";
 
-  const showToggleButton = true;
+  const showToggleButton = !isHrAdmin;
   const showBackButton = !isOnDashboard;
 
   const isSmallMobile = windowWidth < 360;
@@ -464,23 +467,6 @@ const Navbar: React.FC<NavbarProps> = ({
                     strokeWidth={2.5}
                   />
                 </TouchableOpacity>
-              ) : showBackButton ? (
-                <TouchableOpacity
-                  onPress={() => router.push("/(app)/(tabs)" as any)}
-                  className={`rounded-lg ml-3 ${isMobile ? "p-2" : "p-2.5"}`}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.12)",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.25)",
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <ArrowLeft
-                    size={isSmallMobile ? 16 : isMobile ? 18 : 20}
-                    color="#FFFFFF"
-                    strokeWidth={2}
-                  />
-                </TouchableOpacity>
               ) : null}
 
               {/* Qsutra Logo - Always visible */}
@@ -579,6 +565,7 @@ const Navbar: React.FC<NavbarProps> = ({
               )}
 
               {/* DESKTOP/TABLET VIEW */}
+              {/* DESKTOP/TABLET VIEW */}
               {!isMobile && (
                 <>
                   {/* ✅ Dynamic/Stratum Logo on Desktop */}
@@ -592,7 +579,6 @@ const Navbar: React.FC<NavbarProps> = ({
                             : rightLogo || STRATUM_LOGO
                         }
                         resizeMode="contain"
-                        // ✅ FIXED: Changed maxWidth to width to restore original size & ensure it renders
                         style={{
                           height: isTablet ? 32 : 40,
                           width: isTablet ? 80 : 100,
@@ -602,19 +588,21 @@ const Navbar: React.FC<NavbarProps> = ({
                     </View>
                   )}
 
-                  {/* Notification Bell */}
-                  {user && (
+                  {/* ✅ Notification Bell - Hidden for HR_ADMIN and MASTER */}
+                  {!isHrAdminOrMaster && user && (
                     <View className="mx-1">
                       <NotificationBell />
                     </View>
                   )}
 
-                  {/* Calendar Icon */}
-                  {!shouldHideCalendar() && (
+                  {/* ✅ Calendar Icon - Hidden for HR_ADMIN and MASTER */}
+                  {!isHrAdminOrMaster && !shouldHideCalendar() && (
                     <HoverView className="mx-1">
                       {(isHovered) => (
                         <TouchableOpacity
-                            onPress={() => router.push('/(app)/(tabs)/calendar '  as any)} // ✅ Expo Router Calendar Navigation
+                          onPress={() =>
+                            router.push("/(app)/(tabs)/calendar" as any)
+                          }
                           className="items-center justify-center w-12 h-12 rounded-lg"
                           style={{
                             backgroundColor: isHovered
@@ -851,60 +839,99 @@ const Navbar: React.FC<NavbarProps> = ({
                     </TouchableOpacity>
 
                     <View style={{ paddingVertical: 8 }}>
-                       <TouchableOpacity
-                        onPress={() => {
-                          setMobileMenuOpen(false);
-                          setTimeout(() => {
-                            setNotificationOpen(true);
-                          }, 300);
-                        }}
-                        activeOpacity={0.7}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          paddingHorizontal: 16,
-                          paddingVertical: 12,
-                        }}
-                      >
-                        <View
+                      {/* ✅ Notifications - Hidden for HR_ADMIN and MASTER */}
+                      {!isHrAdminOrMaster && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setMobileMenuOpen(false);
+                            setTimeout(() => {
+                              setNotificationOpen(true);
+                            }, 300);
+                          }}
+                          activeOpacity={0.7}
                           style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 10,
-                            backgroundColor: "#EFF6FF",
+                            flexDirection: "row",
                             alignItems: "center",
-                            justifyContent: "center",
-                            position: "relative", // ✅ Added for badge positioning
+                            paddingHorizontal: 16,
+                            paddingVertical: 12,
                           }}
                         >
-                          <Bell
-                            size={18}
-                            color={PRIMARY_COLOR}
-                            strokeWidth={1.5}
-                          />
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 10,
+                              backgroundColor: "#EFF6FF",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              position: "relative",
+                            }}
+                          >
+                            <Bell
+                              size={18}
+                              color={PRIMARY_COLOR}
+                              strokeWidth={1.5}
+                            />
 
-                          {/* ✅ 1. Small Red Badge on the Bell Icon */}
+                            {/* Small Red Badge on the Bell Icon */}
+                            {unreadCount > 0 && (
+                              <View
+                                style={{
+                                  position: "absolute",
+                                  top: -2,
+                                  right: -2,
+                                  minWidth: 18,
+                                  height: 18,
+                                  backgroundColor: "#ef4444",
+                                  borderRadius: 9,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  paddingHorizontal: 4,
+                                  borderWidth: 2,
+                                  borderColor: "#FFFFFF",
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    color: "white",
+                                    fontSize: 10,
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <Text
+                            style={{
+                              flex: 1,
+                              marginLeft: 12,
+                              fontSize: 14,
+                              fontWeight: "500",
+                              color: "#1F2937",
+                            }}
+                          >
+                            Notifications
+                          </Text>
+
+                          {/* Count Pill on the Right Side */}
                           {unreadCount > 0 && (
                             <View
                               style={{
-                                position: "absolute",
-                                top: -2,
-                                right: -2,
-                                minWidth: 18,
-                                height: 18,
                                 backgroundColor: "#ef4444",
-                                borderRadius: 9,
+                                borderRadius: 12,
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                minWidth: 24,
                                 alignItems: "center",
-                                justifyContent: "center",
-                                paddingHorizontal: 4,
-                                borderWidth: 2,
-                                borderColor: "#FFFFFF",
                               }}
                             >
                               <Text
                                 style={{
                                   color: "white",
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: "bold",
                                 }}
                               >
@@ -912,48 +939,17 @@ const Navbar: React.FC<NavbarProps> = ({
                               </Text>
                             </View>
                           )}
-                        </View>
+                        </TouchableOpacity>
+                      )}
 
-                        <Text
-                          style={{
-                            flex: 1,
-                            marginLeft: 12,
-                            fontSize: 14,
-                            fontWeight: "500",
-                            color: "#1F2937",
-                          }}
-                        >
-                          Notifications
-                        </Text>
-
-                        {/* ✅ 2. Count Pill on the Right Side (Highly visible on mobile) */}
-                        {unreadCount > 0 && (
-                          <View
-                            style={{
-                              backgroundColor: "#ef4444",
-                              borderRadius: 12,
-                              paddingHorizontal: 8,
-                              paddingVertical: 2,
-                              minWidth: 24,
-                              alignItems: "center",
-                            }}
-                          >
-                            <Text
-                              style={{
-                                color: "white",
-                                fontSize: 12,
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {unreadCount > 99 ? "99+" : unreadCount}
-                            </Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-
-                      {!shouldHideCalendar() && (
+                      {/* ✅ Calendar - Hidden for HR_ADMIN and MASTER */}
+                      {!isHrAdminOrMaster && !shouldHideCalendar() && (
                         <TouchableOpacity
-                            onPress={() => handleMenuItemClick(() => router.push('/(app)/(tabs)/calendar'  as any))} // ✅ Expo Router Calendar Navigation
+                          onPress={() =>
+                            handleMenuItemClick(() =>
+                              router.push("/(app)/(tabs)/calendar" as any),
+                            )
+                          }
                           activeOpacity={0.7}
                           style={{
                             flexDirection: "row",
