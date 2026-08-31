@@ -833,12 +833,19 @@ const handleGoBack = () => {
           <FadeInView delay={0}>
             <View className="flex-row items-center justify-between mb-6">
               <TouchableOpacity
-                onPress={handleGoBack}
-                className="flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
-              >
-                <ArrowLeft size={16} color="#334155" />
-                <Text className="text-sm font-medium text-slate-700">Back</Text>
-              </TouchableOpacity>
+  onPress={() => {
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    } else {
+      const dashboardPath = getDashboardPath(user) || "/";
+      router.replace(dashboardPath as any);
+    }
+  }}
+  className="flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
+>
+  <ArrowLeft size={16} color="#334155" />
+  <Text className="text-sm font-medium text-slate-700">Back</Text>
+</TouchableOpacity>
               <TouchableOpacity
                 onPress={downloadForm7Pdf}
                 disabled={pdfDownloading || (!createdNcr?.id && !params.id)}
@@ -1152,13 +1159,18 @@ const handleGoBack = () => {
 
                   <View className="flex-row gap-2">
                     <TouchableOpacity
-                      onPress={handleGoBack}
-                      className="px-4 py-2.5 bg-white border rounded-lg shadow-sm border-slate-200"
-                    >
-                      <Text className="text-sm font-medium text-slate-700">
-                        Cancel
-                      </Text>
-                    </TouchableOpacity>
+  onPress={() => {
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    } else {
+      const dashboardPath = getDashboardPath(user) || "/";
+      router.replace(dashboardPath as any);
+    }
+  }}
+  className="px-4 py-2.5 bg-white border rounded-lg shadow-sm border-slate-200"
+>
+  <Text className="text-sm font-medium text-slate-700">Cancel</Text>
+</TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleSave}
                       disabled={saving || !!createdNcr?.id}
