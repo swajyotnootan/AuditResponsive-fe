@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/config/apiConfig";
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { auditAPI } from "@/services/api"; // ✅ Add this import
 import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ ADD THIS IMPORT
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -24,8 +25,9 @@ import {
   Send,
   Sparkles,
   User,
+  X
 } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -173,6 +175,15 @@ export default function IATFInternalAuditForm(props: any) {
   const params = useLocalSearchParams();
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
+  // ✅ Add unsaved changes hook
+const {
+  markDirty,
+  resetDirty,
+  confirmDiscard,
+  showDiscardModal,
+  cancelDiscard,
+  discardChanges,
+} = useUnsavedChanges();
   const isDesktop = width >= 768;
 
   const editId = props.editId || params.edit;
@@ -226,6 +237,43 @@ export default function IATFInternalAuditForm(props: any) {
     observations: {} as Record<number, string>,
     score: null as number | null,
   });
+  // ✅ Store initial form data for comparison
+const [initialFormData] = useState(() => {
+  return {
+    documentNumber: generateDocumentNumber(),
+    department: departmentParam || "",
+    location: "",
+    shift: "Morning",
+    date: new Date().toISOString().split("T")[0],
+    time: new Date().toLocaleTimeString(),
+    auditorName: user?.name || "",
+    auditorId: user?.id,
+    auditorSignature: "",
+    auditeeName: "",
+    auditeeId: "",
+    status: "IN_PROGRESS",
+    responses: {} as Record<number, string>,
+    observations: {} as Record<number, string>,
+    score: null as number | null,
+  };
+});
+
+const hasFormChanged = useCallback(() => {
+  // Check if any data has changed from initial
+  const currentData = {
+    ...formData,
+    responses: JSON.stringify(formData.responses),
+    observations: JSON.stringify(formData.observations),
+  };
+  const initialData = {
+    ...initialFormData,
+    responses: JSON.stringify(initialFormData.responses),
+    observations: JSON.stringify(initialFormData.observations),
+  };
+  return JSON.stringify(currentData) !== JSON.stringify(initialData);
+}, [formData, initialFormData]);
+
+
 
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
@@ -655,18 +703,36 @@ export default function IATFInternalAuditForm(props: any) {
     };
   }, [currentStep, currentCheckpointIndex, questions.length]);
 
-  const handleInputChange = (field: string, value: any) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  const handleObservationChange = (questionId: number, observation: string) =>
-    setFormData((prev) => ({
-      ...prev,
-      observations: { ...prev.observations, [questionId]: observation },
-    }));
-  const handleStatusChange = (questionId: number, status: string) =>
-    setFormData((prev) => ({
-      ...prev,
-      responses: { ...prev.responses, [questionId]: status },
-    }));
+ const handleInputChange = useCallback((field: string, value: any) => {
+  setFormData((prev) => ({ ...prev, [field]: value }));
+  // ✅ Mark as dirty only if the value actually changed
+  const initialValue = initialFormData[field as keyof typeof initialFormData];
+  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
+  const handleObservationChange = useCallback((questionId: number, observation: string) => {
+  setFormData((prev) => ({
+    ...prev,
+    observations: { ...prev.observations, [questionId]: observation },
+  }));
+  // ✅ Mark as dirty
+  const initialObs = initialFormData.observations[questionId] || "";
+  if (observation !== initialObs) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
+ const handleStatusChange = useCallback((questionId: number, status: string) => {
+  setFormData((prev) => ({
+    ...prev,
+    responses: { ...prev.responses, [questionId]: status },
+  }));
+  // ✅ Mark as dirty
+  const initialStatus = initialFormData.responses[questionId] || "";
+  if (status !== initialStatus) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
 
   useEffect(() => {
     const keywordStatusMap = {
@@ -991,6 +1057,8 @@ const goToNcrForm = (savedResponseId: any) => {
       return;
     }
     await saveAuditData("DRAFT", false);
+      resetDirty(); // ✅ Reset after successful submission
+
   };
 
   const submitAudit = async () => {
@@ -1023,6 +1091,8 @@ const goToNcrForm = (savedResponseId: any) => {
       return;
     }
     await saveAuditData("SUBMITTED", true);
+      resetDirty(); // ✅ Reset after successful submission
+
   };
 
   const handleAutoFill = () => {
@@ -1176,10 +1246,18 @@ const goToNcrForm = (savedResponseId: any) => {
     }
   };
 
-  const handleGoBack = () => {
+  const handleGoBack = useCallback(() => {
+  // ✅ Check if there are unsaved changes
+  if (hasFormChanged() && !formData.status?.includes("SUBMITTED")) {
+    confirmDiscard(() => {
+      if (props.onClose) props.onClose();
+      else router.back();
+    });
+  } else {
     if (props.onClose) props.onClose();
     else router.back();
-  };
+  }
+}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
 
   // ✅ EMPTY STATES
   if (isAlreadyCompleted) {
@@ -2708,8 +2786,122 @@ const goToNcrForm = (savedResponseId: any) => {
               </FadeInView>
             )}
           </View>
-        </ScrollView>
+                </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* ✅ Discard Changes Modal - ADD THIS HERE */}
+      <Modal
+        visible={showDiscardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDiscard}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              backgroundColor: 'white',
+              borderRadius: 16,
+              padding: 24,
+              elevation: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#fef2f2',
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: 'center',
+                marginBottom: 16,
+              }}
+            >
+              <X size={26} color="#dc2626" />
+            </View>
+
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: '#111827',
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              Discard changes?
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: '#6b7280',
+                textAlign: 'center',
+                lineHeight: 21,
+                marginBottom: 24,
+              }}
+            >
+              You have unsaved changes. Are you sure you want to leave without saving?
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={cancelDiscard}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  backgroundColor: 'white',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                  Stay
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => discardChanges(() => {
+                  if (props.onClose) props.onClose();
+                  else router.back();
+                })}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  backgroundColor: '#dc2626',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
+                  Discard
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
     </SafeAreaView>
   );
 }
