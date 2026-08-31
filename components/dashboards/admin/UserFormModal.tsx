@@ -1,5 +1,6 @@
 // components/dashboards/admin/UserFormModal.tsx
 import { API_BASE_URL } from '@/config/apiConfig';
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { enterpriseAPI } from '@/services/enterpriseAPI';
 import * as ImagePicker from 'expo-image-picker';
 import { Calendar, Camera, Check, ChevronDown, GraduationCap, Upload, X } from 'lucide-react-native';
@@ -215,7 +216,7 @@ const DatePickerModal = React.memo(({ visible, value, onSelect, onClose }: { vis
         >
           {/* Header */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={(onClose)}>
               <Text style={{ color: '#ef4444', fontSize: 16 }}>Cancel</Text>
             </TouchableOpacity>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>Select Date</Text>
@@ -340,7 +341,11 @@ interface UserFormModalProps {
 export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFormModalProps) {
   const { width: screenWidth } = useWindowDimensions();
   const isDesktop = screenWidth >= 768;
-  
+  const {
+  markDirty,
+  resetDirty,
+  confirmDiscard,
+} = useUnsavedChanges();
   const [step, setStep] = useState(1);
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [showDeptPicker, setShowDeptPicker] = useState(false);
@@ -615,16 +620,34 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
   // Stable callbacks
   const updateField = useCallback((field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+   markDirty();
+}, [markDirty]);
 
   const handleSave = useCallback(() => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.role) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
-    }
-    onSave({ ...formData, profilePhoto, signature });
-  }, [formData, profilePhoto, signature, onSave]);
+  if (
+    !formData.firstName ||
+    !formData.lastName ||
+    !formData.email ||
+    !formData.role
+  ) {
+    Alert.alert('Error', 'Please fill all required fields');
+    return;
+  }
 
+  resetDirty();
+
+  onSave({
+    ...formData,
+    profilePhoto,
+    signature,
+  });
+}, [
+  formData,
+  profilePhoto,
+  signature,
+  onSave,
+  resetDirty,
+]);
   const pickImage = useCallback(async (setter: (uri: string) => void) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -702,7 +725,7 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
         }}>
           {/* Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#e5e7eb' }}>
-            <TouchableOpacity onPress={onClose}><X size={24} color="#6b7280" /></TouchableOpacity>
+            <TouchableOpacity onPress={() => confirmDiscard(onClose)}><X size={24} color="#6b7280" /></TouchableOpacity>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>{isEdit ? 'Edit User' : 'Add User'}</Text>
             <TouchableOpacity onPress={handleSave}><Text style={{ color: '#2563eb', fontWeight: '600' }}>Save</Text></TouchableOpacity>
           </View>
