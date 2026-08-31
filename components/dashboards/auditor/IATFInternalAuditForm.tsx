@@ -820,13 +820,59 @@ export default function IATFInternalAuditForm(props: any) {
     return params.toString();
   };
 
-  const goToNcrForm = (savedResponseId: any) => {
-    if (!savedResponseId) {
-      addToast("First submit the audit to save the report number.", "warning");
-      return;
-    }
-    router.push(`/form7?${buildNcrQuery(savedResponseId)}` as any);
+  // =====================================================
+// REPLACE this entire function in IATFInternalAuditForm
+// =====================================================
+const goToNcrForm = (savedResponseId: any) => {
+  if (!savedResponseId) {
+    addToast("First submit the audit to save the report number.", "warning");
+    return;
+  }
+
+  const ncQuestions = getNcrFindings();
+  
+  // ✅ Build the params object (same as AuditorDashboard)
+  const routeParams = {
+    auditId: String(savedResponseId),
+    auditReportNumber: formData.documentNumber || "",
+    department: formData.department || "",
+    shift: formData.shift || "Day",
+    auditeeId: formData.auditeeId ? String(formData.auditeeId) : "",
+    auditeeName: formData.auditeeName || "",
+    clause: ncQuestions
+      .map((q) => (q.clause ? `Clause ${q.clause}` : `Question ${q.slNo}`))
+      .join("\n"),
+    evidence: ncQuestions
+      .map((q) => {
+        const status =
+          formData.responses[q.slNo] === "MAJOR_NC" ? "Major NC" : "Minor NC";
+        const observation =
+          formData.observations[q.slNo] || "Observation not entered";
+        return `Q${q.slNo}: ${q.checkpoint}\nStatus: ${status}\nEvidence: ${observation}`;
+      })
+      .join("\n"),
+    statement: ncQuestions
+      .map((q) => {
+        const status =
+          formData.responses[q.slNo] === "MAJOR_NC"
+            ? "Major nonconformity"
+            : "Minor nonconformity";
+        return `${status} identified for Q${q.slNo}: ${q.checkpoint}`;
+      })
+      .join("\n"),
   };
+
+  // ✅ Use the same pattern as AuditorDashboard - set state to render Form7 inline
+  // If you have a prop to handle this from parent, use it
+  if (props.onRaiseNcr) {
+    // If parent passed a callback
+    props.onRaiseNcr(routeParams);
+  } else {
+    // Fallback: Use router navigation (if you have the route configured)
+    const queryString = new URLSearchParams(routeParams).toString();
+    router.push(`/form7?${queryString}` as any);
+  }
+};
 
   const saveAuditData = async (status: string, isSubmit = false) => {
     if (!currentCheckSheet || !currentCheckSheet.id) {
@@ -1377,21 +1423,23 @@ export default function IATFInternalAuditForm(props: any) {
               )}
 
               <View className="flex-col gap-3">
-                {submissionResult.ncrCount > 0 && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowSuccessModal(false);
-                      goToNcrForm(submissionResult.savedId);
-                    }}
-                    className="flex-row items-center justify-center gap-2 px-5 py-3 font-semibold text-white shadow-md bg-rose-600 rounded-xl"
-                  >
-                    <AlertCircle size={18} color="#ffffff" />
-                    <Text className="text-white">
-                      Raise NCR ({submissionResult.ncrCount} finding
-                      {submissionResult.ncrCount > 1 ? "s" : ""})
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                {/* In the SubmissionSuccessModal component */}
+{submissionResult.ncrCount > 0 && (
+  <TouchableOpacity
+    onPress={() => {
+      // ✅ Close modal first, then raise NCR
+      setShowSuccessModal(false);
+      goToNcrForm(submissionResult.savedId);
+    }}
+    className="flex-row items-center justify-center gap-2 px-5 py-3 font-semibold text-white shadow-md bg-rose-600 rounded-xl"
+  >
+    <AlertCircle size={18} color="#ffffff" />
+    <Text className="text-white">
+      Raise NCR ({submissionResult.ncrCount} finding
+      {submissionResult.ncrCount > 1 ? "s" : ""})
+    </Text>
+  </TouchableOpacity>
+)}
                 <TouchableOpacity
                   onPress={() => {
                     setShowSuccessModal(false);

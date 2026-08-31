@@ -21,63 +21,60 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
   switch (normalizedRole) {
     case UserRole.MASTER:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
-          route: "/(app)/(tabs)/master?section=user-management", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=user-management",
           title: "User Management",
           icon: "Users",
           action: "user-management",
         },
         {
-          route: "/(app)/(tabs)/calendar",
-          title: "Calendar",
-          icon: "Calendar",
-        },
-        {
-          route: "/(app)/(tabs)/master?section=enterprise-management", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=enterprise-management",
           title: "Enterprise",
           icon: "Building",
           action: "enterprise-management",
         },
         {
-          route: "/(app)/(tabs)/master?section=role-management", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=role-management",
           title: "Role Management",
           icon: "Shield",
           action: "role-management",
         },
         {
-          route: "/(app)/(tabs)/master?section=audit-type-management", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=audit-type-management",
           title: "Audit Types",
           icon: "Award",
           action: "audit-type-management",
         },
         {
-          route: "/(app)/(tabs)/master?section=competency-management", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=competency-management",
           title: "Competency",
           icon: "GraduationCap",
           action: "competency-management",
         },
         {
-          route: "/(app)/(tabs)/master?section=logo-mgmt", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=logo-mgmt",
           title: "Logo Management",
           icon: "CheckSquare",
           action: "logo-mgmt",
         },
         {
-          route: "/(app)/(tabs)/master?section=line-mgmt", // ✅ Added ?section=
+          route: "/(app)/(tabs)/master?section=line-mgmt",
           title: "Line Management",
           icon: "ClipboardList",
           action: "line-mgmt",
         },
+        // ✅ Removed Calendar for Master
       ];
+
     case UserRole.AUDITOR:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/auditor?tab=my-audits",
           title: "My Audits",
           icon: "ClipboardCheck",
-          tab: "my-audits", // ✅ NEW: Use tab parameter
+          tab: "my-audits",
           badge: true,
         },
         {
@@ -89,20 +86,21 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           route: "/(app)/(tabs)/auditor?tab=ncr-pending",
           title: "NCR Pending",
           icon: "AlertTriangle",
-          tab: "ncr-pending", // ✅ NEW: Use tab parameter
+          tab: "ncr-pending",
           badge: true,
         },
         {
           route: "/(app)/(tabs)/auditor?tab=ncr-list",
           title: "My NCRs",
           icon: "TrendingUp",
-          tab: "ncr-list", // ✅ NEW: Use tab parameter
+          tab: "ncr-list",
           badge: true,
         },
       ];
-     case UserRole.HOD:
+
+    case UserRole.HOD:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/fresh-8d",
           title: "Fresh 8D",
@@ -117,36 +115,42 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
 
     case UserRole.LEAD_AUDITOR:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=overview",
           title: "Dashboard Overview",
           icon: "BarChart2",
+          tab: "overview",
         },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=audits",
           title: "Audits",
           icon: "Calendar",
+          tab: "audits",
         },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=responses",
           title: "CheckSheets",
           icon: "FileText",
+          tab: "responses",
         },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=ncrs",
           title: "NCR Management",
           icon: "AlertTriangle",
+          tab: "ncrs",
         },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=auditors",
           title: "Auditors",
           icon: "Users",
+          tab: "auditors",
         },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=auditees",
           title: "Auditees",
           icon: "UserCheck",
+          tab: "auditees",
         },
         {
           route: "/(app)/(tabs)/calendar",
@@ -157,25 +161,25 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
 
     case UserRole.AUDITEE:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/auditee?tab=my-audits",
           title: "My Audits",
           icon: "UserCheck",
-          tab: "my-audits", // ✅ NEW: Use tab parameter
+          tab: "my-audits",
         },
         {
           route: "/(app)/(tabs)/auditee?tab=ncr-pending",
           title: "NCR Pending",
           icon: "AlertCircle",
-          tab: "ncr-pending", // ✅ NEW: Use tab parameter
+          tab: "ncr-pending",
           badge: true,
         },
         {
           route: "/(app)/(tabs)/auditee?tab=my-ncrs",
           title: "My NCRs",
           icon: "TrendingUp",
-          tab: "my-ncrs", // ✅ NEW: Use tab parameter
+          tab: "my-ncrs",
           badge: true,
         },
         {
@@ -184,6 +188,7 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "Calendar",
         },
       ];
+
     case UserRole.AUDIT_MANAGER:
       return [
         {
@@ -216,10 +221,10 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "Calendar",
         },
       ];
-     case UserRole.INITIATOR:
-      return [
-        ...commonItems,
 
+    case UserRole.INITIATOR:
+      return [
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/fresh-8d",
           title: "Fresh 8D",
@@ -231,6 +236,7 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "AlertCircle",
         },
       ];
+
     case UserRole.TOP_MANAGEMENT:
       return [
         {
@@ -248,7 +254,7 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
         {
           route: "/(app)/(tabs)/top-management?tab=dept",
           title: "Dept Plan",
-          icon: "List", // or "BarChart2"
+          icon: "List",
           tab: "dept",
         },
         {
@@ -263,12 +269,16 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "CheckCircle",
           tab: "daily",
         },
-        // ... keep calendar/other common items
+        {
+          route: "/(app)/(tabs)/calendar",
+          title: "Calendar",
+          icon: "Calendar",
+        },
       ];
-    // ... (keep the rest of the file the same)
+
     case UserRole.HR_ADMIN:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/hr-admin",
           title: "HR Panel",
@@ -289,7 +299,7 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
 
     case UserRole.QMS_ADMIN:
       return [
-        ...commonItems,
+        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
           route: "/(app)/(tabs)/qms-admin",
           title: "QMS Panel",

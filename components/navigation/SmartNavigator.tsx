@@ -42,7 +42,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     }
   };
 
-  // ✅ FIXED: Extract the base route from URL
+  // ✅ Extract the base route from URL
   const getBaseRoute = (route: string) => {
     // Remove query params
     const base = route.split("?")[0];
@@ -51,7 +51,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     return clean;
   };
 
-  // ✅ FIXED: Extract tab/section from URL
+  // ✅ Extract tab/section from URL
   const getParam = (key: string) => {
     const p = params as any;
     
@@ -85,55 +85,59 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     return undefined;
   };
 
-  // ✅ FIXED: Better isActive function
-  // ✅ FIXED: Only highlight the item that matches BOTH route AND tab
-const isActive = (item: any): boolean => {
-  // Get current path
-  const currentPath = "/" + segments.filter(Boolean).join("/");
-  
-  // Get clean base route for the navigation item
-  const itemBaseRoute = getBaseRoute(item.route);
-  
-  // Get current tab from URL
-  const currentTab = getParam("tab");
-  const currentSection = getParam("section");
+  // ✅ FIXED: Simplified and more robust isActive function
+  const isActive = (item: any): boolean => {
+    const currentPath = "/" + segments.filter(Boolean).join("/");
+    const itemBaseRoute = getBaseRoute(item.route);
+    const currentTab = getParam("tab");
+    const currentSection = getParam("section");
 
-  // ✅ CASE 1: Items with TAB parameter (most common)
-  if (item.tab) {
-    // Must match BOTH: base route AND tab
-    const routeMatches = currentPath.includes(itemBaseRoute) || 
-                         currentPath === itemBaseRoute;
-    const tabMatches = String(currentTab) === String(item.tab);
-    
-    // ✅ BOTH must be true for active state
-    return routeMatches && tabMatches;
-  }
-  
-  // ✅ CASE 2: Items with ACTION parameter (for Master/Admin)
-  if (item.action) {
-    const routeMatches = currentPath.includes(itemBaseRoute) || 
-                         currentPath === itemBaseRoute;
-    const sectionMatches = String(currentSection) === String(item.action);
-    return routeMatches && sectionMatches;
-  }
+    // ✅ For Master role with section param
+    if (item.action) {
+      const routeMatches = currentPath === itemBaseRoute || 
+                           currentPath.includes(itemBaseRoute);
+      const sectionMatches = String(currentSection) === String(item.action);
+      return routeMatches && sectionMatches;
+    }
 
-  // ✅ CASE 3: Items with NO tab/action (like Calendar, Dashboard Home)
-  // These should only be active when exactly on that route
-  if (currentPath === itemBaseRoute) {
-    return true;
-  }
-  
-  // ✅ CASE 4: Partial match for nested routes
-  if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
-    // For items like "Dashboard" that don't have tabs
-    // BUT only if no tab is selected (prevents double highlighting)
-    if (!currentTab && !currentSection) {
+    // ✅ For roles with tab param (Auditor, Lead Auditor, Audit Manager, etc.)
+    if (item.tab) {
+      const routeMatches = currentPath === itemBaseRoute || 
+                           currentPath.includes(itemBaseRoute);
+      const tabMatches = String(currentTab) === String(item.tab);
+      return routeMatches && tabMatches;
+    }
+
+    // ✅ For Calendar and other simple routes
+    if (item.route === "/(app)/(tabs)/calendar") {
+      return currentPath === "/calendar" || currentPath.includes("/calendar");
+    }
+
+    // ✅ For Dashboard (Home)
+    if (item.route === "/(app)/(tabs)") {
+      // Only highlight if no tab or section is selected
+      if (!currentTab && !currentSection) {
+        return currentPath === "/" || currentPath === "";
+      }
+      // If we're on a tab-based dashboard but no specific tab matches
+      return currentPath === "/" || currentPath === "";
+    }
+
+    // ✅ Default: exact path match
+    if (currentPath === itemBaseRoute) {
       return true;
     }
-  }
 
-  return false;
-};
+    // ✅ Partial match for nested routes
+    if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
+      // Only if no tab/section is selected (prevents double highlighting)
+      if (!currentTab && !currentSection) {
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   const getIcon = (iconName: string) => {
     const iconMap: any = {
@@ -174,10 +178,11 @@ const isActive = (item: any): boolean => {
     return iconMap[iconName] || Icons.Circle;
   };
 
-  // ✅ DEBUG: Remove in production
+  // ✅ Debug logs (remove in production)
   console.log("📍 Current path:", "/" + segments.filter(Boolean).join("/"));
   console.log("📍 Current tab:", getParam("tab"));
   console.log("📍 Current section:", getParam("section"));
+  console.log("📍 User role:", user.role);
 
   return (
     <View
@@ -213,12 +218,11 @@ const isActive = (item: any): boolean => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
           
-          // ✅ DEBUG: Remove in production
-          console.log(`📌 ${item.title}: active=${active}, tab=${item.tab || 'none'}`);
+          console.log(`📌 ${item.title}: active=${active}, tab=${item.tab || 'none'}, action=${item.action || 'none'}`);
 
           return (
             <TouchableOpacity
-              key={`${item.route}-${item.tab || index}`}
+              key={`${item.route}-${item.tab || item.action || index}`}
               onPress={() => handleNavigation(item)}
               activeOpacity={0.7}
               style={{

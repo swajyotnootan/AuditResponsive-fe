@@ -2190,50 +2190,50 @@ const handleOpenForum = (audit: any, form: any = null) => {
     );
   };
   // ✅ ADD THIS NEW FUNCTION RIGHT HERE
-  const renderActiveForm = () => {
-    if (!activeFormConfig) return null;
+ // In AuditorDashboard - renderActiveForm function
+const renderActiveForm = () => {
+  if (!activeFormConfig) return null;
 
-    // Common props shared by all audit forms
-    const commonProps = {
-      ...activeFormConfig,
-      onClose: () => {
-        setActiveFormConfig(null);
-        handleRefresh();
-      },
-      onUpdateEditId: (newEditId: string) => {
-        setActiveFormConfig((prev: any) => ({ ...prev, editId: newEditId }));
-      },
-    };
-
-    const type = (activeFormConfig.auditType || "").toLowerCase();
-
-    // ✅ 1. 5S Audit
-    if (
-      type.includes("5s") ||
-      type.includes("five_s") ||
-      type.includes("five s")
-    ) {
-      return <FiveSAuditForm {...commonProps} />;
-    }
-
-    // ✅ 2. IATF / System / Internal Audit
-    if (
-      type.includes("iatf") ||
-      type.includes("system") ||
-      type.includes("internal") ||
-      type.includes("16949")
-    ) {
-      return <IATFInternalAuditForm {...commonProps} />;
-    }
-
-    // // ✅ 3. Process / Manufacturing Audit
-    if (type.includes("process") || type.includes("manufacturing")) {
-      return <ManufacturingProcessAuditForm {...commonProps} />;
-    }
-
-    // ✅ Fallback (defaults to 5S if type is unrecognized)
-    return <FiveSAuditForm {...commonProps} />;
+  const commonProps = {
+    ...activeFormConfig,
+    onClose: () => {
+      setActiveFormConfig(null);
+      handleRefresh();
+    },
+    onUpdateEditId: (newEditId: string) => {
+      setActiveFormConfig((prev: any) => ({ ...prev, editId: newEditId }));
+    },
+    // ✅ ADD THIS: Pass the callback to handle NCR raising
+    onRaiseNcr: (routeParams: any) => {
+      setActiveNcrConfig(routeParams);
+    },
   };
+
+  const type = (activeFormConfig.auditType || "").toLowerCase();
+
+  if (
+    type.includes("5s") ||
+    type.includes("five_s") ||
+    type.includes("five s")
+  ) {
+    return <FiveSAuditForm {...commonProps} />;
+  }
+
+  if (
+    type.includes("iatf") ||
+    type.includes("system") ||
+    type.includes("internal") ||
+    type.includes("16949")
+  ) {
+    return <IATFInternalAuditForm {...commonProps} />;
+  }
+
+  if (type.includes("process") || type.includes("manufacturing")) {
+    return <ManufacturingProcessAuditForm {...commonProps} />;
+  }
+
+  return <FiveSAuditForm {...commonProps} />;
+};
 
   // ✅ ADD THIS NEW FUNCTION
   const renderActiveNcrForm = () => {
