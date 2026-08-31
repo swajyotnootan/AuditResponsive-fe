@@ -12,7 +12,6 @@ import {
   Calendar,
   Check,
   Coffee,
-  Download,
   Edit2,
   FileText,
   MessageSquare,
@@ -23,7 +22,7 @@ import {
   Sunrise,
   Sunset,
   Trash2,
-  X,
+  X
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -2622,7 +2621,7 @@ return (
               >
                 PDF
               </ActionButton>
-              <ActionButton
+              {/* <ActionButton
                 onPress={handleExport}
                 color="#FFF"
                 bgColor={COLORS.accent}
@@ -2630,7 +2629,7 @@ return (
                 className="h-10"
               >
                 Export
-              </ActionButton>
+              </ActionButton> */}
               <TouchableOpacity
                 onPress={() => {
                   fetchDetailedSchedules();
