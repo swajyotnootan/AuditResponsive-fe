@@ -352,147 +352,202 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
     // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths
     // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
  // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
+// ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
 const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
-  if (!backendRoute) return '/(app)/(tabs)';
+  if (!backendRoute) {
+    // Return role-specific default
+    return getDefaultRouteForRole(role);
+  }
   
-  // If it's already an expo-router path, just return it
-  if (backendRoute.startsWith('/(app)/')) return backendRoute;
+  // ✅ If it's already an expo-router path, just return it
+  if (backendRoute.startsWith('/(app)/')) {
+    return backendRoute;
+  }
 
   const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
   const roleUpper = (role || '').toUpperCase();
 
   // ==========================================
-  // 🎯 1. TOP MANAGEMENT ROUTES (Fixed)
+  // 🎯 1. TOP MANAGEMENT ROUTES (FIXED)
   // ==========================================
   if (roleUpper === 'TOP_MANAGEMENT') {
-    // Top Management specific routes
-    if (cleanRoute === '/top-management' || backendRoute.includes('/top-management')) {
-      if (backendRoute.includes('annual') || backendRoute.includes('form3')) {
-        return '/(app)/(tabs)/top-management?tab=annual';
-      }
-      if (backendRoute.includes('dept') || backendRoute.includes('form4')) {
-        return '/(app)/(tabs)/top-management?tab=dept';
-      }
-      if (backendRoute.includes('week') || backendRoute.includes('form5-dashboard')) {
-        return '/(app)/(tabs)/top-management?tab=week';
-      }
-      if (backendRoute.includes('daily') || backendRoute.includes('form5-detailed')) {
-        return '/(app)/(tabs)/top-management?tab=daily';
+    console.log('📍 Top Management route mapping for:', backendRoute);
+    
+    // ✅ Check for all possible route variations
+    const routeLower = backendRoute.toLowerCase();
+    
+    // Check for specific tabs
+    if (routeLower.includes('annual') || routeLower.includes('form3')) {
+      return '/(app)/(tabs)/top-management?tab=annual';
+    }
+    if (routeLower.includes('dept') || routeLower.includes('form4')) {
+      return '/(app)/(tabs)/top-management?tab=dept';
+    }
+    if (routeLower.includes('week') || routeLower.includes('form5-dashboard') || routeLower.includes('form5')) {
+      return '/(app)/(tabs)/top-management?tab=week';
+    }
+    if (routeLower.includes('daily') || routeLower.includes('form5-detailed')) {
+      return '/(app)/(tabs)/top-management?tab=daily';
+    }
+    
+    // ✅ Check for exact route matches (with or without leading slash)
+    if (cleanRoute === '/top-management' || cleanRoute === 'top-management' || 
+        routeLower.includes('/top-management') || routeLower.includes('top-management')) {
+      // Check if there's a tab parameter
+      if (backendRoute.includes('tab=')) {
+        const tabMatch = backendRoute.match(/tab=([^&]+)/);
+        if (tabMatch) {
+          const tab = tabMatch[1];
+          // Map the tab to the correct top-management tab
+          if (tab === 'annual' || tab === 'dept' || tab === 'week' || tab === 'daily' || tab === 'overview') {
+            return `/(app)/(tabs)/top-management?tab=${tab}`;
+          }
+        }
       }
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
-    // Form routes for Top Management
-    if (cleanRoute === '/form3') return '/(app)/(tabs)/top-management?tab=annual';
-    if (cleanRoute === '/form4') return '/(app)/(tabs)/top-management?tab=dept';
-    if (cleanRoute === '/form5-dashboard') return '/(app)/(tabs)/top-management?tab=week';
-    if (cleanRoute === '/form5-detailed') return '/(app)/(tabs)/top-management?tab=daily';
-    
-    // NCR routes for Top Management
-    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
+    // ✅ NCR routes for Top Management
+    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
       return '/(app)/(tabs)/top-management?tab=overview';
     }
     
-    // Audit Manager routes - redirect to Top Management overview
-    if (cleanRoute === '/audit-manager' || backendRoute.includes('/audit-manager')) {
+    // ✅ Calendar route
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    
+    // ✅ Audit Manager routes - redirect to Top Management overview
+    if (routeLower.includes('audit-manager') || routeLower.includes('/audit-manager')) {
       return '/(app)/(tabs)/top-management?tab=overview';
     }
+    
+    // ✅ Default fallback for Top Management
+    return '/(app)/(tabs)/top-management?tab=overview';
   }
 
   // ==========================================
-  // 🎯 2. AUDIT MANAGER ROUTES (Fixed)
+  // 🎯 2. AUDIT MANAGER ROUTES (FIXED)
   // ==========================================
   if (roleUpper === 'AUDIT_MANAGER') {
-    // Audit Manager specific routes
-    if (cleanRoute === '/audit-manager' || backendRoute.includes('/audit-manager')) {
-      if (backendRoute.includes('requests') || backendRoute.includes('#requests')) {
-        return '/(app)/(tabs)/audit-manager?tab=requests';
-      }
-      if (backendRoute.includes('ncr') || backendRoute.includes('NCR')) {
-        return '/(app)/(tabs)/audit-manager?tab=ncr';
-      }
-      if (backendRoute.includes('schedules') || backendRoute.includes('schedule')) {
-        return '/(app)/(tabs)/audit-manager?tab=schedules';
-      }
-      if (backendRoute.includes('dashboard')) {
-        return '/(app)/(tabs)/audit-manager?tab=dashboard';
-      }
-      // ✅ FIXED: Default to dashboard tab, not just the base route
+    console.log('📍 Audit Manager route mapping for:', backendRoute);
+    
+    const routeLower = backendRoute.toLowerCase();
+    
+    // ✅ Check for specific tabs in the route
+    if (routeLower.includes('requests') || routeLower.includes('pending')) {
+      return '/(app)/(tabs)/audit-manager?tab=requests';
+    }
+    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
+      return '/(app)/(tabs)/audit-manager?tab=ncr';
+    }
+    if (routeLower.includes('schedules') || routeLower.includes('schedule') || 
+        routeLower.includes('form3') || routeLower.includes('form4') || routeLower.includes('form5')) {
+      return '/(app)/(tabs)/audit-manager?tab=schedules';
+    }
+    if (routeLower.includes('dashboard') || routeLower.includes('overview')) {
       return '/(app)/(tabs)/audit-manager?tab=dashboard';
     }
     
-    // Schedule workflow routes for Audit Manager
-    if (cleanRoute === '/form3' || cleanRoute === '/form4' || 
-        cleanRoute === '/form5-dashboard' || cleanRoute === '/form5-detailed') {
+    // ✅ Check for exact audit-manager route
+    if (cleanRoute === '/audit-manager' || cleanRoute === 'audit-manager' || 
+        routeLower.includes('/audit-manager') || routeLower.includes('audit-manager')) {
+      // Check if there's a tab parameter
+      if (backendRoute.includes('tab=')) {
+        const tabMatch = backendRoute.match(/tab=([^&]+)/);
+        if (tabMatch) {
+          const tab = tabMatch[1];
+          if (tab === 'dashboard' || tab === 'schedules' || tab === 'ncr' || tab === 'requests') {
+            return `/(app)/(tabs)/audit-manager?tab=${tab}`;
+          }
+        }
+      }
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    }
+    
+    // ✅ Top Management routes - redirect to Audit Manager schedules
+    if (routeLower.includes('top-management')) {
       return '/(app)/(tabs)/audit-manager?tab=schedules';
     }
     
-    // Top Management routes - redirect to Audit Manager schedules
-    if (cleanRoute === '/top-management') {
-      return '/(app)/(tabs)/audit-manager?tab=schedules';
+    // ✅ Calendar route
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
     }
     
-    // NCR routes for Audit Manager
-    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
-      return '/(app)/(tabs)/audit-manager?tab=ncr';
-    }
+    // ✅ Default fallback for Audit Manager
+    return '/(app)/(tabs)/audit-manager?tab=dashboard';
   }
 
   // ==========================================
   // 🎯 3. AUDITOR ROUTES
   // ==========================================
   if (roleUpper === 'AUDITOR') {
-    if (cleanRoute === '/auditor') return '/(app)/(tabs)/auditor?tab=my-audits';
-    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
-      return '/(app)/(tabs)/auditor?tab=ncr-list';
-    }
-    if (['/form3', '/form4', '/form5-dashboard', '/form5-detailed', '/top-management'].includes(cleanRoute)) {
+    const routeLower = backendRoute.toLowerCase();
+    if (routeLower.includes('auditor')) {
+      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditor?tab=my-audits';
+      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditor?tab=ncr-pending';
+      if (routeLower.includes('ncr-list') || routeLower.includes('my-ncrs')) return '/(app)/(tabs)/auditor?tab=ncr-list';
       return '/(app)/(tabs)/auditor?tab=my-audits';
     }
+    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
+      return '/(app)/(tabs)/auditor?tab=ncr-list';
+    }
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    return '/(app)/(tabs)/auditor?tab=my-audits';
   }
 
   // ==========================================
   // 🎯 4. AUDITEE ROUTES
   // ==========================================
   if (roleUpper === 'AUDITEE') {
-    if (cleanRoute === '/auditee') return '/(app)/(tabs)/auditee?tab=my-audits';
-    if (cleanRoute === '/form7' || cleanRoute.startsWith('/ncr-view') || cleanRoute.includes('/ncr')) {
-      return '/(app)/(tabs)/auditee?tab=my-ncrs';
-    }
-    if (['/form3', '/form4', '/form5-dashboard', '/form5-detailed', '/top-management'].includes(cleanRoute)) {
+    const routeLower = backendRoute.toLowerCase();
+    if (routeLower.includes('auditee')) {
+      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditee?tab=my-audits';
+      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditee?tab=ncr-pending';
+      if (routeLower.includes('my-ncrs') || routeLower.includes('ncr-list')) return '/(app)/(tabs)/auditee?tab=my-ncrs';
       return '/(app)/(tabs)/auditee?tab=my-audits';
     }
+    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
+      return '/(app)/(tabs)/auditee?tab=my-ncrs';
+    }
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    return '/(app)/(tabs)/auditee?tab=my-audits';
   }
 
   // ==========================================
   // 🎯 5. MASTER ROUTES
   // ==========================================
   if (roleUpper === 'MASTER') {
-    if (cleanRoute === '/master' || backendRoute.includes('/master')) {
-      if (backendRoute.includes('user-management')) return '/(app)/(tabs)/master?section=user-management';
-      if (backendRoute.includes('enterprise-management')) return '/(app)/(tabs)/master?section=enterprise-management';
-      if (backendRoute.includes('role-management')) return '/(app)/(tabs)/master?section=role-management';
-      if (backendRoute.includes('audit-type-management')) return '/(app)/(tabs)/master?section=audit-type-management';
-      if (backendRoute.includes('competency-management')) return '/(app)/(tabs)/master?section=competency-management';
-      if (backendRoute.includes('logo-mgmt')) return '/(app)/(tabs)/master?section=logo-mgmt';
-      if (backendRoute.includes('line-mgmt')) return '/(app)/(tabs)/master?section=line-mgmt';
-      return '/(app)/(tabs)/master?section=user-management';
-    }
+    const routeLower = backendRoute.toLowerCase();
+    if (routeLower.includes('user-management')) return '/(app)/(tabs)/master?section=user-management';
+    if (routeLower.includes('enterprise-management')) return '/(app)/(tabs)/master?section=enterprise-management';
+    if (routeLower.includes('role-management')) return '/(app)/(tabs)/master?section=role-management';
+    if (routeLower.includes('audit-type-management')) return '/(app)/(tabs)/master?section=audit-type-management';
+    if (routeLower.includes('competency-management')) return '/(app)/(tabs)/master?section=competency-management';
+    if (routeLower.includes('logo-mgmt')) return '/(app)/(tabs)/master?section=logo-mgmt';
+    if (routeLower.includes('line-mgmt')) return '/(app)/(tabs)/master?section=line-mgmt';
+    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
+    return '/(app)/(tabs)/master?section=user-management';
   }
 
   // ==========================================
   // 🎯 6. LEAD AUDITOR ROUTES
   // ==========================================
   if (roleUpper === 'LEAD_AUDITOR') {
-    if (cleanRoute === '/lead-auditor' || backendRoute.includes('/lead-auditor')) {
-      if (backendRoute.includes('overview')) return '/(app)/(tabs)/lead-auditor?tab=overview';
-      if (backendRoute.includes('audits')) return '/(app)/(tabs)/lead-auditor?tab=audits';
-      if (backendRoute.includes('responses')) return '/(app)/(tabs)/lead-auditor?tab=responses';
-      if (backendRoute.includes('ncrs')) return '/(app)/(tabs)/lead-auditor?tab=ncrs';
-      if (backendRoute.includes('auditors')) return '/(app)/(tabs)/lead-auditor?tab=auditors';
-      if (backendRoute.includes('auditees')) return '/(app)/(tabs)/lead-auditor?tab=auditees';
-      return '/(app)/(tabs)/lead-auditor?tab=overview';
-    }
+    const routeLower = backendRoute.toLowerCase();
+    if (routeLower.includes('overview')) return '/(app)/(tabs)/lead-auditor?tab=overview';
+    if (routeLower.includes('audits')) return '/(app)/(tabs)/lead-auditor?tab=audits';
+    if (routeLower.includes('responses')) return '/(app)/(tabs)/lead-auditor?tab=responses';
+    if (routeLower.includes('ncrs')) return '/(app)/(tabs)/lead-auditor?tab=ncrs';
+    if (routeLower.includes('auditors')) return '/(app)/(tabs)/lead-auditor?tab=auditors';
+    if (routeLower.includes('auditees')) return '/(app)/(tabs)/lead-auditor?tab=auditees';
+    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
+    return '/(app)/(tabs)/lead-auditor?tab=overview';
   }
 
   // ==========================================
@@ -505,28 +560,29 @@ const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: str
   // ==========================================
   // 🔄 FALLBACK - Role-specific default dashboards
   // ==========================================
-  if (roleUpper === 'AUDIT_MANAGER') {
-    return '/(app)/(tabs)/audit-manager?tab=dashboard';
-  }
-  if (roleUpper === 'TOP_MANAGEMENT') {
-    return '/(app)/(tabs)/top-management?tab=overview';
-  }
-  if (roleUpper === 'AUDITOR') {
-    return '/(app)/(tabs)/auditor?tab=my-audits';
-  }
-  if (roleUpper === 'AUDITEE') {
-    return '/(app)/(tabs)/auditee?tab=my-audits';
-  }
-  if (roleUpper === 'MASTER') {
-    return '/(app)/(tabs)/master?section=user-management';
-  }
-  if (roleUpper === 'LEAD_AUDITOR') {
-    return '/(app)/(tabs)/lead-auditor?tab=overview';
-  }
+  return getDefaultRouteForRole(role);
+};
 
-  // Ultimate Fallback
-  console.warn('⚠️ Unknown backend route, defaulting to dashboard:', backendRoute);
-  return '/(app)/(tabs)';
+// ✅ Helper function to get default route for each role
+const getDefaultRouteForRole = (role: string | null): string => {
+  const roleUpper = (role || '').toUpperCase();
+  
+  switch (roleUpper) {
+    case 'TOP_MANAGEMENT':
+      return '/(app)/(tabs)/top-management?tab=overview';
+    case 'AUDIT_MANAGER':
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    case 'AUDITOR':
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    case 'AUDITEE':
+      return '/(app)/(tabs)/auditee?tab=my-audits';
+    case 'MASTER':
+      return '/(app)/(tabs)/master?section=user-management';
+    case 'LEAD_AUDITOR':
+      return '/(app)/(tabs)/lead-auditor?tab=overview';
+    default:
+      return '/(app)/(tabs)';
+  }
 };
 
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
