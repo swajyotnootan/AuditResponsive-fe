@@ -113,14 +113,33 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       return currentPath === "/calendar" || currentPath.includes("/calendar");
     }
 
-    // ✅ For Dashboard (Home)
-    if (item.route === "/(app)/(tabs)") {
-      // Only highlight if no tab or section is selected
-      if (!currentTab && !currentSection) {
-        return currentPath === "/" || currentPath === "";
+    // ✅ FIXED: For Dashboard (Home) - properly handle active state
+    if (item.route === "/(app)/(tabs)" || item.route === "/(app)/(tabs)/" || item.route === "/") {
+      // Check if we're on the home/dashboard route
+      const isHomeRoute = currentPath === "/" || currentPath === "" || currentPath === "/(app)/(tabs)";
+      
+      // If we're on a sub-route of dashboard but no tab/section is selected
+      if (isHomeRoute) {
+        return true;
       }
-      // If we're on a tab-based dashboard but no specific tab matches
-      return currentPath === "/" || currentPath === "";
+      
+      // Check if we're on a sub-page under dashboard (like /audits, /reports, etc.)
+      // But only if no tab or section is active
+      if (currentPath !== "/" && !currentTab && !currentSection) {
+        // Check if any other navigation item matches
+        const otherItemsMatch = navigationItems.some((otherItem: any) => {
+          if (otherItem.route === item.route) return false;
+          const otherBaseRoute = getBaseRoute(otherItem.route);
+          return currentPath.includes(otherBaseRoute) && otherBaseRoute !== "/";
+        });
+        
+        // If no other item matches, highlight dashboard
+        if (!otherItemsMatch) {
+          return true;
+        }
+      }
+      
+      return false;
     }
 
     // ✅ Default: exact path match
@@ -214,7 +233,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
 
       {/* Navigation Items */}
       <ScrollView className="flex-1 pt-2" showsVerticalScrollIndicator={false}>
-        {navigationItems.map((item, index) => {
+        {navigationItems.map((item: any, index: number) => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
           
