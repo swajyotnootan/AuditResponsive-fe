@@ -567,14 +567,21 @@ export default function Form7View({ initialParams, onClose }: any) {
   };
 
   // ✅ FIXED: Function to go back/dismiss - same as Back button
-  const handleGoBack = () => {
-    if (onClose && typeof onClose === 'function') {
-      onClose();
-    } else {
-      const dashboardPath = getDashboardPath(user) || "/";
-      router.replace(dashboardPath as any);
-    }
-  };
+  // ✅ FIXED: Function to go back/dismiss - same as Back button
+const handleGoBack = () => {
+  // Close modal first if it's open
+  if (showSuccessModal) {
+    setShowSuccessModal(false);
+  }
+  
+  // Then navigate back
+  if (onClose && typeof onClose === 'function') {
+    onClose();
+  } else {
+    const dashboardPath = getDashboardPath(user) || "/";
+    router.replace(dashboardPath as any);
+  }
+};
 
   // ============================================================================
   // SUCCESS MODAL
@@ -688,19 +695,24 @@ export default function Form7View({ initialParams, onClose }: any) {
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity
-                  onPress={() => {
-                    setShowSuccessModal(false);
-                    // Use the same handleGoBack function
-                    setTimeout(() => handleGoBack(), 100);
-                  }}
-                  className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"
-                  style={{ backgroundColor: COLORS.secondary }}
-                >
-                  <ArrowLeft size={18} color="#fff" />
-                  <Text className="font-semibold text-white">
-                    Back to Dashboard
-                  </Text>
-                </TouchableOpacity>
+  onPress={() => {
+    setShowSuccessModal(false);
+    // Navigate directly without setTimeout
+    if (onClose && typeof onClose === 'function') {
+      onClose();
+    } else {
+      const dashboardPath = getDashboardPath(user) || "/";
+      router.replace(dashboardPath as any);
+    }
+  }}
+  className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"
+  style={{ backgroundColor: COLORS.secondary }}
+>
+  <ArrowLeft size={18} color="#fff" />
+  <Text className="font-semibold text-white">
+    Back to Dashboard
+  </Text>
+</TouchableOpacity>
               </View>
             </View>
           </View>
