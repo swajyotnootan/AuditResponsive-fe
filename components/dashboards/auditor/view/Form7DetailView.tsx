@@ -40,6 +40,7 @@ import {
   View,
 } from "react-native";
 import Form8View from "../../auditee/Form8View";
+
 // ─────────────────────────────────────────────────────────────
 // COLOR PALETTE & STYLES
 // ─────────────────────────────────────────────────────────────
@@ -56,6 +57,55 @@ const COLORS = {
   danger: "#ef4444",
 };
 
+// ─────────────────────────────────────────────────────────────
+// ✅ UTC TO IST CONVERTER
+// ─────────────────────────────────────────────────────────────
+const convertUTCToIST = (utcDateString: string | null | undefined): string | null => {
+  if (!utcDateString) return null;
+  
+  try {
+    const date = new Date(utcDateString);
+    if (isNaN(date.getTime())) return null;
+    
+    // IST is UTC + 5:30
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+    const istDate = new Date(date.getTime() + istOffset);
+    
+    return istDate.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata", // Explicitly set timezone
+    });
+  } catch (error) {
+    console.error("Error converting UTC to IST:", error);
+    return null;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// ✅ FORMAT DATE FOR DISPLAY (with IST conversion)
+// ─────────────────────────────────────────────────────────────
+const formatDateIST = (dateString: string | null | undefined): string => {
+  if (!dateString) return "—";
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "—";
+    
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    });
+  } catch (error) {
+    return "—";
+  }
+};
 
 const getIconColor = (textClass: string) => {
   if (textClass.includes("amber")) return "#92400e";
@@ -64,7 +114,7 @@ const getIconColor = (textClass: string) => {
   if (textClass.includes("purple")) return "#581c87";
   if (textClass.includes("green")) return "#166534";
   if (textClass.includes("red")) return "#991b1b";
-  if (textClass.includes("cyan")) return "#0e7490"; // ✅ Added for IN_8D_PROCESS
+  if (textClass.includes("cyan")) return "#0e7490";
   return "#334155";
 };
 
@@ -127,7 +177,6 @@ const StatusBadge = ({ status }: { status: string }) => {
       icon: X,
       label: "Rejected",
     },
-    // ✅ ADD THESE MISSING STATUSES (Matches NCRDashboard)
     SENT_TO_8D: {
       bg: "bg-purple-100",
       text: "text-purple-800",
@@ -218,6 +267,7 @@ const DetailRow = ({ label, value, multiline = false }: any) => (
   </View>
 );
 
+// ✅ UPDATED SignatureField with IST conversion
 const SignatureField = ({
   label,
   name,
@@ -225,16 +275,8 @@ const SignatureField = ({
   pending = false,
   timestamp,
 }: any) => {
-  const formattedTimestamp = timestamp
-    ? new Date(timestamp).toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      })
-    : null;
+  // ✅ Convert UTC to IST
+  const formattedTimestamp = convertUTCToIST(timestamp);
 
   // ✅ DEBUG: Verify the string is actually reaching the UI component
   if (signature) {
@@ -252,7 +294,6 @@ const SignatureField = ({
 
       {signature &&
       (signature.startsWith("data:image") || signature.startsWith("http")) ? (
-        // ✅ FIX: Added explicit style={{ minHeight: 60, alignItems: 'center', justifyContent: 'center' }}
         <View
           className="w-full p-2 border border-gray-200 rounded-lg bg-gray-50"
           style={{
@@ -263,8 +304,6 @@ const SignatureField = ({
         >
           <Image
             source={{ uri: signature }}
-            // ✅ CRITICAL FIX: React Native Web often ignores className dimensions on <Image>.
-            // Explicit style guarantees it renders.
             style={{ width: "100%", height: 48 }}
             resizeMode="contain"
             onError={(e) =>
@@ -658,10 +697,10 @@ export default function Form7DetailView({
   const [loading8DReport, setLoading8DReport] = useState(false);
   const [activeForm8DetailConfig, setActiveForm8DetailConfig] =
     useState<any>(null);
+
   const fetchSignature = async (userId: string | number, fullName?: string) => {
     try {
       let url = "";
-    
 
       if (userId) {
         url = `${API_BASE_URL}/api/users/${userId}/signature`;
@@ -681,7 +720,6 @@ export default function Form7DetailView({
 
       console.log("🔗 [FETCH SIGNATURE] Fetching from:", url);
 
-      // ✅ BRANCH 1: WEB (Keep your working blob logic)
       if (Platform.OS === "web") {
         const response = await fetch(url, {
           headers: { Accept: "image/png, image/jpeg, application/json" },
@@ -715,10 +753,7 @@ export default function Form7DetailView({
           response.status,
         );
         return null;
-      }
-
-      // ✅ BRANCH 2: MOBILE (Uses legacy import, fixing the deprecation error)
-      else {
+      } else {
         const fileUri = `${FileSystem.cacheDirectory}signature_${userId}.tmp`;
 
         console.log("📱 [FETCH SIGNATURE] Downloading via expo-file-system...");
@@ -745,12 +780,10 @@ export default function Form7DetailView({
           downloadResult.uri,
         );
 
-        // Read the downloaded file as a base64 string
         const base64 = await FileSystem.readAsStringAsync(downloadResult.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
 
-        // Try to get the correct MIME type from headers, fallback to image/png
         const contentType =
           downloadResult.headers?.["content-type"] || "image/png";
         const dataUri = `data:${contentType};base64,${base64}`;
@@ -766,6 +799,7 @@ export default function Form7DetailView({
       return null;
     }
   };
+
   const fetchNCRDetail = async () => {
     setLoading(true);
     setError(null);
@@ -776,7 +810,6 @@ export default function Form7DetailView({
         console.log("🔍 [DEBUG] NCR Data fetched:", ncrData);
         setNcr(ncrData);
 
-        // ✅ Fetch Auditor Signature (with name fallback like FiveSView)
         const auditorId = ncrData.auditorId || ncrData.auditor?.id;
         const auditorName = ncrData.auditorName || ncrData.auditor?.name;
 
@@ -795,7 +828,6 @@ export default function Form7DetailView({
           if (sig) setAuditorSignature(sig);
         }
 
-        // ✅ Fetch Auditee Signature (with name fallback like FiveSView)
         const auditeeId = ncrData.auditeeId || ncrData.auditee?.id;
         const auditeeName = ncrData.auditeeName || ncrData.auditee?.name;
 
@@ -1014,7 +1046,6 @@ export default function Form7DetailView({
     ].includes(ncr?.status),
   );
 
-  // ✅ ADD THIS: Render function for Form 8
   const renderActiveForm8 = () => {
     if (!activeForm8Config) return null;
     return (
@@ -1022,55 +1053,27 @@ export default function Form7DetailView({
         initialParams={activeForm8Config}
         onClose={() => {
           setActiveForm8Config(null);
-          fetchNCRDetail(); // Refresh data when returning from Form 8
+          fetchNCRDetail();
         }}
       />
     );
   };
 
-  // const renderActiveForm8Detail = () => {
-  //   if (!activeForm8DetailConfig) return null;
-  //   return (
-  //     <Form8DetailView
-  //       initialParams={activeForm8DetailConfig}
-  //       onClose={() => {
-  //         setActiveForm8DetailConfig(null);
-  //         fetchNCRDetail(); // Refresh data when returning from Form 8 Detail
-  //       }}
-  //     />
-  //   );
-  // };
-
-  // ✅ ADD THIS: Render function for 8D Report Preview
   const render8DPreview = () => {
     if (!show8DReportModal || !selected8DEventId) return null;
 
     return (
       <FinalPreview
         eventId={selected8DEventId}
-        isHOD={isHOD || false} // Passed from useAuth()
+        isHOD={isHOD || false}
         onRefresh={() => {
           setShow8DReportModal(false);
           setSelected8DEventId(null);
-          fetchNCRDetail(); // Refresh NCR data after 8D actions (e.g., approval)
+          fetchNCRDetail();
         }}
       />
     );
   };
-
-  // ✅ UPDATE THE EARLY RETURN CHECKS (Place this before the loading/error checks)
-
-  // if (activeForm8DetailConfig) {
-  //   return renderActiveForm8Detail();
-  // }
-
-  if (activeForm8Config) {
-    return renderActiveForm8();
-  }
-
-  // if (activeForm8DetailConfig) {
-  //   return renderActiveForm8Detail();
-  // }
 
   if (activeForm8Config) {
     return renderActiveForm8();
@@ -1119,7 +1122,6 @@ export default function Form7DetailView({
   }
 
   return (
-    // ✅ FIX 2: Added explicit style={{ flex: 1 }} to guarantee desktop web scrolling
     <SafeAreaView className="flex-1 bg-gray-50" style={{ flex: 1 }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -1130,7 +1132,7 @@ export default function Form7DetailView({
           className="flex-1"
           style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={true} // Turned on for desktop visibility
+          showsVerticalScrollIndicator={true}
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
           contentContainerClassName="p-4"
         >
@@ -1190,7 +1192,7 @@ export default function Form7DetailView({
               </View>
             </View>
 
-            {/* Info Cards Row */}
+            {/* Info Cards Row - ✅ UPDATED: Due Date with IST conversion */}
             <View className="px-4 py-4 border-b border-gray-100 bg-gray-50">
               <View className="flex-row flex-wrap gap-3">
                 <View className="w-[48%] md:w-[23%]">
@@ -1218,11 +1220,7 @@ export default function Form7DetailView({
                   <InfoCard
                     icon={Calendar}
                     label="Due Date"
-                    value={
-                      ncr.dueDate
-                        ? new Date(ncr.dueDate).toLocaleDateString()
-                        : "—"
-                    }
+                    value={formatDateIST(ncr.dueDate)}
                   />
                 </View>
               </View>
@@ -1328,7 +1326,6 @@ export default function Form7DetailView({
               ncr?.ncr2CorrectiveAction?.trim()) && (
               <TouchableOpacity
                 onPress={() => {
-                  // ✅ Call the parent callback instead of setting local state
                   if (onNavigateToForm8) {
                     onNavigateToForm8({
                       id: ncr.id,
@@ -1405,7 +1402,6 @@ export default function Form7DetailView({
             {canSubmitCA && (
               <TouchableOpacity
                 onPress={() => {
-                  // ✅ SET STATE TO OPEN FORM 8 INLINE
                   setActiveForm8Config({
                     id: ncr.id,
                     type: ncr?.status === "READY_FOR_NCR2" ? "ncr2" : "normal",
@@ -1470,12 +1466,11 @@ export default function Form7DetailView({
         />
       )}
 
-      {/* 🗄️ RIGHT-SIDE DRAWER: 8D Report Preview */}
+      {/* 8D Report Preview Modal */}
       {show8DReportModal && selected8DEventId && (
         <Modal visible={true} transparent animationType="slide">
           <View className="flex-1 bg-black/60">
             <View className="flex-row justify-end flex-1">
-              {/* 1. Backdrop (Click outside the drawer to close) */}
               <TouchableOpacity
                 className="flex-1"
                 activeOpacity={1}
@@ -1485,9 +1480,7 @@ export default function Form7DetailView({
                 }}
               />
 
-              {/* 2. Drawer Panel */}
               <View className="w-full md:w-[500px] lg:w-[600px] bg-white h-full shadow-2xl border-l border-gray-200">
-                {/* Drawer Header */}
                 <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
                   <View className="flex-row items-center gap-3">
                     <FileBarChart size={20} color={COLORS.primary} />
@@ -1506,7 +1499,6 @@ export default function Form7DetailView({
                   </TouchableOpacity>
                 </View>
 
-                {/* Drawer Content (FinalPreview Component) */}
                 <View className="flex-1 bg-gray-50">
                   <FinalPreview
                     eventId={selected8DEventId}
@@ -1514,7 +1506,7 @@ export default function Form7DetailView({
                     onRefresh={() => {
                       setShow8DReportModal(false);
                       setSelected8DEventId(null);
-                      fetchNCRDetail(); // Refresh parent NCR data on approval/rejection
+                      fetchNCRDetail();
                     }}
                   />
                 </View>

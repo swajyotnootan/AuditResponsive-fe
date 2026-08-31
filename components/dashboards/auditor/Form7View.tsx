@@ -566,15 +566,11 @@ export default function Form7View({ initialParams, onClose }: any) {
     }
   };
 
-  // ✅ FIXED: Function to navigate to dashboard
-  const navigateToDashboard = () => {
-    setShowSuccessModal(false);
-    
-    // If onClose is provided and is a function, call it
+  // ✅ FIXED: Function to go back/dismiss - same as Back button
+  const handleGoBack = () => {
     if (onClose && typeof onClose === 'function') {
       onClose();
     } else {
-      // Otherwise navigate using router
       const dashboardPath = getDashboardPath(user) || "/";
       router.replace(dashboardPath as any);
     }
@@ -692,7 +688,11 @@ export default function Form7View({ initialParams, onClose }: any) {
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity
-                  onPress={navigateToDashboard}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    // Use the same handleGoBack function
+                    setTimeout(() => handleGoBack(), 100);
+                  }}
                   className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"
                   style={{ backgroundColor: COLORS.secondary }}
                 >
@@ -821,14 +821,7 @@ export default function Form7View({ initialParams, onClose }: any) {
           <FadeInView delay={0}>
             <View className="flex-row items-center justify-between mb-6">
               <TouchableOpacity
-                onPress={() => {
-                  if (onClose && typeof onClose === 'function') {
-                    onClose();
-                  } else {
-                    const dashboardPath = getDashboardPath(user) || "/";
-                    router.replace(dashboardPath as any);
-                  }
-                }}
+                onPress={handleGoBack}
                 className="flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
               >
                 <ArrowLeft size={16} color="#334155" />
@@ -1046,8 +1039,7 @@ export default function Form7View({ initialParams, onClose }: any) {
                           Auditor
                         </Text>
                       </View>
-                      <InputField
-                        label="Name"
+                      <InputField                        label="Name"
                         value={formData.auditorName}
                         onChange={(v: string) => setValue("auditorName", v)}
                         placeholder="Auditor name"
@@ -1148,14 +1140,7 @@ export default function Form7View({ initialParams, onClose }: any) {
 
                   <View className="flex-row gap-2">
                     <TouchableOpacity
-                      onPress={() => {
-                        if (onClose && typeof onClose === 'function') {
-                          onClose();
-                        } else {
-                          const dashboardPath = getDashboardPath(user) || "/";
-                          router.replace(dashboardPath as any);
-                        }
-                      }}
+                      onPress={handleGoBack}
                       className="px-4 py-2.5 bg-white border rounded-lg shadow-sm border-slate-200"
                     >
                       <Text className="text-sm font-medium text-slate-700">
