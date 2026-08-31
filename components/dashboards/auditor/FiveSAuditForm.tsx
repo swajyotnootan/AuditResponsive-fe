@@ -1,6 +1,6 @@
 import { API_BASE_URL } from "@/config/apiConfig";
-import { auditAPI } from "@/services/api";
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { auditAPI } from "@/services/api";
 import {
   auditScheduleApi,
   EvidenceFile,
@@ -37,7 +37,7 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -280,6 +280,67 @@ export default function FiveSAuditForm(props: any) {
     auditorSignature: "",
     createdAt: new Date().toISOString(),
   });
+
+  // ✅ Store initial form data for comparison
+const [initialFormData] = useState(() => {
+  return {
+    documentNumber: generateDocumentNumber(sheetKey),
+    department: "",
+    supervisor: "",
+    area: "",
+    shift: "Morning",
+    date: new Date().toISOString().split("T")[0],
+    time: new Date().toLocaleTimeString(),
+    auditorName: user?.name || "",
+    auditorId: user?.id ? Number(user.id) : null,
+    hodEmail: "",
+    status: "IN_PROGRESS",
+    scores: {} as Record<number, number | null>,
+    comments: {} as Record<number, string>,
+    totalScore: null as number | null,
+    maxPossibleScore: 144,
+    percentage: null as number | null,
+    auditorSignature: "",
+    createdAt: new Date().toISOString(),
+  };
+});
+
+// ✅ Check if form has changed
+const hasFormChanged = useCallback(() => {
+  // Check if any data has changed from initial
+  const currentData = {
+    ...formData,
+    scores: JSON.stringify(formData.scores),
+    comments: JSON.stringify(formData.comments),
+    documentNumber: formData.documentNumber,
+    department: formData.department,
+    supervisor: formData.supervisor,
+    area: formData.area,
+    shift: formData.shift,
+    date: formData.date,
+    auditeeName: auditeeInfo.auditeeName,
+    auditorSignature: formData.auditorSignature,
+  };
+  
+  const initialData = {
+    ...initialFormData,
+    scores: JSON.stringify(initialFormData.scores),
+    comments: JSON.stringify(initialFormData.comments),
+    documentNumber: initialFormData.documentNumber,
+    department: initialFormData.department,
+    supervisor: initialFormData.supervisor,
+    area: initialFormData.area,
+    shift: initialFormData.shift,
+    date: initialFormData.date,
+    auditeeName: "",
+    auditorSignature: "",
+  };
+  
+  // Also check if any evidence exists
+  const hasEvidence = Object.keys(evidences).length > 0;
+  
+  return JSON.stringify(currentData) !== JSON.stringify(initialData) || hasEvidence;
+}, [formData, initialFormData, evidences, auditeeInfo.auditeeName]);
 
   const getQualityValue = (q: string) => {
     switch (q) {
@@ -1448,18 +1509,36 @@ export default function FiveSAuditForm(props: any) {
     setFormData((prev) => ({ ...prev, date: formattedDate }));
   };
 
-  const handleInputChange = (field: string, value: any) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  const handleScoreChange = (questionId: number, score: number) =>
-    setFormData((prev) => ({
-      ...prev,
-      scores: { ...prev.scores, [questionId]: score },
-    }));
-  const handleCommentChange = (questionId: number, comment: string) =>
-    setFormData((prev) => ({
-      ...prev,
-      comments: { ...prev.comments, [questionId]: comment },
-    }));
+const handleInputChange = useCallback((field: string, value: any) => {
+  setFormData((prev) => ({ ...prev, [field]: value }));
+  // ✅ Mark as dirty
+  const initialValue = initialFormData[field as keyof typeof initialFormData];
+  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
+ const handleScoreChange = useCallback((questionId: number, score: number) => {
+  setFormData((prev) => ({
+    ...prev,
+    scores: { ...prev.scores, [questionId]: score },
+  }));
+  // ✅ Mark as dirty
+  const initialScore = initialFormData.scores[questionId];
+  if (score !== initialScore) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
+  const handleCommentChange = useCallback((questionId: number, comment: string) => {
+  setFormData((prev) => ({
+    ...prev,
+    comments: { ...prev.comments, [questionId]: comment },
+  }));
+  // ✅ Mark as dirty
+  const initialComment = initialFormData.comments[questionId] || "";
+  if (comment !== initialComment) {
+    markDirty();
+  }
+}, [markDirty, initialFormData]);
 
   const calculateTotalScore = () => {
     let total = 0;
@@ -1489,13 +1568,25 @@ export default function FiveSAuditForm(props: any) {
   };
 
   // ✅ UNIVERSAL NAVIGATION HANDLER
-  const handleGoBack = () => {
+  // ✅ UNIVERSAL NAVIGATION HANDLER with unsaved changes
+const handleGoBack = useCallback(() => {
+  // ✅ Check if there are unsaved changes
+  if (hasFormChanged() && !formData.status?.includes("SUBMITTED")) {
+    confirmDiscard(() => {
+      if (props.onClose) {
+        props.onClose();
+      } else {
+        router.back();
+      }
+    });
+  } else {
     if (props.onClose) {
       props.onClose();
     } else {
       router.back();
     }
-  };
+  }
+}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
 
   const saveDraft = async () => {
     setSaving(true);
@@ -1513,18 +1604,18 @@ export default function FiveSAuditForm(props: any) {
 
       // ✅ Prepare evidence for API submission
       // ✅ Prepare evidence for API submission (with await)
-const preparedEvidences = [];
-for (const questionKey in evidences) {
-  const evidenceData = evidences[questionKey];
+       const preparedEvidences = [];
+        for (const questionKey in evidences) {
+       const evidenceData = evidences[questionKey];
 
-  if (evidenceData.image) {
-    try {
-      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-        type: "image",
-        uri: evidenceData.image.uri,
-        name: evidenceData.image.name,
-        quality: evidenceData.image.quality,
-        capturedAt: evidenceData.image.capturedAt,
+     if (evidenceData.image) {
+       try {
+         const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
+           type: "image",
+           uri: evidenceData.image.uri,
+          name: evidenceData.image.name,
+          quality: evidenceData.image.quality,
+          capturedAt: evidenceData.image.capturedAt,
       });
       preparedEvidences.push(prepared);
     } catch (error) {
@@ -1669,6 +1760,8 @@ for (const questionKey in evidences) {
             },
           });
         }
+          resetDirty(); // ✅ Reset after successful draft save
+
       }
     } catch (error: any) {
       console.error("Error saving draft:", error);
@@ -1875,6 +1968,8 @@ for (const questionKey in evidences) {
     } else {
       router.replace("/auditor");
     }
+      resetDirty(); // ✅ Reset after successful submission
+
   } catch (error: any) {
     console.error("Error submitting audit:", error);
     addToast(`Failed to submit audit: ${error.message}`, "error");
@@ -2011,6 +2106,16 @@ for (const questionKey in evidences) {
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
   }, [currentStep, questions, currentCheckpointIndex, activeSectionIndex]); // ✅ Updated dependencies
+
+  // ✅ Track evidence changes for dirty state
+useEffect(() => {
+  const hasEvidence = Object.keys(evidences).length > 0;
+  const initialEvidenceCount = 0; // Initially no evidence
+  
+  if (hasEvidence && hasFormChanged()) {
+    markDirty();
+  }
+}, [evidences]);
   const handleTabChange = (index: number) => {
     setActiveSectionIndex(index);
     const section = FIVE_S_SECTIONS[index];
@@ -3760,6 +3865,121 @@ for (const questionKey in evidences) {
             ))}
         </View>
       </Modal>
+      {/* ✅ Discard Changes Modal */}
+<Modal
+  visible={showDiscardModal}
+  transparent
+  animationType="fade"
+  onRequestClose={cancelDiscard}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+    }}
+  >
+    <View
+      style={{
+        width: '100%',
+        maxWidth: 420,
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      }}
+    >
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: '#fef2f2',
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'center',
+          marginBottom: 16,
+        }}
+      >
+        <X size={26} color="#dc2626" />
+      </View>
+
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: '700',
+          color: '#111827',
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
+      >
+        Discard changes?
+      </Text>
+
+      <Text
+        style={{
+          fontSize: 14,
+          color: '#6b7280',
+          textAlign: 'center',
+          lineHeight: 21,
+          marginBottom: 24,
+        }}
+      >
+        You have unsaved changes. Are you sure you want to leave without saving?
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <TouchableOpacity
+          onPress={cancelDiscard}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            height: 46,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: '#d1d5db',
+            backgroundColor: 'white',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+            Stay
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => discardChanges(() => {
+            if (props.onClose) {
+              props.onClose();
+            } else {
+              router.back();
+            }
+          })}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            height: 46,
+            borderRadius: 10,
+            backgroundColor: '#dc2626',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
+            Discard
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
     </SafeAreaView>
   );
 }
