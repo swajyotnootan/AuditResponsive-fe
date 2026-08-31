@@ -12,34 +12,40 @@ export function useUnsavedChanges() {
     setIsDirty(false);
   }, []);
 
-  const confirmDiscard = useCallback(
-    (onDiscard: () => void) => {
-      if (!isDirty) {
-        onDiscard();
-        return;
-      }
+ const confirmDiscard = useCallback(
+  (onDiscard: () => void) => {
+    console.log('confirmDiscard called');
+    console.log('isDirty:', isDirty);
 
-      Alert.alert(
-        'Discard changes?',
-        'You have unsaved changes. Are you sure you want to leave?',
-        [
-          {
-            text: 'Stay',
-            style: 'cancel',
+    if (!isDirty) {
+      console.log('Not dirty → closing');
+      onDiscard();
+      return;
+    }
+
+    console.log('DIRTY → showing alert');
+
+    Alert.alert(
+      'Discard changes?',
+      'You have unsaved changes. Are you sure you want to leave?',
+      [
+        {
+          text: 'Stay',
+          style: 'cancel',
+        },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            setIsDirty(false);
+            onDiscard();
           },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => {
-              setIsDirty(false);
-              onDiscard();
-            },
-          },
-        ],
-      );
-    },
-    [isDirty],
-  );
+        },
+      ],
+    );
+  },
+  [isDirty],
+);
 
   return {
     isDirty,

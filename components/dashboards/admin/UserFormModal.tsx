@@ -690,15 +690,27 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
     }
   }, []);
 
-  const toggleArray = useCallback((field: string, item: string, isArray = false) => {
+  const toggleArray = useCallback(
+  (field: string, item: string, isArray = false) => {
     setFormData(prev => {
-      const current = isArray ? (prev[field as keyof typeof prev] as string[]) : (prev[field as keyof typeof prev] as string)?.split(',') || [];
-      const updated = isArray 
-        ? (current as string[]).includes(item) ? (current as string[]).filter(i => i !== item) : [...(current as string[]), item]
-        : (current as string[]).includes(item) ? (current as string[]).filter(i => i !== item) : [...(current as string[]), item];
-      return { ...prev, [field]: isArray ? updated : updated.join(',') };
+      const current = isArray
+        ? (prev[field as keyof typeof prev] as string[])
+        : (prev[field as keyof typeof prev] as string)?.split(',') || [];
+
+      const updated = current.includes(item)
+        ? current.filter(i => i !== item)
+        : [...current, item];
+
+      return {
+        ...prev,
+        [field]: isArray ? updated : updated.join(','),
+      };
     });
-  }, []);
+
+    markDirty();
+  },
+  [markDirty]
+);
 
   const formatDate = useCallback((dateStr: string) => {
     if (!dateStr) return '';
