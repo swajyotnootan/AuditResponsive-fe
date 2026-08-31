@@ -345,6 +345,9 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
   markDirty,
   resetDirty,
   confirmDiscard,
+  showDiscardModal,
+  cancelDiscard,
+  discardChanges,
 } = useUnsavedChanges();
   const [step, setStep] = useState(1);
   const [showRolePicker, setShowRolePicker] = useState(false);
@@ -1018,7 +1021,7 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
         onSelect={handleSiteSelect} 
       />
 
-      <PickerModal 
+            <PickerModal 
         visible={showUnitPicker} 
         onClose={() => setShowUnitPicker(false)} 
         title="Select Unit" 
@@ -1029,6 +1032,143 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
         selected={formData.unitId} 
         onSelect={handleUnitSelect} 
       />
+
+      {/* ==================== DISCARD CHANGES MODAL ==================== */}
+      <Modal
+        visible={showDiscardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDiscard}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 24,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              backgroundColor: 'white',
+              borderRadius: 16,
+              padding: 24,
+              elevation: 10,
+              shadowColor: '#000',
+              shadowOffset: {
+                width: 0,
+                height: 4,
+              },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+            }}
+          >
+            {/* Icon */}
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#fef2f2',
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: 'center',
+                marginBottom: 16,
+              }}
+            >
+              <X size={26} color="#dc2626" />
+            </View>
+
+            {/* Title */}
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: '700',
+                color: '#111827',
+                textAlign: 'center',
+                marginBottom: 8,
+              }}
+            >
+              Discard changes?
+            </Text>
+
+            {/* Message */}
+            <Text
+              style={{
+                fontSize: 14,
+                color: '#6b7280',
+                textAlign: 'center',
+                lineHeight: 21,
+                marginBottom: 24,
+              }}
+            >
+              You have unsaved changes. Are you sure you want to leave without saving?
+            </Text>
+
+            {/* Buttons */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 10,
+              }}
+            >
+              {/* Stay */}
+              <TouchableOpacity
+                onPress={cancelDiscard}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#d1d5db',
+                  backgroundColor: 'white',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: '#374151',
+                  }}
+                >
+                  Stay
+                </Text>
+              </TouchableOpacity>
+
+              {/* Discard */}
+              <TouchableOpacity
+                onPress={() => discardChanges(onClose)}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  backgroundColor: '#dc2626',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: 'white',
+                  }}
+                >
+                  Discard
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    
     </Modal>
   );
 }
