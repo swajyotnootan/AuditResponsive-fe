@@ -173,10 +173,6 @@ const clearUserStorage = async (userId: string) => {
 // ENHANCED NOTIFICATION SOUND MANAGER
 // ==========================================
 
-// ==========================================
-// ENHANCED NOTIFICATION SOUND MANAGER
-// ✅ Uses YOUR notify.mp3 from public/sounds (web) or assets/sounds (native)
-// ==========================================
 class NotificationSound {
   isEnabled: boolean = true;
   volume: number = 0.8;
@@ -254,37 +250,33 @@ class NotificationSound {
     this.isPlaying = false;
   }
 
-  // ✅ NEW: Play YOUR notify.mp3 file
-  // ✅ NEW: Play YOUR notify.mp3 file — works on BOTH web and native
-private async playNotifyFile(): Promise<void> {
-  try {
-    // ✅ Unified approach: use expo-av Audio.Sound on BOTH platforms
-    const source = Platform.OS === 'web'
-      ? { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
-      : { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
+  private async playNotifyFile(): Promise<void> {
+    try {
+      const source = Platform.OS === 'web'
+        ? { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
+        : { uri: `${typeof window !== 'undefined' ? window.location.origin : ''}/sounds/notify.mp3` }
 
-    const { sound } = await Audio.Sound.createAsync(
-      source,
-      { shouldPlay: true, volume: this.volume }
-    );
+      const { sound } = await Audio.Sound.createAsync(
+        source,
+        { shouldPlay: true, volume: this.volume }
+      );
 
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-      }
-    });
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
 
-    console.log(`🔊 Played notify.mp3 (${Platform.OS})`);
-  } catch (error) {
-    console.error('Error playing notify sound:', error);
+      console.log(`🔊 Played notify.mp3 (${Platform.OS})`);
+    } catch (error) {
+      console.error('Error playing notify sound:', error);
+    }
   }
-}
-  // ✅ Play notify sound for ALL types (with haptics per type on native)
+
   async playNotificationSound(type: string = 'info') {
     if (!this.isEnabled) return;
     await this.ensureInitialized();
 
-    // Haptics feedback per type (native only)
     if (Platform.OS !== 'web') {
       try {
         if (type === 'success') {
@@ -301,7 +293,6 @@ private async playNotifyFile(): Promise<void> {
       }
     }
 
-    // ✅ Play YOUR notify.mp3 for every notification
     await this.playNotifyFile();
   }
 
@@ -320,6 +311,231 @@ private async playNotifyFile(): Promise<void> {
     this.volume = Math.min(1, Math.max(0, volume));
   }
 }
+
+// ==========================================
+// ROUTE MAPPER HELPER FUNCTIONS
+// ==========================================
+
+// ✅ Helper function to get default route for each role
+const getDefaultRouteForRole = (role: string | null): string => {
+  const roleUpper = (role || '').toUpperCase();
+  
+  switch (roleUpper) {
+    case 'TOP_MANAGEMENT':
+      return '/(app)/(tabs)/top-management?tab=overview';
+    case 'AUDIT_MANAGER':
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    case 'AUDITOR':
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    case 'AUDITEE':
+      return '/(app)/(tabs)/auditee?tab=my-audits';
+    case 'MASTER':
+      return '/(app)/(tabs)/master?section=user-management';
+    case 'LEAD_AUDITOR':
+      return '/(app)/(tabs)/lead-auditor?tab=overview';
+    default:
+      return '/(app)/(tabs)';
+  }
+};
+
+// ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
+const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
+  if (!backendRoute) {
+    return getDefaultRouteForRole(role);
+  }
+  
+  // If it's already an expo-router path, just return it
+  if (backendRoute.startsWith('/(app)/')) {
+    return backendRoute;
+  }
+
+  const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
+  const roleUpper = (role || '').toUpperCase();
+  const routeLower = backendRoute.toLowerCase();
+
+  // ==========================================
+  // 🎯 1. TOP MANAGEMENT ROUTES (FIXED)
+  // ==========================================
+  if (roleUpper === 'TOP_MANAGEMENT') {
+    console.log('📍 Top Management route mapping for:', backendRoute);
+    
+    // Check for specific tabs
+    if (routeLower.includes('annual') || routeLower.includes('form3')) {
+      return '/(app)/(tabs)/top-management?tab=annual';
+    }
+    if (routeLower.includes('dept') || routeLower.includes('form4')) {
+      return '/(app)/(tabs)/top-management?tab=dept';
+    }
+    if (routeLower.includes('week') || routeLower.includes('form5-dashboard') || routeLower.includes('form5')) {
+      return '/(app)/(tabs)/top-management?tab=week';
+    }
+    if (routeLower.includes('daily') || routeLower.includes('form5-detailed')) {
+      return '/(app)/(tabs)/top-management?tab=daily';
+    }
+    
+    // Check for exact route matches
+    if (cleanRoute === '/top-management' || cleanRoute === 'top-management' || 
+        routeLower.includes('/top-management') || routeLower.includes('top-management')) {
+      if (backendRoute.includes('tab=')) {
+        const tabMatch = backendRoute.match(/tab=([^&]+)/);
+        if (tabMatch) {
+          const tab = tabMatch[1];
+          if (tab === 'annual' || tab === 'dept' || tab === 'week' || tab === 'daily' || tab === 'overview') {
+            return `/(app)/(tabs)/top-management?tab=${tab}`;
+          }
+        }
+      }
+      return '/(app)/(tabs)/top-management?tab=overview';
+    }
+    
+    // NCR routes for Top Management
+    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
+      return '/(app)/(tabs)/top-management?tab=overview';
+    }
+    
+    // Calendar route
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    
+    // Audit Manager routes - redirect to Top Management overview
+    if (routeLower.includes('audit-manager') || routeLower.includes('/audit-manager')) {
+      return '/(app)/(tabs)/top-management?tab=overview';
+    }
+    
+    // Default fallback for Top Management
+    return '/(app)/(tabs)/top-management?tab=overview';
+  }
+
+  // ==========================================
+  // 🎯 2. AUDIT MANAGER ROUTES (FIXED)
+  // ==========================================
+  if (roleUpper === 'AUDIT_MANAGER') {
+    console.log('📍 Audit Manager route mapping for:', backendRoute);
+    
+    // Check for specific tabs in the route
+    if (routeLower.includes('requests') || routeLower.includes('pending')) {
+      return '/(app)/(tabs)/audit-manager?tab=requests';
+    }
+    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
+      return '/(app)/(tabs)/audit-manager?tab=ncr';
+    }
+    if (routeLower.includes('schedules') || routeLower.includes('schedule') || 
+        routeLower.includes('form3') || routeLower.includes('form4') || routeLower.includes('form5')) {
+      return '/(app)/(tabs)/audit-manager?tab=schedules';
+    }
+    if (routeLower.includes('dashboard') || routeLower.includes('overview')) {
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    }
+    
+    // Check for exact audit-manager route
+    if (cleanRoute === '/audit-manager' || cleanRoute === 'audit-manager' || 
+        routeLower.includes('/audit-manager') || routeLower.includes('audit-manager')) {
+      if (backendRoute.includes('tab=')) {
+        const tabMatch = backendRoute.match(/tab=([^&]+)/);
+        if (tabMatch) {
+          const tab = tabMatch[1];
+          if (tab === 'dashboard' || tab === 'schedules' || tab === 'ncr' || tab === 'requests') {
+            return `/(app)/(tabs)/audit-manager?tab=${tab}`;
+          }
+        }
+      }
+      return '/(app)/(tabs)/audit-manager?tab=dashboard';
+    }
+    
+    // Top Management routes - redirect to Audit Manager schedules
+    if (routeLower.includes('top-management')) {
+      return '/(app)/(tabs)/audit-manager?tab=schedules';
+    }
+    
+    // Calendar route
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    
+    // Default fallback for Audit Manager
+    return '/(app)/(tabs)/audit-manager?tab=dashboard';
+  }
+
+  // ==========================================
+  // 🎯 3. AUDITOR ROUTES
+  // ==========================================
+  if (roleUpper === 'AUDITOR') {
+    if (routeLower.includes('auditor')) {
+      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditor?tab=my-audits';
+      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditor?tab=ncr-pending';
+      if (routeLower.includes('ncr-list') || routeLower.includes('my-ncrs')) return '/(app)/(tabs)/auditor?tab=ncr-list';
+      return '/(app)/(tabs)/auditor?tab=my-audits';
+    }
+    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
+      return '/(app)/(tabs)/auditor?tab=ncr-list';
+    }
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    return '/(app)/(tabs)/auditor?tab=my-audits';
+  }
+
+  // ==========================================
+  // 🎯 4. AUDITEE ROUTES
+  // ==========================================
+  if (roleUpper === 'AUDITEE') {
+    if (routeLower.includes('auditee')) {
+      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditee?tab=my-audits';
+      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditee?tab=ncr-pending';
+      if (routeLower.includes('my-ncrs') || routeLower.includes('ncr-list')) return '/(app)/(tabs)/auditee?tab=my-ncrs';
+      return '/(app)/(tabs)/auditee?tab=my-audits';
+    }
+    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
+      return '/(app)/(tabs)/auditee?tab=my-ncrs';
+    }
+    if (routeLower.includes('calendar')) {
+      return '/(app)/(tabs)/calendar';
+    }
+    return '/(app)/(tabs)/auditee?tab=my-audits';
+  }
+
+  // ==========================================
+  // 🎯 5. MASTER ROUTES
+  // ==========================================
+  if (roleUpper === 'MASTER') {
+    if (routeLower.includes('user-management')) return '/(app)/(tabs)/master?section=user-management';
+    if (routeLower.includes('enterprise-management')) return '/(app)/(tabs)/master?section=enterprise-management';
+    if (routeLower.includes('role-management')) return '/(app)/(tabs)/master?section=role-management';
+    if (routeLower.includes('audit-type-management')) return '/(app)/(tabs)/master?section=audit-type-management';
+    if (routeLower.includes('competency-management')) return '/(app)/(tabs)/master?section=competency-management';
+    if (routeLower.includes('logo-mgmt')) return '/(app)/(tabs)/master?section=logo-mgmt';
+    if (routeLower.includes('line-mgmt')) return '/(app)/(tabs)/master?section=line-mgmt';
+    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
+    return '/(app)/(tabs)/master?section=user-management';
+  }
+
+  // ==========================================
+  // 🎯 6. LEAD AUDITOR ROUTES
+  // ==========================================
+  if (roleUpper === 'LEAD_AUDITOR') {
+    if (routeLower.includes('overview')) return '/(app)/(tabs)/lead-auditor?tab=overview';
+    if (routeLower.includes('audits')) return '/(app)/(tabs)/lead-auditor?tab=audits';
+    if (routeLower.includes('responses')) return '/(app)/(tabs)/lead-auditor?tab=responses';
+    if (routeLower.includes('ncrs')) return '/(app)/(tabs)/lead-auditor?tab=ncrs';
+    if (routeLower.includes('auditors')) return '/(app)/(tabs)/lead-auditor?tab=auditors';
+    if (routeLower.includes('auditees')) return '/(app)/(tabs)/lead-auditor?tab=auditees';
+    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
+    return '/(app)/(tabs)/lead-auditor?tab=overview';
+  }
+
+  // ==========================================
+  // 🎯 7. CALENDAR ROUTE (Works for all roles)
+  // ==========================================
+  if (cleanRoute === '/calendar' || backendRoute.includes('/calendar')) {
+    return '/(app)/(tabs)/calendar';
+  }
+
+  // ==========================================
+  // 🔄 FALLBACK - Role-specific default dashboards
+  // ==========================================
+  return getDefaultRouteForRole(role);
+};
 
 // ==========================================
 // NOTIFICATION PROVIDER
@@ -349,244 +565,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({ childr
   const userId = user?.id ?? null;
   const userRole = user?.role ?? null;
 
-    // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths
-    // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
- // ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
-// ✅ ROUTE MAPPER: Translates Backend paths to Expo-Router paths (ROLE-AWARE)
-const mapBackendRouteToExpoRouter = (backendRoute: string | undefined, role: string | null): string => {
-  if (!backendRoute) {
-    // Return role-specific default
-    return getDefaultRouteForRole(role);
-  }
-  
-  // ✅ If it's already an expo-router path, just return it
-  if (backendRoute.startsWith('/(app)/')) {
-    return backendRoute;
-  }
-
-  const cleanRoute = backendRoute.split('#')[0].split('?')[0].trim();
-  const roleUpper = (role || '').toUpperCase();
-
-  // ==========================================
-  // 🎯 1. TOP MANAGEMENT ROUTES (FIXED)
-  // ==========================================
-  if (roleUpper === 'TOP_MANAGEMENT') {
-    console.log('📍 Top Management route mapping for:', backendRoute);
-    
-    // ✅ Check for all possible route variations
-    const routeLower = backendRoute.toLowerCase();
-    
-    // Check for specific tabs
-    if (routeLower.includes('annual') || routeLower.includes('form3')) {
-      return '/(app)/(tabs)/top-management?tab=annual';
-    }
-    if (routeLower.includes('dept') || routeLower.includes('form4')) {
-      return '/(app)/(tabs)/top-management?tab=dept';
-    }
-    if (routeLower.includes('week') || routeLower.includes('form5-dashboard') || routeLower.includes('form5')) {
-      return '/(app)/(tabs)/top-management?tab=week';
-    }
-    if (routeLower.includes('daily') || routeLower.includes('form5-detailed')) {
-      return '/(app)/(tabs)/top-management?tab=daily';
-    }
-    
-    // ✅ Check for exact route matches (with or without leading slash)
-    if (cleanRoute === '/top-management' || cleanRoute === 'top-management' || 
-        routeLower.includes('/top-management') || routeLower.includes('top-management')) {
-      // Check if there's a tab parameter
-      if (backendRoute.includes('tab=')) {
-        const tabMatch = backendRoute.match(/tab=([^&]+)/);
-        if (tabMatch) {
-          const tab = tabMatch[1];
-          // Map the tab to the correct top-management tab
-          if (tab === 'annual' || tab === 'dept' || tab === 'week' || tab === 'daily' || tab === 'overview') {
-            return `/(app)/(tabs)/top-management?tab=${tab}`;
-          }
-        }
-      }
-      return '/(app)/(tabs)/top-management?tab=overview';
-    }
-    
-    // ✅ NCR routes for Top Management
-    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
-      return '/(app)/(tabs)/top-management?tab=overview';
-    }
-    
-    // ✅ Calendar route
-    if (routeLower.includes('calendar')) {
-      return '/(app)/(tabs)/calendar';
-    }
-    
-    // ✅ Audit Manager routes - redirect to Top Management overview
-    if (routeLower.includes('audit-manager') || routeLower.includes('/audit-manager')) {
-      return '/(app)/(tabs)/top-management?tab=overview';
-    }
-    
-    // ✅ Default fallback for Top Management
-    return '/(app)/(tabs)/top-management?tab=overview';
-  }
-
-  // ==========================================
-  // 🎯 2. AUDIT MANAGER ROUTES (FIXED)
-  // ==========================================
-  if (roleUpper === 'AUDIT_MANAGER') {
-    console.log('📍 Audit Manager route mapping for:', backendRoute);
-    
-    const routeLower = backendRoute.toLowerCase();
-    
-    // ✅ Check for specific tabs in the route
-    if (routeLower.includes('requests') || routeLower.includes('pending')) {
-      return '/(app)/(tabs)/audit-manager?tab=requests';
-    }
-    if (routeLower.includes('ncr') || routeLower.includes('form7') || routeLower.includes('/ncr-view')) {
-      return '/(app)/(tabs)/audit-manager?tab=ncr';
-    }
-    if (routeLower.includes('schedules') || routeLower.includes('schedule') || 
-        routeLower.includes('form3') || routeLower.includes('form4') || routeLower.includes('form5')) {
-      return '/(app)/(tabs)/audit-manager?tab=schedules';
-    }
-    if (routeLower.includes('dashboard') || routeLower.includes('overview')) {
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    }
-    
-    // ✅ Check for exact audit-manager route
-    if (cleanRoute === '/audit-manager' || cleanRoute === 'audit-manager' || 
-        routeLower.includes('/audit-manager') || routeLower.includes('audit-manager')) {
-      // Check if there's a tab parameter
-      if (backendRoute.includes('tab=')) {
-        const tabMatch = backendRoute.match(/tab=([^&]+)/);
-        if (tabMatch) {
-          const tab = tabMatch[1];
-          if (tab === 'dashboard' || tab === 'schedules' || tab === 'ncr' || tab === 'requests') {
-            return `/(app)/(tabs)/audit-manager?tab=${tab}`;
-          }
-        }
-      }
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    }
-    
-    // ✅ Top Management routes - redirect to Audit Manager schedules
-    if (routeLower.includes('top-management')) {
-      return '/(app)/(tabs)/audit-manager?tab=schedules';
-    }
-    
-    // ✅ Calendar route
-    if (routeLower.includes('calendar')) {
-      return '/(app)/(tabs)/calendar';
-    }
-    
-    // ✅ Default fallback for Audit Manager
-    return '/(app)/(tabs)/audit-manager?tab=dashboard';
-  }
-
-  // ==========================================
-  // 🎯 3. AUDITOR ROUTES
-  // ==========================================
-  if (roleUpper === 'AUDITOR') {
-    const routeLower = backendRoute.toLowerCase();
-    if (routeLower.includes('auditor')) {
-      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditor?tab=my-audits';
-      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditor?tab=ncr-pending';
-      if (routeLower.includes('ncr-list') || routeLower.includes('my-ncrs')) return '/(app)/(tabs)/auditor?tab=ncr-list';
-      return '/(app)/(tabs)/auditor?tab=my-audits';
-    }
-    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
-      return '/(app)/(tabs)/auditor?tab=ncr-list';
-    }
-    if (routeLower.includes('calendar')) {
-      return '/(app)/(tabs)/calendar';
-    }
-    return '/(app)/(tabs)/auditor?tab=my-audits';
-  }
-
-  // ==========================================
-  // 🎯 4. AUDITEE ROUTES
-  // ==========================================
-  if (roleUpper === 'AUDITEE') {
-    const routeLower = backendRoute.toLowerCase();
-    if (routeLower.includes('auditee')) {
-      if (routeLower.includes('my-audits')) return '/(app)/(tabs)/auditee?tab=my-audits';
-      if (routeLower.includes('ncr-pending')) return '/(app)/(tabs)/auditee?tab=ncr-pending';
-      if (routeLower.includes('my-ncrs') || routeLower.includes('ncr-list')) return '/(app)/(tabs)/auditee?tab=my-ncrs';
-      return '/(app)/(tabs)/auditee?tab=my-audits';
-    }
-    if (routeLower.includes('form7') || routeLower.includes('ncr')) {
-      return '/(app)/(tabs)/auditee?tab=my-ncrs';
-    }
-    if (routeLower.includes('calendar')) {
-      return '/(app)/(tabs)/calendar';
-    }
-    return '/(app)/(tabs)/auditee?tab=my-audits';
-  }
-
-  // ==========================================
-  // 🎯 5. MASTER ROUTES
-  // ==========================================
-  if (roleUpper === 'MASTER') {
-    const routeLower = backendRoute.toLowerCase();
-    if (routeLower.includes('user-management')) return '/(app)/(tabs)/master?section=user-management';
-    if (routeLower.includes('enterprise-management')) return '/(app)/(tabs)/master?section=enterprise-management';
-    if (routeLower.includes('role-management')) return '/(app)/(tabs)/master?section=role-management';
-    if (routeLower.includes('audit-type-management')) return '/(app)/(tabs)/master?section=audit-type-management';
-    if (routeLower.includes('competency-management')) return '/(app)/(tabs)/master?section=competency-management';
-    if (routeLower.includes('logo-mgmt')) return '/(app)/(tabs)/master?section=logo-mgmt';
-    if (routeLower.includes('line-mgmt')) return '/(app)/(tabs)/master?section=line-mgmt';
-    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
-    return '/(app)/(tabs)/master?section=user-management';
-  }
-
-  // ==========================================
-  // 🎯 6. LEAD AUDITOR ROUTES
-  // ==========================================
-  if (roleUpper === 'LEAD_AUDITOR') {
-    const routeLower = backendRoute.toLowerCase();
-    if (routeLower.includes('overview')) return '/(app)/(tabs)/lead-auditor?tab=overview';
-    if (routeLower.includes('audits')) return '/(app)/(tabs)/lead-auditor?tab=audits';
-    if (routeLower.includes('responses')) return '/(app)/(tabs)/lead-auditor?tab=responses';
-    if (routeLower.includes('ncrs')) return '/(app)/(tabs)/lead-auditor?tab=ncrs';
-    if (routeLower.includes('auditors')) return '/(app)/(tabs)/lead-auditor?tab=auditors';
-    if (routeLower.includes('auditees')) return '/(app)/(tabs)/lead-auditor?tab=auditees';
-    if (routeLower.includes('calendar')) return '/(app)/(tabs)/calendar';
-    return '/(app)/(tabs)/lead-auditor?tab=overview';
-  }
-
-  // ==========================================
-  // 🎯 7. CALENDAR ROUTE (Works for all roles)
-  // ==========================================
-  if (cleanRoute === '/calendar' || backendRoute.includes('/calendar')) {
-    return '/(app)/(tabs)/calendar';
-  }
-
-  // ==========================================
-  // 🔄 FALLBACK - Role-specific default dashboards
-  // ==========================================
-  return getDefaultRouteForRole(role);
-};
-
-// ✅ Helper function to get default route for each role
-const getDefaultRouteForRole = (role: string | null): string => {
-  const roleUpper = (role || '').toUpperCase();
-  
-  switch (roleUpper) {
-    case 'TOP_MANAGEMENT':
-      return '/(app)/(tabs)/top-management?tab=overview';
-    case 'AUDIT_MANAGER':
-      return '/(app)/(tabs)/audit-manager?tab=dashboard';
-    case 'AUDITOR':
-      return '/(app)/(tabs)/auditor?tab=my-audits';
-    case 'AUDITEE':
-      return '/(app)/(tabs)/auditee?tab=my-audits';
-    case 'MASTER':
-      return '/(app)/(tabs)/master?section=user-management';
-    case 'LEAD_AUDITOR':
-      return '/(app)/(tabs)/lead-auditor?tab=overview';
-    default:
-      return '/(app)/(tabs)';
-  }
-};
-
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
-    // ✅ ENHANCED: Check if user has access to notification based on role
   const hasRoleAccess = useCallback((notification: Notification): boolean => {
     if (!userRole) {
       console.warn('⚠️ No user role available');
@@ -659,7 +638,6 @@ const getDefaultRouteForRole = (role: string | null): string => {
         initSoundSystem();
       }
 
-      // Update current user ID ref
       currentUserIdRef.current = String(userId);
     }
   }, [userId, userRole, initSoundSystem]);
@@ -699,14 +677,12 @@ const getDefaultRouteForRole = (role: string | null): string => {
     setLoading(true);
 
     try {
-      // Try loading from cache first (unless force refresh)
       let cachedNotifications: Notification[] | null = null;
       if (!forceRefresh) {
         cachedNotifications = await loadNotificationsFromStorage(userIdStr);
       }
 
       if (cachedNotifications && cachedNotifications.length > 0) {
-        // ✅ Use cached notifications with role filtering
         const filtered = cachedNotifications.filter((n: Notification) => hasRoleAccess(n));
         console.log(`📦 Loaded ${filtered.length} notifications from cache for role: ${userRole}`);
         
@@ -718,12 +694,10 @@ const getDefaultRouteForRole = (role: string | null): string => {
         setIsInitialLoad(false);
         setLoading(false);
         
-        // Still fetch in background for updates
         fetchAndUpdateNotifications(userIdStr);
         return;
       }
 
-      // No cache, fetch from API
       await fetchAndUpdateNotifications(userIdStr);
       
     } catch (error) {
@@ -735,91 +709,81 @@ const getDefaultRouteForRole = (role: string | null): string => {
   }, [userId, userRole, hasRoleAccess]);
 
   // ✅ Fetch from API and update cache
-    // ✅ ENHANCED: Fetch from API and update cache with better logging
-  // ✅ Fetch from API and update cache - ENHANCED for sound
-const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
-  try {
-    console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
-    const data = await notificationAPI.getForUser(userIdStr);
-    
-    const notificationsData = Array.isArray(data) ? data : [];
-    
-    console.log(`📥 Received ${notificationsData.length} total notifications from backend`);
-    
-    // Log each notification for debugging
-    notificationsData.forEach((n: Notification, idx: number) => {
-      console.log(`   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)} | read: ${n.read}`);
-    });
-    
-    // Filter by role
-    const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
-    
-    console.log(`✅ Filtered to ${roleFilteredData.length} notifications for role: ${userRole}`);
-    console.log(`   Filtered out: ${notificationsData.length - roleFilteredData.length} notifications`);
-
-    // ✅ Find NEW unread notifications (notifications we haven't seen before)
-    const previousIds = new Set(lastNotificationsRef.current.map(n => n.id));
-    const newNotifications = roleFilteredData.filter((n: Notification) => 
-      !previousIds.has(n.id) && !n.read
-    );
-
-    console.log(`🆕 Found ${newNotifications.length} NEW unread notifications`);
-
-    // Save to cache
-    await saveNotificationsToStorage(userIdStr, roleFilteredData);
-
-    // Update state
-    setNotifications(roleFilteredData);
-    lastNotificationsRef.current = roleFilteredData;
-
-    const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
-    
-    // ✅ Play sound for NEW unread notifications (improved logic)
-    if (newNotifications.length > 0 && soundEnabled) {
-      console.log(`🔔 NEW notifications detected: ${newNotifications.length}`);
+  const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
+    try {
+      console.log(`📡 Fetching fresh notifications for user: ${userIdStr} (Role: ${userRole})`);
+      const data = await notificationAPI.getForUser(userIdStr);
       
-      const latestNotification = newNotifications[0];
-      const notificationType = getNotificationSoundType(latestNotification.title);
+      const notificationsData = Array.isArray(data) ? data : [];
       
-      console.log(`🔊 Playing ${notificationType} sound for: ${latestNotification.title}`);
+      console.log(`📥 Received ${notificationsData.length} total notifications from backend`);
       
-      // ✅ Ensure sound system is ready before playing
-      if (notificationSound.current) {
-        if (!notificationSound.current.isInitialized) {
-          console.log('⚡ Initializing sound system...');
-          await notificationSound.current.init();
-        }
+      notificationsData.forEach((n: Notification, idx: number) => {
+        console.log(`   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)} | read: ${n.read} | navigateTo: ${n.navigateTo}`);
+      });
+      
+      const roleFilteredData = notificationsData.filter((n: Notification) => hasRoleAccess(n));
+      
+      console.log(`✅ Filtered to ${roleFilteredData.length} notifications for role: ${userRole}`);
+      console.log(`   Filtered out: ${notificationsData.length - roleFilteredData.length} notifications`);
+
+      const previousIds = new Set(lastNotificationsRef.current.map(n => n.id));
+      const newNotifications = roleFilteredData.filter((n: Notification) => 
+        !previousIds.has(n.id) && !n.read
+      );
+
+      console.log(`🆕 Found ${newNotifications.length} NEW unread notifications`);
+
+      await saveNotificationsToStorage(userIdStr, roleFilteredData);
+
+      setNotifications(roleFilteredData);
+      lastNotificationsRef.current = roleFilteredData;
+
+      const newUnreadCount = roleFilteredData.filter((n: Notification) => !n.read).length;
+      
+      if (newNotifications.length > 0 && soundEnabled) {
+        console.log(`🔔 NEW notifications detected: ${newNotifications.length}`);
         
-        if (isSoundReady || notificationSound.current.isInitialized) {
-          await notificationSound.current.playNotificationSound(notificationType);
-          console.log('✅ Sound played successfully');
-        } else {
-          console.log('⏳ Sound not ready, queuing...');
-          notificationSound.current.queueSound(notificationType);
-        }
-      }
-    } else if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
-      // Fallback: if unread count increased but no new IDs detected
-      console.log(`📈 Unread count increased: ${previousUnreadCount.current} → ${newUnreadCount}`);
-      
-      const unreadNotifications = roleFilteredData.filter((n: Notification) => !n.read);
-      if (unreadNotifications.length > 0) {
-        const latestNotification = unreadNotifications[0];
+        const latestNotification = newNotifications[0];
         const notificationType = getNotificationSoundType(latestNotification.title);
         
-        if (notificationSound.current && (isSoundReady || notificationSound.current.isInitialized)) {
-          await notificationSound.current.playNotificationSound(notificationType);
+        console.log(`🔊 Playing ${notificationType} sound for: ${latestNotification.title}`);
+        
+        if (notificationSound.current) {
+          if (!notificationSound.current.isInitialized) {
+            console.log('⚡ Initializing sound system...');
+            await notificationSound.current.init();
+          }
+          
+          if (isSoundReady || notificationSound.current.isInitialized) {
+            await notificationSound.current.playNotificationSound(notificationType);
+            console.log('✅ Sound played successfully');
+          } else {
+            console.log('⏳ Sound not ready, queuing...');
+            notificationSound.current.queueSound(notificationType);
+          }
+        }
+      } else if (newUnreadCount > previousUnreadCount.current && soundEnabled) {
+        console.log(`📈 Unread count increased: ${previousUnreadCount.current} → ${newUnreadCount}`);
+        
+        const unreadNotifications = roleFilteredData.filter((n: Notification) => !n.read);
+        if (unreadNotifications.length > 0) {
+          const latestNotification = unreadNotifications[0];
+          const notificationType = getNotificationSoundType(latestNotification.title);
+          
+          if (notificationSound.current && (isSoundReady || notificationSound.current.isInitialized)) {
+            await notificationSound.current.playNotificationSound(notificationType);
+          }
         }
       }
-    }
 
-    setUnreadCount(newUnreadCount);
-    previousUnreadCount.current = newUnreadCount;
-    
-  } catch (error) {
-    console.error('Error fetching notifications from API:', error);
-  }
-}, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
+      setUnreadCount(newUnreadCount);
+      previousUnreadCount.current = newUnreadCount;
+      
+    } catch (error) {
+      console.error('Error fetching notifications from API:', error);
+    }
+  }, [userRole, hasRoleAccess, soundEnabled, isSoundReady]);
 
   // ✅ Clear cache on logout
   const clearNotificationCache = useCallback(async () => {
@@ -842,10 +806,8 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   // ✅ Initial load and polling
   useEffect(() => {
     if (userId && userRole) {
-      // Load notifications (with cache)
       loadNotifications(false);
 
-      // Poll every 15 seconds for updates
       const intervalId = setInterval(() => {
         if (userId) {
           fetchAndUpdateNotifications(String(userId));
@@ -854,13 +816,11 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
 
       return () => clearInterval(intervalId);
     } else {
-      // Clear notifications when logged out
       clearNotificationCache();
     }
   }, [userId, userRole, loadNotifications, fetchAndUpdateNotifications, clearNotificationCache]);
 
-  // ✅ FIXED: Add Notification with persistence
-   // ✅ ENHANCED: Add Notification with proper role targeting
+  // ✅ ENHANCED: Add Notification with proper role targeting
   const addNotification = (
     title: string,
     message: string,
@@ -869,8 +829,10 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   ): Notification => {
     const { navigateTo, location, actionText, role, targetRoles, senderRole, ...restMetadata } = metadata;
 
-    // ✅ Determine target roles - if role is specified, use it
     const finalTargetRoles = targetRoles || (role ? [role] : undefined);
+    
+    // ✅ If no target roles specified, use the current user's role
+    const effectiveTargetRoles = finalTargetRoles || (userRole ? [userRole] : undefined);
     
     const newNotification: Notification = {
       id: Date.now(),
@@ -879,11 +841,11 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
       type,
       timestamp: new Date().toISOString(),
       read: false,
-      navigateTo,
-      location,
+      navigateTo: navigateTo || '',
+      location: location || '',
       actionText: actionText || 'Review & Take Action',
-      role: role || undefined,
-      targetRoles: finalTargetRoles,
+      role: role || userRole || undefined,
+      targetRoles: effectiveTargetRoles,
       senderRole: senderRole || userRole || undefined,
       ...restMetadata,
     };
@@ -892,16 +854,15 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
       title,
       role: newNotification.role,
       targetRoles: newNotification.targetRoles,
-      currentUserRole: userRole
+      currentUserRole: userRole,
+      navigateTo: newNotification.navigateTo
     });
 
-    // If this notification is for the current user's role, show it
     if (hasRoleAccess(newNotification)) {
       console.log('✅ Notification matches current user role, adding to state');
       
       setNotifications(prev => {
         const updated = [newNotification, ...prev];
-        // Save to cache
         if (userId) {
           saveNotificationsToStorage(String(userId), updated);
         }
@@ -915,14 +876,12 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
       console.log('❌ Notification does NOT match current user role');
     }
 
-    // Always show toast for the action
     showToastNotification(title, message, type);
 
     // ✅ Send to backend with role targeting
     if (userId) {
-      if (finalTargetRoles && finalTargetRoles.length > 0) {
-        // Send to specific roles
-        finalTargetRoles.forEach(targetRole => {
+      if (effectiveTargetRoles && effectiveTargetRoles.length > 0) {
+        effectiveTargetRoles.forEach(targetRole => {
           console.log(`📡 Sending notification to role: ${targetRole}`);
           notificationAPI.sendToRole(
             targetRole,
@@ -934,7 +893,6 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
           ).catch(err => console.error(`Failed to send to role ${targetRole}:`, err));
         });
       } else {
-        // Send to current user only
         console.log(`📡 Sending notification to user: ${userId}`);
         notificationAPI.sendToUser(
           String(userId),
@@ -981,46 +939,44 @@ const fetchAndUpdateNotifications = useCallback(async (userIdStr: string) => {
   }, []);
 
   // ✅ Mark as Read with persistence & Expo Router Navigation
-const markAsReadAndNavigate = async (notification: Notification) => {
-  if (!notification.read) {
-    try {
-      if (userId) {
-        await notificationAPI.markAsRead(String(notification.id), String(userId));
-      }
-      setNotifications(prev => {
-        const updated = prev.map(n => n.id === notification.id ? { ...n, read: true } : n);
-        if (userId) {
-          saveNotificationsToStorage(String(userId), updated);
-        }
-        return updated;
-      });
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking as read:', error);
-    }
-  }
-
-  setIsOpen(false);
-
-  if (notification.navigateTo) {
-    setTimeout(() => {
+  const markAsReadAndNavigate = async (notification: Notification) => {
+    if (!notification.read) {
       try {
-        // ✅ Translate the backend route using our mapper
-        const targetRoute = mapBackendRouteToExpoRouter(notification.navigateTo, userRole);
-        console.log('🧭 Navigating from backend route:', notification.navigateTo, '-> expo route:', targetRoute);
-        console.log('👤 User role:', userRole);
-        
-        // ✅ Use Expo Router's push instead of React Navigation
-        router.push(targetRoute as any);
+        if (userId) {
+          await notificationAPI.markAsRead(String(notification.id), String(userId));
+        }
+        setNotifications(prev => {
+          const updated = prev.map(n => n.id === notification.id ? { ...n, read: true } : n);
+          if (userId) {
+            saveNotificationsToStorage(String(userId), updated);
+          }
+          return updated;
+        });
+        setUnreadCount(prev => Math.max(0, prev - 1));
       } catch (error) {
-        console.error('Navigation error:', error);
-        // Fallback to role-specific dashboard
-        const fallbackRoute = mapBackendRouteToExpoRouter('', userRole);
-        router.push(fallbackRoute as any);
+        console.error('Error marking as read:', error);
       }
-    }, 150);
-  }
-};
+    }
+
+    setIsOpen(false);
+
+    if (notification.navigateTo) {
+      setTimeout(() => {
+        try {
+          // ✅ Translate the backend route using our mapper
+          const targetRoute = mapBackendRouteToExpoRouter(notification.navigateTo, userRole);
+          console.log('🧭 Navigating from backend route:', notification.navigateTo, '-> expo route:', targetRoute);
+          console.log('👤 User role:', userRole);
+          
+          router.push(targetRoute as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+          const fallbackRoute = mapBackendRouteToExpoRouter('', userRole);
+          router.push(fallbackRoute as any);
+        }
+      }, 150);
+    }
+  };
 
   // ✅ Mark All as Read with persistence
   const markAllAsRead = async () => {
@@ -1033,7 +989,6 @@ const markAsReadAndNavigate = async (notification: Notification) => {
       await notificationAPI.markAllAsRead(String(userId));
       setNotifications(prev => {
         const updated = prev.map(n => ({ ...n, read: true }));
-        // Save to cache
         if (userId) {
           saveNotificationsToStorage(String(userId), updated);
         }
@@ -1048,7 +1003,6 @@ const markAsReadAndNavigate = async (notification: Notification) => {
   };
 
   // ✅ Clear All with persistence
- // ✅ FIXED: Clear All with Web support, Optimistic UI, and Safe API Fallback
   const clearAllNotifications = () => {
     console.log("🔴 clearAllNotifications triggered. userId:", userId);
 
@@ -1061,17 +1015,14 @@ const markAsReadAndNavigate = async (notification: Notification) => {
     const handleClear = async () => {
       console.log("🟢 handleClear executing...");
       try {
-        // 1. Optimistic UI Update: Clear immediately for instant feedback
         console.log("1️⃣ Optimistic UI Update...");
         setNotifications([]);
         setUnreadCount(0);
-        lastNotificationsRef.current = []; // Clear ref to prevent stale state conflicts
+        lastNotificationsRef.current = [];
 
-        // 2. Clear local cache
         console.log("2️⃣ Clearing local cache...");
         await clearUserStorage(String(userId));
 
-        // 3. Backend sync with SAFE FALLBACK
         console.log("3️⃣ Backend sync...");
         try {
           if (typeof notificationAPI.clearAll === "function") {
@@ -1089,18 +1040,15 @@ const markAsReadAndNavigate = async (notification: Notification) => {
           console.log(
             "   🔄 Falling back to markAllAsRead so they don't reappear as unread...",
           );
-          // Fallback: Mark as read so the 15s poll doesn't bring them back as "unread"
           await notificationAPI.markAllAsRead(String(userId));
         }
 
-        // 4. Show success
         console.log("4️⃣ Showing success toast...");
         showSuccess("All notifications cleared", "Success");
         console.log("✅ handleClear finished successfully.");
       } catch (error: any) {
         console.error("❌ CRITICAL Error in handleClear:", error);
 
-        // Try to show error, but wrap in try/catch in case toast system is failing
         try {
           showError(
             "Failed to clear: " + (error.message || "Unknown error"),
@@ -1113,13 +1061,11 @@ const markAsReadAndNavigate = async (notification: Notification) => {
           );
         }
 
-        // Revert optimistic update by fetching fresh data from backend
         console.log("5️⃣ Reverting optimistic update by fetching fresh data...");
         await refreshNotifications();
       }
     };
 
-    // ✅ FIX: React Native Web does not support Alert.alert natively
     if (Platform.OS === "web") {
       console.log("🌐 Web platform: showing window.confirm");
       if (
@@ -1253,7 +1199,6 @@ const markAsReadAndNavigate = async (notification: Notification) => {
       3000
     );
 
-    // Refresh notifications after action
     setTimeout(() => {
       if (userId) {
         refreshNotifications();
@@ -1261,92 +1206,81 @@ const markAsReadAndNavigate = async (notification: Notification) => {
     }, 1000);
   };
 
-  // Helper functions - Replace the existing formatDate section with this:
+  // Helper functions - Date formatting
+  const isProductionBackend = () => {
+    const url = API_BASE_URL || '';
+    return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
+  };
 
-// ✅ Detect if we're talking to the production (UTC) backend
-const isProductionBackend = () => {
-  const url = API_BASE_URL || '';
-  return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.');
-};
-
-// ✅ FIXED: Parse backend date correctly for BOTH local (IST) and prod (UTC)
-const parseBackendDate = (dateString: string): Date => {
-  let isoString = dateString;
-  if (!isoString.includes('T')) {
-    isoString = isoString.replace(' ', 'T');
-  }
-  
-  // ✅ Production returns UTC without marker → add 'Z' so browser converts UTC→local (IST)
-  // ✅ Local returns IST → parse as-is (no 'Z')
-  if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
-    isoString += 'Z';
-  }
-  
-  return new Date(isoString);
-};
-
-// ✅ FIXED: Format date with better time display (no more "19h ago")
-const formatDate = (timestamp: string | undefined): string => {
-  if (!timestamp) return 'Just now';
-  
-  try {
-    const date = parseBackendDate(timestamp);
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date:', timestamp);
-      return 'Just now';
+  const parseBackendDate = (dateString: string): Date => {
+    let isoString = dateString;
+    if (!isoString.includes('T')) {
+      isoString = isoString.replace(' ', 'T');
     }
     
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    if (isProductionBackend() && !isoString.includes('Z') && !isoString.includes('+')) {
+      isoString += 'Z';
+    }
     
-    // ✅ Show relative time ONLY for very recent messages (< 1 hour)
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
+    return new Date(isoString);
+  };
+
+  const formatDate = (timestamp: string | undefined): string => {
+    if (!timestamp) return 'Just now';
     
-    // ✅ For messages within 24 hours, show the actual TIME
-    if (diffHours < 24) {
-      return date.toLocaleTimeString('en-US', {
+    try {
+      const date = parseBackendDate(timestamp);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', timestamp);
+        return 'Just now';
+      }
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      
+      if (diffHours < 24) {
+        return date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+      }
+      
+      if (diffDays === 1) {
+        return `Yesterday ${date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })}`;
+      }
+      
+      if (diffDays < 7) {
+        return `${date.toLocaleDateString('en-US', { weekday: 'short' })} ${date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })}`;
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
       });
+      
+    } catch (error) {
+      console.error('Date formatting error:', error, timestamp);
+      return 'Just now';
     }
-    
-    // ✅ Show "Yesterday" with time
-    if (diffDays === 1) {
-      return `Yesterday ${date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })}`;
-    }
-    
-    // ✅ Show day name for this week with time
-    if (diffDays < 7) {
-      return `${date.toLocaleDateString('en-US', { weekday: 'short' })} ${date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })}`;
-    }
-    
-    // ✅ Show full date for older messages
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-    
-  } catch (error) {
-    console.error('Date formatting error:', error, timestamp);
-    return 'Just now';
-  }
-};
+  };
 
   const getActionText = (title: string | undefined): string => {
     if (title?.includes('Approval')) return 'Review & Approve';
@@ -1398,32 +1332,32 @@ const formatDate = (timestamp: string | undefined): string => {
   };
 
   // ==========================================
-  // UI COMPONENTS (Same as before, with refresh button)
+  // UI COMPONENTS
   // ==========================================
 
   const SoundControlPanel: FC = () => (
     <View style={{ padding: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8 }}>
       <Text style={{ marginBottom: 12, fontSize: 14, fontWeight: '600', color: '#111827' }}>🔔 Notification Sounds</Text>
       <View style={{ gap: 12 }}>
-      <TouchableOpacity
-        onPress={() => {
-          console.log('🧪 Testing notification sound...');
-          addNotification(
-            'Test Notification',
-            'This is a test notification to verify sound is working',
-            'info',
-            { navigateTo: '/dashboard' }
-          );
-        }}
-        style={{ 
-          padding: 12, 
-          backgroundColor: '#10b981', 
-          borderRadius: 8,
-          alignItems: 'center'
-        }}
-      >
-        <Text style={{ color: 'white', fontWeight: '600' }}>🔔 Test Notification Sound</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            console.log('🧪 Testing notification sound...');
+            addNotification(
+              'Test Notification',
+              'This is a test notification to verify sound is working',
+              'info',
+              { navigateTo: '/dashboard' }
+            );
+          }}
+          style={{ 
+            padding: 12, 
+            backgroundColor: '#10b981', 
+            borderRadius: 8,
+            alignItems: 'center'
+          }}
+        >
+          <Text style={{ color: 'white', fontWeight: '600' }}>🔔 Test Notification Sound</Text>
+        </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ fontSize: 14, color: '#374151' }}>Enable Sounds</Text>
           <TouchableOpacity
@@ -1586,7 +1520,6 @@ const formatDate = (timestamp: string | undefined): string => {
             },
           ]}
         >
-          {/* Header with Role Badge and Refresh Button */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View>
@@ -1605,7 +1538,6 @@ const formatDate = (timestamp: string | undefined): string => {
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {/* Refresh Button */}
                 <TouchableOpacity
                   onPress={refreshNotifications}
                   style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: '#f3f4f6' }}
@@ -1630,7 +1562,6 @@ const formatDate = (timestamp: string | undefined): string => {
             </View>
           </View>
 
-          {/* Notification List (same as before) */}
           <ScrollView style={{ flex: 1, padding: 16 }} showsVerticalScrollIndicator={false}>
             {loading ? (
               <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 64 }}>
@@ -1760,7 +1691,6 @@ const formatDate = (timestamp: string | undefined): string => {
             )}
           </ScrollView>
 
-          {/* Footer */}
           {notifications.length > 0 && (
             <View style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
               <TouchableOpacity
