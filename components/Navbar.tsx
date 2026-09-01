@@ -12,7 +12,6 @@ import {
   LogOut,
   Mail,
   Menu,
-  MoreVertical,
   Shield,
   User,
   X
@@ -449,120 +448,108 @@ const Navbar: React.FC<NavbarProps> = ({
             style={{ maxWidth: isDesktop ? 1600 : "100%" }}
           >
             {/* LEFT SECTION */}
-            <View className="flex-row items-center flex-shrink">
-              {showToggleButton ? (
-                <TouchableOpacity
-                  onPress={onMenuPress}
-                  className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.12)",
-                    borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.25)",
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Menu
-                    size={isSmallMobile ? 18 : isMobile ? 20 : 22}
-                    color="#FFFFFF"
-                    strokeWidth={2.5}
-                  />
-                </TouchableOpacity>
-              ) : null}
+<View className="flex-row items-center flex-shrink">
+  {showToggleButton ? (
+    <TouchableOpacity
+      onPress={onMenuPress || handleSidebarToggle}  // ✅ Use handleSidebarToggle if onMenuPress is not provided
+      className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
+      style={{
+        backgroundColor: "rgba(255,255,255,0.12)",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.25)",
+      }}
+      activeOpacity={0.7}
+    >
+      <Menu
+        size={isSmallMobile ? 18 : isMobile ? 20 : 22}
+        color="#FFFFFF"
+        strokeWidth={2.5}
+      />
+    </TouchableOpacity>
+  ) : null}
 
-              {/* Qsutra Logo - Always visible */}
-              <TouchableOpacity
-                onPress={() => router.push("/(app)/(tabs)" as any)}
-                className="flex-row items-center"
-                activeOpacity={0.8}
-              >
-                <Image
-                  source={QSUTRA_LOGO}
-                  resizeMode="contain"
-                  style={
-                    isSmallMobile
-                      ? { width: 60, height: 24 }
-                      : isMobile
-                        ? { width: 80, height: 32 }
-                        : isTablet
-                          ? { width: 100, height: 40 }
-                          : { width: 140, height: 56 }
-                  }
-                />
-              </TouchableOpacity>
+  {/* Qsutra Logo - Always visible */}
+  <TouchableOpacity
+    onPress={() => router.push("/(app)/(tabs)" as any)}
+    className="flex-row items-center"
+    activeOpacity={0.8}
+  >
+    <Image
+      source={QSUTRA_LOGO}
+      resizeMode="contain"
+      style={
+        isSmallMobile
+          ? { width: 60, height: 24 }
+          : isMobile
+            ? { width: 80, height: 32 }
+            : isTablet
+              ? { width: 100, height: 40 }
+              : { width: 140, height: 56 }
+      }
+    />
+  </TouchableOpacity>
 
-              {/* Breadcrumbs - Desktop only */}
-              {isDesktop && breadcrumbs.length > 0 && (
-                <View className="flex-row items-center ml-6">
-                  {breadcrumbs.map((crumb, index) => (
-                    <React.Fragment key={index}>
-                      {index > 0 && (
-                        <ChevronRight size={16} color="rgba(255,255,255,0.4)" />
-                      )}
-                      <TouchableOpacity
-                        onPress={crumb.onPress}
-                        disabled={index === breadcrumbs.length - 1}
-                        className="px-3 py-1.5"
-                      >
-                        <Text
-                          className={`text-sm font-medium ${
-                            index === breadcrumbs.length - 1
-                              ? "text-white"
-                              : "text-white/70"
-                          }`}
-                          style={{ letterSpacing: 0.2 }}
-                        >
-                          {crumb.label}
-                        </Text>
-                      </TouchableOpacity>
-                    </React.Fragment>
-                  ))}
-                </View>
-              )}
-            </View>
+  {/* Breadcrumbs - Desktop only */}
+  {isDesktop && breadcrumbs.length > 0 && (
+    <View className="flex-row items-center ml-6">
+      {breadcrumbs.map((crumb, index) => (
+        <React.Fragment key={index}>
+          {index > 0 && (
+            <ChevronRight size={16} color="rgba(255,255,255,0.4)" />
+          )}
+          <TouchableOpacity
+            onPress={crumb.onPress}
+            disabled={index === breadcrumbs.length - 1}
+            className="px-3 py-1.5"
+          >
+            <Text
+              className={`text-sm font-medium ${
+                index === breadcrumbs.length - 1
+                  ? "text-white"
+                  : "text-white/70"
+              }`}
+              style={{ letterSpacing: 0.2 }}
+            >
+              {crumb.label}
+            </Text>
+          </TouchableOpacity>
+        </React.Fragment>
+      ))}
+    </View>
+  )}
+</View>
 
             {/* RIGHT SECTION */}
             <View className="flex-row items-center">
               {/* MOBILE VIEW */}
-              {isMobile && (
-                <View className="flex-row items-center">
-                  {/* ✅ Dynamic/Stratum Logo on Mobile */}
-                  <View className="items-center justify-center mr-2">
-                    <Image
-                      key={`mobile-logo-${logoKey}`}
-                      source={
-                        dynamicLogo
-                          ? { uri: dynamicLogo }
-                          : rightLogo || STRATUM_LOGO
-                      }
-                      resizeMode="contain"
-                      // ✅ FIXED: Changed maxWidth to width to restore original size & ensure it renders
-                      style={{ height: 30, width: 50, borderRadius: 10 }}
-                    />
-                  </View>
+{isMobile && (
+  <View className="flex-row items-center">
+    {/* ✅ Dynamic/Stratum Logo on Mobile */}
+    <View className="items-center justify-center mr-2">
+      <Image
+        key={`mobile-logo-${logoKey}`}
+        source={
+          dynamicLogo
+            ? { uri: dynamicLogo }
+            : rightLogo || STRATUM_LOGO
+        }
+        resizeMode="contain"
+        style={{ height: 30, width: 50, borderRadius: 10 }}
+      />
+    </View>
 
-                  <TouchableOpacity
-                    onPress={() => setMobileMenuOpen(true)}
-                    className="p-2 rounded-lg"
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.08)",
-                      borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.15)",
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <MoreVertical size={20} color="#FFFFFF" strokeWidth={2} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={handleLogout}
-                    className="p-2 ml-1 rounded-lg"
-                    style={{ backgroundColor: "#DC2626" }}
-                    activeOpacity={0.8}
-                  >
-                    <LogOut size={18} color="#FFFFFF" strokeWidth={1.5} />
-                  </TouchableOpacity>
-                </View>
-              )}
+    {/* ✅ REMOVED the MoreVertical button - the hamburger menu handles sidebar toggling */}
+    {/* Only keep logout button on mobile */}
+    <TouchableOpacity
+      onPress={handleLogout}
+      className="p-2 ml-1 rounded-lg"
+      style={{ backgroundColor: "#DC2626" }}
+      activeOpacity={0.8}
+    >
+      <LogOut size={18} color="#FFFFFF" strokeWidth={1.5} />
+    </TouchableOpacity>
+  </View>
+)}
 
               {/* DESKTOP/TABLET VIEW */}
               {/* DESKTOP/TABLET VIEW */}
