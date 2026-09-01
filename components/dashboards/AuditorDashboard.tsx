@@ -1590,300 +1590,361 @@ const recalculateTimeStatus = (schedule: any): string => {
   // ============================================================
   // ✅ FIXED: Full fetchSchedulesWithStatus
   // ============================================================
-const fetchSchedulesWithStatus = async (year = selectedYear) => {
-  try {
-    setIsFetching(true);
-    setRefreshing(true);
-    const [
-      responsesData,
-      ncrData,
-      rescheduleData,
-      extensionData,
-      schedulesData,
-    ] = await Promise.all([
-      apiFetch("/templates/responses/all").catch(() => []),
-      apiFetch("/ncr/all").catch(() => []),
-      apiFetch(
-        `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
-      ).catch(() => []),
-      apiFetch(
-        `/audit-schedule/extension-requests/auditor/${user?.id}`,
-      ).catch(() => []),
-      apiFetch(
-        `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
-      ).catch(() => []),
-    ]);
-
-    const pendingRescheduleIds = new Set();
-    (rescheduleData || []).forEach((req: any) => {
-      if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
-    });
-    const pendingExtensionIds = new Set();
-    (extensionData || []).forEach((req: any) => {
-      if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
-    });
-
-    const allResponses: any[] = responsesData || [];
-    const existingNcrAuditIds = new Set(
-      (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
-    );
-
-    const pendingNcrItems = allResponses
-      .filter((r: any) => {
-        const isMyAudit = Number(r.auditorId) === Number(user?.id);
-        if (!isMyAudit) {
-          console.log(
-            `⚠️ [NCR DEBUG] Skipped response ${r.id}: auditorId (${r.auditorId}) !== userId (${user?.id})`,
-          );
-        }
-        return isMyAudit;
-      })
-      .map((r: any) => {
-        const answers = parseResponseAnswers(r);
-        return {
-          responseId: r.id,
-          auditReportNumber: getAuditReportNumber(answers, r),
-          formName: answers.formName || r.checkSheet?.name || "Audit Form",
-          department: r.department || answers.department || "Production",
-          auditeeId: r.auditeeId || answers.auditeeId || "",
-          auditeeName: r.auditeeName || answers.auditeeName || "",
-          shift: r.shift || answers.shift || "Day",
-          findings: getNcrFindingEntries(answers),
-          createdAt: r.createdAt,
-        };
-      })
-      .filter((item: any) => {
-        const itemYear = item.createdAt
-          ? new Date(item.createdAt).getFullYear()
-          : new Date().getFullYear();
-        const hasFindings = item.findings.length > 0;
-        const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
-        const isCurrentYear = itemYear === year;
-
-        return hasFindings && notRaised && isCurrentYear;
+// ============================================================
+  // ✅ FIXED: Full fetchSchedulesWithStatus with Top Management Approval Filter
+  // ============================================================
+  const fetchSchedulesWithStatus = async (year = selectedYear) => {
+    try {
+      setIsFetching(true);
+      setRefreshing(true);
+ 
+      const [
+        responsesData,
+        ncrData,
+        rescheduleData,
+        extensionData,
+        schedulesData,
+      ] = await Promise.all([
+        apiFetch("/templates/responses/all").catch(() => []),
+        apiFetch("/ncr/all").catch(() => []),
+        apiFetch(
+          `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
+        ).catch(() => []),
+        apiFetch(
+          `/audit-schedule/extension-requests/auditor/${user?.id}`,
+        ).catch(() => []),
+        apiFetch(
+          `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
+        ).catch(() => []),
+      ]);
+ 
+      const pendingRescheduleIds = new Set();
+      (rescheduleData || []).forEach((req: any) => {
+        if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
       });
-
-    setPendingNcrAudits(pendingNcrItems);
-
-    let filteredSchedules = schedulesData || [];
-    if (year) {
-      filteredSchedules = filteredSchedules.filter((item: any) => {
-        const schedule = item.schedule || item;
-        if (!schedule) return false;
-
-        if (schedule.scheduledDate) {
-          return (
-            parseServerDate(schedule.scheduledDate).getFullYear() === year
-          );
-        }
-        if (schedule.fromDate && schedule.toDate) {
-          const fromYear = parseServerDate(schedule.fromDate).getFullYear();
-          const toYear = parseServerDate(schedule.toDate).getFullYear();
-          if (fromYear <= year && toYear >= year) return true;
-        }
-        return false;
+ 
+      const pendingExtensionIds = new Set();
+      (extensionData || []).forEach((req: any) => {
+        if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
       });
-    }
-    const todayStr = toDateString(new Date()) || '';
-
-    const enhancedData = await Promise.all(filteredSchedules.map(async (item: any) => {
-      const schedule = item.schedule || item;
-      const scheduleId = schedule.id;
-      const department = schedule.department || "";
-      const auditType = schedule.auditType || "";
-
-      // 1. Find all saved responses for this specific schedule
-      const scheduleResponses = allResponses.filter(
-        (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
+ 
+      const allResponses: any[] = responsesData || [];
+      const existingNcrAuditIds = new Set(
+        (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
       );
-
-      // Create a map for quick lookup: checkSheetId -> response
-      const responseMap = new Map();
-      scheduleResponses.forEach((r: any) => {
-        if (r.checkSheet?.id) {
-          responseMap.set(String(r.checkSheet.id), r);
-        }
-      });
-
-            // 2. Determine the list of ALL assigned forms
-      let formDetails: any[] = [];
-      
-      // ✅ FIX: For IATF/System audits, ALWAYS fetch all available forms for the department
-      // because schedule.forms might only contain 1 form while the department actually has more (like SQA).
-      const isIATFOrSystem = 
-        auditType.toLowerCase().includes("iatf") ||
-        auditType.toLowerCase().includes("16949") ||
-        auditType.toLowerCase().includes("system");
-
-      if (isIATFOrSystem) {
-        const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
-        if (availableForms.length > 0) {
-          formDetails = availableForms.map((form: any) => {
-            const existingResponse = responseMap.get(String(form.id));
-            return {
-              id: form.id,
-              name: form.name || form.processName || "Audit Form",
-              processName: form.processName || form.name || "Audit",
-              completed: !!existingResponse && (
-                existingResponse.status === "COMPLETED" ||
-                existingResponse.status === "APPROVED" ||
-                existingResponse.status === "SUBMITTED" ||
-                existingResponse.submittedAt !== null
-              ),
-              responseId: existingResponse?.id,
-              status: existingResponse?.status,
-            };
-          });
-        }
-      }
-
-      // Fallback to assignedForms if not IATF or if fetch returned empty
-      const assignedForms = schedule.forms || schedule.checkSheets || schedule.assignedForms;
-      
-      if (formDetails.length === 0 && Array.isArray(assignedForms) && assignedForms.length > 0) {
-        formDetails = assignedForms.map((form: any) => {
-          const existingResponse = responseMap.get(String(form.id));
+ 
+      const pendingNcrItems = allResponses
+        .filter((r: any) => {
+          const isMyAudit = Number(r.auditorId) === Number(user?.id);
+          return isMyAudit;
+        })
+        .map((r: any) => {
+          const answers = parseResponseAnswers(r);
           return {
-            id: form.id,
-            name: form.name || form.processName || "Audit Form",
-            processName: form.processName || form.name || "Audit",
-            completed: !!existingResponse && (
-              existingResponse.status === "COMPLETED" ||
-              existingResponse.status === "APPROVED" ||
-              existingResponse.status === "SUBMITTED" ||
-              existingResponse.submittedAt !== null
-            ),
-            responseId: existingResponse?.id,
-            status: existingResponse?.status,
+            responseId: r.id,
+            auditReportNumber: getAuditReportNumber(answers, r),
+            formName: answers.formName || r.checkSheet?.name || "Audit Form",
+            department: r.department || answers.department || "Production",
+            auditeeId: r.auditeeId || answers.auditeeId || "",
+            auditeeName: r.auditeeName || answers.auditeeName || "",
+            shift: r.shift || answers.shift || "Day",
+            findings: getNcrFindingEntries(answers),
+            createdAt: r.createdAt,
           };
+        })
+        .filter((item: any) => {
+          const itemYear = item.createdAt
+            ? new Date(item.createdAt).getFullYear()
+            : new Date().getFullYear();
+          const hasFindings = item.findings.length > 0;
+          const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
+          const isCurrentYear = itemYear === year;
+ 
+          return hasFindings && notRaised && isCurrentYear;
+        });
+ 
+      setPendingNcrAudits(pendingNcrItems);
+ 
+      if (schedulesData && schedulesData.length > 0) {
+        console.log(
+          "🔍 [DEBUG] RAW SCHEDULE DATA FROM BACKEND:",
+          JSON.stringify(
+            schedulesData[0].schedule || schedulesData[0],
+            null,
+            2,
+          ),
+        );
+      }
+ 
+      let filteredSchedules = (schedulesData || []).filter((item: any) => {
+        const schedule = item.schedule || item;
+ 
+        // ✅ FIXED: Use the correct field name from your backend
+        return schedule.detailedApprovalStatus === "APPROVED";
+      });
+ 
+      // 🔍 DEBUG: Check your console to see if the filter is working
+      console.log(
+        "🔍 [DEBUG] Total schedules fetched from API:",
+        schedulesData?.length,
+      );
+      console.log(
+        "🔍 [DEBUG] Approved schedules remaining after filter:",
+        filteredSchedules.length,
+      );
+ 
+      // ✅ Existing Year Filter Logic
+      if (year) {
+        filteredSchedules = filteredSchedules.filter((item: any) => {
+          const schedule = item.schedule || item;
+          if (!schedule) return false;
+ 
+          if (schedule.scheduledDate) {
+            return (
+              parseServerDate(schedule.scheduledDate).getFullYear() === year
+            );
+          }
+          if (schedule.fromDate && schedule.toDate) {
+            const fromYear = parseServerDate(schedule.fromDate).getFullYear();
+            const toYear = parseServerDate(schedule.toDate).getFullYear();
+            if (fromYear <= year && toYear >= year) return true;
+          }
+          return false;
         });
       }
-      
-      if (formDetails.length === 0) {
-        const availableForms = await fetchAvailableFormsForDepartment(department, auditType);
-        if (availableForms.length > 0) {
-          formDetails = availableForms.map((form: any) => {
-            const existingResponse = responseMap.get(String(form.id));
-            return {
-              id: form.id,
-              name: form.name || form.processName || "Audit Form",
-              processName: form.processName || form.name || "Audit",
-              completed: !!existingResponse && (
-                existingResponse.status === "COMPLETED" ||
-                existingResponse.status === "APPROVED" ||
-                existingResponse.status === "SUBMITTED" ||
-                existingResponse.submittedAt !== null
-              ),
-              responseId: existingResponse?.id,
-              status: existingResponse?.status,
-            };
+ 
+      const todayStr = toDateString(new Date()) || "";
+ 
+      const enhancedData = await Promise.all(
+        filteredSchedules.map(async (item: any) => {
+          const schedule = item.schedule || item;
+          const scheduleId = schedule.id;
+          const department = schedule.department || "";
+          const auditType = schedule.auditType || "";
+ 
+          // 1. Find all saved responses for this specific schedule
+          const scheduleResponses = allResponses.filter(
+            (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
+          );
+ 
+          // Create a map for quick lookup: checkSheetId -> response
+          const responseMap = new Map();
+          scheduleResponses.forEach((r: any) => {
+            if (r.checkSheet?.id) {
+              responseMap.set(String(r.checkSheet.id), r);
+            }
           });
-        } else {
-          // ✅ FIX: For single-form audits, only use the latest response
-          if (scheduleResponses.length > 0) {
-            // Sort by createdAt to get the most recent response
-            const sortedResponses = [...scheduleResponses].sort((a, b) => {
-              const dateA = new Date(a.createdAt || 0).getTime();
-              const dateB = new Date(b.createdAt || 0).getTime();
-              return dateB - dateA; // Descending order (newest first)
-            });
-            
-            // Only take the first (most recent) response for single-form audits
-            const latestResponse = sortedResponses[0];
-            formDetails = [{
-              id: latestResponse.checkSheet?.id || 1,
-              name: latestResponse.checkSheet?.name || auditType || "Audit Form",
-              processName: latestResponse.checkSheet?.processName || auditType || "Audit",
-              completed:
-                latestResponse.status === "COMPLETED" ||
-                latestResponse.status === "APPROVED" ||
-                latestResponse.status === "SUBMITTED" ||
-                latestResponse.submittedAt !== null,
-              responseId: latestResponse.id,
-              status: latestResponse.status,
-            }];
-          } else {
-            formDetails = [
-              {
-                id: schedule.checkSheet?.id || 1,
-                name: auditType || "Audit Form",
-                processName: auditType || "Audit",
-                completed: schedule.status === "COMPLETED" || schedule.status === "APPROVED",
-              },
-            ];
+ 
+          // 2. Determine the list of ALL assigned forms
+          let formDetails: any[] = [];
+ 
+          const isIATFOrSystem =
+            auditType.toLowerCase().includes("iatf") ||
+            auditType.toLowerCase().includes("16949") ||
+            auditType.toLowerCase().includes("system");
+ 
+          if (isIATFOrSystem) {
+            const availableForms = await fetchAvailableFormsForDepartment(
+              department,
+              auditType,
+            );
+            if (availableForms.length > 0) {
+              formDetails = availableForms.map((form: any) => {
+                const existingResponse = responseMap.get(String(form.id));
+                return {
+                  id: form.id,
+                  name: form.name || form.processName || "Audit Form",
+                  processName: form.processName || form.name || "Audit",
+                  completed:
+                    !!existingResponse &&
+                    (existingResponse.status === "COMPLETED" ||
+                      existingResponse.status === "APPROVED" ||
+                      existingResponse.status === "SUBMITTED" ||
+                      existingResponse.submittedAt !== null),
+                  responseId: existingResponse?.id,
+                  status: existingResponse?.status,
+                };
+              });
+            }
           }
-        }
-      }
-
-
-      // 3. Calculate accurate stats based on ALL forms
-      const totalForms = formDetails.length;
-      const completedForms = formDetails.filter((f: any) => f.completed).length;
-      const hasFormData = completedForms > 0;
-      const isAllFormsCompleted = totalForms > 0 && completedForms === totalForms;
-
-      const isAuditCompleted =
-        schedule.status === "COMPLETED" ||
-        schedule.status === "APPROVED" ||
-        schedule.status === "CLOSED";
-
-      const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
-      
-      // ✅ CRITICAL FIX: Override backend's timeStatus with frontend calculation
-      const finalTimeStatus = allFormsCompleted ? "COMPLETED" : recalculateTimeStatus(schedule);
-      const finalCanStart = !allFormsCompleted && (finalTimeStatus === "ACTIVE");
-
-      return {
-        ...item,
-        schedule: {
-          ...schedule,
-          hasFormData,
-          totalForms,
-          completedForms: allFormsCompleted ? totalForms : completedForms,
-          pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
-          allFormsCompleted,
-          formDetails,
-          rescheduleRequested: pendingRescheduleIds.has(scheduleId),
-          extensionRequested: pendingExtensionIds.has(scheduleId),
-          coAuditorNames: schedule.coAuditorNames || [],
-        },
-        timeStatus: finalTimeStatus,
-        canStart: finalCanStart,
-      };
-    }));
-
-    setSchedules(enhancedData);
-
-    // ✅ Debug log to verify time status calculation
-    console.log("✅ [TIME STATUS DEBUG] Current time:", new Date().toLocaleTimeString());
-    console.log("✅ [TIME STATUS DEBUG] Schedules:", enhancedData.map(s => ({
-      auditType: s.schedule.auditType,
-      scheduledDate: s.schedule.scheduledDate,
-      startTime: s.schedule.startTime,
-      endTime: s.schedule.endTime,
-      timeStatus: s.timeStatus,
-    })));
-
-    setStats({
-      upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING").length,
-      active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE").length,
-      inProgress: enhancedData.filter(
-        (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
-      ).length,
-      expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED").length,
-      partiallyCompleted: 0,
-      completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted).length,
-      overdueNoWork: 0,
-      overduePartialWork: 0,
-    });
-  } catch (error) {
-    console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
-    addToast("Failed to load schedules", "error");
-  } finally {
-    setIsFetching(false);
-    setRefreshing(false);
-  }
-};
+ 
+          // Fallback to assignedForms if not IATF or if fetch returned empty
+          const assignedForms =
+            schedule.forms || schedule.checkSheets || schedule.assignedForms;
+ 
+          if (
+            formDetails.length === 0 &&
+            Array.isArray(assignedForms) &&
+            assignedForms.length > 0
+          ) {
+            formDetails = assignedForms.map((form: any) => {
+              const existingResponse = responseMap.get(String(form.id));
+              return {
+                id: form.id,
+                name: form.name || form.processName || "Audit Form",
+                processName: form.processName || form.name || "Audit",
+                completed:
+                  !!existingResponse &&
+                  (existingResponse.status === "COMPLETED" ||
+                    existingResponse.status === "APPROVED" ||
+                    existingResponse.status === "SUBMITTED" ||
+                    existingResponse.submittedAt !== null),
+                responseId: existingResponse?.id,
+                status: existingResponse?.status,
+              };
+            });
+          }
+ 
+          if (formDetails.length === 0) {
+            const availableForms = await fetchAvailableFormsForDepartment(
+              department,
+              auditType,
+            );
+            if (availableForms.length > 0) {
+              formDetails = availableForms.map((form: any) => {
+                const existingResponse = responseMap.get(String(form.id));
+                return {
+                  id: form.id,
+                  name: form.name || form.processName || "Audit Form",
+                  processName: form.processName || form.name || "Audit",
+                  completed:
+                    !!existingResponse &&
+                    (existingResponse.status === "COMPLETED" ||
+                      existingResponse.status === "APPROVED" ||
+                      existingResponse.status === "SUBMITTED" ||
+                      existingResponse.submittedAt !== null),
+                  responseId: existingResponse?.id,
+                  status: existingResponse?.status,
+                };
+              });
+            } else {
+              if (scheduleResponses.length > 0) {
+                const sortedResponses = [...scheduleResponses].sort((a, b) => {
+                  const dateA = new Date(a.createdAt || 0).getTime();
+                  const dateB = new Date(b.createdAt || 0).getTime();
+                  return dateB - dateA;
+                });
+ 
+                const latestResponse = sortedResponses[0];
+                formDetails = [
+                  {
+                    id: latestResponse.checkSheet?.id || 1,
+                    name:
+                      latestResponse.checkSheet?.name ||
+                      auditType ||
+                      "Audit Form",
+                    processName:
+                      latestResponse.checkSheet?.processName ||
+                      auditType ||
+                      "Audit",
+                    completed:
+                      latestResponse.status === "COMPLETED" ||
+                      latestResponse.status === "APPROVED" ||
+                      latestResponse.status === "SUBMITTED" ||
+                      latestResponse.submittedAt !== null,
+                    responseId: latestResponse.id,
+                    status: latestResponse.status,
+                  },
+                ];
+              } else {
+                formDetails = [
+                  {
+                    id: schedule.checkSheet?.id || 1,
+                    name: auditType || "Audit Form",
+                    processName: auditType || "Audit",
+                    completed:
+                      schedule.status === "COMPLETED" ||
+                      schedule.status === "APPROVED",
+                  },
+                ];
+              }
+            }
+          }
+ 
+          // 3. Calculate accurate stats based on ALL forms
+          const totalForms = formDetails.length;
+          const completedForms = formDetails.filter(
+            (f: any) => f.completed,
+          ).length;
+          const hasFormData = completedForms > 0;
+          const isAllFormsCompleted =
+            totalForms > 0 && completedForms === totalForms;
+ 
+          const isAuditCompleted =
+            schedule.status === "COMPLETED" ||
+            schedule.status === "APPROVED" ||
+            schedule.status === "CLOSED";
+ 
+          const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
+ 
+          const finalTimeStatus = allFormsCompleted
+            ? "COMPLETED"
+            : recalculateTimeStatus(schedule);
+          const finalCanStart =
+            !allFormsCompleted && finalTimeStatus === "ACTIVE";
+ 
+          return {
+            ...item,
+            schedule: {
+              ...schedule,
+              hasFormData,
+              totalForms,
+              completedForms: allFormsCompleted ? totalForms : completedForms,
+              pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
+              allFormsCompleted,
+              formDetails,
+              rescheduleRequested: pendingRescheduleIds.has(scheduleId),
+              extensionRequested: pendingExtensionIds.has(scheduleId),
+              coAuditorNames: schedule.coAuditorNames || [],
+            },
+            timeStatus: finalTimeStatus,
+            canStart: finalCanStart,
+          };
+        }),
+      );
+ 
+      setSchedules(enhancedData);
+ 
+      console.log(
+        "✅ [TIME STATUS DEBUG] Current time:",
+        new Date().toLocaleTimeString(),
+      );
+      console.log(
+        "✅ [TIME STATUS DEBUG] Schedules:",
+        enhancedData.map((s) => ({
+          auditType: s.schedule.auditType,
+          scheduledDate: s.schedule.scheduledDate,
+          startTime: s.schedule.startTime,
+          endTime: s.schedule.endTime,
+          timeStatus: s.timeStatus,
+        })),
+      );
+ 
+      setStats({
+        upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
+          .length,
+        active: enhancedData.filter((s: any) => s.timeStatus === "ACTIVE")
+          .length,
+        inProgress: enhancedData.filter(
+          (s: any) => s.schedule.hasFormData && !s.schedule.allFormsCompleted,
+        ).length,
+        expired: enhancedData.filter((s: any) => s.timeStatus === "EXPIRED")
+          .length,
+        partiallyCompleted: 0,
+        completed: enhancedData.filter((s: any) => s.schedule.allFormsCompleted)
+          .length,
+        overdueNoWork: 0,
+        overduePartialWork: 0,
+      });
+    } catch (error) {
+      console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
+      addToast("Failed to load schedules", "error");
+    } finally {
+      setIsFetching(false);
+      setRefreshing(false);
+    }
+  };
+ 
 
   useEffect(() => {
     if (user?.id) {

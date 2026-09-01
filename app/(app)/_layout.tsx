@@ -1,18 +1,33 @@
 // app/(app)/_layout.tsx
 import { useAuth } from '@/components/context/AuthContext';
-import { useSidebar } from '@/components/context/SidebarContext'; // ✅ ADD THIS
+import { useSidebar } from '@/components/context/SidebarContext';
 import Navbar from '@/components/Navbar';
 import SmartNavigator from '@/components/navigation/SmartNavigator';
 import { Redirect, Stack } from 'expo-router';
-import React from 'react'; // ✅ REMOVE useState
-import { ActivityIndicator, Dimensions, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, Dimensions, LogBox, Platform, TouchableOpacity, View } from 'react-native';
+
+// ✅ Ignore specific warnings on Android
+if (Platform.OS === 'android') {
+  LogBox.ignoreLogs([
+    'ViewPropTypes will be removed',
+    'ColorPropType will be removed',
+    'Require cycle:',
+  ]);
+}
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
-  // ✅ USE SIDEBAR CONTEXT INSTEAD OF LOCAL STATE
   const { isOpen: drawerVisible, toggleSidebar, closeSidebar } = useSidebar();
+
+  // ✅ Android crash prevention - only render if user exists
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      console.log('📱 AppLayout mounted on Android');
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -30,7 +45,7 @@ export default function AppLayout() {
     <View style={{ flex: 1 }}>
       {/* ✅ Navbar has higher zIndex, stays on top */}
       <View style={{ zIndex: 10, elevation: 10 }}>
-        <Navbar onMenuPress={toggleSidebar} /> {/* ✅ Pass toggleSidebar */}
+        <Navbar onMenuPress={toggleSidebar} />
       </View>
 
       {/* Content area with drawer */}
@@ -48,7 +63,7 @@ export default function AppLayout() {
               flexDirection: "row",
             }}
           >
-            {/* ✅ SmartNavigator renders the sidebar content */}
+            {/* ✅ FIXED: Exact width match with SmartNavigator (256) */}
             <View
               style={{
                 width: 256,

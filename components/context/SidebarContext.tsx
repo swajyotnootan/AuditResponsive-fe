@@ -15,10 +15,10 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 export const SidebarProvider = ({ children }: { children: React.ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggleSidebar = useCallback(() => {
-    console.log('🔄 toggleSidebar called, current state:', isOpen, 'Platform:', Platform.OS);
-    setIsOpen(prev => !prev);
-  }, [isOpen]);
+    const toggleSidebar = useCallback(() => {
+    console.log('🔄 toggleSidebar called');
+    setIsOpen(prev => !prev); // ✅ Uses previous state, no need for [isOpen] dependency
+  }, []); // ✅ Empty dependency array
 
   const openSidebar = useCallback(() => {
     console.log('📖 openSidebar called, Platform:', Platform.OS);

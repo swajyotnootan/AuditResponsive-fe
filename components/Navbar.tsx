@@ -149,6 +149,7 @@ const Navbar: React.FC<NavbarProps> = ({
   // ✅ Dynamic logo from backend
   const [dynamicLogo, setDynamicLogo] = useState<string | null>(null);
   const [logoKey, setLogoKey] = useState(0);
+  const [isMenuToggling, setIsMenuToggling] = useState(false);
 
   const loadDynamicLogo = async () => {
     try {
@@ -461,35 +462,43 @@ const Navbar: React.FC<NavbarProps> = ({
 <View className="flex-row items-center flex-shrink">
   {showToggleButton ? (
     <TouchableOpacity
-      onPress={() => {
-        console.log('🔄 Menu button pressed!');
-        try {
-          if (onMenuPress) {
-            console.log('📌 Using onMenuPress from props');
-            onMenuPress();
-          } else {
-            console.log('📌 Using handleSidebarToggle');
-            toggleSidebar();
-          }
-        } catch (error) {
-          console.error('❌ Error in menu press:', error);
-          // ✅ Fallback: Don't crash, just log
-        }
-      }}
-      className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
-      style={{
-        backgroundColor: "rgba(255,255,255,0.12)",
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.25)",
-      }}
-      activeOpacity={0.7}
-    >
-      <Menu
-        size={isSmallMobile ? 18 : isMobile ? 20 : 22}
-        color="#FFFFFF"
-        strokeWidth={2.5}
-      />
-    </TouchableOpacity>
+  onPress={() => {
+    // ✅ Prevent double-tap rapid closing
+    if (isMenuToggling) return; 
+    
+    console.log('🔄 Menu button pressed!');
+    setIsMenuToggling(true);
+    
+    try {
+      if (onMenuPress) {
+        console.log('📌 Using onMenuPress from props');
+        onMenuPress();
+      } else {
+        console.log('📌 Opening mobile menu and toggling sidebar');
+        setMobileMenuOpen(true); // ✅ EXPLICITLY OPEN THE MODAL
+        toggleSidebar();         // ✅ Keep this if it also controls the sidebar
+      }
+    } catch (error) {
+      console.error('❌ Error in menu press:', error);
+    } finally {
+      // ✅ Reset the lock after a short delay to allow animation to start
+      setTimeout(() => setIsMenuToggling(false), 300);
+    }
+  }}
+  className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
+  style={{
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  }}
+  activeOpacity={0.7}
+>
+  <Menu
+    size={isSmallMobile ? 18 : isMobile ? 20 : 22}
+    color="#FFFFFF"
+    strokeWidth={2.5}
+  />
+</TouchableOpacity>
   ) : null}
 
   {/* Qsutra Logo - Always visible */}
