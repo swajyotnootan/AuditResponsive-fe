@@ -1,9 +1,7 @@
 // components/Navbar.tsx
 import { useSidebar } from "@/components/context/SidebarContext";
 import { API_BASE_URL } from "@/config/apiConfig";
-import type { NavigationProp, RouteProp } from "@react-navigation/native";
-import { useNavigation, useRoute } from "@react-navigation/native";
-import { router } from "expo-router";
+import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   Bell,
   Building2,
@@ -12,6 +10,7 @@ import {
   LogOut,
   Mail,
   Menu,
+  MoreVertical, // ✅ FIXED: Added MoreVertical import
   Shield,
   User,
   X
@@ -20,7 +19,7 @@ import React, { ReactNode, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
-  DeviceEventEmitter, // ✅ Added for native event listening
+  DeviceEventEmitter,
   Image,
   ImageErrorEventData,
   ImageSourcePropType,
@@ -64,22 +63,12 @@ interface NavbarProps {
   breadcrumbs?: Array<{ label: string; onPress?: () => void }>;
 }
 
-type RootStackParamList = {
-  Home: undefined;
-  Calendar: undefined;
-  [key: string]: undefined | object;
-};
-
-type NavigationType = NavigationProp<RootStackParamList>;
-type RouteType = RouteProp<RootStackParamList, keyof RootStackParamList>;
-
 // Import assets
 const QSUTRA_LOGO = require("../assets/QsutraQMSWhiteLogo.png");
 const STRATUM_LOGO = require("../assets/Stratum.png");
 
 // Professional Corporate Color Palette
 const PRIMARY_COLOR = "#00529B";
-// DELETE the hardcoded line above
 
 // Custom HoverView Component
 interface HoverViewProps {
@@ -118,8 +107,9 @@ const Navbar: React.FC<NavbarProps> = ({
   onSearch,
   breadcrumbs = [],
 }) => {
-  const navigation = useNavigation<NavigationType>();
-  const route = useRoute<RouteType>();
+  const router = useRouter();
+const pathname = usePathname();
+const params = useLocalSearchParams();
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
   const { unreadCount, setIsOpen: setNotificationOpen } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -164,12 +154,12 @@ const Navbar: React.FC<NavbarProps> = ({
           const newUrl = URL.createObjectURL(blob);
           currentBlobUrlRef.current = newUrl;
           setDynamicLogo(newUrl);
-          setLogoKey((prev) => prev + 1); // ✅ Force re-render
+          setLogoKey((prev) => prev + 1);
         } else {
           const reader = new FileReader();
           reader.onloadend = () => {
             setDynamicLogo(reader.result as string);
-            setLogoKey((prev) => prev + 1); // ✅ Force re-render
+            setLogoKey((prev) => prev + 1);
           };
           reader.readAsDataURL(blob);
         }
@@ -191,7 +181,6 @@ const Navbar: React.FC<NavbarProps> = ({
     let webListener: (() => void) | null = null;
     let nativeSubscription: any = null;
 
-    // ✅ Cross-platform event listening
     if (Platform.OS === "web" && typeof window !== "undefined") {
       webListener = () => {
         console.log("🔄 Navbar: logo-updated received (web)!");
@@ -222,7 +211,7 @@ const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const dashboardPath = getDashboardPath(user);
-  const currentPath = route.name || "";
+const currentPath = pathname || "";
   const currentPathLower = currentPath.toLowerCase();
 
   const isOnDashboard =
@@ -346,18 +335,17 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleSidebarToggle = () => {
-  console.log('🔄 Hamburger clicked! Platform:', Platform.OS);
-  try {
-    // ✅ Check if toggleSidebar exists before calling
-    if (typeof toggleSidebar === 'function') {
-      toggleSidebar();
-    } else {
-      console.warn('⚠️ toggleSidebar is not a function!');
+    console.log('🔄 Hamburger clicked! Platform:', Platform.OS);
+    try {
+      if (typeof toggleSidebar === 'function') {
+        toggleSidebar();
+      } else {
+        console.warn('⚠️ toggleSidebar is not a function!');
+      }
+    } catch (error) {
+      console.error('❌ Error in handleSidebarToggle:', error);
     }
-  } catch (error) {
-    console.error('❌ Error in handleSidebarToggle:', error);
-  }
-};
+  };
 
   const getUserInitials = (): string => {
     if (!user?.name) return "?";
@@ -459,109 +447,118 @@ const Navbar: React.FC<NavbarProps> = ({
             style={{ maxWidth: isDesktop ? 1600 : "100%" }}
           >
             {/* LEFT SECTION */}
-<View className="flex-row items-center flex-shrink">
-  {showToggleButton ? (
-    <TouchableOpacity
-  onPress={() => {
-    // ✅ Prevent double-tap rapid closing
-    if (isMenuToggling) return; 
-    
-    console.log('🔄 Menu button pressed!');
-    setIsMenuToggling(true);
-    
-    try {
-      if (onMenuPress) {
-        console.log('📌 Using onMenuPress from props');
-        onMenuPress();
-      } else {
-        console.log('📌 Opening mobile menu and toggling sidebar');
-        setMobileMenuOpen(true); // ✅ EXPLICITLY OPEN THE MODAL
-        toggleSidebar();         // ✅ Keep this if it also controls the sidebar
-      }
-    } catch (error) {
-      console.error('❌ Error in menu press:', error);
-    } finally {
-      // ✅ Reset the lock after a short delay to allow animation to start
-      setTimeout(() => setIsMenuToggling(false), 300);
-    }
-  }}
-  className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
-  style={{
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-  }}
-  activeOpacity={0.7}
->
-  <Menu
-    size={isSmallMobile ? 18 : isMobile ? 20 : 22}
-    color="#FFFFFF"
-    strokeWidth={2.5}
-  />
-</TouchableOpacity>
-  ) : null}
+            <View className="flex-row items-center flex-shrink">
+              {showToggleButton ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    if (isMenuToggling) return; 
+                    
+                    console.log('🔄 Menu button pressed!');
+                    setIsMenuToggling(true);
+                    
+                    try {
+                      if (onMenuPress) {
+                        console.log('📌 Using onMenuPress from props');
+                        onMenuPress();
+                      } else {
+                        console.log('📌 Opening mobile menu and toggling sidebar');
+                        setMobileMenuOpen(true);
+                        toggleSidebar();
+                      }
+                    } catch (error) {
+                      console.error('❌ Error in menu press:', error);
+                    } finally {
+                      setTimeout(() => setIsMenuToggling(false), 300);
+                    }
+                  }}
+                  className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.12)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.25)",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Menu
+                    size={isSmallMobile ? 18 : isMobile ? 20 : 22}
+                    color="#FFFFFF"
+                    strokeWidth={2.5}
+                  />
+                </TouchableOpacity>
+              ) : null}
 
-  {/* Qsutra Logo - Always visible */}
-  <TouchableOpacity
-    onPress={() => {
-      try {
-        router.push("/(app)/(tabs)" as any);
-      } catch (error) {
-        console.error('❌ Navigation error:', error);
-      }
-    }}
-    className="flex-row items-center"
-    activeOpacity={0.8}
-  >
-    <Image
-      source={QSUTRA_LOGO}
-      resizeMode="contain"
-      style={
-        isSmallMobile
-          ? { width: 60, height: 24 }
-          : isMobile
-            ? { width: 80, height: 32 }
-            : isTablet
-              ? { width: 100, height: 40 }
-              : { width: 140, height: 56 }
-      }
-    />
-  </TouchableOpacity>
-</View>
+              {/* Qsutra Logo - Always visible */}
+              <TouchableOpacity
+                onPress={() => {
+                  try {
+                    router.push("/(app)/(tabs)" as any);
+                  } catch (error) {
+                    console.error('❌ Navigation error:', error);
+                  }
+                }}
+                className="flex-row items-center"
+                activeOpacity={0.8}
+              >
+                <Image
+                  source={QSUTRA_LOGO}
+                  resizeMode="contain"
+                  style={
+                    isSmallMobile
+                      ? { width: 60, height: 24 }
+                      : isMobile
+                        ? { width: 80, height: 32 }
+                        : isTablet
+                          ? { width: 100, height: 40 }
+                          : { width: 140, height: 56 }
+                  }
+                />
+              </TouchableOpacity>
+            </View>
 
             {/* RIGHT SECTION */}
             <View className="flex-row items-center">
               {/* MOBILE VIEW */}
-{isMobile && (
-  <View className="flex-row items-center">
-    {/* ✅ Dynamic/Stratum Logo on Mobile */}
-    <View className="items-center justify-center mr-2">
-      <Image
-        key={`mobile-logo-${logoKey}`}
-        source={
-          dynamicLogo
-            ? { uri: dynamicLogo }
-            : rightLogo || STRATUM_LOGO
-        }
-        resizeMode="contain"
-        style={{ height: 30, width: 50, borderRadius: 10 }}
-      />
-    </View>
-
-    {/* ✅ REMOVED the MoreVertical button - the hamburger menu handles sidebar toggling */}
-    {/* Only keep logout button on mobile */}
-    <TouchableOpacity
-      onPress={handleLogout}
-      className="p-2 ml-1 rounded-lg"
-      style={{ backgroundColor: "#DC2626" }}
-      activeOpacity={0.8}
-    >
-      <LogOut size={18} color="#FFFFFF" strokeWidth={1.5} />
-    </TouchableOpacity>
-  </View>
-)}
-
-              {/* DESKTOP/TABLET VIEW */}
+              {isMobile && (
+                <View className="flex-row items-center">
+                  {/* ✅ Dynamic/Stratum Logo on Mobile */}
+                  <View className="items-center justify-center mr-2">
+                    <Image
+                      key={`mobile-logo-${logoKey}`}
+                      source={
+                        dynamicLogo
+                          ? { uri: dynamicLogo }
+                          : rightLogo || STRATUM_LOGO
+                      }
+                      resizeMode="contain"
+                      style={{ height: 30, width: 50, borderRadius: 10 }}
+                    />
+                  </View>
+ 
+                  {/* ✅ MoreVertical Menu Button */}
+                  <TouchableOpacity
+                    onPress={() => setMobileMenuOpen(true)}
+                    className="p-2 rounded-lg"
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.08)",
+                      borderWidth: 1,
+                      borderColor: "rgba(255,255,255,0.15)",
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={20} color="#FFFFFF" strokeWidth={2} />
+                  </TouchableOpacity>
+ 
+                  <TouchableOpacity
+                    onPress={handleLogout}
+                    className="p-2 ml-1 rounded-lg"
+                    style={{ backgroundColor: "#DC2626" }}
+                    activeOpacity={0.8}
+                  >
+                    <LogOut size={18} color="#FFFFFF" strokeWidth={1.5} />
+                  </TouchableOpacity>
+                </View>
+              )}
+ 
               {/* DESKTOP/TABLET VIEW */}
               {!isMobile && (
                 <>
@@ -584,14 +581,14 @@ const Navbar: React.FC<NavbarProps> = ({
                       />
                     </View>
                   )}
-
+ 
                   {/* ✅ Notification Bell - Hidden for HR_ADMIN and MASTER */}
                   {!isHrAdminOrMaster && user && (
                     <View className="mx-1">
                       <NotificationBell />
                     </View>
                   )}
-
+ 
                   {/* ✅ Calendar Icon - Hidden for HR_ADMIN and MASTER */}
                   {!isHrAdminOrMaster && !shouldHideCalendar() && (
                     <HoverView className="mx-1">
@@ -621,7 +618,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       )}
                     </HoverView>
                   )}
-
+ 
                   {/* Profile Avatar */}
                   <HoverView className="ml-1">
                     {(isHovered) => (
@@ -658,7 +655,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       </TouchableOpacity>
                     )}
                   </HoverView>
-
+ 
                   {/* User Info */}
                   <HoverView className="justify-center ml-1">
                     {(isHovered) => (
@@ -691,7 +688,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       </TouchableOpacity>
                     )}
                   </HoverView>
-
+ 
                   {/* Logout Button */}
                   <HoverView className="mx-1">
                     {(isHovered) => (
@@ -731,7 +728,6 @@ const Navbar: React.FC<NavbarProps> = ({
         </View>
       </View>
 
-      {/* Rest of the component (Mobile Menu, Profile Modal) stays EXACTLY the same */}
       {/* MOBILE MENU DROPDOWN */}
       {isMobile && (
         <Modal
@@ -869,8 +865,6 @@ const Navbar: React.FC<NavbarProps> = ({
                               color={PRIMARY_COLOR}
                               strokeWidth={1.5}
                             />
-
-                            {/* Small Red Badge on the Bell Icon */}
                             {unreadCount > 0 && (
                               <View
                                 style={{
@@ -900,7 +894,6 @@ const Navbar: React.FC<NavbarProps> = ({
                               </View>
                             )}
                           </View>
-
                           <Text
                             style={{
                               flex: 1,
@@ -912,8 +905,6 @@ const Navbar: React.FC<NavbarProps> = ({
                           >
                             Notifications
                           </Text>
-
-                          {/* Count Pill on the Right Side */}
                           {unreadCount > 0 && (
                             <View
                               style={{
