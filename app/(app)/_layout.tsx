@@ -1,24 +1,18 @@
 // app/(app)/_layout.tsx
 import { useAuth } from '@/components/context/AuthContext';
+import { useSidebar } from '@/components/context/SidebarContext'; // ✅ ADD THIS
 import Navbar from '@/components/Navbar';
 import SmartNavigator from '@/components/navigation/SmartNavigator';
 import { Redirect, Stack } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React from 'react'; // ✅ REMOVE useState
 import { ActivityIndicator, Dimensions, TouchableOpacity, View } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
-  const [drawerVisible, setDrawerVisible] = useState(false);
-
-  const toggleDrawer = useCallback(() => {
-    setDrawerVisible(prev => !prev);
-  }, []);
-
-  const closeDrawer = useCallback(() => {
-    setDrawerVisible(false);
-  }, []);
+  // ✅ USE SIDEBAR CONTEXT INSTEAD OF LOCAL STATE
+  const { isOpen: drawerVisible, toggleSidebar, closeSidebar } = useSidebar();
 
   if (loading) {
     return (
@@ -36,7 +30,7 @@ export default function AppLayout() {
     <View style={{ flex: 1 }}>
       {/* ✅ Navbar has higher zIndex, stays on top */}
       <View style={{ zIndex: 10, elevation: 10 }}>
-        <Navbar onMenuPress={toggleDrawer} />
+        <Navbar onMenuPress={toggleSidebar} /> {/* ✅ Pass toggleSidebar */}
       </View>
 
       {/* Content area with drawer */}
@@ -54,7 +48,7 @@ export default function AppLayout() {
               flexDirection: "row",
             }}
           >
-            {/* ✅ FIXED: Exact width match with SmartNavigator (256) */}
+            {/* ✅ SmartNavigator renders the sidebar content */}
             <View
               style={{
                 width: 256,
@@ -67,14 +61,14 @@ export default function AppLayout() {
                 shadowRadius: 10,
               }}
             >
-              <SmartNavigator type="drawer" onClose={closeDrawer} />
+              <SmartNavigator type="drawer" onClose={closeSidebar} />
             </View>
 
             {/* Overlay */}
             <TouchableOpacity
               style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
               activeOpacity={1}
-              onPress={closeDrawer}
+              onPress={closeSidebar}
             />
           </View>
         )}

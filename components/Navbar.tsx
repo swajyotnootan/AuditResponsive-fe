@@ -345,8 +345,18 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleSidebarToggle = () => {
-    toggleSidebar();
-  };
+  console.log('🔄 Hamburger clicked! Platform:', Platform.OS);
+  try {
+    // ✅ Check if toggleSidebar exists before calling
+    if (typeof toggleSidebar === 'function') {
+      toggleSidebar();
+    } else {
+      console.warn('⚠️ toggleSidebar is not a function!');
+    }
+  } catch (error) {
+    console.error('❌ Error in handleSidebarToggle:', error);
+  }
+};
 
   const getUserInitials = (): string => {
     if (!user?.name) return "?";
@@ -451,7 +461,21 @@ const Navbar: React.FC<NavbarProps> = ({
 <View className="flex-row items-center flex-shrink">
   {showToggleButton ? (
     <TouchableOpacity
-      onPress={onMenuPress || handleSidebarToggle}  // ✅ Use handleSidebarToggle if onMenuPress is not provided
+      onPress={() => {
+        console.log('🔄 Menu button pressed!');
+        try {
+          if (onMenuPress) {
+            console.log('📌 Using onMenuPress from props');
+            onMenuPress();
+          } else {
+            console.log('📌 Using handleSidebarToggle');
+            toggleSidebar();
+          }
+        } catch (error) {
+          console.error('❌ Error in menu press:', error);
+          // ✅ Fallback: Don't crash, just log
+        }
+      }}
       className={`rounded-lg mr-3 ${isMobile ? "p-2" : "p-2.5"}`}
       style={{
         backgroundColor: "rgba(255,255,255,0.12)",
@@ -470,7 +494,13 @@ const Navbar: React.FC<NavbarProps> = ({
 
   {/* Qsutra Logo - Always visible */}
   <TouchableOpacity
-    onPress={() => router.push("/(app)/(tabs)" as any)}
+    onPress={() => {
+      try {
+        router.push("/(app)/(tabs)" as any);
+      } catch (error) {
+        console.error('❌ Navigation error:', error);
+      }
+    }}
     className="flex-row items-center"
     activeOpacity={0.8}
   >
@@ -488,35 +518,6 @@ const Navbar: React.FC<NavbarProps> = ({
       }
     />
   </TouchableOpacity>
-
-  {/* Breadcrumbs - Desktop only */}
-  {isDesktop && breadcrumbs.length > 0 && (
-    <View className="flex-row items-center ml-6">
-      {breadcrumbs.map((crumb, index) => (
-        <React.Fragment key={index}>
-          {index > 0 && (
-            <ChevronRight size={16} color="rgba(255,255,255,0.4)" />
-          )}
-          <TouchableOpacity
-            onPress={crumb.onPress}
-            disabled={index === breadcrumbs.length - 1}
-            className="px-3 py-1.5"
-          >
-            <Text
-              className={`text-sm font-medium ${
-                index === breadcrumbs.length - 1
-                  ? "text-white"
-                  : "text-white/70"
-              }`}
-              style={{ letterSpacing: 0.2 }}
-            >
-              {crumb.label}
-            </Text>
-          </TouchableOpacity>
-        </React.Fragment>
-      ))}
-    </View>
-  )}
 </View>
 
             {/* RIGHT SECTION */}
