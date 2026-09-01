@@ -82,13 +82,20 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     return undefined;
   };
 
-  // ✅ FIXED: Simplified and more robust isActive function
+  // ✅ Helper to check if this is a "first tab" (should be active when no tab is selected)
+  const isFirstTab = (tab: string): boolean => {
+    const firstTabs = ["dashboard", "overview", "my-audits", "audits"];
+    return firstTabs.includes(tab);
+  };
+
+  // ✅ FIXED: Robust isActive function that works on both web and Android
   const isActive = (item: any): boolean => {
     const currentPath = "/" + segments.filter(Boolean).join("/");
     const itemBaseRoute = getBaseRoute(item.route);
     const currentTab = getParam("tab");
     const currentSection = getParam("section");
 
+    // ✅ For Master role with section param
     if (item.action) {
       const routeMatches = currentPath === itemBaseRoute || 
                            currentPath.includes(itemBaseRoute);
@@ -96,17 +103,27 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       return routeMatches && sectionMatches;
     }
 
+    // ✅ For roles with tab param (Auditor, Lead Auditor, Audit Manager, etc.)
     if (item.tab) {
       const routeMatches = currentPath === itemBaseRoute || 
                            currentPath.includes(itemBaseRoute);
       const tabMatches = String(currentTab) === String(item.tab);
+      
+      // ✅ FIX: On Android, when there's no tab param, the first tab should be active
+      // This preserves web behavior while fixing Android
+      if (routeMatches && !currentTab && !currentSection && isFirstTab(item.tab)) {
+        return true;
+      }
+      
       return routeMatches && tabMatches;
     }
 
+    // ✅ For Calendar and other simple routes
     if (item.route === "/(app)/(tabs)/calendar") {
       return currentPath === "/calendar" || currentPath.includes("/calendar");
     }
 
+    // ✅ For Dashboard (Home) - preserves existing logic
     if (item.route === "/(app)/(tabs)" || item.route === "/(app)/(tabs)/" || item.route === "/") {
       const isHomeRoute = currentPath === "/" || currentPath === "" || currentPath === "/(app)/(tabs)";
       if (isHomeRoute) {
@@ -125,10 +142,12 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       return false;
     }
 
+    // ✅ Default: exact path match
     if (currentPath === itemBaseRoute) {
       return true;
     }
 
+    // ✅ Partial match for nested routes
     if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
       if (!currentTab && !currentSection) {
         return true;

@@ -797,9 +797,12 @@ export default function LandingPage({ type }: LandingPageProps) {
     return Math.round((completedStepsTotal / totalStepsPossible) * 100);
   }, [scopedEvents]);
 
-  const renderEventCard = (ev: ParsedEvent) => {
+ const renderEventCard = (ev: ParsedEvent) => {
     const isApprovalPending = ev.status === "Approval Pending";
-
+ 
+    const availableWidth = width - horizontalPadding * 2;
+    const desktopCardWidth = (availableWidth - 74) / 3;
+ 
     return (
       <View
         className={`bg-white rounded-xl shadow-md border overflow-hidden ${
@@ -807,12 +810,11 @@ export default function LandingPage({ type }: LandingPageProps) {
         }`}
         style={{
           backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
-          marginBottom: isDesktop ? 0 : 16,
-          // Better width calculation for 3 columns
-          width: isDesktop ? `${(100 - 24) / 3}%` : "100%", // Account for gap
-          maxWidth: isDesktop ? 400 : undefined,
-          alignSelf: "stretch",
-          marginLeft: isDesktop ? 0 : 0,
+          marginBottom: 16,
+          // ✅ Use exact calculated width instead of flex
+          width: isDesktop ? desktopCardWidth : "100%",
+          // ✅ Use marginRight for spacing (except last card in row)
+          marginRight: isDesktop ? 12 : 0,
         }}
       >
         {isApprovalPending && (
@@ -822,7 +824,7 @@ export default function LandingPage({ type }: LandingPageProps) {
             </Text>
           </View>
         )}
-
+ 
         <View className={isDesktop ? "p-3" : "p-4"}>
           {/* ... rest of the card content remains exactly the same ... */}
           <View className="flex-row items-start justify-between mb-3">
@@ -834,7 +836,7 @@ export default function LandingPage({ type }: LandingPageProps) {
                 {ev.status}
               </Text>
             </View>
-
+ 
             {(isInitiator || isAdmin) && (
               <TouchableOpacity
                 onPress={() => {
@@ -847,7 +849,7 @@ export default function LandingPage({ type }: LandingPageProps) {
               </TouchableOpacity>
             )}
           </View>
-
+ 
           <Text
             className={`mb-2 font-bold text-slate-800 ${
               isDesktop ? "text-base" : "text-lg"
@@ -856,7 +858,7 @@ export default function LandingPage({ type }: LandingPageProps) {
           >
             {ev.title}
           </Text>
-
+ 
           <Text
             className={`font-medium text-slate-600 ${
               isDesktop ? "text-[10px]" : "text-xs"
@@ -865,14 +867,14 @@ export default function LandingPage({ type }: LandingPageProps) {
           >
             Owner: {ev.owner}
           </Text>
-
+ 
           <View className="flex-row items-center gap-2 mb-4">
             <Clock size={isDesktop ? 12 : 14} color="#64748b" />
             <Text className="text-xs font-medium text-slate-600">
               Created: {ev.created}
             </Text>
           </View>
-
+ 
           <View className="flex-row items-center justify-between mb-2">
             <View
               className={`bg-indigo-50 border border-indigo-100 rounded-lg ${
@@ -891,7 +893,7 @@ export default function LandingPage({ type }: LandingPageProps) {
               {ev.completedSteps}/{ev.totalSteps} Steps
             </Text>
           </View>
-
+ 
           <View
             className={`w-full overflow-hidden rounded-full bg-slate-100 ${
               isDesktop ? "h-2 mb-3" : "h-2.5 mb-5"
@@ -902,7 +904,7 @@ export default function LandingPage({ type }: LandingPageProps) {
               style={{ width: `${(ev.completedSteps / ev.totalSteps) * 100}%` }}
             />
           </View>
-
+ 
           {/* ✅ STRICT SINGLE ROW: flex-row (no wrap), flex-1 for equal sharing */}
           <View className="flex-row gap-2 mt-2">
             {/* 1. View Details Button (Conditionally shown) */}
@@ -923,7 +925,7 @@ export default function LandingPage({ type }: LandingPageProps) {
                 </Text>
               </TouchableOpacity>
             )}
-
+ 
             {/* 2. Dynamic Action Button based on Status and Role */}
             {ev.status === "Rejected" ? (
               <TouchableOpacity
@@ -1062,7 +1064,7 @@ export default function LandingPage({ type }: LandingPageProps) {
                 </Text>
               </TouchableOpacity>
             )}
-
+ 
             {/* 3. Forum Button */}
             <TouchableOpacity
               onPress={() => {
@@ -1084,6 +1086,8 @@ export default function LandingPage({ type }: LandingPageProps) {
       </View>
     );
   };
+ 
+ 
 
   return (
     <SafeAreaView
@@ -1545,26 +1549,33 @@ export default function LandingPage({ type }: LandingPageProps) {
             {limitedFiltered.length > 0 ? (
               <FlatList
                 data={limitedFiltered}
-                renderItem={({ item }) => renderEventCard(item)}
+                renderItem={({ item, index }) => {
+                  const card = renderEventCard(item);
+                  if (isDesktop && (index + 1) % 3 === 0) {
+                    return React.cloneElement(card, {
+                      style: {
+                        ...card.props.style,
+                        marginRight: 0,
+                      },
+                    });
+                  }
+                  return card;
+                }}
                 keyExtractor={(item) => item.eventNo}
                 key={isDesktop ? "desktop-3-col-grid" : "mobile-1-col-list"}
                 numColumns={isDesktop ? 3 : 1}
+                // ✅ Remove columnWrapperStyle gap since we handle it with marginRight
                 columnWrapperStyle={
-                  isDesktop
-                    ? {
-                        justifyContent: "space-between",
-                        gap: 12, // Add gap between columns
-                      }
-                    : undefined
+                  isDesktop ? { marginBottom: 16 } : undefined
                 }
                 contentContainerStyle={{
                   paddingBottom: 20,
-                  // Remove gap here since we're using columnWrapperStyle
                 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
                 style={{ width: "100%" }}
               />
+ 
             ) : (
               // ... empty state remains exactly the same ...
               !loading && (
