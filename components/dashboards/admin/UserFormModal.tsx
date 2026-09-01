@@ -1,10 +1,16 @@
-// components/dashboards/admin/UserFormModal.tsx
 import { API_BASE_URL } from '@/config/apiConfig';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { enterpriseAPI } from '@/services/enterpriseAPI';
 import * as ImagePicker from 'expo-image-picker';
-import { Calendar, Camera, Check, ChevronDown, GraduationCap, Upload, X } from 'lucide-react-native';
-import React, { useCallback, useEffect, useState } from 'react';
+import {
+  CountryCode,
+  getExampleNumber,
+  isPossiblePhoneNumber,
+} from "libphonenumber-js";
+import mobileExamples from "libphonenumber-js/examples.mobile.json";
+import { Calendar, Camera, Check, ChevronDown, GraduationCap, Search, Upload, X } from 'lucide-react-native'; // ✅ Added Search
+import React, { useCallback, useEffect, useMemo, useState } from 'react'; // ✅ Added useMemo
+import worldCountries from "world-countries";
 
 import {
   Alert, Image, Modal,
@@ -32,17 +38,6 @@ const uriToBase64 = async (uri: string): Promise<string> => {
   }
 };
 
-// const ROLES = [
-//   { name: 'MASTER', displayName: 'Master' },
-//   { name: 'AUDIT_MANAGER', displayName: 'Audit Manager' },
-//   { name: 'LEAD_AUDITOR', displayName: 'Lead Auditor' },
-//   { name: 'AUDITOR', displayName: 'Auditor' },
-//   { name: 'HOD', displayName: 'HOD' },
-//   { name: 'AUDITEE', displayName: 'Auditee' },
-//   { name: 'HR_ADMIN', displayName: 'HR Admin' },
-//   { name: 'INITIATOR', displayName: 'Initiator' },
-//   { name: 'TOP_MANAGEMENT', displayName: 'Top Management' },
-// ];
 
 const NAME_PREFIXES = ['Mr.', 'Mrs.', 'Miss', 'Ms.', 'Dr.', 'Prof.'];
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
@@ -52,6 +47,48 @@ const CORE_TOOLS = ['APQP', 'FMEA', 'PPAP', 'SPC', 'MSA'];
 const PROBLEM_SOLVING_TOOLS = ['8D', 'Why-Why', 'Fishbone', 'Pareto', '5W1H'];
 const PROCESSES = ['Machining', 'Assembly', 'Welding', 'Painting', 'Heat Treatment', 'Surface Finishing', 'Quality Control', 'Warehouse', 'Maintenance'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+
+// ✅ Add these phone helper functions
+const mobileLengthCache: Record<string, number> = {};
+const getStandardMobileLength = (iso: string): number => {
+  const code = (iso || "IN").toUpperCase();
+  if (mobileLengthCache[code]) return mobileLengthCache[code];
+  let len = 10;
+  try {
+    const example = getExampleNumber(
+      code as CountryCode,
+      mobileExamples as any,
+    );
+    if (example?.nationalNumber) len = example.nationalNumber.length;
+  } catch (e) {}
+  mobileLengthCache[code] = len;
+  return len;
+};
+
+const phoneLengthCache: Record<string, number[]> = {};
+const getPossiblePhoneLengths = (iso: string): number[] => {
+  if (phoneLengthCache[iso]) return phoneLengthCache[iso];
+  const lengths: number[] = [];
+  try {
+    for (let n = 1; n <= 17; n++) {
+      if (isPossiblePhoneNumber("9".repeat(n), iso as any)) lengths.push(n);
+    }
+  } catch (e) {}
+  const result = lengths.length > 0 ? lengths : [10];
+  phoneLengthCache[iso] = result;
+  return result;
+};
+const getMaxPhoneLength = (iso: string): number =>
+  Math.max(...getPossiblePhoneLengths(iso));
+
+// ✅ Add Country interface
+interface Country {
+  name: string;
+  iso2: string;
+  dialCode: string;
+  flagUrl: string;
+}
 
 // ==================== HELPER COMPONENTS (Outside main component) ====================
 
@@ -372,6 +409,11 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
   const [units, setUnits] = useState<any[]>([]);
   const [availableRoles, setAvailableRoles] = useState<any[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [countryCode, setCountryCode] = useState(user?.countryCode || '+91');
+  const [countryIsoCode, setCountryIsoCode] = useState(user?.countryIsoCode || 'IN');
 
   const [formData, setFormData] = useState({
     namePrefix: user?.namePrefix || 'Mr.',
@@ -380,6 +422,8 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
     userName: user?.username || user?.userName || '',
     email: user?.email || '',
     phone: user?.phone || '',
+  countryCode: user?.countryCode || '+91',
+  countryIsoCode: user?.countryIsoCode || 'IN',
     dateOfBirth: user?.dateOfBirth || '',
     gender: user?.gender || '',
     role: user?.role || '',
@@ -416,6 +460,48 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
     certificationDate: user?.certificationDate || '',
     certificationExpiryDate: user?.certificationExpiryDate || '',
   });
+
+  // ✅ Add countries list (after state variables)
+const countries = useMemo<Country[]>(() => {
+  return (worldCountries as any[])
+    .map((c) => ({
+      name: c?.name?.common || "",
+      iso2: (c?.cca2 || "").toUpperCase(),
+      dialCode: c?.idd?.root
+        ? `${c.idd.root}${c.idd?.suffixes?.[0] || ""}`
+        : "",
+      flagUrl:
+        c?.flags?.png ||
+        `https://flagcdn.com/w40/${(c?.cca2 || "").toLowerCase()}.png`,
+    }))
+    .filter((c) => c.name && c.iso2 && c.dialCode)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}, []);
+
+const filteredCountries = useMemo(() => {
+  const q = countrySearch.trim().toLowerCase();
+  if (!q) return countries;
+  return countries.filter(
+    (c) => c.name.toLowerCase().includes(q) || c.dialCode.includes(q),
+  );
+}, [countries, countrySearch]);
+
+// ✅ Phone helper functions
+const maxPhoneDigits = getStandardMobileLength(countryIsoCode || "IN");
+const phoneLengthLabel = `${maxPhoneDigits}-digit`;
+
+const handlePhoneChange = (text: string) => {
+  const digits = text.replace(/\D/g, "");
+  const maxLen = getStandardMobileLength(countryIsoCode || "IN");
+  setPhone(digits.slice(0, maxLen));
+};
+
+const phoneError = useMemo(() => {
+  if (!phone) return "";
+  const expected = getStandardMobileLength(countryIsoCode || "IN");
+  if (phone.length === expected) return "";
+  return `Invalid number – ${countryCode} requires exactly ${expected} digits (you entered ${phone.length})`;
+}, [phone, countryIsoCode, countryCode]);
 
   const isAuditorRole = formData.role === 'AUDITOR' || formData.role === 'LEAD_AUDITOR';
 
@@ -694,11 +780,17 @@ const fetchRoles = async () => {
 
   onSave({
     ...formData,
+    phone: phone, // ✅ Use the phone state
+    countryCode: countryCode, // ✅ Use the countryCode state
+    countryIsoCode: countryIsoCode, // ✅ Use the countryIsoCode state
     profilePhoto,
     signature,
   });
 }, [
   formData,
+  phone,
+  countryCode,
+  countryIsoCode,
   profilePhoto,
   signature,
   onSave,
@@ -824,8 +916,56 @@ const fetchRoles = async () => {
 
                 <Field label="Username"><StyledInput value={formData.userName} onChangeText={(t: string) => updateField('userName', t)} placeholder="Username" /></Field>
                 <Field label="Email" required><StyledInput value={formData.email} onChangeText={(t: string) => updateField('email', t)} placeholder="Email" keyboardType="email-address" /></Field>
-                <Field label="Phone"><StyledInput value={formData.phone} onChangeText={(t: string) => updateField('phone', t)} placeholder="Phone" keyboardType="phone-pad" /></Field>
+{/* ✅ Phone Number with Country Code Picker - Same as D0 Form */}
+<Field label="Phone Number">
+  <View style={{ flexDirection: 'row', alignItems: 'stretch', overflow: 'hidden', backgroundColor: 'white', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8 }}>
+    <TouchableOpacity
+      onPress={() => setShowCountryPicker(true)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 10,
+        borderRightWidth: 1,
+        borderRightColor: '#d1d5db',
+        backgroundColor: '#f9fafb',
+        minWidth: 92,
+      }}
+    >
+      <Image
+        source={{
+          uri: `https://flagcdn.com/w40/${(countryIsoCode || 'IN').toLowerCase()}.png`,
+        }}
+        style={{ width: 24, height: 16, borderRadius: 3 }}
+        resizeMode="cover"
+      />
+      <Text style={{ marginLeft: 6, fontSize: 14, fontWeight: 'bold', color: '#1f2937' }}>
+        {countryCode || '+91'}
+      </Text>
+      <ChevronDown size={14} color="#6B7280" style={{ marginLeft: 4 }} />
+    </TouchableOpacity>
 
+    <TextInput
+      value={phone}
+      onChangeText={handlePhoneChange}
+      placeholder={`Enter ${phoneLengthLabel} number`}
+      placeholderTextColor="#9ca3af"
+      keyboardType="phone-pad"
+      maxLength={maxPhoneDigits}
+      style={{
+        flex: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        color: '#111827',
+        backgroundColor: 'white',
+      }}
+    />
+  </View>
+  {phoneError ? (
+    <Text style={{ marginTop: 4, fontSize: 12, color: '#ef4444' }}>{phoneError}</Text>
+  ) : null}
+</Field>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <View style={{ flex: 1 }}><Field label="Date of Birth"><DateInput value={formData.dateOfBirth ? formatDate(formData.dateOfBirth) : ''} onPress={() => setShowDatePicker('dateOfBirth')} placeholder="Select date" /></Field></View>
                   <View style={{ width: 80 }}><Field label="Age"><View style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#f3f4f6' }}><Text style={{ fontSize: 14, color: '#6b7280' }}>{age ? `${age} yrs` : '--'}</Text></View></Field></View>
@@ -1144,6 +1284,82 @@ const fetchRoles = async () => {
         selected={formData.unitId} 
         onSelect={handleUnitSelect} 
       />
+
+      {/* ✅ Country Picker Modal - Same as D0 Form */}
+<Modal
+  visible={showCountryPicker}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowCountryPicker(false)}
+>
+  <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+    <TouchableOpacity
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      onPress={() => setShowCountryPicker(false)}
+    />
+    
+    <View style={{
+      backgroundColor: 'white',
+      borderRadius: 16,
+      padding: 20,
+      maxHeight: 500,
+      width: isDesktop ? 400 : Math.min(screenWidth * 0.92, 480),
+    }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#111827' }}>Select Country</Text>
+        <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+          <X size={20} color="#6b7280" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, marginBottom: 16 }}>
+        <Search size={16} color="#6B7280" />
+        <TextInput
+          value={countrySearch}
+          onChangeText={setCountrySearch}
+          placeholder="Search country or code..."
+          placeholderTextColor="#9ca3af"
+          style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: '#111827' }}
+        />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 350 }}>
+        {filteredCountries.map((country) => (
+          <TouchableOpacity
+            key={country.iso2}
+            onPress={() => {
+              setCountryCode(country.dialCode);
+              setCountryIsoCode(country.iso2);
+              setShowCountryPicker(false);
+              setCountrySearch("");
+              // Also update formData
+              updateField('countryCode', country.dialCode);
+              updateField('countryIsoCode', country.iso2);
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 12,
+              paddingHorizontal: 8,
+              borderBottomWidth: 1,
+              borderBottomColor: '#f3f4f6',
+            }}
+          >
+            <Image
+              source={{ uri: country.flagUrl }}
+              style={{ width: 28, height: 20, borderRadius: 4 }}
+              resizeMode="cover"
+            />
+            <Text style={{ flex: 1, marginLeft: 12, fontSize: 14, color: '#111827' }}>
+              {country.name}
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6B7280' }}>{country.dialCode}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
 
       {/* ==================== DISCARD CHANGES MODAL ==================== */}
       <Modal
