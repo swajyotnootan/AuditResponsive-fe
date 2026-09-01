@@ -1,6 +1,5 @@
 import { useAuth } from "@/components/context/AuthContext";
 import { getNavigationByRole } from "@/config/navigation.config";
-
 import {
   useLocalSearchParams,
   usePathname,
@@ -44,9 +43,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
 
   // ✅ Extract the base route from URL
   const getBaseRoute = (route: string) => {
-    // Remove query params
     const base = route.split("?")[0];
-    // Remove expo router groups like (app)/(tabs)/
     const clean = base.replace(/\([^)]*\)\//g, "");
     return clean;
   };
@@ -55,16 +52,12 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   const getParam = (key: string) => {
     const p = params as any;
     
-    // Level 1: Direct param
     if (p[key]) return Array.isArray(p[key]) ? p[key][0] : p[key];
     
-    // Level 2: Nested inside params.params
     if (p.params && typeof p.params === "object") {
       if (p.params[key]) {
         return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
       }
-      
-      // Level 3: Deeply nested
       if (p.params.params && typeof p.params.params === "object") {
         if (p.params.params[key]) {
           return Array.isArray(p.params.params[key]) 
@@ -74,18 +67,17 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       }
     }
     
-    // Level 4: Check URL string directly
-    // Level 4: Check URL string directly (only on web)
-if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has(key)) {
-      return urlParams.get(key);
+    // ✅ Only on web
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has(key)) {
+          return urlParams.get(key);
+        }
+      } catch (e) {
+        // Ignore URL parsing errors on native
+      }
     }
-  } catch (e) {
-    // Ignore URL parsing errors on native
-  }
-}
     
     return undefined;
   };
@@ -97,7 +89,6 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const currentTab = getParam("tab");
     const currentSection = getParam("section");
 
-    // ✅ For Master role with section param
     if (item.action) {
       const routeMatches = currentPath === itemBaseRoute || 
                            currentPath.includes(itemBaseRoute);
@@ -105,7 +96,6 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
       return routeMatches && sectionMatches;
     }
 
-    // ✅ For roles with tab param (Auditor, Lead Auditor, Audit Manager, etc.)
     if (item.tab) {
       const routeMatches = currentPath === itemBaseRoute || 
                            currentPath.includes(itemBaseRoute);
@@ -113,48 +103,33 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
       return routeMatches && tabMatches;
     }
 
-    // ✅ For Calendar and other simple routes
     if (item.route === "/(app)/(tabs)/calendar") {
       return currentPath === "/calendar" || currentPath.includes("/calendar");
     }
 
-    // ✅ FIXED: For Dashboard (Home) - properly handle active state
     if (item.route === "/(app)/(tabs)" || item.route === "/(app)/(tabs)/" || item.route === "/") {
-      // Check if we're on the home/dashboard route
       const isHomeRoute = currentPath === "/" || currentPath === "" || currentPath === "/(app)/(tabs)";
-      
-      // If we're on a sub-route of dashboard but no tab/section is selected
       if (isHomeRoute) {
         return true;
       }
-      
-      // Check if we're on a sub-page under dashboard (like /audits, /reports, etc.)
-      // But only if no tab or section is active
       if (currentPath !== "/" && !currentTab && !currentSection) {
-        // Check if any other navigation item matches
         const otherItemsMatch = navigationItems.some((otherItem: any) => {
           if (otherItem.route === item.route) return false;
           const otherBaseRoute = getBaseRoute(otherItem.route);
           return currentPath.includes(otherBaseRoute) && otherBaseRoute !== "/";
         });
-        
-        // If no other item matches, highlight dashboard
         if (!otherItemsMatch) {
           return true;
         }
       }
-      
       return false;
     }
 
-    // ✅ Default: exact path match
     if (currentPath === itemBaseRoute) {
       return true;
     }
 
-    // ✅ Partial match for nested routes
     if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
-      // Only if no tab/section is selected (prevents double highlighting)
       if (!currentTab && !currentSection) {
         return true;
       }
@@ -210,26 +185,57 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
 
   return (
     <View
-      className="flex-1 bg-white border-r border-slate-200"
-      style={{ width: 256 }}
+      style={{ 
+        flex: 1, 
+        backgroundColor: '#FFFFFF', 
+        borderRightWidth: 1, 
+        borderRightColor: '#E2E8F0',
+        width: 256 
+      }}
     >
       {/* Header */}
-      <View className="px-5 pt-6 pb-5 border-b border-slate-100">
-        <View className="flex-row items-center gap-3">
+      <View style={{ 
+        paddingHorizontal: 20, 
+        paddingTop: 24, 
+        paddingBottom: 20, 
+        borderBottomWidth: 1, 
+        borderBottomColor: '#F1F5F9' 
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View
-            className="items-center justify-center w-10 h-10 shadow-md rounded-xl"
-            style={{ backgroundColor: "#2563EB" }}
+            style={{
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 4,
+              borderRadius: 12,
+              backgroundColor: '#2563EB',
+            }}
           >
             <Icons.LayoutGrid size={20} color="#FFFFFF" />
           </View>
-          <View className="flex-1">
-            <Text className="text-base font-bold leading-tight text-slate-800">
+          <View style={{ flex: 1 }}>
+            <Text style={{ 
+              fontSize: 16, 
+              fontWeight: 'bold', 
+              color: '#1E293B',
+              lineHeight: 20
+            }}>
               {user.role
                 .split("_")
                 .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
                 .join(" ")}
             </Text>
-            <Text className="text-xs text-slate-500 mt-0.5">
+            <Text style={{ 
+              fontSize: 12, 
+              color: '#64748B',
+              marginTop: 2 
+            }}>
               Management Console
             </Text>
           </View>
@@ -237,7 +243,7 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
       </View>
 
       {/* Navigation Items */}
-      <ScrollView className="flex-1 pt-2" showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
         {navigationItems.map((item: any, index: number) => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
@@ -336,18 +342,35 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
       {/* Logout */}
       <TouchableOpacity
         onPress={handleLogout}
-        className="flex-row items-center px-4 py-3 mx-3 mb-4 rounded-xl"
-        style={{ backgroundColor: "transparent" }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          marginHorizontal: 12,
+          marginBottom: 16,
+          borderRadius: 12,
+          backgroundColor: "transparent",
+        }}
         activeOpacity={0.7}
       >
-        <View className="p-2 rounded-lg">
+        <View style={{ padding: 8, borderRadius: 8 }}>
           <Icons.LogOut size={20} color="#ef4444" strokeWidth={1.5} />
         </View>
-        <Text className="ml-3 text-sm font-semibold text-red-500">Logout</Text>
+        <Text style={{ 
+          marginLeft: 12, 
+          fontSize: 14, 
+          fontWeight: '600', 
+          color: '#ef4444' 
+        }}>Logout</Text>
       </TouchableOpacity>
 
-      <View className="px-5 py-2 mb-2">
-        <Text className="text-xs text-center text-gray-300">v2.0.1</Text>
+      <View style={{ paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 }}>
+        <Text style={{ 
+          fontSize: 12, 
+          textAlign: 'center', 
+          color: '#D1D5DB' 
+        }}>v2.0.1</Text>
       </View>
     </View>
   );

@@ -181,49 +181,83 @@ export default function EnterpriseManagement() {
   };
 
   const handleSave = async () => {
-    if (!formData.name) { 
-      setError('Name is required'); 
-      return; 
+  console.log('🔄 Saving...', { editingItem, view, formData });
+  
+  if (!formData.name) { 
+    setError('Name is required'); 
+    return; 
+  }
+  
+  setLoading(true); 
+  setError('');
+  
+  try {
+    const data = { ...formData };
+    
+    // Add parent ID for nested entities
+    if (view !== 'companies') {
+      if (view === 'plants') (data as any).companyId = selectedParent?.id;
+      else if (view === 'sites') (data as any).plantId = selectedParent?.id;
+      else if (view === 'units') (data as any).siteId = selectedParent?.id;
     }
-    setLoading(true); 
-    setError('');
-    try {
-      const data = { ...formData };
-      if (view !== 'companies') {
-        if (view === 'plants') (data as any).companyId = selectedParent?.id;
-        else if (view === 'sites') (data as any).plantId = selectedParent?.id;
-        else if (view === 'units') (data as any).siteId = selectedParent?.id;
+    
+    // ✅ Check if we're editing or creating
+    const isEditing = editingItem && editingItem.id !== undefined && editingItem.id !== null;
+    
+    console.log('📌 isEditing:', isEditing);
+    
+    if (isEditing) {
+      // ✅ UPDATE
+      console.log('📌 UPDATING:', editingItem.id);
+      switch (view) { 
+        case 'companies': 
+          await enterpriseAPI.updateCompany(editingItem.id, data); 
+          break;
+        case 'plants': 
+          await enterpriseAPI.updatePlant(editingItem.id, data); 
+          break;
+        case 'sites': 
+          await enterpriseAPI.updateSite(editingItem.id, data); 
+          break;
+        case 'units': 
+          await enterpriseAPI.updateUnit(editingItem.id, data); 
+          break;
       }
-      
-      if (editingItem) {
-        switch (view) { 
-          case 'companies': await enterpriseAPI.updateCompany(editingItem.id, data); break;
-          case 'plants': await enterpriseAPI.updatePlant(editingItem.id, data); break;
-          case 'sites': await enterpriseAPI.updateSite(editingItem.id, data); break;
-          case 'units': await enterpriseAPI.updateUnit(editingItem.id, data); break;
-        }
-      } else {
-        switch (view) { 
-          case 'companies': await enterpriseAPI.createCompany(data); break;
-          case 'plants': await enterpriseAPI.createPlant(data); break;
-          case 'sites': await enterpriseAPI.createSite(data); break;
-          case 'units': await enterpriseAPI.createUnit(data); break;
-        }
+    } else {
+      // ✅ CREATE
+      console.log('📌 CREATING NEW');
+      switch (view) { 
+        case 'companies': 
+          await enterpriseAPI.createCompany(data); 
+          break;
+        case 'plants': 
+          await enterpriseAPI.createPlant(data); 
+          break;
+        case 'sites': 
+          await enterpriseAPI.createSite(data); 
+          break;
+        case 'units': 
+          await enterpriseAPI.createUnit(data); 
+          break;
       }
-      setSuccess(`${editingItem ? 'Updated' : 'Created'} successfully!`);
-      resetDirty(); // ✅ Reset dirty state after successful save
-      setShowModal(false); 
-      setEditingItem(null);
-      setFormData(emptyFormData);
-      setInitialFormData(emptyFormData);
-      refreshView();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) { 
-      setError(err.message || 'Failed to save'); 
-    } finally { 
-      setLoading(false); 
     }
-  };
+    
+    setSuccess(`${editingItem ? 'Updated' : 'Created'} successfully!`);
+    resetDirty();
+    setShowModal(false); 
+    setEditingItem(null);
+    setFormData(emptyFormData);
+    setInitialFormData(emptyFormData);
+    refreshView();
+    setTimeout(() => setSuccess(''), 3000);
+    
+  } catch (err: any) { 
+    console.error('❌ Save error:', err);
+    setError(err.message || 'Failed to save'); 
+  } finally { 
+    setLoading(false); 
+  }
+};
 
   const executeDelete = async (id: string) => {
     setLoading(true); 
