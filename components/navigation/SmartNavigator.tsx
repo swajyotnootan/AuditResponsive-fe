@@ -9,7 +9,7 @@ import {
 } from "expo-router";
 import * as Icons from "lucide-react-native";
 import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 interface SmartNavigatorProps {
   type: "drawer" | "tabs";
@@ -75,12 +75,17 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     }
     
     // Level 4: Check URL string directly
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has(key)) {
-        return urlParams.get(key);
-      }
+    // Level 4: Check URL string directly (only on web)
+if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has(key)) {
+      return urlParams.get(key);
     }
+  } catch (e) {
+    // Ignore URL parsing errors on native
+  }
+}
     
     return undefined;
   };
