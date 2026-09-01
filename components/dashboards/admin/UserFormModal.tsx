@@ -32,17 +32,17 @@ const uriToBase64 = async (uri: string): Promise<string> => {
   }
 };
 
-const ROLES = [
-  { name: 'MASTER', displayName: 'Master' },
-  { name: 'AUDIT_MANAGER', displayName: 'Audit Manager' },
-  { name: 'LEAD_AUDITOR', displayName: 'Lead Auditor' },
-  { name: 'AUDITOR', displayName: 'Auditor' },
-  { name: 'HOD', displayName: 'HOD' },
-  { name: 'AUDITEE', displayName: 'Auditee' },
-  { name: 'HR_ADMIN', displayName: 'HR Admin' },
-  { name: 'INITIATOR', displayName: 'Initiator' },
-  { name: 'TOP_MANAGEMENT', displayName: 'Top Management' },
-];
+// const ROLES = [
+//   { name: 'MASTER', displayName: 'Master' },
+//   { name: 'AUDIT_MANAGER', displayName: 'Audit Manager' },
+//   { name: 'LEAD_AUDITOR', displayName: 'Lead Auditor' },
+//   { name: 'AUDITOR', displayName: 'Auditor' },
+//   { name: 'HOD', displayName: 'HOD' },
+//   { name: 'AUDITEE', displayName: 'Auditee' },
+//   { name: 'HR_ADMIN', displayName: 'HR Admin' },
+//   { name: 'INITIATOR', displayName: 'Initiator' },
+//   { name: 'TOP_MANAGEMENT', displayName: 'Top Management' },
+// ];
 
 const NAME_PREFIXES = ['Mr.', 'Mrs.', 'Miss', 'Ms.', 'Dr.', 'Prof.'];
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
@@ -370,6 +370,8 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
   const [plants, setPlants] = useState<any[]>([]);
   const [sites, setSites] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<any[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
 
   const [formData, setFormData] = useState({
     namePrefix: user?.namePrefix || 'Mr.',
@@ -420,10 +422,61 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
   // Fetch companies on mount
   useEffect(() => {
     fetchCompanies();
+    fetchRoles(); // ✅ Add this line
     loadProfilePhoto();
     loadSignature();
   }, []);
 
+
+  // Add this function to fetch roles from API
+const fetchRoles = async () => {
+  try {
+    setLoadingRoles(true);
+    const response = await fetch(`${API_BASE_URL}/api/roles`);
+    const data = await response.json();
+    
+    let rolesArray = [];
+    if (Array.isArray(data)) {
+      rolesArray = data;
+    } else if (data?.data && Array.isArray(data.data)) {
+      rolesArray = data.data;
+    } else if (data?.roles && Array.isArray(data.roles)) {
+      rolesArray = data.roles;
+    } else {
+      // Fallback to hardcoded if API fails
+      rolesArray = [
+        { name: 'MASTER', displayName: 'Master' },
+        { name: 'AUDIT_MANAGER', displayName: 'Audit Manager' },
+        { name: 'LEAD_AUDITOR', displayName: 'Lead Auditor' },
+        { name: 'AUDITOR', displayName: 'Auditor' },
+        { name: 'HOD', displayName: 'HOD' },
+        { name: 'AUDITEE', displayName: 'Auditee' },
+        { name: 'HR_ADMIN', displayName: 'HR Admin' },
+        { name: 'INITIATOR', displayName: 'Initiator' },
+        { name: 'TOP_MANAGEMENT', displayName: 'Top Management' },
+      ];
+    }
+    
+    console.log('✅ Roles loaded:', rolesArray.length);
+    setAvailableRoles(rolesArray);
+  } catch (error) {
+    console.error('❌ Failed to load roles:', error);
+    // Fallback to hardcoded roles
+    setAvailableRoles([
+      { name: 'MASTER', displayName: 'Master' },
+      { name: 'AUDIT_MANAGER', displayName: 'Audit Manager' },
+      { name: 'LEAD_AUDITOR', displayName: 'Lead Auditor' },
+      { name: 'AUDITOR', displayName: 'Auditor' },
+      { name: 'HOD', displayName: 'HOD' },
+      { name: 'AUDITEE', displayName: 'Auditee' },
+      { name: 'HR_ADMIN', displayName: 'HR Admin' },
+      { name: 'INITIATOR', displayName: 'Initiator' },
+      { name: 'TOP_MANAGEMENT', displayName: 'Top Management' },
+    ]);
+  } finally {
+    setLoadingRoles(false);
+  }
+};
   // Fetch functions with proper error handling
   const fetchCompanies = async () => {
     try {
@@ -779,7 +832,20 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
                 </View>
 
                 <Field label="Gender"><PickerButton value={formData.gender} placeholder="Select gender" onPress={() => setShowGenderPicker(true)} /></Field>
-                <Field label="Role" required><PickerButton value={ROLES.find(r => r.name === formData.role)?.displayName} placeholder="Select role" onPress={() => setShowRolePicker(true)} /></Field>
+<Field label="Role" required>
+  <PickerButton 
+    value={availableRoles.find(r => r.name === formData.role)?.displayName} 
+    placeholder="Select role" 
+    onPress={() => {
+      if (availableRoles.length === 0) {
+        Alert.alert('Info', 'Loading roles... Please wait.');
+        fetchRoles();
+        return;
+      }
+      setShowRolePicker(true);
+    }} 
+  />
+</Field>
                 <Field label="Department"><PickerButton value={formData.department} placeholder="Select department" onPress={() => setShowDeptPicker(true)} /></Field>
 
                 {!isEdit && <Field label="Password" required><StyledInput value={formData.password} onChangeText={(t: string) => updateField('password', t)} placeholder="Password" secureTextEntry /></Field>}
@@ -1019,8 +1085,14 @@ export default function UserFormModal({ isEdit, user, onClose, onSave }: UserFor
 
       {/* Regular Pickers */}
       <DatePickerModal visible={!!showDatePicker} value={showDatePicker ? (formData[showDatePicker as keyof typeof formData] as string) || '' : ''} onSelect={(dateStr: string) => { if (showDatePicker) updateField(showDatePicker, dateStr); setShowDatePicker(null); }} onClose={() => setShowDatePicker(null)} />
-      <PickerModal visible={showRolePicker} onClose={() => setShowRolePicker(false)} title="Select Role" options={ROLES} selected={formData.role} onSelect={(v: string) => updateField('role', v)} />
-      <PickerModal visible={showDeptPicker} onClose={() => setShowDeptPicker(false)} title="Select Department" options={DEPARTMENTS} selected={formData.department} onSelect={(v: string) => updateField('department', v)} />
+<PickerModal 
+  visible={showRolePicker} 
+  onClose={() => setShowRolePicker(false)} 
+  title="Select Role" 
+  options={availableRoles} 
+  selected={formData.role} 
+  onSelect={(v: string) => updateField('role', v)} 
+/>      <PickerModal visible={showDeptPicker} onClose={() => setShowDeptPicker(false)} title="Select Department" options={DEPARTMENTS} selected={formData.department} onSelect={(v: string) => updateField('department', v)} />
       <PickerModal visible={showPrefixPicker} onClose={() => setShowPrefixPicker(false)} title="Select Prefix" options={NAME_PREFIXES} selected={formData.namePrefix} onSelect={(v: string) => updateField('namePrefix', v)} />
       <PickerModal visible={showGenderPicker} onClose={() => setShowGenderPicker(false)} title="Select Gender" options={GENDERS} selected={formData.gender} onSelect={(v: string) => updateField('gender', v)} />
 
