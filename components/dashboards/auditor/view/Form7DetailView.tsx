@@ -410,7 +410,7 @@ const ReviewModal = ({
                     fontWeight: "bold",
                   }}
                 >
-                  NCR {ncr?.ncrNumber}
+                  {ncr?.ncrNumber}
                 </Text>
                 {"\n"}
                 <Text style={{ fontWeight: "bold" }}>Department:</Text>{" "}

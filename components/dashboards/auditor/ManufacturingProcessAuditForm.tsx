@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/config/apiConfig";
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { auditAPI } from "@/services/api";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -25,12 +26,13 @@ import {
   Sparkles,
   User,
 } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -135,6 +137,15 @@ export default function ManufacturingProcessAuditForm(props: any) {
   const params = useLocalSearchParams();
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
+  // ✅ Add unsaved changes hook
+const {
+  markDirty,
+  resetDirty,
+  confirmDiscard,
+  showDiscardModal,
+  cancelDiscard,
+  discardChanges,
+} = useUnsavedChanges();
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
 
@@ -167,6 +178,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
   const scrollViewRef = useRef<ScrollView>(null);
   const auditLoaded = useRef(false);
   const isManualSubmitRef = useRef(false);
+  
 
   const [formData, setFormData] = useState({
     documentNumber: "",
@@ -195,6 +207,52 @@ export default function ManufacturingProcessAuditForm(props: any) {
     auditorSignature: "",
     createdAt: "",
   });
+
+  // ✅ Store initial form data for comparison
+const [initialFormData] = useState(() => ({
+  documentNumber: generateDocumentNumber(),
+  auditNumber: `AUD-${Date.now()}`,
+  wefDate: getWEFDate(),
+  revNo: getRevisionNumber(),
+  revDate: getRevisionDate(),
+  issueDate: getIssueDate(),
+  department: urlDepartment || "",
+  partNumber: "",
+  machine: "",
+  date: new Date().toISOString().split("T")[0],
+  shift: "Morning",
+  time: new Date().toLocaleTimeString(),
+  location: "",
+  auditorName: user?.name || "",
+  auditorId: user?.id ? (typeof user.id === 'string' ? parseInt(user.id) : user.id) : null,
+  auditeeName: "",
+  auditeeId: null,
+  hodEmail: "",
+  status: "IN_PROGRESS",
+  responses: {} as Record<number, string>,
+  observations: {} as Record<number, string>,
+  documentsVerified: {} as Record<number, string>,
+  score: null as number | null,
+  auditorSignature: "",
+  createdAt: "",
+}));
+
+const hasFormChanged = useCallback(() => {
+  // Check if any data has changed from initial
+  const currentData = {
+    ...formData,
+    responses: JSON.stringify(formData.responses),
+    observations: JSON.stringify(formData.observations),
+    documentsVerified: JSON.stringify(formData.documentsVerified),
+  };
+  const initialData = {
+    ...initialFormData,
+    responses: JSON.stringify(initialFormData.responses),
+    observations: JSON.stringify(initialFormData.observations),
+    documentsVerified: JSON.stringify(initialFormData.documentsVerified),
+  };
+  return JSON.stringify(currentData) !== JSON.stringify(initialData);
+}, [formData, initialFormData]);
 
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
@@ -497,18 +555,36 @@ export default function ManufacturingProcessAuditForm(props: any) {
     }
   };
 
-  const handleInputChange = (field: string, value: any) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  const handleObservationChange = (questionId: number, observation: string) =>
-    setFormData((prev) => ({
-      ...prev,
-      observations: { ...prev.observations, [questionId]: observation },
-    }));
-  const handleStatusChange = (questionId: number, status: string) =>
-    setFormData((prev) => ({
-      ...prev,
-      responses: { ...prev.responses, [questionId]: status },
-    }));
+  const handleInputChange = (field: string, value: any) => {
+  setFormData((prev) => ({ ...prev, [field]: value }));
+  // ✅ Mark as dirty only if the value actually changed
+  const initialValue = initialFormData[field as keyof typeof initialFormData];
+  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
+    markDirty();
+  }
+};
+  const handleObservationChange = (questionId: number, observation: string) => {
+  setFormData((prev) => ({
+    ...prev,
+    observations: { ...prev.observations, [questionId]: observation },
+  }));
+  // ✅ Mark as dirty
+  const initialObs = initialFormData.observations[questionId] || "";
+  if (observation !== initialObs) {
+    markDirty();
+  }
+};
+  const handleStatusChange = (questionId: number, status: string) => {
+  setFormData((prev) => ({
+    ...prev,
+    responses: { ...prev.responses, [questionId]: status },
+  }));
+  // ✅ Mark as dirty
+  const initialStatus = initialFormData.responses[questionId] || "";
+  if (status !== initialStatus) {
+    markDirty();
+  }
+};
 
   const calculateScore = () => {
     if (questions.length === 0) return 0;
@@ -591,6 +667,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
             },
           });
         }
+        resetDirty(); // ✅ Reset after successful save
       }
     } catch (error: any) {
       console.error("Error saving draft:", error);
@@ -684,6 +761,7 @@ export default function ManufacturingProcessAuditForm(props: any) {
       } else {
         router.replace("/auditor");
       }
+      resetDirty(); // ✅ Reset after successful save
     } catch (error: any) {
       console.error("Error submitting audit:", error);
       addToast(`Failed to submit audit: ${error.message}`, "error");
@@ -771,10 +849,18 @@ export default function ManufacturingProcessAuditForm(props: any) {
     scrollToTop();
   };
 
-  const handleGoBack = () => {
+  const handleGoBack = useCallback(() => {
+  // ✅ Check if there are unsaved changes
+  if (hasFormChanged() && !formData.status?.includes("SUBMITTED") && !formData.status?.includes("DRAFT")) {
+    confirmDiscard(() => {
+      if (props.onClose) props.onClose();
+      else router.back();
+    });
+  } else {
     if (props.onClose) props.onClose();
     else router.back();
-  };
+  }
+}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
 
   const steps = [
     { number: 1, title: "General Information", icon: User },
@@ -3529,6 +3615,118 @@ export default function ManufacturingProcessAuditForm(props: any) {
           />
         )}
       </KeyboardAvoidingView>
+      {/* ✅ Discard Changes Modal */}
+<Modal
+  visible={showDiscardModal}
+  transparent
+  animationType="fade"
+  onRequestClose={cancelDiscard}
+>
+  <View
+    style={{
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+    }}
+  >
+    <View
+      style={{
+        width: '100%',
+        maxWidth: 420,
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 24,
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      }}
+    >
+      <View
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: '#fef2f2',
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'center',
+          marginBottom: 16,
+        }}
+      >
+        <AlertTriangle size={26} color="#dc2626" />
+      </View>
+
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: '700',
+          color: '#111827',
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
+      >
+        Discard changes?
+      </Text>
+
+      <Text
+        style={{
+          fontSize: 14,
+          color: '#6b7280',
+          textAlign: 'center',
+          lineHeight: 21,
+          marginBottom: 24,
+        }}
+      >
+        You have unsaved changes. Are you sure you want to leave without saving?
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <TouchableOpacity
+          onPress={cancelDiscard}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            height: 46,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: '#d1d5db',
+            backgroundColor: 'white',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+            Stay
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => discardChanges(() => {
+            if (props.onClose) props.onClose();
+            else router.back();
+          })}
+          activeOpacity={0.8}
+          style={{
+            flex: 1,
+            height: 46,
+            borderRadius: 10,
+            backgroundColor: '#dc2626',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
+            Discard
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
     </SafeAreaView>
   );
 }

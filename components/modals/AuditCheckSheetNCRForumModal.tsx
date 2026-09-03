@@ -452,7 +452,7 @@ const AuditCheckSheetNCRForumModal: React.FC<
       transparent
       animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent
+      // statusBarTranslucent
     >
       <View style={styles.modalContainer}>
         <TouchableOpacity
@@ -501,22 +501,26 @@ const styles = StyleSheet.create({
  drawerContainer: {
   flex: 1,
   position: "absolute",
-
   top: 0,
   bottom: 0,
-
-  // ✅ Web = right-side drawer
-  // ✅ Android/iOS = full screen
   left: Platform.OS === "web" ? undefined : 0,
   right: 0,
-
   width: Platform.OS === "web" ? "90%" : "100%",
   maxWidth: Platform.OS === "web" ? 600 : undefined,
+  // ✅ FIX: Add this to prevent bottom shift on Android
+  ...Platform.select({
+    android: {
+      paddingBottom: 0,
+      marginBottom: 0,
+    },
+  }),
 },
   drawer: {
   flex: 1,
   width: "100%",
   backgroundColor: "#FFFFFF",
+  // ✅ FIX: Ensure no extra bottom padding
+  paddingBottom: 0,
 
   ...Platform.select({
     ios: {
@@ -525,11 +529,11 @@ const styles = StyleSheet.create({
       shadowOpacity: 0.1,
       shadowRadius: 10,
     },
-
     android: {
       elevation: 8,
+      // ✅ FIX: Ensure no extra bottom padding on Android
+      paddingBottom: 0,
     },
-
     web: {
       boxShadow: "0 0 20px rgba(0,0,0,0.12)",
     },

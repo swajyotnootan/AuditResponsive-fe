@@ -7,6 +7,7 @@ import {
   CountryCode,
   getExampleNumber,
   isPossiblePhoneNumber,
+  parsePhoneNumber,
 } from "libphonenumber-js";
 import mobileExamples from "libphonenumber-js/examples.mobile.json";
 import {
@@ -72,7 +73,7 @@ interface Department {
 
 interface Company {
   name: string;
-  logo: string;
+  logo: any;
 }
 
 interface TeamMember {
@@ -201,10 +202,20 @@ interface LayoutTabsProps {
   setActiveLayout: (layout: string) => void;
 }
 
+// Use require with correct path
 const companies: Company[] = [
-  { name: "TTK Prestige", logo: "/logos/ttk-prestige.png" },
-  { name: "Boeing", logo: "/logos/boeing.png" },
-  { name: "Feather Light Furniture", logo: "/logos/feather-light.png" },
+  {
+    name: "TTK Prestige",
+    logo: require("@/assets/logos/ttk-prestige.png"),
+  },
+  {
+    name: "Boeing",
+    logo: require("@/assets/logos/boeing.png"),
+  },
+  {
+    name: "Feather Light Furniture",
+    logo: require("@/assets/logos/feather-light.png"),
+  },
 ];
 
 const defaultDepartments: Department[] = [
@@ -1059,9 +1070,24 @@ export default function D0PlanContain({
               String(eventId || backendData.eventNo || "").startsWith("8D-"),
             );
 
+            const parsedPhone = parseInitialPhone(backendData.phone);
+
+            // ✅ Re-resolve the company logo from local assets based on the saved company name
+            const savedCompany = companies.find(
+              (c) => c.name === backendData.companyName,
+            );
+
             setFormData((prev) => ({
               ...prev,
               ...backendData,
+              // ✅ Force the logo to be the fresh require() result if company name matches
+              companyLogo: savedCompany
+                ? savedCompany.logo
+                : backendData.companyLogo || "",
+              phone: parsedPhone.phone, // ✅ Just the digits
+              countryCode: backendData.countryCode || parsedPhone.countryCode,
+              countryIsoCode:
+                backendData.countryIsoCode || parsedPhone.countryIsoCode,
               dateDiscovered: normalizeDateForInput(backendData.dateDiscovered),
               reportedBy: loadedIsNcrBased
                 ? "self"
@@ -1076,8 +1102,6 @@ export default function D0PlanContain({
               sourceType: loadedIsNcrBased
                 ? "ncr"
                 : backendData.sourceType || "fresh",
-              countryCode: backendData.countryCode || "+91",
-              countryIsoCode: backendData.countryIsoCode || "IN",
             }));
           }
         }
@@ -1241,6 +1265,38 @@ export default function D0PlanContain({
       });
       return updated;
     });
+  };
+
+  // ✅ Add this helper function (same as UserFormModal)
+  const parseInitialPhone = (combinedPhone: string | undefined) => {
+    if (!combinedPhone)
+      return { phone: "", countryCode: "+91", countryIsoCode: "IN" };
+
+    try {
+      const parsed = parsePhoneNumber(combinedPhone);
+      if (parsed && parsed.countryCallingCode) {
+        return {
+          phone: parsed.nationalNumber,
+          countryCode: `+${parsed.countryCallingCode}`,
+          countryIsoCode: parsed.country || "IN",
+        };
+      }
+    } catch (e) {
+      const match = combinedPhone.match(/^(\+\d{1,4})(\d{4,15})$/);
+      if (match) {
+        return {
+          phone: match[2],
+          countryCode: match[1],
+          countryIsoCode: "IN",
+        };
+      }
+    }
+
+    return {
+      phone: combinedPhone.replace(/\D/g, ""),
+      countryCode: "+91",
+      countryIsoCode: "IN",
+    };
   };
 
   const searchUserByEmail = async (searchTerm: string, index: number) => {
@@ -1541,6 +1597,10 @@ export default function D0PlanContain({
     return Object.keys(newErrors).length === 0;
   };
 
+  const combinedPhone = formData.phone
+    ? `${formData.countryCode}${formData.phone}`
+    : "";
+
   const handleSubmit = async () => {
     if (!isInitiator && !isAdmin) {
       Alert.alert("Unauthorized", "Only initiators can submit.");
@@ -1565,8 +1625,23 @@ export default function D0PlanContain({
       const submittedStatus =
         formData.status === "in progress" ? "in progress" : "approval pending";
 
+      // ✅ FIX: Backend expects a string for companyLogo, not an object/number from require()
+      let backendCompanyLogo = "";
+      if (typeof formData.companyLogo === "string") {
+        backendCompanyLogo = formData.companyLogo;
+      } else if (
+        typeof formData.companyLogo === "object" &&
+        formData.companyLogo !== null
+      ) {
+        // Web: extract the URI string from the require() object
+        backendCompanyLogo =
+          (formData.companyLogo as any).uri || formData.companyName || "";
+      } else {
+        // Native fallback: just send the company name if it's a number
+        backendCompanyLogo = formData.companyName || "";
+      }
+
       const jsonPayload = {
-        // ... (Keep your existing jsonPayload object exactly as is) ...
         eventNo: formData.eventNo || "",
         plantLine: formData.plantLine,
         partName: formData.partName,
@@ -1577,9 +1652,9 @@ export default function D0PlanContain({
         personName: formData.personName,
         department: formData.department,
         companyName: formData.companyName,
-        companyLogo: formData.companyLogo,
+        companyLogo: backendCompanyLogo, // ✅ Use the cleaned string here
         contactPerson: formData.contactPerson,
-        phone: formData.phone,
+        phone: combinedPhone,
         email: formData.email,
         countryCode: formData.countryCode,
         countryIsoCode: formData.countryIsoCode,
@@ -1604,9 +1679,9 @@ export default function D0PlanContain({
               personName: formData.personName,
               department: formData.department,
               companyName: formData.companyName,
-              companyLogo: formData.companyLogo,
+              companyLogo: backendCompanyLogo, // ✅ Use the cleaned string here too
               contactPerson: formData.contactPerson,
-              phone: formData.phone,
+              phone: combinedPhone,
               email: formData.email,
               countryCode: formData.countryCode,
               countryIsoCode: formData.countryIsoCode,
@@ -1620,6 +1695,8 @@ export default function D0PlanContain({
       };
 
       formDataToSend.append("jsonContent", JSON.stringify(jsonPayload));
+
+      // ... (Keep the rest of your file upload and fetch logic exactly as it is) ...
       console.log(`📦 [SUBMIT] JSON Payload appended successfully.`);
 
       // Map files to their specific categories
@@ -2145,9 +2222,22 @@ export default function D0PlanContain({
                             Company
                           </Text>
                           <View className="flex-row items-center gap-2 p-2 bg-white border border-gray-300 rounded-lg shadow-sm">
-                            {formData.companyLogo && (
+                            {/* {console.log("🔍 DEBUG 3 - Rendering Image. formData.companyLogo =", formData.companyLogo)} */}
+
+                            {!!formData.companyLogo && (
                               <Image
-                                source={{ uri: formData.companyLogo }}
+                                source={
+                                  typeof formData.companyLogo === "number"
+                                    ? formData.companyLogo // Native: number
+                                    : typeof formData.companyLogo ===
+                                          "object" &&
+                                        formData.companyLogo !== null
+                                      ? {
+                                          uri: (formData.companyLogo as any)
+                                            .uri,
+                                        } // ✅ Web: Extract only URI
+                                      : { uri: String(formData.companyLogo) } // String URI fallback
+                                }
                                 className="w-10 h-10 border border-gray-200 rounded"
                                 resizeMode="contain"
                               />
@@ -2159,6 +2249,7 @@ export default function D0PlanContain({
                                   const selected = companies.find(
                                     (c) => c.name === val,
                                   );
+
                                   setFormData((prev) => ({
                                     ...prev,
                                     companyName: val,

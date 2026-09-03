@@ -1,6 +1,7 @@
 import { useAuth } from "@/components/context/AuthContext";
 import { getNavigationByRole } from "@/config/navigation.config";
 import {
+  useGlobalSearchParams,
   useLocalSearchParams,
   usePathname,
   useRouter,
@@ -9,6 +10,8 @@ import {
 import * as Icons from "lucide-react-native";
 import React from "react";
 import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+
+// In your component:
 
 interface SmartNavigatorProps {
   type: "drawer" | "tabs";
@@ -21,6 +24,8 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   const segments = useSegments();
   const pathname = usePathname();
   const params = useLocalSearchParams();
+  const globalParams = useGlobalSearchParams();
+
 
   if (!user) return null;
 
@@ -49,39 +54,73 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   };
 
   // ✅ Extract tab/section from URL
-  const getParam = (key: string) => {
-    const p = params as any;
-    
-    if (p[key]) return Array.isArray(p[key]) ? p[key][0] : p[key];
-    
-    if (p.params && typeof p.params === "object") {
-      if (p.params[key]) {
-        return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
-      }
-      if (p.params.params && typeof p.params.params === "object") {
-        if (p.params.params[key]) {
-          return Array.isArray(p.params.params[key]) 
-            ? p.params.params[key][0] 
-            : p.params.params[key];
-        }
-      }
-    }
-    
-    // ✅ Only on web
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has(key)) {
-          return urlParams.get(key);
-        }
-      } catch (e) {
-        // Ignore URL parsing errors on native
-      }
-    }
-    
-    return undefined;
-  };
+ 
 
+const getParam = (key: string) => {
+  console.log(`🔍 Looking for param: ${key}`);
+  
+  // 1. Try local params first
+  const p = params as any;
+  console.log("Local params:", JSON.stringify(p));
+  
+  if (p[key]) {
+    console.log(`✅ Found in local params: ${p[key]}`);
+    return Array.isArray(p[key]) ? p[key][0] : p[key];
+  }
+  
+  // 2. Try global params (works better for nested navigators)
+  const gp = globalParams as any;
+  console.log("Global params:", JSON.stringify(gp));
+  
+  if (gp[key]) {
+    console.log(`✅ Found in global params: ${gp[key]}`);
+    return Array.isArray(gp[key]) ? gp[key][0] : gp[key];
+  }
+  
+  // 3. Try nested params
+  if (p.params && typeof p.params === "object") {
+    if (p.params[key]) {
+      console.log(`✅ Found in nested params: ${p.params[key]}`);
+      return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
+    }
+    if (p.params.params && typeof p.params.params === "object") {
+      if (p.params.params[key]) {
+        console.log(`✅ Found in double-nested params: ${p.params.params[key]}`);
+        return Array.isArray(p.params.params[key]) 
+          ? p.params.params[key][0] 
+          : p.params.params[key];
+      }
+    }
+  }
+  
+  // 4. Try extracting from pathname
+  if (pathname) {
+    console.log("Pathname:", pathname);
+    const match = pathname.match(new RegExp(`[?&]${key}=([^&]+)`));
+    if (match && match[1]) {
+      const value = decodeURIComponent(match[1]);
+      console.log(`✅ Found in pathname: ${value}`);
+      return value;
+    }
+  }
+  
+  // 5. Web-specific
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has(key)) {
+        const value = urlParams.get(key);
+        console.log(`✅ Found in web URL: ${value}`);
+        return value;
+      }
+    } catch (e) {
+      console.log("❌ Error parsing web URL:", e);
+    }
+  }
+  
+  console.log(`❌ Param "${key}" not found`);
+  return undefined;
+};
   // ✅ Helper to check if this is a "first tab" (should be active when no tab is selected)
   const isFirstTab = (tab: string): boolean => {
     const firstTabs = ["dashboard", "overview", "my-audits", "audits"];

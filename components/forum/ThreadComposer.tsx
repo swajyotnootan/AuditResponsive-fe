@@ -30,7 +30,39 @@ import {
 
 // ✅ Import Emoji Picker Library
 // @ts-ignore
+import Constants from 'expo-constants';
+import * as ImagePicker from 'expo-image-picker';
 import EmojiSelector, { Categories } from "react-native-emoji-selector";
+
+// ========== HELPER: Detect Emulator ==========
+// ========== HELPER: Detect Emulator ==========
+// ========== HELPER: Detect Emulator ==========
+const isEmulator = (): boolean => {
+  if (Platform.OS !== 'android') return false;
+  
+  // ✅ Real device check FIRST
+  const isDevice = Constants.isDevice;
+  if (isDevice) {
+    // Real device - definitely NOT emulator
+    return false;
+  }
+  
+  // ✅ Only for virtual devices (emulator)
+  const debuggerHost = Constants.manifest?.debuggerHost || '';
+  
+  const isEmulatorDebug = 
+    debuggerHost.includes('10.0.2.2') ||   // Android emulator
+    debuggerHost.includes('10.0.3.2') ||   // Genymotion
+    debuggerHost.includes('10.2.0.') ||    // Your server IP
+    debuggerHost.includes('localhost') ||
+    debuggerHost.includes('127.0.0.1');
+  
+  console.log('📱 Emulator detected:', isEmulatorDebug);
+  
+  return isEmulatorDebug;
+};
+// ========== OPEN EMULATOR CAMERA ==========
+
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 // ========== TYPES ==========
@@ -134,6 +166,7 @@ export default function ThreadComposer({
   });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCameraOptions, setShowCameraOptions] = useState(false);
 
   // Document preview state
   const [documentPreview, setDocumentPreview] = useState<{
@@ -231,32 +264,115 @@ export default function ThreadComposer({
   };
 
   // ========== OPEN CAMERA ==========
-  const openCamera = async () => {
-    if (!cameraPermission?.granted) {
-      const result = await requestCameraPermission();
-      if (!result.granted) {
-        Alert.alert(
-          "Permission Denied",
-          "Camera access is required to take photos and videos.",
-        );
+ // ========== OPEN CAMERA ==========
+// ========== OPEN CAMERA ==========
+// ========== OPEN CAMERA ==========
+// ========== OPEN CAMERA ==========
+// ========== OPEN CAMERA ==========
+const openCamera = async () => {
+  // ✅ On Android Emulator: Use ImagePicker with BOTH Photo & Video
+  if (isEmulator()) {
+    console.log('📱 Emulator detected - using ImagePicker with both options');
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Camera access is needed');
         return;
       }
+
+      // ✅ MediaTypeOptions.All shows BOTH Photo and Video options!
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // ✅ BOTH Photo & Video
+        allowsEditing: true,
+        quality: 0.9,
+        base64: true,
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.Low,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const isVideo = asset.type === 'video';
+        
+        setPreviewMedia({
+          type: isVideo ? 'video' : 'image',
+          uri: asset.uri,
+          fileData: asset.base64 || '',
+          base64: asset.base64 || '',
+          fileName: `${isVideo ? 'video' : 'photo'}-${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`,
+          fileType: isVideo ? 'video/mp4' : 'image/jpeg',
+          fileSize: asset.fileSize || 0,
+        });
+      }
+    } catch (error) {
+      console.error('Emulator camera error:', error);
+      Alert.alert('Error', 'Failed to open camera on emulator');
+    }
+    return;
+  }
+
+  // ✅ Real Android, iOS, Web: Use CameraView
+  console.log('📱 Real device - using CameraView');
+  if (!cameraPermission?.granted) {
+    const result = await requestCameraPermission();
+    if (!result.granted) {
+      Alert.alert(
+        "Permission Denied",
+        "Camera access is required to take photos and videos.",
+      );
+      return;
+    }
+  }
+
+  const { status: audioStatus } = await Audio.requestPermissionsAsync();
+  if (audioStatus !== "granted") {
+    console.warn("Microphone permission not granted");
+  }
+
+  setCameraModalOpen(true);
+  setCameraMode("picture");
+  setError("");
+};
+
+const openEmulatorCamera = async (type: 'photo' | 'video') => {
+  try {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Camera access is needed');
+      return;
     }
 
-    const { status: audioStatus } = await Audio.requestPermissionsAsync();
-    if (audioStatus !== "granted") {
-      console.warn("Microphone permission not granted");
-    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: type === 'photo' 
+  ? ImagePicker.MediaTypeOptions.Images 
+  : ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: true,
+      quality: type === 'photo' ? 0.9 : 0.8,
+      base64: true,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Low,
+    });
 
-    setCameraModalOpen(true);
-    setCameraMode("picture");
-    setError("");
-  };
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const isVideo = asset.type === 'video';
+      
+      setPreviewMedia({
+        type: isVideo ? 'video' : 'image',
+        uri: asset.uri,
+        fileData: asset.base64 || '',
+        base64: asset.base64 || '',
+        fileName: `${isVideo ? 'video' : 'photo'}-${Date.now()}.${isVideo ? 'mp4' : 'jpg'}`,
+        fileType: isVideo ? 'video/mp4' : 'image/jpeg',
+        fileSize: asset.fileSize || 0,
+      });
+    }
+  } catch (error) {
+    console.error('Emulator camera error:', error);
+    Alert.alert('Error', 'Failed to open camera');
+  }
+};
 
   const closeCamera = () => {
-    if (isRecordingVideo) {
-      stopVideoRecording();
-    }
+    
     setCameraModalOpen(false);
     setIsRecordingVideo(false);
     setRecordingTime(0);
@@ -267,65 +383,74 @@ export default function ThreadComposer({
     }
   };
 
-  // ========== TAKE PHOTO ==========
-  const takePhoto = async () => {
-    if (!cameraRef.current) return;
+ 
+// ========== TAKE PHOTO (Real Devices Only) ==========
+// ========== TAKE PHOTO ==========
+const takePhoto = async () => {
+  // ✅ Emulator is handled in openCamera
+  if (isEmulator()) {
+    return;
+  }
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.9,
-        base64: Platform.OS !== "web",
-        skipProcessing: Platform.OS === "web",
-      });
+  // ✅ Real Android, iOS, Web: Use CameraView
+  if (!cameraRef.current) return;
 
-      if (!photo?.uri) {
-        Alert.alert("Error", "Failed to capture photo");
-        return;
-      }
+  try {
+    const photo = await cameraRef.current.takePictureAsync({
+      quality: 0.9,
+      base64: Platform.OS !== "web",
+      skipProcessing: Platform.OS === "web",
+    });
 
-      let base64 = "";
-
-      if (Platform.OS === "web") {
-        const response = await fetch(photo.uri);
-        const blob = await response.blob();
-
-        base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } else {
-        base64 = photo.base64 ?? (await readFileAsBase64(photo.uri));
-      }
-
-      if (!base64) {
-        Alert.alert("Error", "Failed to process photo");
-        return;
-      }
-
-      setPreviewMedia({
-        type: "image",
-        uri: photo.uri,
-        fileData: base64,
-        base64,
-        fileName: `photo-${Date.now()}.jpg`,
-        fileType: "image/jpeg",
-        fileSize: base64.length,
-      });
-
-      closeCamera();
-    } catch (e) {
-      console.error("Photo capture error:", e);
+    if (!photo?.uri) {
       Alert.alert("Error", "Failed to capture photo");
+      return;
     }
-  };
 
+    let base64 = "";
+
+    if (Platform.OS === "web") {
+      const response = await fetch(photo.uri);
+      const blob = await response.blob();
+      base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } else {
+      base64 = photo.base64 ?? (await readFileAsBase64(photo.uri));
+    }
+
+    if (!base64) {
+      Alert.alert("Error", "Failed to process photo");
+      return;
+    }
+
+    setPreviewMedia({
+      type: "image",
+      uri: photo.uri,
+      fileData: base64,
+      base64,
+      fileName: `photo-${Date.now()}.jpg`,
+      fileType: "image/jpeg",
+      fileSize: base64.length,
+    });
+
+    closeCamera();
+  } catch (e) {
+    console.error("Photo capture error:", e);
+    Alert.alert("Error", "Failed to capture photo");
+  }
+};
   // ========== RECORD VIDEO (ANDROID FIX) ==========
   const startVideoRecording = async () => {
+    if (isEmulator()) {
+    return;
+  }
     if (!cameraRef.current) return;
 
     if (cameraMode !== "video") {
@@ -356,32 +481,37 @@ export default function ThreadComposer({
           };
 
           mediaRecorder.onstop = async () => {
-            const blob = new Blob(chunks, { type: "video/webm" });
-            const url = URL.createObjectURL(blob);
+  const blob = new Blob(chunks, { type: "video/webm" });
+  const url = URL.createObjectURL(blob);
 
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const result = reader.result as string;
-                resolve(result.split(",")[1]);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 
-            setPreviewMedia({
-              type: "video",
-              uri: url,
-              fileData: base64,
-              base64,
-              fileName: `video-${Date.now()}.webm`,
-              fileType: "video/webm",
-              fileSize: blob.size,
-            });
+  // ✅ FIX: Close camera FIRST
+  closeCamera();
 
-            closeCamera();
-            stream.getTracks().forEach((track) => track.stop());
-          };
+  // ✅ Then show preview
+  setTimeout(() => {
+    setPreviewMedia({
+      type: "video",
+      uri: url,
+      fileData: base64,
+      base64,
+      fileName: `video-${Date.now()}.webm`,
+      fileType: "video/webm",
+      fileSize: blob.size,
+    });
+  }, 300);
+
+  stream.getTracks().forEach((track) => track.stop());
+};
 
           mediaRecorder.start(1000);
           setIsRecordingVideo(true);
@@ -473,39 +603,51 @@ export default function ThreadComposer({
       }
 
       let base64 = "";
-      try {
-        base64 = await readFileAsBase64(video.uri);
-        console.log("Base64 length:", base64.length);
-      } catch (readError) {
-        console.error("Error reading video file:", readError);
-      }
+try {
+  // ✅ Only convert if file size is reasonable (< 5MB)
+  if (fileInfo.size < 5 * 1024 * 1024) {
+    base64 = await readFileAsBase64(video.uri);
+    console.log("Base64 length:", base64.length);
+  } else {
+    console.log("Video file too large for base64 conversion:", fileInfo.size);
+  }
+} catch (readError) {
+  console.error("Error reading video file:", readError);
+}
 
-      if (!base64) {
-        Alert.alert(
-          "Warning",
-          "Video was recorded but could not be processed. It will be attached as a file.",
-        );
-      }
+if (!base64) {
+  // ✅ This is fine - video will be sent as a file
+  console.log("Video will be attached as a file (no base64)");
+}
 
       const fileExtension = Platform.OS === "android" ? "mp4" : "mov";
       const mimeType =
         Platform.OS === "android" ? "video/mp4" : "video/quicktime";
 
-      const previewData = {
-        type: "video",
-        uri: video.uri,
-        fileData: base64,
-        base64,
-        fileName: `video-${Date.now()}.${fileExtension}`,
-        fileType: mimeType,
-        fileSize: fileInfo.size ?? Math.floor(base64.length * 0.75),
-      };
+      // Instead of reading video as base64, just use the URI directly
+const previewData = {
+  type: "video",
+  uri: video.uri,
+  fileData: base64 || "",  // ✅ Empty if no base64
+  base64: base64 || "",    // ✅ Empty if no base64
+  fileName: `video-${Date.now()}.${fileExtension}`,
+  fileType: mimeType,
+  fileSize: fileInfo.size || 0,
+};
 
       console.log("Preview data:", { ...previewData, base64: "..." });
 
-      setPreviewMedia(previewData);
-      setIsRecordingVideo(false);
-      closeCamera();
+// ✅ Show preview IMMEDIATELY
+
+setPreviewMedia(previewData);
+setIsRecordingVideo(false);
+  setTimeout(() => {
+  closeCamera();
+}, 100); 
+
+
+// ✅ Close camera in the background (don't wait)
+// Use a small delay to let preview render fir
     } catch (err) {
       console.error("Video recording error details:", err);
 
@@ -546,6 +688,7 @@ export default function ThreadComposer({
       recordingTimerRef.current = null;
     }
     setIsRecordingVideo(false);
+    closeCamera();
   };
 
   const toggleCamera = () => {
@@ -1697,11 +1840,87 @@ export default function ThreadComposer({
         </TouchableOpacity>
       </Modal>
 
+      {/* Camera Options Modal - Long Press Menu */}
+<Modal
+  visible={showCameraOptions}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setShowCameraOptions(false)}
+>
+  <TouchableOpacity
+    style={styles.cameraOptionsOverlay}
+    activeOpacity={1}
+    onPress={() => setShowCameraOptions(false)}
+  >
+    <View style={styles.cameraOptionsContainer}>
+      <Text style={styles.cameraOptionsTitle}>Choose Action</Text>
+      
+      {/* Photo Option */}
+      <TouchableOpacity
+        style={styles.cameraOptionItem}
+        onPress={() => {
+          setShowCameraOptions(false);
+          if (isEmulator()) {
+            openEmulatorCamera('photo');
+          } else {
+            openCamera();
+          }
+        }}
+      >
+        <Ionicons name="camera" size={24} color="#3b82f6" />
+        <Text style={styles.cameraOptionText}>📷 Take Photo</Text>
+        <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+      </TouchableOpacity>
+      
+      {/* Video Option */}
+      <TouchableOpacity
+        style={styles.cameraOptionItem}
+        onPress={() => {
+          setShowCameraOptions(false);
+          if (isEmulator()) {
+            openEmulatorCamera('video');
+          } else {
+            if (!cameraPermission?.granted) {
+              requestCameraPermission();
+            }
+            setCameraModalOpen(true);
+            setCameraMode("video");
+            setError("");
+          }
+        }}
+      >
+        <Ionicons name="videocam" size={24} color="#22c55e" />
+        <Text style={styles.cameraOptionText}>🎥 Record Video</Text>
+        <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+      </TouchableOpacity>
+      
+      {/* Cancel Button */}
+      <TouchableOpacity
+        style={styles.cameraOptionCancel}
+        onPress={() => setShowCameraOptions(false)}
+      >
+        <Text style={styles.cameraOptionCancelText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  </TouchableOpacity>
+</Modal>
+
       {/* Main Composer */}
       <View style={styles.composerContainer}>
-        <TouchableOpacity onPress={openCamera} style={styles.iconBtn}>
-          <Ionicons name="camera" size={22} color="#6b7280" />
-        </TouchableOpacity>
+        {/* Camera Icon - Long press only on emulator */}
+<TouchableOpacity
+  onPress={openCamera}
+  onLongPress={() => {
+    // ✅ Only show camera options on emulator
+    if (isEmulator()) {
+      setShowCameraOptions(true);
+    }
+  }}
+  delayLongPress={300}
+  style={styles.iconBtn}
+>
+  <Ionicons name="camera" size={22} color="#6b7280" />
+</TouchableOpacity>
 
         <TouchableOpacity
           onPress={startVoiceRecording}
@@ -1863,6 +2082,58 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
+
+  cameraOptionsOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.5)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+cameraOptionsContainer: {
+  backgroundColor: 'white',
+  borderRadius: 16,
+  padding: 20,
+  width: '85%',
+  maxWidth: 320,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 5,
+},
+cameraOptionsTitle: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#1f2937',
+  textAlign: 'center',
+  marginBottom: 16,
+},
+cameraOptionItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 14,
+  paddingHorizontal: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: '#f3f4f6',
+  gap: 12,
+},
+cameraOptionText: {
+  flex: 1,
+  fontSize: 16,
+  color: '#374151',
+},
+cameraOptionCancel: {
+  marginTop: 12,
+  paddingVertical: 12,
+  borderRadius: 8,
+  backgroundColor: '#f3f4f6',
+  alignItems: 'center',
+},
+cameraOptionCancelText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#6b7280',
+},
   editBanner: {
     flexDirection: "row",
     alignItems: "center",

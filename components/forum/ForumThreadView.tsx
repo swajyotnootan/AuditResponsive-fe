@@ -33,14 +33,13 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -1453,12 +1452,7 @@ const getDateLabel = (dateString?: string) => {
 
   // ========== MAIN RENDER ==========
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      // ✅ TERNARY 1: iOS needs 'padding', Android needs 'height' (to push content up)
-      behavior={Platform.OS === "ios" ? "position" : "height"}
-      keyboardVerticalOffset={isInDrawer ? 0 : 60}
-    >
+    
       <View className="flex-1 bg-white">
         <View
           style={{
@@ -1467,7 +1461,7 @@ const getDateLabel = (dateString?: string) => {
             justifyContent: "space-between",
             backgroundColor: "#1e3a8a",
             paddingHorizontal: 12,
-            paddingTop: insets.top + 10, // ✅ Space for status bar / notch
+            paddingTop: isInDrawer ? 10 : insets.top + 8,
             paddingBottom: 10,
           }}
         >
@@ -1727,7 +1721,6 @@ const getDateLabel = (dateString?: string) => {
           />
         )}
       </View>
-    </KeyboardAvoidingView>
   );
 }
 

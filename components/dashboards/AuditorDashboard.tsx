@@ -303,61 +303,95 @@ const parseTimeToMinutes = (timeStr: string) => {
 // ============================================================================
 // REUSABLE COMPONENTS
 // ============================================================================
+// ============================================================================
+// REUSABLE COMPONENTS
+// ============================================================================
 const TimePicker = ({ value, onChange, disabled, options }: any) => {
   const [showPicker, setShowPicker] = useState(false);
+
   return (
     <View>
+      {/* Trigger Button with Clock Icon for better affordance */}
       <TouchableOpacity
         onPress={() => !disabled && setShowPicker(true)}
         disabled={disabled}
-        className={`w-full p-3 border rounded-xl bg-white ${disabled ? "bg-slate-100 border-slate-200" : "border-slate-200"}`}
+        className={`w-full p-3 border rounded-xl bg-white flex-row items-center justify-between ${
+          disabled ? "bg-slate-100 border-slate-200" : "border-slate-200"
+        }`}
       >
         <Text
-          className={`text-sm ${disabled ? "text-slate-400" : "text-slate-800"}`}
+          className={`text-sm flex-1 ${disabled ? "text-slate-400" : "text-slate-800"}`}
         >
           {value || "Select Time"}
         </Text>
+        <Clock size={16} color={disabled ? "#94a3b8" : "#64748b"} />
       </TouchableOpacity>
-      <Modal visible={showPicker} transparent animationType="slide">
-        <View className="justify-end flex-1 bg-slate-900/50">
+
+      {/* Centered, Constrained Modal for Professional Web/Mobile Look */}
+      <Modal visible={showPicker} transparent animationType="fade">
+        <View className="items-center justify-center flex-1 bg-slate-900/40">
           <View
-            className="p-4 bg-white rounded-t-3xl"
-            style={{ maxHeight: "50%" }}
+            className="overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200"
+            style={{ width: "70%", maxWidth: 320, maxHeight: "30%" }}
           >
-            <View className="flex-row items-center justify-between pb-2 mb-4 border-b border-slate-100">
-              <Text className="text-lg font-bold text-slate-800">
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-5 py-4 bg-blue-600 border-b border-slate-100">
+              <Text className="text-base font-semibold text-slate-800">
                 Select Time
               </Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <X size={24} color="#475569" />
+              <TouchableOpacity
+                onPress={() => setShowPicker(false)}
+                className="p-1.5 rounded-full bg-slate-200/50"
+              >
+                <X size={18} color="#64748b" />
               </TouchableOpacity>
             </View>
+
+            {/* Scrollable List */}
             <FlatList
               data={options}
               keyExtractor={(item: string) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    onChange(item);
-                    setShowPicker(false);
-                  }}
-                  className={`p-4 rounded-xl mb-2 ${value === item ? "bg-blue-50 border border-blue-200" : "bg-slate-50"}`}
-                >
-                  <Text
-                    className={`text-center font-medium ${value === item ? "text-blue-700" : "text-slate-700"}`}
+              contentContainerStyle={{ padding: 8 }}
+              showsVerticalScrollIndicator={true}
+              renderItem={({ item }) => {
+                const isSelected = value === item;
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      onChange(item);
+                      setShowPicker(false);
+                    }}
+                    className={`flex-row items-center justify-between p-3 rounded-xl mb-1 ${
+                      isSelected
+                        ? "bg-blue-50 border border-blue-200"
+                        : "bg-white border border-slate-100"
+                    }`}
                   >
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
+                    <View className="flex-row items-center gap-3">
+                      {/* Visual Dot Indicator */}
+                      <View
+                        className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-500" : "bg-slate-300"}`}
+                      />
+                      <Text
+                        className={`text-sm font-medium ${
+                          isSelected ? "text-blue-700" : "text-slate-700"
+                        }`}
+                      >
+                        {item}
+                      </Text>
+                    </View>
+                    {/* Checkmark for Selected State */}
+                    {isSelected && <CheckCircle size={16} color="#2563eb" />}
+                  </TouchableOpacity>
+                );
+              }}
             />
           </View>
         </View>
       </Modal>
     </View>
   );
-};
-
+}
 const StatCard = ({ title, value, icon: Icon }: any) => (
   <View className="flex-1 p-3 bg-white border shadow-sm border-slate-200 rounded-2xl">
     <View className="flex-row items-start justify-start mb-2">
@@ -567,10 +601,17 @@ const AuditListItem = ({
                 ? `${audit.fromDate} → ${audit.toDate}`
                 : audit.scheduledDate}
             </Text>
-            {audit.originalScheduledDate && (
-              <Text className="ml-1 text-xs line-through text-rose-500">
-                Was: {audit.originalScheduledDate}
-              </Text>
+             {audit.originalScheduledDate && (
+              <>
+                <Text className="ml-1 text-xs line-through text-rose-500">
+                  Was: {audit.originalScheduledDate}
+                </Text>
+                <View className="px-1.5 py-0.5 bg-amber-100 border border-amber-200 rounded">
+                  <Text className="text-[9px] font-bold text-amber-800">
+                    Rescheduled
+                  </Text>
+                </View>
+              </>
             )}
           </View>
           <View className="flex-row items-center gap-1">
@@ -843,7 +884,15 @@ const AuditCard = ({
                 : audit.scheduledDate}
             </Text>
           </View>
+           {audit.originalScheduledDate && (
+            <View className="flex-row items-center gap-1.5 mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+              <Text className="text-[10px] font-semibold text-amber-800 line-through">
+                Was: {audit.originalScheduledDate}
+              </Text>
+            </View>
+          )}
         </View>
+
 
         {/* ✅ ROW 2: Title */}
         <Text
