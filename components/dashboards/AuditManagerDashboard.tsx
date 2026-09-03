@@ -556,7 +556,7 @@ const DepartmentLineChart = ({
   // SVG dimensions
   const svgWidth = 500;
   const svgHeight = 280;
-  const padding = { top: 20, right: 20, bottom: 50, left: 50 };
+  const padding = { top: 50, right: 20, bottom: 50, left: 50 };
   const chartWidth = svgWidth - padding.left - padding.right;
   const chartHeight = svgHeight - padding.top - padding.bottom;
 
