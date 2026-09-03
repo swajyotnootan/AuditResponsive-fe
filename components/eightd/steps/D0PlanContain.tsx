@@ -206,7 +206,7 @@ interface LayoutTabsProps {
 const companies: Company[] = [
   {
     name: "TTK Prestige",
-    logo: require("@/assets/logos/ttk-prestige.png"),
+    logo: require("@/assets/logos/ttkprestige.png"),
   },
   {
     name: "Boeing",
