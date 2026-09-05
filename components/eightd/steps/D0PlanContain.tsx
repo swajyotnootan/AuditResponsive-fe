@@ -214,7 +214,7 @@ const companies: Company[] = [
   },
   {
     name: "Feather Light Furniture",
-    logo: require("@/assets/logos/feather-light.png"),
+    logo: require("@/assets/logos/featherlight.png"),
   },
 ];
 
@@ -2755,7 +2755,6 @@ export default function D0PlanContain({
         </View>
       </Modal>
 
-      {/* Country Picker Modal */}
       {/* Country Picker Modal */}
       <Modal
         visible={showCountryPicker}

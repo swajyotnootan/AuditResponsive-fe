@@ -1999,7 +1999,8 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     paddingHorizontal: 8,
     paddingTop: 8, // ✅ Keep top padding for breathing room
-    paddingBottom: 4,  },
+    paddingBottom: 4,  
+  },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",

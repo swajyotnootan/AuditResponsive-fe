@@ -4147,7 +4147,7 @@ export default function TopManagementDashboard() {
                               >
                                 <X size={16} color="#ffffff" />
                                 <Text className="font-medium text-white">
-                                  Reject All Pending
+                                  Reject All
                                 </Text>
                               </TouchableOpacity>
                               <TouchableOpacity
@@ -4156,7 +4156,7 @@ export default function TopManagementDashboard() {
                               >
                                 <CheckSquare size={16} color="#ffffff" />
                                 <Text className="font-medium text-white">
-                                  Approve All Pending
+                                  Approve All
                                 </Text>
                               </TouchableOpacity>
                             </View>
@@ -4168,6 +4168,7 @@ export default function TopManagementDashboard() {
               </View>
             </Modal>
           );
+ 
         })()}
     </View>
   );
