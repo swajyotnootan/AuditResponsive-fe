@@ -1,23 +1,23 @@
 // app/hooks/useAuditData.ts
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    AuditSchedule,
-    ChartData,
-    DepartmentNCRData,
-    FormStatus,
-    NCR,
-    PendingRequest,
-    Stats,
-    User
-} from '../components/types/audit.types';
+  AuditSchedule,
+  ChartData,
+  DepartmentNCRData,
+  FormStatus,
+  NCR,
+  PendingRequest,
+  Stats,
+  User,
+} from "../components/types/audit.types";
 import {
-    auditPlanApi,
-    auditScheduleApi,
-    departmentPlanApi,
-    ncrApi,
-    userApi
-} from '../services/auditScheduleApi';
+  auditPlanApi,
+  auditScheduleApi,
+  departmentPlanApi,
+  ncrApi,
+  userApi,
+} from "../services/auditScheduleApi";
 
 interface UseAuditDataProps {
   selectedYear: number;
@@ -28,7 +28,7 @@ interface WorkflowStep {
   id: number;
   title: string;
   description: string;
-  status: 'completed' | 'in-progress' | 'pending' | 'locked';
+  status: "completed" | "in-progress" | "pending" | "locked";
   icon: string;
   time?: string;
 }
@@ -48,8 +48,14 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
     pendingRequests: 0,
     pendingCaVerification: 0,
   });
-  const [form3Status, setForm3Status] = useState<FormStatus>({ status: 'NOT_STARTED', year: selectedYear });
-  const [form4Status, setForm4Status] = useState<FormStatus>({ status: 'NOT_STARTED', year: selectedYear });
+  const [form3Status, setForm3Status] = useState<FormStatus>({
+    status: "NOT_STARTED",
+    year: selectedYear,
+  });
+  const [form4Status, setForm4Status] = useState<FormStatus>({
+    status: "NOT_STARTED",
+    year: selectedYear,
+  });
   const [hasApprovedForm5, setHasApprovedForm5] = useState(false);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
 
@@ -66,35 +72,45 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
         userResponse,
         scheduleResponse,
       ] = await Promise.all([
-        auditPlanApi.getPlanByYear(selectedYear).catch(() => ({ data: { approvalStatus: 'NOT_STARTED' } })),
-        departmentPlanApi.getPlanByYear(selectedYear).catch(() => ({ data: { approvalStatus: 'NOT_STARTED' } })),
-        auditScheduleApi.getAvailableMonths(selectedYear).catch(() => ({ data: [] })),
+        auditPlanApi
+          .getPlanByYear(selectedYear)
+          .catch(() => ({ data: { approvalStatus: "NOT_STARTED" } })),
+        departmentPlanApi
+          .getPlanByYear(selectedYear)
+          .catch(() => ({ data: { approvalStatus: "NOT_STARTED" } })),
+        auditScheduleApi
+          .getAvailableMonths(selectedYear)
+          .catch(() => ({ data: [] })),
         auditScheduleApi.getPendingRequests().catch(() => ({ data: [] })),
         ncrApi.getAllNCRs().catch(() => ({ data: [] })),
         userApi.getAll().catch(() => ({ data: [] })),
-        userId 
-          ? auditScheduleApi.getSchedulesWithStatus(userId).catch(() => ({ data: [] })) 
+        userId
+          ? auditScheduleApi
+              .getSchedulesWithStatus(userId)
+              .catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
       ]);
 
       // Extract data from axios responses
-      const form3 = form3Response?.data || { approvalStatus: 'NOT_STARTED' };
-      const form4 = form4Response?.data || { approvalStatus: 'NOT_STARTED' };
+      const form3 = form3Response?.data || { approvalStatus: "NOT_STARTED" };
+      const form4 = form4Response?.data || { approvalStatus: "NOT_STARTED" };
       const form5 = form5Response?.data || [];
       const requests = requestsResponse?.data || [];
       const ncrData = ncrResponse?.data || [];
       const userData = userResponse?.data || [];
       const scheduleData = scheduleResponse?.data || [];
 
-      setForm3Status({ 
-        status: form3?.approvalStatus || 'NOT_STARTED', 
-        year: selectedYear 
+      setForm3Status({
+        status: form3?.approvalStatus || "NOT_STARTED",
+        year: selectedYear,
       });
-      setForm4Status({ 
-        status: form4?.approvalStatus || 'NOT_STARTED', 
-        year: selectedYear 
+      setForm4Status({
+        status: form4?.approvalStatus || "NOT_STARTED",
+        year: selectedYear,
       });
-      setHasApprovedForm5(form5.some((m: any) => m.approvalStatus === 'APPROVED'));
+      setHasApprovedForm5(
+        form5.some((m: any) => m.approvalStatus === "APPROVED"),
+      );
       setPendingRequests(requests);
       setAllNCRs(ncrData);
       setAllUsers(userData);
@@ -103,18 +119,19 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
       // Calculate stats
       const totalAudits = scheduleData.length;
       const completedAudits = scheduleData.filter(
-        (s: AuditSchedule) => s.status === 'COMPLETED' || s.status === 'CLOSED'
+        (s: AuditSchedule) => s.status === "COMPLETED" || s.status === "CLOSED",
       ).length;
       const pendingSchedules = scheduleData.filter(
         (s: AuditSchedule) =>
-          s.approvalStatus === 'PENDING_APPROVAL' ||
-          (s.approvalStatus === 'APPROVED' && s.status === 'SCHEDULED')
+          s.approvalStatus === "PENDING_APPROVAL" ||
+          (s.approvalStatus === "APPROVED" && s.status === "SCHEDULED"),
       ).length;
       const openNCRs = ncrData.filter(
-        (n: NCR) => n.status !== 'CLOSED' && n.status !== 'NCR2_COMPLETED'
+        (n: NCR) => n.status !== "CLOSED" && n.status !== "NCR2_COMPLETED",
       ).length;
       const pendingCaVerification = ncrData.filter(
-        (n: NCR) => n.status === 'IN_PROGRESS' || n.status === 'NCR2_IN_PROGRESS'
+        (n: NCR) =>
+          n.status === "IN_PROGRESS" || n.status === "NCR2_IN_PROGRESS",
       ).length;
 
       setStats({
@@ -125,9 +142,8 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
         pendingRequests: requests.length,
         pendingCaVerification,
       });
-
     } catch (error) {
-      console.error('Error fetching audit data:', error);
+      console.error("Error fetching audit data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -157,11 +173,25 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
 
   // Monthly trend data
   const monthlyTrendData = useMemo((): ChartData[] => {
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
     const monthCounts = new Array(12).fill(0);
 
-    schedules.forEach(schedule => {
-      const dateStr = schedule.auditDate || schedule.scheduledDate || schedule.date;
+    schedules.forEach((schedule) => {
+      const dateStr =
+        schedule.auditDate || schedule.scheduledDate || schedule.date;
       if (dateStr) {
         const date = new Date(dateStr);
         if (!isNaN(date.getTime()) && date.getFullYear() === selectedYear) {
@@ -182,29 +212,32 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
     if (allNCRs.length === 0) return [];
 
     const statusGroups: Record<string, number> = {
-      'Open': 0,
-      'In Progress': 0,
-      'Pending Verification': 0,
-      'Closed': 0,
-      'Completed': 0,
+      Open: 0,
+      "In Progress": 0,
+      "Pending Verification": 0,
+      Closed: 0,
+      Completed: 0,
     };
 
-    allNCRs.forEach(ncr => {
-      const status = (ncr.status || '').toUpperCase();
-      if (status === 'CLOSED') statusGroups['Closed']++;
-      else if (status === 'NCR2_COMPLETED' || status === 'COMPLETED') statusGroups['Completed']++;
-      else if (status === 'IN_PROGRESS' || status === 'NCR2_IN_PROGRESS') statusGroups['Pending Verification']++;
-      else if (status === 'OPEN' || status === 'NEW' || status === 'DRAFT') statusGroups['Open']++;
-      else statusGroups['In Progress']++;
+    allNCRs.forEach((ncr) => {
+      const status = (ncr.status || "").toUpperCase();
+      if (status === "CLOSED") statusGroups["Closed"]++;
+      else if (status === "NCR2_COMPLETED" || status === "COMPLETED")
+        statusGroups["Completed"]++;
+      else if (status === "IN_PROGRESS" || status === "NCR2_IN_PROGRESS")
+        statusGroups["Pending Verification"]++;
+      else if (status === "OPEN" || status === "NEW" || status === "DRAFT")
+        statusGroups["Open"]++;
+      else statusGroups["In Progress"]++;
     });
 
-    const colors = ['#1e3a8a', '#1d4ed8', '#2563eb', '#3b82f6', '#60a5fa'];
-    
+    const colors = ["#1e3a8a", "#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa"];
+
     // ✅ FIXED: Use 'label' instead of 'name'
     return Object.entries(statusGroups)
       .filter(([_, value]) => value > 0)
       .map(([label, value], index) => ({
-        label,  // ✅ Changed from 'name' to 'label'
+        label, // ✅ Changed from 'name' to 'label'
         value,
         color: colors[index % colors.length],
       }));
@@ -215,8 +248,8 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
     if (allNCRs.length === 0) return [];
 
     const deptCounts: Record<string, number> = {};
-    allNCRs.forEach(ncr => {
-      const dept = ncr.department || ncr.auditDepartment || 'Unknown';
+    allNCRs.forEach((ncr) => {
+      const dept = ncr.department || ncr.auditDepartment || "Unknown";
       deptCounts[dept] = (deptCounts[dept] || 0) + 1;
     });
 
@@ -230,39 +263,39 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
   const recentActivities = useMemo(() => {
     const activities: any[] = [];
 
-    pendingRequests.slice(0, 3).forEach(req => {
+    pendingRequests.slice(0, 3).forEach((req) => {
       activities.push({
-        title: `${req.type === 'RESCHEDULE' ? 'Reschedule' : 'Extension'} Request`,
+        title: `${req.type === "RESCHEDULE" ? "Reschedule" : "Extension"} Request`,
         description: `${req.auditType} - ${req.department}`,
         time: new Date(req.requestedAt).toLocaleDateString(),
-        icon: 'message-square',
+        icon: "message-square",
       });
     });
 
     if (stats.openNCRs > 0) {
       activities.push({
-        title: 'Open NCRs',
+        title: "Open NCRs",
         description: `${stats.openNCRs} non-conformance reports require attention`,
-        time: 'Active',
-        icon: 'alert-circle',
+        time: "Active",
+        icon: "alert-circle",
       });
     }
 
-    if (form3Status.status === 'APPROVED') {
+    if (form3Status.status === "APPROVED") {
       activities.push({
-        title: 'Annual Audit Plan Approved',
+        title: "Annual Audit Plan Approved",
         description: `Form 3 for ${selectedYear} has been approved`,
-        time: 'Recent',
-        icon: 'check-circle',
+        time: "Recent",
+        icon: "check-circle",
       });
     }
 
-    if (form4Status.status === 'APPROVED') {
+    if (form4Status.status === "APPROVED") {
       activities.push({
-        title: 'Department Plan Approved',
+        title: "Department Plan Approved",
         description: `Form 4 for ${selectedYear} has been approved`,
-        time: 'Recent',
-        icon: 'file-text',
+        time: "Recent",
+        icon: "file-text",
       });
     }
 
@@ -271,42 +304,68 @@ export const useAuditData = ({ selectedYear, userId }: UseAuditDataProps) => {
 
   // Workflow steps
   const workflowSteps = useMemo((): WorkflowStep[] => {
-    const isForm3Approved = form3Status.status === 'APPROVED';
-    const isForm4Approved = form4Status.status === 'APPROVED';
+    const isForm3Approved = form3Status.status === "APPROVED";
+    const isForm4Approved = form4Status.status === "APPROVED";
     const isForm5Approved = hasApprovedForm5;
 
     return [
       {
         id: 1,
-        title: 'Annual Audit Plan',
-        description: 'Form 3 - Define yearly audit elements',
-        status: isForm3Approved ? 'completed' : form3Status.status === 'PENDING_APPROVAL' ? 'pending' : 'locked',
-        icon: 'file-text',
-        time: isForm3Approved ? 'Approved' : form3Status.status === 'PENDING_APPROVAL' ? 'Pending' : 'Locked',
+        title: "Annual Audit Plan",
+        description: "Form 3 - Define yearly audit elements",
+        status: isForm3Approved
+          ? "completed"
+          : form3Status.status === "PENDING_APPROVAL"
+            ? "pending"
+            : "locked",
+        icon: "file-text",
+        time: isForm3Approved
+          ? "Approved"
+          : form3Status.status === "PENDING_APPROVAL"
+            ? "Pending"
+            : "Locked",
       },
       {
         id: 2,
-        title: 'Department Audit Plan',
-        description: 'Form 4 - Assign audits to departments',
-        status: !isForm3Approved ? 'locked' : isForm4Approved ? 'completed' : form4Status.status === 'PENDING_APPROVAL' ? 'pending' : 'in-progress',
-        icon: 'users',
-        time: isForm4Approved ? 'Approved' : isForm3Approved ? 'In Progress' : 'Locked',
+        title: "Department Audit Plan",
+        description: "Form 4 - Assign audits to departments",
+        status: !isForm3Approved
+          ? "locked"
+          : isForm4Approved
+            ? "completed"
+            : form4Status.status === "PENDING_APPROVAL"
+              ? "pending"
+              : "in-progress",
+        icon: "users",
+        time: isForm4Approved
+          ? "Approved"
+          : isForm3Approved
+            ? "In Progress"
+            : "Locked",
       },
       {
         id: 3,
-        title: 'Schedule Dashboard',
-        description: 'Form 5 - Month-wise audit schedule',
-        status: !isForm4Approved ? 'locked' : isForm5Approved ? 'completed' : 'in-progress',
-        icon: 'grid',
-        time: isForm5Approved ? 'Approved' : isForm4Approved ? 'In Progress' : 'Locked',
+        title: "Schedule Dashboard",
+        description: "Form 5 - Month-wise audit schedule",
+        status: !isForm4Approved
+          ? "locked"
+          : isForm5Approved
+            ? "completed"
+            : "in-progress",
+        icon: "grid",
+        time: isForm5Approved
+          ? "Approved"
+          : isForm4Approved
+            ? "In Progress"
+            : "Locked",
       },
       {
         id: 4,
-        title: 'Schedule Calendar',
-        description: 'Daily schedules with time slots',
-        status: !isForm5Approved ? 'locked' : 'pending',
-        icon: 'calendar',
-        time: !isForm5Approved ? 'Locked' : 'Ready',
+        title: "Schedule Calendar",
+        description: "Daily schedules with time slots",
+        status: !isForm5Approved ? "locked" : "pending",
+        icon: "calendar",
+        time: !isForm5Approved ? "Locked" : "Ready",
       },
     ];
   }, [form3Status, form4Status, hasApprovedForm5]);

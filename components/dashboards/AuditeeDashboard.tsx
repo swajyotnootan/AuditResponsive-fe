@@ -1,4 +1,4 @@
-﻿import { API_BASE_URL } from "@/config/apiConfig";
+import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
@@ -40,11 +40,11 @@ import YearFilter from "../common/YearFilter";
 import ForumThreadView from "../forum/ForumThreadView";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
 
-// ⚠️ Adjust these paths to match your actual project structure
+// ?? Adjust these paths to match your actual project structure
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 
-// ⚠️ Adjust these paths to match your actual project structure
+// ?? Adjust these paths to match your actual project structure
 import FiveSView from "./auditor/view/FiveSView";
 import IATFInternalView from "./auditor/view/IATFInternalView";
 import ManufacturingProcessView from "./auditor/view/ManufacturingProcessView";
@@ -61,11 +61,11 @@ const NAVBAR_COLORS = {
 };
 
 // ============================================================================
-// ✅ NATIVE FETCH HELPER
+// ? NATIVE FETCH HELPER
 // ============================================================================
 const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}/api${endpoint}`;
-  const token = await AsyncStorage.getItem("token");
+  const token = await AsyncStorage.getItem("authToken");
   const config: RequestInit = {
     headers: {
       "Content-Type": "application/json",
@@ -85,7 +85,7 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     const text = await response.text();
     return text ? JSON.parse(text) : {};
   } catch (error) {
-    console.error(`❌ [API FETCH] Failed (${endpoint}):`, error);
+    console.error(`? [API FETCH] Failed (${endpoint}):`, error);
     throw error;
   }
 };
@@ -137,26 +137,26 @@ const is8DRelated = (ncr: any) => {
 };
 
 // ============================================================================
-// ✅ REUSABLE COMPONENTS (Matched to Auditor Dashboard)
+// ? REUSABLE COMPONENTS (Matched to Auditor Dashboard)
 // ============================================================================
 const StatCard = ({ title, value, icon: Icon }: any) => (
-  <View className="flex-1 p-3 bg-white border shadow-sm border-slate-200 rounded-2xl">
-    <View className="flex-row items-start justify-start mb-2">
+  <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <View className="mb-2 flex-row items-start justify-start">
       <View
-        className="p-2 rounded-xl"
+        className="rounded-xl p-2"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
         <Icon size={18} color={NAVBAR_COLORS.primary} />
       </View>
     </View>
     <Text
-      className="mb-1 text-lg font-bold tracking-tight text-left text-slate-800"
+      className="mb-1 text-left text-lg font-bold tracking-tight text-slate-800"
       numberOfLines={1}
     >
       {value}
     </Text>
     <Text
-      className="text-[10px] font-semibold tracking-wide uppercase text-left text-slate-500"
+      className="text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500"
       numberOfLines={2}
     >
       {title}
@@ -164,7 +164,7 @@ const StatCard = ({ title, value, icon: Icon }: any) => (
   </View>
 );
 
-// ✅ NEW: StatCardsContainer to handle proper width distribution (Mobile scroll vs Desktop flex)
+// ? NEW: StatCardsContainer to handle proper width distribution (Mobile scroll vs Desktop flex)
 const StatCardsContainer = ({ stats, isNcr = false }: any) => {
   const { width: screenWidth } = useWindowDimensions();
   const isMobile = screenWidth < 768;
@@ -189,7 +189,7 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
 
   const statsData = isNcr ? ncrStatsData : auditStats;
 
-  // ✅ MOBILE: Horizontal ScrollView (Fixed width per card so it doesn't squish)
+  // ? MOBILE: Horizontal ScrollView (Fixed width per card so it doesn't squish)
   if (isMobile) {
     return (
       <ScrollView
@@ -207,11 +207,11 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
     );
   }
 
-  // ✅ TABLET & DESKTOP: Force ALL cards into a SINGLE row, dividing width equally
+  // ? TABLET & DESKTOP: Force ALL cards into a SINGLE row, dividing width equally
   return (
     <View className="flex-row">
       {statsData.map((stat, index) => (
-        <View key={index} className="px-1 mb-4" style={{ flex: 1 }}>
+        <View key={index} className="mb-4 px-1" style={{ flex: 1 }}>
           <StatCard title={stat.title} value={stat.value} icon={stat.icon} />
         </View>
       ))}
@@ -276,7 +276,7 @@ const NcrStatusBadge = ({ status }: { status: string }) => {
   };
   return (
     <View
-      className={`flex-row items-center gap-1.5 px-2.5 py-1 rounded-lg border ${className}`}
+      className={`flex-row items-center gap-1.5 rounded-lg border px-2.5 py-1 ${className}`}
     >
       <Text className="text-xs font-medium">{label}</Text>
     </View>
@@ -327,7 +327,7 @@ const AuditCard = ({
       "flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border";
     if (cardStatus === "APPROVED")
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <CheckCircle size={14} color="#047857" />
           <Text className="ml-1 text-[11px] font-semibold text-emerald-700">
             All Approved
@@ -336,7 +336,7 @@ const AuditCard = ({
       );
     if (cardStatus === "REJECTED")
       return (
-        <View className={`${baseClass} bg-rose-50 border-rose-200`}>
+        <View className={`${baseClass} border-rose-200 bg-rose-50`}>
           <XCircle size={14} color="#be123c" />
           <Text className="ml-1 text-[11px] font-semibold text-rose-700">
             All Rejected
@@ -345,7 +345,7 @@ const AuditCard = ({
       );
     if (cardStatus === "PARTIALLY_REJECTED")
       return (
-        <View className={`${baseClass} bg-amber-50 border-amber-200`}>
+        <View className={`${baseClass} border-amber-200 bg-amber-50`}>
           <AlertCircle size={14} color="#b45309" />
           <Text className="ml-1 text-[11px] font-semibold text-amber-700">
             Partially Rejected
@@ -354,7 +354,7 @@ const AuditCard = ({
       );
     if (cardStatus === "PARTIALLY_APPROVED")
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <CheckCircle size={14} color="#1d4ed8" />
           <Text className="ml-1 text-[11px] font-semibold text-blue-700">
             Partially Approved
@@ -362,7 +362,7 @@ const AuditCard = ({
         </View>
       );
     return (
-      <View className={`${baseClass} bg-orange-100 border-orange-200`}>
+      <View className={`${baseClass} border-orange-200 bg-orange-100`}>
         <Clock size={14} color="#c2410c" />
         <Text className="ml-1 text-[11px] font-semibold text-orange-600">
           Pending Review
@@ -372,13 +372,13 @@ const AuditCard = ({
   };
 
   return (
-    <View className="flex-1 bg-white border shadow-sm rounded-2xl border-slate-200">
+    <View className="flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm">
       <View className="p-4">
-        <View className="flex-row items-start justify-between mb-3">
-          <View className="flex-row flex-wrap flex-1 gap-2 mr-2">
+        <View className="mb-3 flex-row items-start justify-between">
+          <View className="mr-2 flex-1 flex-row flex-wrap gap-2">
             {getStatusBadge()}
             {isMultiForm && (
-              <View className="flex-row items-center gap-1 px-2 py-1 border rounded-lg bg-slate-100 border-slate-200">
+              <View className="flex-row items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1">
                 <Text className="text-[10px] font-semibold text-slate-700">
                   {completedForms}/{totalForms} Forms
                 </Text>
@@ -386,10 +386,10 @@ const AuditCard = ({
             )}
           </View>
           <View
-            className="flex-col items-end flex-shrink-0 gap-1"
+            className="flex-shrink-0 flex-col items-end gap-1"
             style={{ maxWidth: "50%" }}
           >
-            <View className="flex-row items-start gap-1 px-1.5 py-1 rounded border bg-slate-50 border-slate-200">
+            <View className="flex-row items-start gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
               <CalendarIcon
                 size={10}
                 color="#94a3b8"
@@ -397,7 +397,7 @@ const AuditCard = ({
               />
               <Text className="text-[11px] text-slate-500" numberOfLines={2}>
                 {isDateRange
-                  ? `${audit.fromDate} → ${audit.toDate}`
+                  ? `${audit.fromDate} ? ${audit.toDate}`
                   : audit.scheduledDate}
               </Text>
             </View>
@@ -411,14 +411,14 @@ const AuditCard = ({
           {audit.auditType || "Audit"} - {audit.department || "General"}
         </Text>
 
-        <View className="flex-row flex-wrap gap-2 mb-3">
-          <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
             <Clock size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
               {audit.startTime} - {audit.endTime}
             </Text>
           </View>
-          <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
+          <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
             <UserCheck size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
               {audit.auditorName || "Not Assigned"}
@@ -428,15 +428,15 @@ const AuditCard = ({
 
         {isMultiForm && (
           <View className="mb-3">
-            <View className="flex-row items-center justify-between mb-1.5">
-              <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            <View className="mb-1.5 flex-row items-center justify-between">
+              <Text className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Progress
               </Text>
               <Text className="text-[10px] font-bold text-blue-600">
                 {Math.round(progressPercent)}%
               </Text>
             </View>
-            <View className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <View className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <View
                 className="h-full rounded-full bg-emerald-500"
                 style={{ width: `${progressPercent}%` }}
@@ -449,7 +449,7 @@ const AuditCard = ({
           <View className="mb-3">
             <TouchableOpacity
               onPress={() => setExpanded(!expanded)}
-              className="flex-row items-center justify-between w-full px-3 py-2.5 border rounded-lg border-slate-200 bg-slate-50"
+              className="w-full flex-row items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
             >
               <Text className="text-[11px] font-semibold text-slate-600">
                 Forms ({completedForms}/{totalForms})
@@ -471,14 +471,14 @@ const AuditCard = ({
                   return (
                     <View
                       key={idx}
-                      className="flex-row items-center justify-between p-3 mb-2 border rounded-lg bg-slate-50 border-slate-200"
+                      className="mb-2 flex-row items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3"
                     >
-                      <View className="flex-row items-center flex-1 gap-2">
+                      <View className="flex-1 flex-row items-center gap-2">
                         <View
-                          className={`w-2 h-2 rounded-full ${form.status === "APPROVED" ? "bg-emerald-500" : form.status === "REJECTED" ? "bg-rose-500" : "bg-amber-500"}`}
+                          className={`h-2 w-2 rounded-full ${form.status === "APPROVED" ? "bg-emerald-500" : form.status === "REJECTED" ? "bg-rose-500" : "bg-amber-500"}`}
                         />
                         <Text
-                          className="flex-1 font-medium truncate text-slate-700"
+                          className="flex-1 truncate font-medium text-slate-700"
                           numberOfLines={1}
                         >
                           {form.processName || form.name}
@@ -487,13 +487,13 @@ const AuditCard = ({
                       <View className="flex-row items-center gap-1">
                         <TouchableOpacity
                           onPress={() => onOpenForum(audit, null)}
-                          className="p-1.5 rounded-md bg-purple-50"
+                          className="rounded-md bg-purple-50 p-1.5"
                         >
                           <MessageCircle size={14} color="#9333ea" />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => onViewReport(audit, form.responseId)}
-                          className="p-1.5 rounded-md bg-blue-50"
+                          className="rounded-md bg-blue-50 p-1.5"
                         >
                           <Eye size={14} color="#1d4ed8" />
                         </TouchableOpacity>
@@ -501,13 +501,13 @@ const AuditCard = ({
                           <>
                             <TouchableOpacity
                               onPress={() => onApprove(audit, form)}
-                              className="p-1.5 rounded-md bg-emerald-50"
+                              className="rounded-md bg-emerald-50 p-1.5"
                             >
                               <ThumbsUp size={14} color="#047857" />
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => onReject(audit, form)}
-                              className="p-1.5 rounded-md bg-rose-50"
+                              className="rounded-md bg-rose-50 p-1.5"
                             >
                               <ThumbsDown size={14} color="#be123c" />
                             </TouchableOpacity>
@@ -522,10 +522,10 @@ const AuditCard = ({
           </View>
         )}
 
-        <View className="flex-row flex-wrap justify-end gap-2 pt-3 mt-auto border-t border-slate-100">
+        <View className="mt-auto flex-row flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
           <TouchableOpacity
             onPress={() => onOpenForum(audit, null)}
-            className="flex-row items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200"
+            className="flex-row items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
           >
             <MessageCircle size={14} color="#334155" />
             <Text className="text-xs font-semibold text-slate-700">Forum</Text>
@@ -542,7 +542,7 @@ const AuditCard = ({
                 if (pendingForm)
                   onViewReport(audit, pendingForm.responseId, pendingForm);
               }}
-              className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200"
+              className="flex-row items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2"
             >
               <Eye size={14} color="#1d4ed8" />
               <Text className="text-xs font-semibold text-blue-700">
@@ -557,7 +557,7 @@ const AuditCard = ({
                 onPress={() =>
                   onViewReport(audit, formDetails[0].responseId, formDetails[0])
                 }
-                className="flex-row items-center gap-1.5 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200"
+                className="flex-row items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
               >
                 <Eye size={14} color="#047857" />
                 <Text className="text-xs font-semibold text-emerald-700">
@@ -615,7 +615,7 @@ const AuditListItem = ({
       "flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border";
     if (cardStatus === "APPROVED")
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <CheckCircle size={14} color="#047857" />
           <Text className="ml-1 text-[11px] font-semibold text-emerald-700">
             All Approved
@@ -624,7 +624,7 @@ const AuditListItem = ({
       );
     if (cardStatus === "REJECTED")
       return (
-        <View className={`${baseClass} bg-rose-50 border-rose-200`}>
+        <View className={`${baseClass} border-rose-200 bg-rose-50`}>
           <XCircle size={14} color="#be123c" />
           <Text className="ml-1 text-[11px] font-semibold text-rose-700">
             All Rejected
@@ -633,7 +633,7 @@ const AuditListItem = ({
       );
     if (cardStatus === "PARTIALLY_REJECTED")
       return (
-        <View className={`${baseClass} bg-amber-50 border-amber-200`}>
+        <View className={`${baseClass} border-amber-200 bg-amber-50`}>
           <AlertCircle size={14} color="#b45309" />
           <Text className="ml-1 text-[11px] font-semibold text-amber-700">
             Partially Rejected
@@ -642,7 +642,7 @@ const AuditListItem = ({
       );
     if (cardStatus === "PARTIALLY_APPROVED")
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <CheckCircle size={14} color="#1d4ed8" />
           <Text className="ml-1 text-[11px] font-semibold text-blue-700">
             Partially Approved
@@ -650,7 +650,7 @@ const AuditListItem = ({
         </View>
       );
     return (
-      <View className={`${baseClass} bg-orange-100 border-orange-200`}>
+      <View className={`${baseClass} border-orange-200 bg-orange-100`}>
         <Clock size={14} color="#c2410c" />
         <Text className="ml-1 text-[11px] font-semibold text-orange-600">
           Pending Review
@@ -660,13 +660,13 @@ const AuditListItem = ({
   };
 
   return (
-    <View className="w-full p-4 mb-3 bg-white border shadow-sm border-slate-200 rounded-xl">
+    <View className="mb-3 w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <View className="flex-row flex-wrap items-center justify-between gap-4">
-        <View className="flex-1 min-w-0">
-          <View className="flex-row flex-wrap items-center gap-2 mb-2">
+        <View className="min-w-0 flex-1">
+          <View className="mb-2 flex-row flex-wrap items-center gap-2">
             {getStatusBadge()}
             {isMultiForm && (
-              <View className="flex-row items-center gap-1 px-2 py-1 border rounded-lg bg-slate-100 border-slate-200">
+              <View className="flex-row items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1">
                 <Text className="text-[10px] font-semibold text-slate-700">
                   {completedForms}/{totalForms} Forms
                 </Text>
@@ -680,21 +680,21 @@ const AuditListItem = ({
             {audit.auditType || "Audit"} - {audit.department || "General"}
           </Text>
           <View className="flex-row flex-wrap gap-3">
-            <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+            <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
               <CalendarIcon size={10} color="#94a3b8" />
               <Text className="text-xs text-slate-600">
                 {isDateRange
-                  ? `${audit.fromDate} → ${audit.toDate}`
+                  ? `${audit.fromDate} ? ${audit.toDate}`
                   : audit.scheduledDate}
               </Text>
             </View>
-            <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+            <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
               <Clock size={10} color="#94a3b8" />
               <Text className="text-xs text-slate-600">
                 {audit.startTime} - {audit.endTime}
               </Text>
             </View>
-            <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+            <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1">
               <UserCheck size={10} color="#94a3b8" />
               <Text className="text-xs text-slate-600">
                 {audit.auditorName || "Not Assigned"}
@@ -702,8 +702,8 @@ const AuditListItem = ({
             </View>
           </View>
           {isMultiForm && (
-            <View className="max-w-md mt-2">
-              <View className="flex-row items-center justify-between mb-1">
+            <View className="mt-2 max-w-md">
+              <View className="mb-1 flex-row items-center justify-between">
                 <Text className="text-[10px] font-medium text-slate-500">
                   Progress
                 </Text>
@@ -711,7 +711,7 @@ const AuditListItem = ({
                   {Math.round(progressPercent)}%
                 </Text>
               </View>
-              <View className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <View className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <View
                   className="h-full rounded-full bg-emerald-500"
                   style={{ width: `${progressPercent}%` }}
@@ -723,7 +723,7 @@ const AuditListItem = ({
         <View className="flex-row flex-wrap items-center gap-2">
           <TouchableOpacity
             onPress={() => onOpenForum(audit, null)}
-            className="px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200"
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5"
           >
             <MessageCircle size={12} color="#334155" />
           </TouchableOpacity>
@@ -738,7 +738,7 @@ const AuditListItem = ({
                 );
                 if (pendingForm) onViewReport(audit, pendingForm.responseId);
               }}
-              className="px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200"
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5"
             >
               <Eye size={12} color="#1d4ed8" />
             </TouchableOpacity>
@@ -748,7 +748,7 @@ const AuditListItem = ({
             formDetails?.length > 0 && (
               <TouchableOpacity
                 onPress={() => onViewReport(audit, formDetails[0].responseId)}
-                className="px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200"
+                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5"
               >
                 <Eye size={12} color="#047857" />
               </TouchableOpacity>
@@ -781,14 +781,14 @@ const AuditListItem = ({
                 return (
                   <View
                     key={idx}
-                    className="flex-row items-center justify-between p-3 mb-2 border rounded-lg bg-slate-50 border-slate-200"
+                    className="mb-2 flex-row items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3"
                   >
-                    <View className="flex-row items-center flex-1 gap-2">
+                    <View className="flex-1 flex-row items-center gap-2">
                       <View
-                        className={`w-2 h-2 rounded-full ${form.status === "APPROVED" ? "bg-emerald-500" : form.status === "REJECTED" ? "bg-rose-500" : "bg-amber-500"}`}
+                        className={`h-2 w-2 rounded-full ${form.status === "APPROVED" ? "bg-emerald-500" : form.status === "REJECTED" ? "bg-rose-500" : "bg-amber-500"}`}
                       />
                       <Text
-                        className="flex-1 font-medium truncate text-slate-700"
+                        className="flex-1 truncate font-medium text-slate-700"
                         numberOfLines={1}
                       >
                         {form.processName || form.name}
@@ -797,13 +797,13 @@ const AuditListItem = ({
                     <View className="flex-row items-center gap-1">
                       <TouchableOpacity
                         onPress={() => onOpenForum(audit, null)}
-                        className="p-1.5 rounded-md bg-purple-50"
+                        className="rounded-md bg-purple-50 p-1.5"
                       >
                         <MessageCircle size={14} color="#9333ea" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => onViewReport(audit, form.responseId)}
-                        className="p-1.5 rounded-md bg-blue-50"
+                        className="rounded-md bg-blue-50 p-1.5"
                       >
                         <Eye size={14} color="#1d4ed8" />
                       </TouchableOpacity>
@@ -811,13 +811,13 @@ const AuditListItem = ({
                         <>
                           <TouchableOpacity
                             onPress={() => onApprove(audit, form)}
-                            className="p-1.5 rounded-md bg-emerald-50"
+                            className="rounded-md bg-emerald-50 p-1.5"
                           >
                             <ThumbsUp size={14} color="#047857" />
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => onReject(audit, form)}
-                            className="p-1.5 rounded-md bg-rose-50"
+                            className="rounded-md bg-rose-50 p-1.5"
                           >
                             <ThumbsDown size={14} color="#be123c" />
                           </TouchableOpacity>
@@ -838,11 +838,16 @@ const AuditListItem = ({
 // ============================================================================
 // NCR PENDING LIST
 // ============================================================================
-const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForum }: any) => {
+const NcrPendingList = ({
+  pendingNcrAudits,
+  onViewNcr,
+  onOpenForum,
+  onOpen8DForum,
+}: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
-      <View className="flex-col items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
-        <View className="flex items-center justify-center w-16 h-16 mb-4 shadow-md rounded-2xl bg-emerald-50">
+      <View className="flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 shadow-sm">
+        <View className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 shadow-md">
           <CheckCircle size={32} color="#059669" />
         </View>
         <Text className="text-lg font-semibold text-slate-700">
@@ -855,15 +860,15 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
     );
   }
   return (
-    <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+    <View className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <View className="flex-row items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
         <View className="flex-row items-center gap-2">
           <AlertCircle size={20} color="#e11d48" />
           <Text className="text-sm font-bold text-slate-800">
             NCRs Awaiting Your Review
           </Text>
         </View>
-        <View className="px-3 py-1.5 bg-rose-50 rounded-lg border border-rose-200">
+        <View className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5">
           <Text className="text-xs font-bold text-rose-700">
             {pendingNcrAudits.length} pending
           </Text>
@@ -873,20 +878,20 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
         data={pendingNcrAudits}
         keyExtractor={(item: any) => String(item.id)}
         renderItem={({ item }: any) => (
-          <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
-            <View className="flex-1 mr-3">
+          <View className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4">
+            <View className="mr-3 flex-1">
               <Text className="font-mono text-sm font-bold text-slate-900">
                 NCR #{item.ncrNumber || item.id}
               </Text>
               <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-                {item.department || "General"} · Due:{" "}
+                {item.department || "General"} � Due:{" "}
                 {item.dueDate
                   ? new Date(item.dueDate).toLocaleDateString()
                   : "Not set"}
               </Text>
-              <View className="flex-row flex-wrap gap-1.5 mt-2">
+              <View className="mt-2 flex-row flex-wrap gap-1.5">
                 <View
-                  className={`px-2 py-1 rounded-md border ${item.severity === "Major NC" ? "bg-rose-50 border-rose-200" : "bg-amber-50 border-amber-200"}`}
+                  className={`rounded-md border px-2 py-1 ${item.severity === "Major NC" ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"}`}
                 >
                   <Text
                     className={`text-[10px] font-semibold ${item.severity === "Major NC" ? "text-rose-700" : "text-amber-700"}`}
@@ -895,7 +900,7 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
                   </Text>
                 </View>
                 {item.clause && (
-                  <View className="px-2 py-1 border rounded-md bg-slate-100 border-slate-200">
+                  <View className="rounded-md border border-slate-200 bg-slate-100 px-2 py-1">
                     <Text className="text-[10px] font-semibold text-slate-600">
                       Clause {item.clause}
                     </Text>
@@ -903,32 +908,34 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
                 )}
               </View>
             </View>
-                        <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center gap-2">
               {/* 1. Standard NCR Forum */}
               {onOpenForum && (
                 <TouchableOpacity
                   onPress={() => onOpenForum(item)}
-                  className="p-2 rounded-lg bg-purple-50"
+                  className="rounded-lg bg-purple-50 p-2"
                 >
                   <MessageCircle size={18} color="#9333ea" />
                 </TouchableOpacity>
               )}
-              
+
               {/* 2. 8D Forum Button (Only shows if 8D related) */}
               {onOpen8DForum && is8DRelated(item) && (
                 <TouchableOpacity
                   onPress={() => onOpen8DForum(item)}
-                  className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
+                  className="flex-row items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5"
                 >
                   <MessageCircle size={12} color="#4338ca" />
-                  <Text className="text-[10px] font-semibold text-indigo-700">8D Forum</Text>
+                  <Text className="text-[10px] font-semibold text-indigo-700">
+                    8D Forum
+                  </Text>
                 </TouchableOpacity>
               )}
 
               {/* 3. View NCR Details (Eye Icon) - PRESERVED */}
               <TouchableOpacity
                 onPress={() => onViewNcr(item.id)}
-                className="p-2 rounded-lg bg-slate-50"
+                className="rounded-lg bg-slate-50 p-2"
               >
                 <Eye size={18} color="#475569" />
               </TouchableOpacity>
@@ -943,20 +950,25 @@ const NcrPendingList = ({ pendingNcrAudits, onViewNcr, onOpenForum, onOpen8DForu
 // ============================================================================
 // NCR LIST TAB
 // ============================================================================
-const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any) => {
+const NcrListTab = ({
+  assignedNCRs,
+  onViewNcr,
+  onOpenForum,
+  onOpen8DForum,
+}: any) => {
   return (
-    <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+    <View className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <View className="flex-row items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
         <View>
           <Text className="text-sm font-bold text-slate-800">
             All Assigned NCRs
           </Text>
-          <Text className="text-xs text-slate-500 mt-0.5">
+          <Text className="mt-0.5 text-xs text-slate-500">
             Nonconformity reports assigned to you
           </Text>
         </View>
         {assignedNCRs.length > 0 && (
-          <View className="px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200">
+          <View className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5">
             <Text className="text-xs font-bold text-slate-700">
               {assignedNCRs.length} total
             </Text>
@@ -964,14 +976,14 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any
         )}
       </View>
       {assignedNCRs.length === 0 ? (
-        <View className="flex-col items-center justify-center py-16 text-center bg-white">
-          <View className="flex items-center justify-center w-12 h-12 mb-3 rounded-xl bg-slate-100">
+        <View className="flex-col items-center justify-center bg-white py-16 text-center">
+          <View className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
             <AlertCircle size={24} color="#94a3b8" />
           </View>
           <Text className="text-sm font-semibold text-slate-700">
             No NCRs assigned
           </Text>
-          <Text className="max-w-xs mt-1 text-xs text-center text-slate-500">
+          <Text className="mt-1 max-w-xs text-center text-xs text-slate-500">
             When NCRs are raised against you, they will appear here
           </Text>
         </View>
@@ -980,7 +992,7 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any
           data={assignedNCRs}
           keyExtractor={(item: any) => String(item.id)}
           renderItem={({ item }: any) => (
-            <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100">
+            <View className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4">
               <View className="flex-1">
                 <Text
                   className="font-mono text-sm font-semibold text-slate-900"
@@ -991,36 +1003,37 @@ const NcrListTab = ({ assignedNCRs, onViewNcr, onOpenForum, onOpen8DForum }: any
                 <Text className="mt-1 text-sm text-slate-600">
                   {item.dueDate
                     ? new Date(item.dueDate).toLocaleDateString("en-GB")
-                    : "—"}
+                    : "�"}
                 </Text>
               </View>
               <NcrStatusBadge status={item.status} />
-                            <View className="flex-row gap-2">
+              <View className="flex-row gap-2">
                 {/* 1. Standard NCR Forum */}
                 {onOpenForum && (
                   <TouchableOpacity
                     onPress={() => onOpenForum(item)}
-                    className="p-2 rounded-lg bg-purple-50"
+                    className="rounded-lg bg-purple-50 p-2"
                   >
                     <MessageCircle size={18} color="#9333ea" />
                   </TouchableOpacity>
                 )}
-                
-              
+
                 {onOpen8DForum && is8DRelated(item) && (
                   <TouchableOpacity
                     onPress={() => onOpen8DForum(item)}
-                    className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200"
+                    className="flex-row items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5"
                   >
                     <MessageCircle size={12} color="#4338ca" />
-                    <Text className="text-[10px] font-semibold text-indigo-700">8D Forum</Text>
+                    <Text className="text-[10px] font-semibold text-indigo-700">
+                      8D Forum
+                    </Text>
                   </TouchableOpacity>
                 )}
 
                 {/* 3. View NCR Details (Eye Icon) - PRESERVED */}
                 <TouchableOpacity
                   onPress={() => onViewNcr(item.id)}
-                  className="p-2 rounded-lg bg-slate-50"
+                  className="rounded-lg bg-slate-50 p-2"
                 >
                   <Eye size={18} color="#475569" />
                 </TouchableOpacity>
@@ -1076,17 +1089,17 @@ export default function AuditeeDashboard() {
   }, [params?.tab]);
 
   // Fetch all users for forum member selection
-useEffect(() => {
-  const fetchUsers = async () => {
-    try {
-      const users = await apiFetch("/users");
-      setAllUsers(users || []);
-    } catch (error) {
-      console.error("Failed to fetch users for forum:", error);
-    }
-  };
-  fetchUsers();
-}, []);
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const users = await apiFetch("/users");
+        setAllUsers(users || []);
+      } catch (error) {
+        console.error("Failed to fetch users for forum:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
   const [isFetching, setIsFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
@@ -1115,16 +1128,15 @@ useEffect(() => {
   const [reviewApproved, setReviewApproved] = useState(false);
   const [reviewComment, setReviewComment] = useState("");
   // Add these state variables
-const [forumModalVisible, setForumModalVisible] = useState(false);
-  
-    const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
+  const [forumModalVisible, setForumModalVisible] = useState(false);
+
+  const [show8DForumDrawer, setShow8DForumDrawer] = useState(false);
   const [selected8DNCR, setSelected8DNCR] = useState<any>(null);
   const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
-const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
-const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
-
 
   const [stats, setStats] = useState({
     pendingReview: 0,
@@ -1331,7 +1343,7 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
         resolvedNCRs: inProgressNCRs.length + closedNCRs.length,
       });
     } catch (error) {
-      console.error("❌ CRITICAL ERROR in fetchAuditeeData:", error);
+      console.error("? CRITICAL ERROR in fetchAuditeeData:", error);
       addToast("Failed to load dashboard data", "error");
     } finally {
       setIsFetching(false);
@@ -1345,7 +1357,6 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
     }
   }, [user?.id, selectedYear]);
 
- 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchAuditeeData(selectedYear);
@@ -1353,24 +1364,24 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   };
 
   const handleViewReport = (audit: any, responseId: any, form: any = null) => {
-  if (!responseId) {
-    addToast("No audit report data available", "error");
-    return;
-  }
-  setActiveReportConfig({
-    id: String(responseId),
-    audit: {
-      ...audit,
-      // Ensure these are passed for forum
-      auditorId: audit.auditorId,
-      auditorName: audit.auditorName,
-      hodEmail: audit.hodEmail,
-      hodName: audit.hodName,
-      memberEmails: audit.memberEmails || [],
-    },
-    form,
-  });
-};
+    if (!responseId) {
+      addToast("No audit report data available", "error");
+      return;
+    }
+    setActiveReportConfig({
+      id: String(responseId),
+      audit: {
+        ...audit,
+        // Ensure these are passed for forum
+        auditorId: audit.auditorId,
+        auditorName: audit.auditorName,
+        hodEmail: audit.hodEmail,
+        hodName: audit.hodName,
+        memberEmails: audit.memberEmails || [],
+      },
+      form,
+    });
+  };
 
   const renderActiveReport = () => {
     if (!activeReportConfig) return null;
@@ -1429,10 +1440,10 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
     );
   };
 
-   const renderActiveNcrView = () => {
+  const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
     return (
-      // ✅ USE YOUR NEW MANAGER HERE
+      // ? USE YOUR NEW MANAGER HERE
       <NCRViewManager
         initialId={activeNcrViewConfig.id}
         initialType={activeNcrViewConfig.type || "form7"}
@@ -1501,15 +1512,15 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   };
 
   // Add this function in both dashboards
-const handleOpenForum = (audit: any, form: any = null) => {
-  console.log("🔍 Opening forum for audit:", audit);
-  if (!audit) {
-    addToast("No audit data available for forum", "error");
-    return;
-  }
-  setSelectedAuditForForum(audit);
-  setForumModalVisible(true);
-};
+  const handleOpenForum = (audit: any, form: any = null) => {
+    console.log("?? Opening forum for audit:", audit);
+    if (!audit) {
+      addToast("No audit data available for forum", "error");
+      return;
+    }
+    setSelectedAuditForForum(audit);
+    setForumModalVisible(true);
+  };
 
   const openNCRForum = (ncr: any) => {
     if (!ncr) {
@@ -1525,7 +1536,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
 
     // 2. Build a unique list of member emails
     const memberEmails: string[] = [];
-    
+
     managers.forEach((m: any) => {
       if (m.email && !memberEmails.includes(m.email)) {
         memberEmails.push(m.email);
@@ -1533,9 +1544,12 @@ const handleOpenForum = (audit: any, form: any = null) => {
     });
 
     // Add NCR specific stakeholders
-    if (ncr.hodEmail && !memberEmails.includes(ncr.hodEmail)) memberEmails.push(ncr.hodEmail);
-    if (ncr.auditorEmail && !memberEmails.includes(ncr.auditorEmail)) memberEmails.push(ncr.auditorEmail);
-    if (ncr.auditeeEmail && !memberEmails.includes(ncr.auditeeEmail)) memberEmails.push(ncr.auditeeEmail);
+    if (ncr.hodEmail && !memberEmails.includes(ncr.hodEmail))
+      memberEmails.push(ncr.hodEmail);
+    if (ncr.auditorEmail && !memberEmails.includes(ncr.auditorEmail))
+      memberEmails.push(ncr.auditorEmail);
+    if (ncr.auditeeEmail && !memberEmails.includes(ncr.auditeeEmail))
+      memberEmails.push(ncr.auditeeEmail);
 
     // Ensure current logged-in user is included
     if (user?.email && !memberEmails.includes(user.email)) {
@@ -1556,13 +1570,13 @@ const handleOpenForum = (audit: any, form: any = null) => {
       auditeeName: ncr.auditeeName || user?.name,
       hodEmail: ncr.hodEmail || null,
       hodName: ncr.hodName || null,
-      memberEmails: memberEmails, // ✅ Now correctly includes MASTER, AUDIT_MANAGER, HOD, etc.
+      memberEmails: memberEmails, // ? Now correctly includes MASTER, AUDIT_MANAGER, HOD, etc.
     });
-    
+
     setForumModalVisible(true);
   };
 
-    const open8DForum = async (ncr: any) => {
+  const open8DForum = async (ncr: any) => {
     if (!ncr) return;
     setSelected8DNCR(ncr);
     setEightDTeamMembers([]);
@@ -1570,19 +1584,33 @@ const handleOpenForum = (audit: any, form: any = null) => {
     setLoadingTeamMembers(true);
     try {
       const eightDEventId = `8D-${ncr.ncrNumber}`;
-      const responseData = await apiFetch(`/eightd/data/${eightDEventId}`).catch(() => null);
-      
+      const responseData = await apiFetch(
+        `/eightd/data/${eightDEventId}`,
+      ).catch(() => null);
+
       if (responseData?.success && responseData.data) {
         const d0Data = responseData.data.content?.d0?.[0] || {};
-        const emails = Array.isArray(d0Data.additionalEmails) ? d0Data.additionalEmails : [];
+        const emails = Array.isArray(d0Data.additionalEmails)
+          ? d0Data.additionalEmails
+          : [];
         setEightDTeamMembers(emails);
       } else {
-        const fallback = [user?.email, ncr.hodEmail, ncr.auditorEmail, ncr.auditeeEmail].filter(Boolean);
+        const fallback = [
+          user?.email,
+          ncr.hodEmail,
+          ncr.auditorEmail,
+          ncr.auditeeEmail,
+        ].filter(Boolean);
         setEightDTeamMembers(fallback);
       }
     } catch (err) {
-      console.error('Failed to fetch 8D team members:', err);
-      const fallback = [user?.email, ncr.hodEmail, ncr.auditorEmail, ncr.auditeeEmail].filter(Boolean);
+      console.error("Failed to fetch 8D team members:", err);
+      const fallback = [
+        user?.email,
+        ncr.hodEmail,
+        ncr.auditorEmail,
+        ncr.auditeeEmail,
+      ].filter(Boolean);
       setEightDTeamMembers(fallback);
     } finally {
       setLoadingTeamMembers(false);
@@ -1627,7 +1655,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
   if (isFetching) {
     return (
       <View
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
         <ActivityIndicator
@@ -1673,8 +1701,8 @@ const handleOpenForum = (audit: any, form: any = null) => {
             {/* Header */}
             {/* Header */}
             {isMobile ? (
-              // ✅ MOBILE LAYOUT: Stacked vertically to prevent squishing
-              <View className="gap-4 mb-6">
+              // ? MOBILE LAYOUT: Stacked vertically to prevent squishing
+              <View className="mb-6 gap-4">
                 <View>
                   <Text className="text-2xl font-bold text-slate-800">
                     Auditee Dashboard
@@ -1697,7 +1725,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
                   <TouchableOpacity
                     onPress={handleRefresh}
                     disabled={refreshing}
-                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
+                    className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                   >
                     {refreshing ? (
                       <ActivityIndicator
@@ -1714,8 +1742,8 @@ const handleOpenForum = (audit: any, form: any = null) => {
                 </View>
               </View>
             ) : (
-              // ✅ DESKTOP/TABLET LAYOUT: Side-by-side
-              <View className="flex-row items-center justify-between gap-4 mb-6">
+              // ? DESKTOP/TABLET LAYOUT: Side-by-side
+              <View className="mb-6 flex-row items-center justify-between gap-4">
                 <View className="flex-1">
                   <Text className="text-2xl font-bold text-slate-800">
                     Auditee Dashboard
@@ -1738,7 +1766,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
                   <TouchableOpacity
                     onPress={handleRefresh}
                     disabled={refreshing}
-                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl"
+                    className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                   >
                     {refreshing ? (
                       <ActivityIndicator
@@ -1756,12 +1784,12 @@ const handleOpenForum = (audit: any, form: any = null) => {
               </View>
             )}
 
-            {/* ✅ Dashboard Overview Stats (ONLY shows on "my-audits" tab) */}
+            {/* ? Dashboard Overview Stats (ONLY shows on "my-audits" tab) */}
             {activeTab === "my-audits" && (
               <View className="mb-6">
-                <View className="flex-row items-center gap-2 mb-4">
+                <View className="mb-4 flex-row items-center gap-2">
                   <View
-                    className="p-1.5 rounded-lg"
+                    className="rounded-lg p-1.5"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <FileText size={16} color={NAVBAR_COLORS.primary} />
@@ -1776,7 +1804,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
 
             {/* Search & View Mode Toggle */}
             {activeTab === "my-audits" && (
-              <View className="flex-row flex-wrap items-center justify-between gap-3 mb-6">
+              <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
                 <View className="relative flex-1">
                   <View className="absolute left-3 top-3.5">
                     <Search size={18} color="#94a3b8" />
@@ -1785,14 +1813,14 @@ const handleOpenForum = (audit: any, form: any = null) => {
                     placeholder="Search audits..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    className="w-full py-3 pl-10 pr-4 text-sm bg-white border shadow-sm border-slate-200 rounded-xl"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm shadow-sm"
                     placeholderTextColor="#94a3b8"
                   />
                 </View>
-                <View className="flex-row gap-1 p-1 bg-white border shadow-sm border-slate-200 rounded-xl">
+                <View className="flex-row gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
                   <TouchableOpacity
                     onPress={() => setViewMode("grid")}
-                    className={`p-2.5 rounded-lg ${viewMode === "grid" ? "bg-blue-600" : "bg-white"}`}
+                    className={`rounded-lg p-2.5 ${viewMode === "grid" ? "bg-blue-600" : "bg-white"}`}
                   >
                     <Grid3x3
                       size={18}
@@ -1801,7 +1829,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => setViewMode("list")}
-                    className={`p-2.5 rounded-lg ${viewMode === "list" ? "bg-blue-600" : "bg-white"}`}
+                    className={`rounded-lg p-2.5 ${viewMode === "list" ? "bg-blue-600" : "bg-white"}`}
                   >
                     <List
                       size={18}
@@ -1815,8 +1843,8 @@ const handleOpenForum = (audit: any, form: any = null) => {
             {/* Content: Grid vs List View */}
             {activeTab === "my-audits" &&
               (filteredAudits.length === 0 ? (
-                <View className="items-center py-16 text-center bg-white border shadow-sm rounded-2xl border-slate-200">
-                  <View className="flex items-center justify-center w-16 h-16 mb-4 shadow-md rounded-2xl bg-blue-50">
+                <View className="items-center rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
+                  <View className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 shadow-md">
                     <FileText size={32} color="#2563eb" />
                   </View>
                   <Text className="text-lg font-semibold text-slate-700">
@@ -1841,7 +1869,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
                         formDetails={audit.formDetails}
                         totalForms={audit.totalForms}
                         completedForms={audit.completedForms}
-                        onOpenForum={handleOpenForum}  // ✅ Change this
+                        onOpenForum={handleOpenForum} // ? Change this
                       />
                     </View>
                   ))}
@@ -1858,18 +1886,18 @@ const handleOpenForum = (audit: any, form: any = null) => {
                       formDetails={audit.formDetails}
                       totalForms={audit.totalForms}
                       completedForms={audit.completedForms}
-                      onOpenForum={handleOpenForum}  // ✅ Change this
+                      onOpenForum={handleOpenForum} // ? Change this
                     />
                   ))}
                 </View>
               ))}
 
-            {/* ✅ UPDATED: NCR Overview Stats (Uses StatCardsContainer for proper width) */}
+            {/* ? UPDATED: NCR Overview Stats (Uses StatCardsContainer for proper width) */}
             {(activeTab === "ncr-pending" || activeTab === "my-ncrs") && (
               <View className="mb-6">
-                <View className="flex-row items-center gap-2 mb-4">
+                <View className="mb-4 flex-row items-center gap-2">
                   <View
-                    className="p-1.5 rounded-lg"
+                    className="rounded-lg p-1.5"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <AlertCircle size={16} color={NAVBAR_COLORS.primary} />
@@ -1884,22 +1912,22 @@ const handleOpenForum = (audit: any, form: any = null) => {
             {/* NCR Tabs */}
             {/* NCR Tabs */}
             {/* NCR Tabs */}
-{activeTab === "ncr-pending" && (
-  <NcrPendingList
-    pendingNcrAudits={pendingNcrReviews}
-    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={openNCRForum}
-    onOpen8DForum={open8DForum} // ✅ ADD THIS
-  />
-)}
-{activeTab === "my-ncrs" && (
-  <NcrListTab
-    assignedNCRs={assignedNCRs}
-    onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
-    onOpenForum={openNCRForum}
-    onOpen8DForum={open8DForum} // ✅ ADD THIS
-  />
-)}
+            {activeTab === "ncr-pending" && (
+              <NcrPendingList
+                pendingNcrAudits={pendingNcrReviews}
+                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+                onOpenForum={openNCRForum}
+                onOpen8DForum={open8DForum} // ? ADD THIS
+              />
+            )}
+            {activeTab === "my-ncrs" && (
+              <NcrListTab
+                assignedNCRs={assignedNCRs}
+                onViewNcr={(id: string) => setActiveNcrViewConfig({ id })}
+                onOpenForum={openNCRForum}
+                onOpen8DForum={open8DForum} // ? ADD THIS
+              />
+            )}
           </View>
         </ScrollView>
       )}
@@ -1908,9 +1936,9 @@ const handleOpenForum = (audit: any, form: any = null) => {
       <Modal visible={showRejectModal} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="items-center justify-center flex-1 bg-slate-900/60"
+          className="flex-1 items-center justify-center bg-slate-900/60"
         >
-          <View className="w-[90%] max-w-md p-6 bg-white shadow-2xl rounded-3xl border border-slate-100">
+          <View className="w-[90%] max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
             <Text className="mb-4 text-lg font-bold text-slate-800">
               Reject Form
             </Text>
@@ -1923,18 +1951,18 @@ const handleOpenForum = (audit: any, form: any = null) => {
               placeholder="Reason..."
               multiline
               numberOfLines={3}
-              className="w-full h-24 p-3 text-sm bg-white border border-slate-200 rounded-xl"
+              className="h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
             />
-            <View className="flex-row justify-end gap-3 mt-6">
+            <View className="mt-6 flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={() => setShowRejectModal(false)}
-                className="px-5 py-2.5 text-sm font-semibold text-slate-700 rounded-xl border border-slate-200 bg-white"
+                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700"
               >
                 <Text>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={submitReject}
-                className="px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md bg-rose-600"
+                className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md"
               >
                 <Text>Reject</Text>
               </TouchableOpacity>
@@ -1946,9 +1974,9 @@ const handleOpenForum = (audit: any, form: any = null) => {
       <Modal visible={showNcrReviewModal} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="items-center justify-center flex-1 bg-slate-900/60"
+          className="flex-1 items-center justify-center bg-slate-900/60"
         >
-          <View className="w-[90%] max-w-md p-6 bg-white shadow-2xl rounded-3xl border border-slate-100">
+          <View className="w-[90%] max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
             <Text className="mb-4 text-lg font-bold text-slate-800">
               {reviewApproved ? "Approve" : "Reject"} NCR
             </Text>
@@ -1963,18 +1991,18 @@ const handleOpenForum = (audit: any, form: any = null) => {
               placeholder="Comment..."
               multiline
               numberOfLines={3}
-              className="w-full h-24 p-3 text-sm bg-white border border-slate-200 rounded-xl"
+              className="h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
             />
-            <View className="flex-row justify-end gap-3 mt-6">
+            <View className="mt-6 flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={() => setShowNcrReviewModal(false)}
-                className="px-5 py-2.5 text-sm font-semibold text-slate-700 rounded-xl border border-slate-200 bg-white"
+                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700"
               >
                 <Text>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={submitNcrReview}
-                className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md ${
+                className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md ${
                   reviewApproved ? "bg-emerald-600" : "bg-rose-600"
                 }`}
               >
@@ -1985,36 +2013,48 @@ const handleOpenForum = (audit: any, form: any = null) => {
         </KeyboardAvoidingView>
       </Modal>
       {/* Forum Modal */}
-{selectedAuditForForum && (
-  <AuditCheckSheetNCRForumModal
-    auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
-    auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
-    auditTitle={selectedAuditForForum.auditType || "Audit"}
-    auditStatus={selectedAuditForForum.status || "ACTIVE"}
-    auditType={selectedAuditForForum.auditType || ""}
-    department={selectedAuditForForum.department || ""}
-    auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
-    auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
-    auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
-    auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
-    hodEmail={selectedAuditForForum.hodEmail || null}
-    hodName={selectedAuditForForum.hodName || null}
-    memberEmails={selectedAuditForForum.memberEmails || []}
-    isOpen={forumModalVisible}
-    onClose={() => {
-      setForumModalVisible(false);
-      setSelectedAuditForForum(null);
-    }}
-    currentUser={user}
-    allUsers={allUsers}
-    onNCRCreated={() => {
-      handleRefresh();
-    }}
-    onNCRUpdated={() => {
-      handleRefresh();
-    }}
-  />
-)}
+      {selectedAuditForForum && (
+        <AuditCheckSheetNCRForumModal
+          auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
+          auditNumber={
+            selectedAuditForForum.auditNumber ||
+            selectedAuditForForum.id?.toString() ||
+            ""
+          }
+          auditTitle={selectedAuditForForum.auditType || "Audit"}
+          auditStatus={selectedAuditForForum.status || "ACTIVE"}
+          auditType={selectedAuditForForum.auditType || ""}
+          department={selectedAuditForForum.department || ""}
+          auditorId={
+            selectedAuditForForum.auditorId ||
+            selectedAuditForForum.leadAuditorId ||
+            null
+          }
+          auditorName={
+            selectedAuditForForum.auditorName ||
+            selectedAuditForForum.leadAuditorName ||
+            ""
+          }
+          auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
+          auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
+          hodEmail={selectedAuditForForum.hodEmail || null}
+          hodName={selectedAuditForForum.hodName || null}
+          memberEmails={selectedAuditForForum.memberEmails || []}
+          isOpen={forumModalVisible}
+          onClose={() => {
+            setForumModalVisible(false);
+            setSelectedAuditForForum(null);
+          }}
+          currentUser={user}
+          allUsers={allUsers}
+          onNCRCreated={() => {
+            handleRefresh();
+          }}
+          onNCRUpdated={() => {
+            handleRefresh();
+          }}
+        />
+      )}
 
       {/* 8D Forum Drawer */}
       <Modal visible={show8DForumDrawer} transparent animationType="slide">
@@ -2028,11 +2068,11 @@ const handleOpenForum = (audit: any, form: any = null) => {
               setEightDTeamMembers([]);
             }}
           />
-          <View className="w-full sm:w-1/2 h-full bg-white border-l border-gray-200 shadow-2xl absolute right-0">
+          <View className="absolute right-0 h-full w-full border-l border-gray-200 bg-white shadow-2xl sm:w-1/2">
             {selected8DNCR && (
               <View className="flex-1">
                 {loadingTeamMembers ? (
-                  <View className="items-center justify-center flex-1">
+                  <View className="flex-1 items-center justify-center">
                     <ActivityIndicator size="large" color="#00529B" />
                     <Text className="mt-3 text-sm text-gray-500">
                       Loading team members...

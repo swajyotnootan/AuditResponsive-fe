@@ -11,7 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  Download,
+  Eye,
   FileText,
   Filter,
   MessageSquare,
@@ -27,7 +27,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -40,10 +39,9 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // Adjust path if needed
 
-import { API_BASE_URL } from "@/config/apiConfig";
-import * as FileSystem from "expo-file-system/legacy"; // Required for mobile file saving
-import * as Sharing from "expo-sharing"; // Required for mobile share sheet
-
+// ✅ Import PDFViewer
+import PDFViewer from "@/components/audit/PDFViewer";
+import { pdfService } from "@/services/pdfService";
 
 // ══════ MNC STANDARD PALETTE ══════
 const COLORS = {
@@ -193,6 +191,8 @@ interface PlanInfo {
 interface Form4ViewProps {
   year?: number;
   onBack?: () => void;
+  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
+  allUsers?: any[]; // ✅ ADD
 }
 
 // ══════ REUSABLE COMPONENTS ══════
@@ -518,7 +518,12 @@ const ElementSelectionModal = ({
 };
 
 // ══════ MAIN COMPONENT ══════
-export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
+export default function Form4View({
+  year: propYear,
+  onBack,
+  onOpenForum, // ✅ ADD THIS
+  allUsers = [], // ✅ ADD THIS
+}: Form4ViewProps) {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement } = useAuth();
@@ -529,6 +534,13 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
+
+  // ✅ PDF Viewer State
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
 
   const [planData, setPlanData] = useState<DeptData[]>([]);
   const [planStatus, setPlanStatus] = useState("DRAFT");
@@ -557,6 +569,8 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   const [expandedDept, setExpandedDept] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showForm3Details, setShowForm3Details] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
   const [selectedMonthForElements, setSelectedMonthForElements] = useState<{
     deptIndex: number;
     month: string;
@@ -583,6 +597,74 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
     rejectedAt: null,
     rejectionReason: "",
   });
+
+  // ✅ Handle View PDF with Sharing
+  // In Form4View.tsx - Updated handleViewPDF
+
+  const handleViewPDF = async () => {
+    if (!user?.id) {
+      addToast("User session not ready. Please wait.", "warning");
+      return;
+    }
+    try {
+      setExporting(true);
+
+      await pdfService.viewPDF(
+        {
+          auditId: String(selectedYear),
+          type: "form4",
+          year: selectedYear,
+          userId: user.id, // ✅ ADD
+        },
+        (result) => {
+          setPDFViewer({
+            visible: true,
+            pdfData: result.pdfData,
+            fileName: result.fileName,
+          });
+          setExporting(false);
+        },
+      );
+    } catch (error) {
+      console.error("PDF View error:", error);
+      addToast("Failed to load PDF", "error");
+      setExporting(false);
+    }
+  };
+
+  // ✅ Handle Share Complete - Navigate to Forum
+  // In Form4View.tsx - Updated handleShareComplete
+
+  const handleShareComplete = (forumId?: string) => {
+    console.log("🟡 [Form4View] onShareComplete called with forumId:", forumId);
+
+    // Close PDF viewer
+    setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+
+    // Show toast
+    addToast("✅ PDF shared to forum successfully!", "success");
+
+    // Navigate to forum
+    if (forumId && onOpenForum) {
+      console.log("🟢 [Form4View] Calling onOpenForum with:", forumId);
+      setTimeout(() => {
+        onOpenForum(forumId);
+      }, 300);
+    }
+  };
+
+  // ✅ Handle Navigate to Forum
+  const handleNavigateToForum = (forumId: string) => {
+    console.log("🟣 [Form4View] onNavigateToForum called with:", forumId);
+    if (onOpenForum) {
+      console.log("🟢 [Form4View] Direct navigation via onOpenForum:", forumId);
+      onOpenForum(forumId);
+      setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+    } else {
+      console.log("🔴 [Form4View] onOpenForum not available!");
+      addToast("Please open the forum from the main menu", "info");
+    }
+  };
 
   // ─── HANDLERS ──────────────────────────────────────────────────────────────
 
@@ -770,9 +852,13 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   };
 
   const fetchForm3Data = async () => {
+    if (!user?.id) return;
     try {
-      const response = await apiClient.get(`/api/audit-plan/${selectedYear}`);
+      const response = await apiClient.get(
+        `/api/audit-plan/${selectedYear}?userId=${user.id}`,
+      );
       const data = response.data || response;
+      // ...
       const elementsByMonth: Record<string, string[]> = {};
       months.forEach((month) => {
         elementsByMonth[month] = [];
@@ -805,10 +891,11 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   };
 
   const fetchPlanData = async () => {
+    if (!user?.id) return;
     try {
       setLoading(true);
       const response = await apiClient.get(
-        `/api/department-plan/${selectedYear}`,
+        `/api/department-plan/${selectedYear}?userId=${user.id}`,
       );
       const data = response.data || response;
       if (data?.planItems?.length > 0) {
@@ -874,12 +961,14 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   };
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchForm3Data();
-      await fetchPlanData();
-    };
-    loadData();
-  }, [selectedYear]);
+    if (user?.id) {
+      const loadData = async () => {
+        await fetchForm3Data();
+        await fetchPlanData();
+      };
+      loadData();
+    }
+  }, [selectedYear, user?.id]);
 
   const handleAddElementsToMonth = (
     deptIndex: number,
@@ -1095,97 +1184,8 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   };
 
   const handleDownloadPDF = async () => {
-    setDownloadingPdf(true);
-    try {
-      const fileName = `Form4_Internal_Quality_Audit_Plan_${selectedYear}.pdf`;
-      const endpoint = `${API_BASE_URL}/api/department-plan/${selectedYear}/download`;
-
-      const response = await fetch(endpoint, {
-        method: "GET",
-        headers: { Accept: "application/pdf" },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch PDF: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-
-      // WEB BROWSER
-      if (Platform.OS === "web") {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", fileName);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        addToast("PDF downloaded successfully!", "success");
-      }
-      // NATIVE MOBILE (iOS / Android)
-      else {
-        const directory =
-          FileSystem.documentDirectory || FileSystem.cacheDirectory;
-        const fileUri = `${directory}${fileName}`;
-
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          try {
-            const base64data = reader.result as string;
-            const base64Content = base64data.split(",")[1];
-
-            await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-
-            const canShare = await Sharing.isAvailableAsync();
-            if (canShare) {
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/pdf",
-                dialogTitle: "Form 4 Internal Quality Audit Plan",
-              });
-              addToast("PDF ready to view/share!", "success");
-            } else {
-              addToast("PDF saved to device storage.", "success");
-            }
-          } catch (saveError: any) {
-            console.error("Error saving PDF:", saveError);
-            addToast(`Failed to save PDF: ${saveError.message}`, "error");
-          } finally {
-            setDownloadingPdf(false);
-          }
-        };
-        reader.onerror = () => {
-          addToast("Failed to read PDF data", "error");
-          setDownloadingPdf(false);
-        };
-        reader.readAsDataURL(blob);
-        return; // Exit early, the reader.onloadend handles the rest
-      }
-    } catch (error: any) {
-      console.error("PDF Download Error:", error);
-      addToast(error?.message || "Failed to download PDF", "error");
-    } finally {
-      if (Platform.OS === "web") {
-        setDownloadingPdf(false);
-      }
-    }
-  };
-
-  // Helper function to trigger the native share sheet
-  const shareFileOnMobile = async (uri: string) => {
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(uri, {
-        mimeType: "application/pdf",
-        dialogTitle: "Form 4 Internal Quality Audit Plan",
-        UTI: "com.adobe.pdf", // Helps iOS recognize the file type
-      });
-      addToast("PDF ready to view/share!", "success");
-    } else {
-      addToast("PDF saved to device storage.", "success");
-    }
+    // ✅ Use the view function instead
+    await handleViewPDF();
   };
 
   const getMonthStatusBadge = (status: string, hasElements: boolean) => {
@@ -1369,7 +1369,7 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
   return (
     <View style={styles.container}>
       {/* ✅ FIXED HEADER - Matches Form3View & UserManagement Look */}
-      <View className="px-4 pt-4 pb-3 bg-white border-b border-gray-200">
+      <View className="border-b border-gray-200 bg-white px-4 pb-3 pt-4">
         <View
           style={
             isDesktop
@@ -1379,18 +1379,18 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
         >
           {/* Top Row: Back, Icon, Title */}
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1 mr-4">
+            <View className="mr-4 flex-1 flex-row items-center">
               {/* Back Button */}
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
-                className="items-center justify-center w-10 h-10 mr-2 bg-gray-100 rounded-xl"
+                className="mr-2 h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
               >
                 <ArrowLeft size={20} color="#6b7280" />
               </TouchableOpacity>
 
               {/* Icon Box */}
               <View
-                className="items-center justify-center w-10 h-10 rounded-xl"
+                className="h-10 w-10 items-center justify-center rounded-xl"
                 style={{
                   backgroundColor: COLORS.primaryLight,
                   borderWidth: 1,
@@ -1401,7 +1401,7 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
               </View>
 
               {/* Title & Subtitle */}
-              <View className="flex-1 ml-3">
+              <View className="ml-3 flex-1">
                 <Text
                   className="text-lg font-bold text-gray-900"
                   numberOfLines={1}
@@ -1428,19 +1428,19 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
                     fetchForm3Data();
                     fetchPlanData();
                   }}
-                  className="p-2 bg-gray-100 rounded-lg"
+                  className="rounded-lg bg-gray-100 p-2"
                 >
                   <RefreshCw size={16} color="#6b7280" />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={handleDownloadPDF}
+                  onPress={handleViewPDF}
                   disabled={downloadingPdf}
-                  className="p-2 bg-gray-100 rounded-lg"
+                  className="rounded-lg bg-gray-100 p-2"
                 >
                   {downloadingPdf ? (
                     <ActivityIndicator size="small" color={COLORS.success} />
                   ) : (
-                    <Download size={16} color={COLORS.success} />
+                    <Eye size={16} color={COLORS.success} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -1449,7 +1449,7 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
 
           {/* Mobile Only: Controls drop to second row */}
           {!isDesktop && (
-            <View className="flex-row flex-wrap items-center justify-end gap-2 mt-3">
+            <View className="mt-3 flex-row flex-wrap items-center justify-end gap-2">
               {getPlanStatusBadge()}
               <YearFilter
                 selectedYear={selectedYear}
@@ -1461,15 +1461,20 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
                   fetchForm3Data();
                   fetchPlanData();
                 }}
-                className="p-2 bg-gray-100 rounded-lg"
+                className="rounded-lg bg-gray-100 p-2"
               >
                 <RefreshCw size={16} color="#6b7280" />
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={handleDownloadPDF}
-                className="p-2 bg-gray-100 rounded-lg"
+                onPress={handleViewPDF}
+                disabled={downloadingPdf}
+                className="rounded-lg bg-gray-100 p-2"
               >
-                <Download size={16} color={COLORS.success} />
+                {downloadingPdf ? (
+                  <ActivityIndicator size="small" color={COLORS.success} />
+                ) : (
+                  <Eye size={16} color={COLORS.success} />
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -2573,6 +2578,35 @@ export default function Form4View({ year: propYear, onBack }: Form4ViewProps) {
             elements,
           )
         }
+      />
+
+      {/* ✅ PDF Viewer with Sharing */}
+      <PDFViewer
+        visible={pdfViewer.visible}
+        pdfData={pdfViewer.pdfData}
+        fileName={pdfViewer.fileName}
+        auditId={String(selectedYear)}
+        auditNumber={`Form4-${selectedYear}`}
+        pdfType="form4" // ✅ ADD THIS - tells PDFViewer it's Form4
+        forumGroups={[
+          {
+            id: `AUDIT-${selectedYear}`,
+            name: `📋 Audit Review ${selectedYear}`,
+            type: "Audit",
+          },
+          {
+            id: "AUDIT-general-forum",
+            name: "📢 General Discussion",
+            type: "General",
+          },
+        ]}
+        onClose={() =>
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+        }
+        onShareComplete={handleShareComplete}
+        onNavigateToForum={handleNavigateToForum}
+        currentUser={user}
+        allUsers={allUsers}
       />
     </View>
   );

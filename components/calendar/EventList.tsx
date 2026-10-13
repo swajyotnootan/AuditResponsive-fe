@@ -1,16 +1,22 @@
 // EventList.tsx - FIXED with Avatar and proper status
 
-import { Calendar as CalendarIcon, Clock, Tag } from 'lucide-react-native';
-import moment from 'moment';
-import React from 'react';
-import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getEventColor, getStatusDisplay } from './CalendarUtils';
-import UserAvatar from './UserAvatar';
+import { Calendar as CalendarIcon, Clock, Tag } from "lucide-react-native";
+import moment from "moment";
+import React from "react";
+import {
+  SectionList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { getEventColor, getStatusDisplay } from "./CalendarUtils";
+import UserAvatar from "./UserAvatar";
 
 export default function EventList({ events, onEventClick, currentDate }: any) {
   // Group events by date
   const groupedEvents = events.reduce((acc: any, event: any) => {
-    const dateKey = event.start || 'Unknown';
+    const dateKey = event.start || "Unknown";
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(event);
     return acc;
@@ -18,53 +24,57 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
 
   const sections = Object.keys(groupedEvents)
     .sort()
-    .map(date => ({
+    .map((date) => ({
       title: date,
-      data: groupedEvents[date]
+      data: groupedEvents[date],
     }));
 
   const formatDate = (dateStr: string) => {
     const eventDate = moment(dateStr);
     const today = moment();
-    if (eventDate.isSame(today, 'day')) return 'Today';
-    if (eventDate.isSame(today.clone().add(1, 'day'), 'day')) return 'Tomorrow';
-    return eventDate.format('dddd, MMMM D, YYYY');
+    if (eventDate.isSame(today, "day")) return "Today";
+    if (eventDate.isSame(today.clone().add(1, "day"), "day")) return "Tomorrow";
+    return eventDate.format("dddd, MMMM D, YYYY");
   };
 
   const renderItem = ({ item }: any) => {
-    const isPast = moment(item.start).isBefore(moment(), 'day');
+    const isPast = moment(item.start).isBefore(moment(), "day");
     const color = getEventColor(item);
     const statusDisplay = getStatusDisplay(item);
-    
+
     // ✅ FIXED: Proper status check for badges
-    const isCompleted = item.isFullyCompleted || item.status === 'COMPLETED';
-    const isSubmitted = item.isSubmitted || item.status === 'SUBMITTED';
-    const isPending = item.status === 'PENDING_APPROVAL';
-    const isOverdue = item.status === 'OVERDUE';
+    const isCompleted = item.isFullyCompleted || item.status === "COMPLETED";
+    const isSubmitted = item.isSubmitted || item.status === "SUBMITTED";
+    const isPending = item.status === "PENDING_APPROVAL";
+    const isOverdue = item.status === "OVERDUE";
 
     return (
       <TouchableOpacity
         onPress={() => onEventClick(item)}
         style={[
           styles.eventCard,
-          isPast ? styles.eventCardPast : styles.eventCardActive
+          isPast ? styles.eventCardPast : styles.eventCardActive,
         ]}
         activeOpacity={0.7}
       >
         <View style={[styles.dotIndicator, { backgroundColor: color }]} />
         <View style={styles.eventContent}>
           <View style={styles.eventHeader}>
-            <Text style={[styles.eventTitle, isPast && styles.textPast]} numberOfLines={1}>
-              {item.auditType || 'Audit'}
+            <Text
+              style={[styles.eventTitle, isPast && styles.textPast]}
+              numberOfLines={1}
+            >
+              {item.auditType || "Audit"}
             </Text>
             <View style={styles.timeBadge}>
               <Clock size={12} color="#6b7280" />
               <Text style={styles.timeText}>
-                {item.startTime || '09:00 AM'} - {item.endTime || '10:00 AM'} IST
+                {item.startTime || "09:00 AM"} - {item.endTime || "10:00 AM"}{" "}
+                IST
               </Text>
             </View>
           </View>
-          
+
           {/* Department */}
           {item.department && (
             <View style={styles.detailRow}>
@@ -72,19 +82,19 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
               <Text style={styles.detailText}>{item.department}</Text>
             </View>
           )}
-          
+
           {/* ✅ FIXED: Auditor with Profile Photo */}
           {item.auditorName && (
             <View style={styles.auditorRow}>
-              <UserAvatar 
-                userId={item.auditorId} 
-                userName={item.auditorName} 
-                size="xs" 
-                showName={true} 
+              <UserAvatar
+                userId={item.auditorId}
+                userName={item.auditorName}
+                size="xs"
+                showName={true}
               />
             </View>
           )}
-          
+
           {/* ✅ FIXED: Status badges with proper conditions */}
           <View style={styles.statusRow}>
             {isCompleted && (
@@ -121,7 +131,9 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
       <View style={styles.emptyContainer}>
         <CalendarIcon size={48} color="#d1d5db" />
         <Text style={styles.emptyTitle}>No events found</Text>
-        <Text style={styles.emptyText}>No audits match your current filters.</Text>
+        <Text style={styles.emptyText}>
+          No audits match your current filters.
+        </Text>
       </View>
     );
   }
@@ -135,7 +147,9 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderText}>{formatDate(title)}</Text>
           <View style={styles.sectionLine} />
-          <Text style={styles.sectionCount}>{groupedEvents[title].length} events</Text>
+          <Text style={styles.sectionCount}>
+            {groupedEvents[title].length} events
+          </Text>
         </View>
       )}
       contentContainerStyle={{ paddingBottom: 20 }}
@@ -144,166 +158,166 @@ export default function EventList({ events, onEventClick, currentDate }: any) {
 }
 
 const styles = StyleSheet.create({
-  eventCard: { 
-    flexDirection: 'row', 
-    padding: 16, 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    marginBottom: 8 
+  eventCard: {
+    flexDirection: "row",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
   },
-  eventCardActive: { 
-    backgroundColor: '#ffffff', 
-    borderColor: '#e5e7eb' 
+  eventCardActive: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e5e7eb",
   },
-  eventCardPast: { 
-    backgroundColor: '#f9fafb', 
-    borderColor: '#e5e7eb', 
-    opacity: 0.75 
+  eventCardPast: {
+    backgroundColor: "#f9fafb",
+    borderColor: "#e5e7eb",
+    opacity: 0.75,
   },
-  dotIndicator: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    marginTop: 4, 
-    marginRight: 12 
+  dotIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 4,
+    marginRight: 12,
   },
-  eventContent: { 
-    flex: 1 
+  eventContent: {
+    flex: 1,
   },
-  eventHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 4 
+  eventHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
   },
-  eventTitle: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    color: '#111827', 
-    flex: 1 
+  eventTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
   },
-  textPast: { 
-    color: '#4b5563' 
+  textPast: {
+    color: "#4b5563",
   },
-  timeBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#f3f4f6', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 12, 
-    flexShrink: 0 
+  timeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f3f4f6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexShrink: 0,
   },
-  timeText: { 
-    fontSize: 12, 
-    fontWeight: '500', 
-    color: '#374151', 
-    marginLeft: 4 
+  timeText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+    marginLeft: 4,
   },
-  detailRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginTop: 2 
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
   },
-  detailText: { 
-    fontSize: 13, 
-    color: '#6b7280', 
-    marginLeft: 4 
+  detailText: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginLeft: 4,
   },
-  auditorRow: { 
-    marginTop: 4 
+  auditorRow: {
+    marginTop: 4,
   },
-  statusRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 6, 
-    marginTop: 4 
+  statusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
   },
-  completedBadge: { 
-    backgroundColor: '#ecfdf5', 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 12 
+  completedBadge: {
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  completedText: { 
-    fontSize: 11, 
-    fontWeight: '600', 
-    color: '#047857' 
+  completedText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#047857",
   },
-  submittedBadge: { 
-    backgroundColor: '#eff6ff', 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 12 
+  submittedBadge: {
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  submittedText: { 
-    fontSize: 11, 
-    fontWeight: '600', 
-    color: '#1d4ed8' 
+  submittedText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#1d4ed8",
   },
-  pendingBadge: { 
-    backgroundColor: '#fefce8', 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 12 
+  pendingBadge: {
+    backgroundColor: "#fefce8",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  pendingText: { 
-    fontSize: 11, 
-    fontWeight: '600', 
-    color: '#a16207' 
+  pendingText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#a16207",
   },
-  overdueBadge: { 
-    backgroundColor: '#fef2f2', 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 12 
+  overdueBadge: {
+    backgroundColor: "#fef2f2",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
-  overdueText: { 
-    fontSize: 11, 
-    fontWeight: '600', 
-    color: '#b91c1c' 
+  overdueText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#b91c1c",
   },
-  statusText: { 
-    fontSize: 11, 
-    fontWeight: '500', 
-    color: '#6b7280' 
+  statusText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#6b7280",
   },
-  emptyContainer: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    padding: 24 
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
-  emptyTitle: { 
-    fontSize: 18, 
-    fontWeight: '600', 
-    color: '#1f2937', 
-    marginTop: 16 
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginTop: 16,
   },
-  emptyText: { 
-    fontSize: 14, 
-    color: '#6b7280', 
-    marginTop: 4 
+  emptyText: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 4,
   },
-  sectionHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 12 
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
   },
-  sectionHeaderText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: '#1e3a8a', 
-    marginRight: 12 
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e3a8a",
+    marginRight: 12,
   },
-  sectionLine: { 
-    flex: 1, 
-    height: 1, 
-    backgroundColor: '#e5e7eb' 
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#e5e7eb",
   },
-  sectionCount: { 
-    fontSize: 12, 
-    color: '#6b7280', 
-    marginLeft: 12 
-  }
+  sectionCount: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginLeft: 12,
+  },
 });

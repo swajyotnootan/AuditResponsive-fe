@@ -1,6 +1,8 @@
 // Form5DetailedView.tsx
+import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi, User } from "@/services/auditScheduleApi";
+import { pdfService } from "@/services/pdfService";
 import DateTimePicker from "@react-native-community/datetimepicker"; // ← ADD THIS LINE
 import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from "expo-file-system/legacy";
@@ -11,6 +13,7 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  CheckSquare,
   Coffee,
   Edit2,
   FileText,
@@ -22,9 +25,16 @@ import {
   Sunrise,
   Sunset,
   Trash2,
-  X
+  X,
+  XCircle,
 } from "lucide-react-native";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -64,6 +74,37 @@ const COLORS = {
   purpleBorder: "#DDD6FE",
 };
 
+// ═════ PLANT FILTER HELPERS ═════
+type PlantKey = string | number | null | undefined;
+
+const PLANT_FIELD_CANDIDATES = [
+  "plantId",
+  "plant_id",
+  "plant",
+  "plantCode",
+  "plantName",
+] as const;
+
+const plantOf = (row: any): string | number | null => {
+  if (!row) return null;
+  for (const k of PLANT_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+};
+
+const samePlant = (row: any, plantId: PlantKey): boolean => {
+  if (plantId === null || plantId === undefined || plantId === "") return true;
+  const rowPlant = plantOf(row);
+  if (rowPlant === null) return true;
+  return String(rowPlant) === String(plantId);
+};
+
+const filterByPlant = <T,>(rows: T[], plantId: PlantKey): T[] => {
+  if (plantId === null || plantId === undefined || plantId === "") return rows;
+  return rows.filter((r) => samePlant(r as any, plantId));
+};
 // ═════ CONSTANTS ═════
 const monthNumber: Record<string, number> = {
   Jan: 0,
@@ -238,7 +279,7 @@ const Card = ({
   style?: any;
 }) => (
   <View
-    className={`rounded-xl border border-gray-200 bg-white shadow-sm mb-4 ${className}`}
+    className={`mb-4 rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}
     style={style}
   >
     {children}
@@ -269,7 +310,7 @@ const ActionButton = ({
   <TouchableOpacity
     onPress={onPress}
     disabled={disabled || loading}
-    className={`h-10 px-5 rounded-lg border flex-row items-center justify-center gap-2 ${disabled || loading ? "bg-gray-100 border-gray-200" : ""} ${className}`}
+    className={`h-10 flex-row items-center justify-center gap-2 rounded-lg border px-5 ${disabled || loading ? "border-gray-200 bg-gray-100" : ""} ${className}`}
     style={{
       backgroundColor: disabled || loading ? undefined : bgColor,
       borderColor:
@@ -332,11 +373,11 @@ const AlertBanner = ({
   const s = stylesMap[type] || stylesMap.info;
   return (
     <View
-      className="flex-row gap-3 p-4 mb-4 border rounded-xl"
+      className="mb-4 flex-row gap-3 rounded-xl border p-4"
       style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
       <View
-        className="items-center justify-center bg-white border rounded-lg w-9 h-9"
+        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
         style={{ borderColor: s.border }}
       >
         <Icon size={18} color={s.iconColor} />
@@ -400,17 +441,17 @@ const ActionModal = ({
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        className="items-center justify-center flex-1 p-5 bg-black/30"
+        className="flex-1 items-center justify-center bg-black/30 p-5"
         activeOpacity={1}
         onPress={onClose}
       >
         <TouchableOpacity
           activeOpacity={1}
-          className="w-full max-w-md overflow-hidden bg-white rounded-2xl"
+          className="w-full max-w-md overflow-hidden rounded-2xl bg-white"
         >
-          <View className="flex-row items-center gap-4 p-6 border-b border-gray-200">
+          <View className="flex-row items-center gap-4 border-b border-gray-200 p-6">
             <View
-              className="items-center justify-center border w-11 h-11 rounded-xl"
+              className="h-11 w-11 items-center justify-center rounded-xl border"
               style={{ backgroundColor: iconBg, borderColor: iconBorder }}
             >
               <Icon size={22} color={iconColor} />
@@ -422,7 +463,7 @@ const ActionModal = ({
           </View>
           <View className="p-6">
             <TextInput
-              className="w-full p-3 rounded-lg border border-gray-200 bg-gray-50 text-gray-800 min-h-[120px]"
+              className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-800"
               value={value}
               onChangeText={setValue}
               multiline
@@ -432,10 +473,10 @@ const ActionModal = ({
               textAlignVertical="top"
             />
           </View>
-          <View className="flex-row justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+          <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
             <TouchableOpacity
               onPress={onClose}
-              className="justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
+              className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
             >
               <Text className="text-sm font-semibold text-gray-700">
                 Cancel
@@ -444,7 +485,7 @@ const ActionModal = ({
             <TouchableOpacity
               onPress={onSubmit}
               disabled={!value.trim() || submitting}
-              className="flex-row items-center justify-center h-10 gap-2 px-5 rounded-lg"
+              className="h-10 flex-row items-center justify-center gap-2 rounded-lg px-5"
               style={{
                 backgroundColor:
                   !value.trim() || submitting ? "#F1F5F9" : submitBg,
@@ -525,6 +566,8 @@ interface Form5DetailedViewProps {
   startDate?: string;
   endDate?: string;
   onBack?: () => void;
+  allUsers?: any[]; // ← Add this
+  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
 }
 
 export default function Form5DetailedView({
@@ -535,10 +578,12 @@ export default function Form5DetailedView({
   startDate: preStartDate,
   endDate: preEndDate,
   onBack,
+  onOpenForum,
+  allUsers = [],
 }: Form5DetailedViewProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { user, isAuditManager, isTopManagement } = useAuth();
+  const { user, isAuditManager, isTopManagement, isLeadAuditor } = useAuth();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -610,8 +655,14 @@ export default function Form5DetailedView({
   >([]);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
   const [changeRequestReason, setChangeRequestReason] = useState("");
+  const [showLaRejectModal, setShowLaRejectModal] = useState(false);
+  const [laRejectReason, setLaRejectReason] = useState("");
   const [departmentAuditors, setDepartmentAuditors] = useState<User[]>([]);
   const [departmentAuditees, setDepartmentAuditees] = useState<User[]>([]);
+  const [competentAuditors, setCompetentAuditors] = useState<User[]>([]);
+  const [competentAuditees, setCompetentAuditees] = useState<User[]>([]);
+  const [loadingCompetentAuditors, setLoadingCompetentAuditors] =
+    useState(false);
   const [loadingDepartmentUsers, setLoadingDepartmentUsers] = useState(false);
   const [selectedAuditDepartment, setSelectedAuditDepartment] = useState("");
   const [tempScheduleId, setTempScheduleId] = useState<number | null>(null);
@@ -648,6 +699,93 @@ export default function Form5DetailedView({
   const [bulkDepartmentAuditees, setBulkDepartmentAuditees] = useState<User[]>(
     [],
   );
+
+  // ✅ NEW: bulk competent users (mirrors AddScheduleModal logic)
+  const [bulkCompetentAuditors, setBulkCompetentAuditors] = useState<User[]>(
+    [],
+  );
+  const [bulkCompetentAuditees, setBulkCompetentAuditees] = useState<User[]>(
+    [],
+  );
+  const [bulkLoadingCompetent, setBulkLoadingCompetent] = useState(false);
+  const [bulkDepartmentTeamInfo, setBulkDepartmentTeamInfo] =
+    useState<DepartmentTeamInfo>({
+      leadAuditorId: null,
+      leadAuditorName: null,
+      teamAuditorIds: [],
+      teamAuditorNames: [],
+      auditeeIds: [],
+      auditeeNames: [],
+    });
+
+  const bulkAvailableAuditors: User[] = useMemo(() => {
+    const teamIds = bulkDepartmentTeamInfo.teamAuditorIds;
+
+    if (teamIds.length > 0) {
+      const result: User[] = [];
+      const seen = new Set<number>();
+      for (const a of bulkDepartmentAuditors) {
+        const id = Number(a.id);
+        if (teamIds.includes(id) && !seen.has(id)) {
+          seen.add(id);
+          result.push(a);
+        }
+      }
+      for (const id of teamIds) {
+        if (!seen.has(id)) {
+          const fromCompetent = bulkCompetentAuditors.find(
+            (a) => Number(a.id) === id,
+          );
+          if (fromCompetent) {
+            seen.add(id);
+            result.push(fromCompetent);
+          }
+        }
+      }
+      return result;
+    }
+
+    return bulkCompetentAuditors;
+  }, [
+    bulkDepartmentTeamInfo.teamAuditorIds,
+    bulkDepartmentAuditors,
+    bulkCompetentAuditors,
+  ]);
+
+  const bulkAvailableAuditees: User[] = useMemo(() => {
+    const teamIds = bulkDepartmentTeamInfo.auditeeIds;
+
+    if (teamIds.length > 0) {
+      const result: User[] = [];
+      const seen = new Set<number>();
+      for (const a of bulkDepartmentAuditees) {
+        const id = Number(a.id);
+        if (teamIds.includes(id) && !seen.has(id)) {
+          seen.add(id);
+          result.push(a);
+        }
+      }
+      for (const id of teamIds) {
+        if (!seen.has(id)) {
+          const fromCompetent = bulkCompetentAuditees.find(
+            (a) => Number(a.id) === id,
+          );
+          if (fromCompetent) {
+            seen.add(id);
+            result.push(fromCompetent);
+          }
+        }
+      }
+      return result;
+    }
+
+    return bulkCompetentAuditees;
+  }, [
+    bulkDepartmentTeamInfo.auditeeIds,
+    bulkDepartmentAuditees,
+    bulkCompetentAuditees,
+  ]);
+
   const userRef = useRef(user);
   useEffect(() => {
     userRef.current = user;
@@ -676,7 +814,11 @@ export default function Form5DetailedView({
     isSpecialEvent: false,
     specialEventType: "",
   });
-
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
   const getUserIdAsNumber = (): number => {
     if (!user?.id) return 0;
     if (typeof user.id === "number") return user.id;
@@ -881,61 +1023,69 @@ export default function Form5DetailedView({
     auditElements: string[];
   }[] => {
     if (!bulkData.fromDate || !bulkData.toDate) return [];
-    const fromDate = new Date(bulkData.fromDate);
-    const toDate = new Date(bulkData.toDate);
+
+    const fromDate = new Date(`${bulkData.fromDate}T00:00:00`);
+    const toDate = new Date(`${bulkData.toDate}T00:00:00`);
     const weeksInRange = new Set<string>();
+
     for (
       let dt = new Date(fromDate);
       dt <= toDate;
       dt.setDate(dt.getDate() + 1)
     ) {
-      const dateStr = dt.toISOString().split("T")[0];
+      // ✅ Use local ISO, not toISOString()
+      const dateStr = toISODate(dt);
       weeksInRange.add(getWeekNumber(dateStr));
     }
+
     const departmentsMap = new Map<
       string,
       { department: string; auditElements: string[] }
     >();
-    const relevantSchedules = basicSchedules.filter(
-      (schedule) =>
-        weeksInRange.has(schedule.week) &&
-        schedule.department &&
-        schedule.department !== "OPENING" &&
-        schedule.department !== "CLOSING" &&
-        schedule.approvalStatus === "APPROVED",
-    );
-    relevantSchedules.forEach((schedule) => {
-      let auditElements: string[] = [];
-      if (schedule.auditElements) {
-        if (typeof schedule.auditElements === "string") {
-          try {
-            auditElements = JSON.parse(schedule.auditElements);
-          } catch (_e) {
-            auditElements = [];
+
+    basicSchedules
+      .filter(
+        (schedule) =>
+          weeksInRange.has(schedule.week) &&
+          schedule.department &&
+          schedule.department !== "OPENING" &&
+          schedule.department !== "CLOSING" &&
+          schedule.approvalStatus === "APPROVED",
+      )
+      .forEach((schedule) => {
+        let auditElements: string[] = [];
+        if (schedule.auditElements) {
+          if (typeof schedule.auditElements === "string") {
+            try {
+              auditElements = JSON.parse(schedule.auditElements);
+            } catch {
+              auditElements = [];
+            }
+          } else if (Array.isArray(schedule.auditElements)) {
+            auditElements = schedule.auditElements;
           }
-        } else if (Array.isArray(schedule.auditElements)) {
-          auditElements = schedule.auditElements;
         }
-      }
-      let filteredElements = auditElements;
-      if (globalAuditType) {
-        filteredElements = auditElements.filter((element) =>
-          element.toLowerCase().includes(globalAuditType.toLowerCase()),
-        );
-      }
-      if (
-        filteredElements.length > 0 &&
-        !departmentsMap.has(schedule.department)
-      ) {
-        departmentsMap.set(schedule.department, {
-          department: schedule.department,
-          auditElements: filteredElements,
-        });
-      }
-    });
+
+        let filteredElements = auditElements;
+        if (globalAuditType && globalAuditType !== "") {
+          filteredElements = auditElements.filter((el) =>
+            el.toLowerCase().includes(globalAuditType.toLowerCase()),
+          );
+        }
+
+        // ✅ Match normal schedule: show dept if no global type OR has matching elements
+        const shouldShow = !globalAuditType || filteredElements.length > 0;
+        if (shouldShow && !departmentsMap.has(schedule.department)) {
+          departmentsMap.set(schedule.department, {
+            department: schedule.department,
+            auditElements:
+              filteredElements.length > 0 ? filteredElements : auditElements,
+          });
+        }
+      });
+
     return Array.from(departmentsMap.values());
   }, [basicSchedules, bulkData.fromDate, bulkData.toDate, globalAuditType]);
-
   const getAvailableAuditors = useCallback((): User[] => {
     const auditorIds: number[] = [];
     if (headerData.leadAuditorId) auditorIds.push(headerData.leadAuditorId);
@@ -1008,6 +1158,12 @@ export default function Form5DetailedView({
       }
       let teamIds: number[] = [];
       let teamNames: string[] = [];
+
+      // Resolve primary auditor ID early (used for merging below)
+      const primaryAuditorId =
+        matchedSchedule.auditorId ?? matchedSchedule.leadAuditorId ?? null;
+
+      // 1. Prefer teamAuditorIds, else coAuditorIds
       if (matchedSchedule.teamAuditorIds) {
         teamIds = matchedSchedule.teamAuditorIds as number[];
         if (typeof teamIds === "string") {
@@ -1031,17 +1187,17 @@ export default function Form5DetailedView({
       teamIds = Array.isArray(teamIds)
         ? teamIds.map((id) => parseInt(id as any)).filter((id) => !isNaN(id))
         : [];
-      if (matchedSchedule.teamAuditorNames) {
-        teamNames = matchedSchedule.teamAuditorNames as string[];
-        if (typeof teamNames === "string") {
-          try {
-            teamNames = JSON.parse(teamNames);
-          } catch (_e) {
-            teamNames = [];
-          }
+
+      // ✅ 2. Merge the PRIMARY auditor into the team (if not already present)
+      if (primaryAuditorId != null) {
+        const primary = parseInt(primaryAuditorId as any);
+        if (!isNaN(primary) && !teamIds.includes(primary)) {
+          teamIds.unshift(primary); // put primary first
         }
       }
-      if (teamNames.length === 0 && matchedSchedule.coAuditorNames) {
+      // Prefer coAuditorNames first (it already includes primary + co-auditors
+      // on the fixed backend), then fall back to teamAuditorNames
+      if (matchedSchedule.coAuditorNames) {
         teamNames = matchedSchedule.coAuditorNames as string[];
         if (typeof teamNames === "string") {
           try {
@@ -1051,6 +1207,33 @@ export default function Form5DetailedView({
           }
         }
       }
+      if (teamNames.length === 0 && matchedSchedule.teamAuditorNames) {
+        teamNames = matchedSchedule.teamAuditorNames as string[];
+        if (typeof teamNames === "string") {
+          try {
+            teamNames = JSON.parse(teamNames);
+          } catch (_e) {
+            teamNames = [];
+          }
+        }
+      }
+
+      // ✅ Ensure the primary auditor's name is present
+      const primaryName =
+        matchedSchedule.auditorName ?? matchedSchedule.leadAuditorName ?? null;
+      if (
+        primaryName &&
+        typeof primaryName === "string" &&
+        primaryName.trim() &&
+        !teamNames.includes(primaryName.trim())
+      ) {
+        teamNames.unshift(primaryName.trim());
+      }
+
+      // Cleanup any non-string values
+      teamNames = teamNames
+        .filter((n: any) => typeof n === "string" && n.trim().length > 0)
+        .map((n: string) => n.trim());
       let auditeeIds: number[] = [];
       let auditeeNames: string[] = [];
       if (matchedSchedule.auditeeIds) {
@@ -1118,43 +1301,425 @@ export default function Form5DetailedView({
     }
   }, []);
 
-  const fetchDepartmentUsers = useCallback(async (departmentCode: string) => {
-    if (!departmentCode) {
-      setDepartmentAuditors([]);
-      setDepartmentAuditees([]);
-      return;
-    }
-    const enumValue =
-      departmentDisplayToEnum[departmentCode] ||
-      departmentCode.toUpperCase().replace(/[&\s/]+/g, "_");
-    setLoadingDepartmentUsers(true);
-    try {
-      const token = "YOUR_AUTH_TOKEN";
-      const headers = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      };
-      const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
-      const auditorsRes = await fetch(auditorsUrl, { headers });
-      const auditorsData = await auditorsRes.json();
-      setDepartmentAuditors(
-        Array.isArray(auditorsData) ? auditorsData : auditorsData.data || [],
-      );
-      const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
-      const auditeesRes = await fetch(auditeesUrl, { headers });
-      const auditeesData = await auditeesRes.json();
-      setDepartmentAuditees(
-        Array.isArray(auditeesData) ? auditeesData : auditeesData.data || [],
-      );
-    } catch (error) {
-      console.error("Error fetching department users:", error);
-      showToast("Failed to load department users", "error");
-      setDepartmentAuditors([]);
-      setDepartmentAuditees([]);
-    } finally {
-      setLoadingDepartmentUsers(false);
-    }
-  }, []);
+  const fetchDepartmentUsers = useCallback(
+    async (departmentCode: string, forBulk: boolean = false) => {
+      console.log("🟦 [fetchDepartmentUsers] START", {
+        departmentCode,
+        forBulk,
+        enumValue: departmentDisplayToEnum[departmentCode] || departmentCode,
+        plantId: (user as any)?.plantId,
+      });
+
+      // ── Guard: no department ─────────────────────────────────
+      if (!departmentCode) {
+        if (forBulk) {
+          setBulkDepartmentAuditors([]);
+          setBulkDepartmentAuditees([]);
+        } else {
+          setDepartmentAuditors([]);
+          setDepartmentAuditees([]);
+        }
+        return;
+      }
+
+      // ── Guard: no plant ──────────────────────────────────────
+      const plantId = (user as any)?.plantId;
+      if (!plantId) {
+        console.warn("⚠️ No plantId — cannot fetch department users");
+        if (forBulk) {
+          setBulkDepartmentAuditors([]);
+          setBulkDepartmentAuditees([]);
+        } else {
+          setDepartmentAuditors([]);
+          setDepartmentAuditees([]);
+        }
+        return;
+      }
+
+      const enumValue =
+        departmentDisplayToEnum[departmentCode] || departmentCode;
+
+      // ── Loading flag ─────────────────────────────────────────
+      if (forBulk) {
+        setBulkLoadingCompetent(true);
+      } else {
+        setLoadingDepartmentUsers(true);
+      }
+
+      try {
+        // ── Fetch AUDITORS ─────────────────────────────────────
+        const auditorsRes = await auditScheduleApi
+          .getAuditorsByDepartment(enumValue)
+          .catch((err) => {
+            console.error("🔴 [fetchDepartmentUsers] auditors API FAILED", err);
+            return [] as User[];
+          });
+        const auditorsList = Array.isArray(auditorsRes)
+          ? auditorsRes
+          : (auditorsRes as any)?.data || [];
+
+        console.log("🟦 [fetchDepartmentUsers] AUDITORS from API", {
+          enumValue,
+          rawCount: Array.isArray(auditorsRes)
+            ? auditorsRes.length
+            : ((auditorsRes as any)?.data?.length ?? 0),
+          finalCount: auditorsList.length,
+          ids: auditorsList.map((u: any) => u.id),
+          names: auditorsList.map((u: any) => `${u.firstName} ${u.lastName}`),
+        });
+
+        // ── Fetch AUDITEES ─────────────────────────────────────
+        const auditeesRes = await auditScheduleApi
+          .getAuditeesByDepartment(enumValue, plantId)
+          .catch(() => [] as User[]);
+        const auditeesList = Array.isArray(auditeesRes)
+          ? auditeesRes
+          : (auditeesRes as any)?.data || [];
+
+        // ── Route to correct state ─────────────────────────────
+        if (forBulk) {
+          setBulkDepartmentAuditors(auditorsList);
+          setBulkDepartmentAuditees(auditeesList);
+        } else {
+          setDepartmentAuditors(auditorsList);
+          setDepartmentAuditees(auditeesList);
+        }
+      } catch (error) {
+        console.error("Error fetching department users:", error);
+        if (forBulk) {
+          setBulkDepartmentAuditors([]);
+          setBulkDepartmentAuditees([]);
+        } else {
+          setDepartmentAuditors([]);
+          setDepartmentAuditees([]);
+        }
+      } finally {
+        if (forBulk) {
+          setBulkLoadingCompetent(false);
+        } else {
+          setLoadingDepartmentUsers(false);
+        }
+      }
+    },
+    [user],
+  );
+
+  const fetchCompetentUsers = useCallback(
+    async (
+      departmentCode: string,
+      auditElements: string[],
+      teamAuditorIds: number[] = [],
+      teamAuditeeIds: number[] = [],
+    ) => {
+      console.log("🟩 [fetchCompetentUsers] START", {
+        departmentCode,
+        enumDept: departmentDisplayToEnum[departmentCode] || departmentCode,
+        auditElements,
+        teamAuditorIds,
+        teamAuditeeIds,
+        plantId: (user as any)?.plantId,
+      });
+
+      if (!departmentCode || !user?.id) {
+        setCompetentAuditors([]);
+        setCompetentAuditees([]);
+        return;
+      }
+
+      const plantId = (user as any)?.plantId;
+      if (!plantId) {
+        console.warn("⚠️ No plantId on user — cannot fetch competent users");
+        setCompetentAuditors([]);
+        setCompetentAuditees([]);
+        return;
+      }
+
+      setLoadingCompetentAuditors(true);
+      try {
+        if (teamAuditorIds.length > 0) {
+          const enumDept =
+            departmentDisplayToEnum[departmentCode] || departmentCode;
+          const [leadRes, regularRes] = await Promise.all([
+            auditScheduleApi
+              .getLeadAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+            auditScheduleApi
+              .getRegularAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+          ]);
+
+          const leadList = Array.isArray(leadRes)
+            ? leadRes
+            : (leadRes as any)?.data || [];
+          const regularList = Array.isArray(regularRes)
+            ? regularRes
+            : (regularRes as any)?.data || [];
+
+          console.log("🟩 [fetchCompetentUsers] TEAM BRANCH result", {
+            enumDept,
+            leadCount: leadList.length,
+            leadIds: leadList.map((u: any) => u.id),
+            regularCount: regularList.length,
+            regularIds: regularList.map((u: any) => u.id),
+          });
+
+          const seen = new Set<number>();
+          const merged: User[] = [];
+          for (const u of [...leadList, ...regularList]) {
+            const id = Number((u as any).id);
+            if (!isNaN(id) && !seen.has(id)) {
+              seen.add(id);
+              merged.push(u as User);
+            }
+          }
+
+          console.log("🟩 [fetchCompetentUsers] TEAM BRANCH merged", {
+            mergedIds: merged.map((u) => u.id),
+            mergedNames: merged.map((u) => `${u.firstName} ${u.lastName}`),
+          });
+
+          // Keep the full dept list available for merging in AddScheduleModal
+          setCompetentAuditors(merged);
+        } else if (auditElements.length > 0) {
+          const auditorsRes = await auditScheduleApi.getFullyCompetentAuditors(
+            auditElements,
+            selectedYear,
+            selectedMonth,
+            plantId,
+          );
+          let auditorsList = Array.isArray(auditorsRes)
+            ? auditorsRes
+            : (auditorsRes as any)?.data || [];
+
+          // ✅ FALLBACK: if competency filter returns 0, use dept auditors
+          if (auditorsList.length === 0) {
+            console.warn(
+              "⚠️ Competency filter empty — falling back to dept auditors",
+            );
+            const enumDept =
+              departmentDisplayToEnum[departmentCode] || departmentCode;
+            const [leadRes, regularRes] = await Promise.all([
+              auditScheduleApi
+                .getLeadAuditorsByDepartment(enumDept)
+                .catch(() => []),
+              auditScheduleApi
+                .getRegularAuditorsByDepartment(enumDept)
+                .catch(() => []),
+            ]);
+            const leadList = Array.isArray(leadRes)
+              ? leadRes
+              : (leadRes as any)?.data || [];
+            const regList = Array.isArray(regularRes)
+              ? regularRes
+              : (regularRes as any)?.data || [];
+            const seen = new Set<number>();
+            auditorsList = [];
+            for (const u of [...leadList, ...regList]) {
+              const id = Number((u as any).id);
+              if (!isNaN(id) && !seen.has(id)) {
+                seen.add(id);
+                auditorsList.push(u as User);
+              }
+            }
+          }
+          setBulkCompetentAuditors(auditorsList);
+        } else {
+          const enumDept =
+            departmentDisplayToEnum[departmentCode] || departmentCode;
+          const [leadRes, regularRes] = await Promise.all([
+            auditScheduleApi
+              .getLeadAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+            auditScheduleApi
+              .getRegularAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+          ]);
+          const leadList = Array.isArray(leadRes)
+            ? leadRes
+            : (leadRes as any)?.data || [];
+          const regularList = Array.isArray(regularRes)
+            ? regularRes
+            : (regularRes as any)?.data || [];
+          const seen = new Set<number>();
+          const merged: User[] = [];
+          for (const u of [...leadList, ...regularList]) {
+            const id = Number((u as any).id);
+            if (!isNaN(id) && !seen.has(id)) {
+              seen.add(id);
+              merged.push(u as User);
+            }
+          }
+          setCompetentAuditors(merged);
+        }
+
+        // ✅ 2. AUDITEES — use team when present, else plant-wide
+        if (teamAuditeeIds.length > 0) {
+          setCompetentAuditees([]); // force modal to read from departmentTeamInfo
+        } else if (auditElements.length > 0) {
+          const auditeesRes =
+            await auditScheduleApi.getCompetentAuditeesByDepartment(
+              departmentDisplayToEnum[departmentCode] || departmentCode,
+              plantId,
+              auditElements,
+            );
+          const auditeesList = Array.isArray(auditeesRes)
+            ? auditeesRes
+            : (auditeesRes as any)?.data || [];
+          setCompetentAuditees(auditeesList);
+        } else {
+          const auditeesRes = await auditScheduleApi.getAuditeesByDepartment(
+            departmentDisplayToEnum[departmentCode] || departmentCode,
+            plantId,
+          );
+          const auditeesList = Array.isArray(auditeesRes)
+            ? auditeesRes
+            : (auditeesRes as any)?.data || [];
+          setCompetentAuditees(auditeesList);
+        }
+      } catch (err) {
+        console.error("❌ Failed to fetch competent users:", err);
+        setCompetentAuditors([]);
+        setCompetentAuditees([]);
+      } finally {
+        setLoadingCompetentAuditors(false);
+      }
+    },
+    [user, selectedYear, selectedMonth],
+  );
+
+  const fetchBulkCompetentUsers = useCallback(
+    async (
+      departmentCode: string,
+      auditElements: string[],
+      teamAuditorIds: number[] = [],
+      teamAuditeeIds: number[] = [],
+    ) => {
+      if (!departmentCode || !user?.id) {
+        setBulkCompetentAuditors([]);
+        setBulkCompetentAuditees([]);
+        return;
+      }
+
+      const plantId = (user as any)?.plantId;
+      if (!plantId) {
+        console.warn("⚠️ No plantId — cannot fetch bulk competent users");
+        setBulkCompetentAuditors([]);
+        setBulkCompetentAuditees([]);
+        return;
+      }
+
+      setBulkLoadingCompetent(true);
+      try {
+        const enumDept =
+          departmentDisplayToEnum[departmentCode] || departmentCode;
+
+        // --- Auditors ---
+        if (teamAuditorIds.length > 0) {
+          setBulkCompetentAuditors([]); // use team from bulkDepartmentTeamInfo
+        } else if (auditElements.length > 0) {
+          const auditorsRes = await auditScheduleApi.getFullyCompetentAuditors(
+            auditElements,
+            selectedYear,
+            selectedMonth,
+            plantId,
+          );
+          let auditorsList = Array.isArray(auditorsRes)
+            ? auditorsRes
+            : (auditorsRes as any)?.data || [];
+
+          // ✅ FALLBACK: if competency filter returns 0, use dept auditors
+          if (auditorsList.length === 0) {
+            console.warn(
+              "⚠️ Competency filter empty — falling back to dept auditors",
+            );
+            const enumDept =
+              departmentDisplayToEnum[departmentCode] || departmentCode;
+            const [leadRes, regularRes] = await Promise.all([
+              auditScheduleApi
+                .getLeadAuditorsByDepartment(enumDept)
+                .catch(() => []),
+              auditScheduleApi
+                .getRegularAuditorsByDepartment(enumDept)
+                .catch(() => []),
+            ]);
+            const leadList = Array.isArray(leadRes)
+              ? leadRes
+              : (leadRes as any)?.data || [];
+            const regList = Array.isArray(regularRes)
+              ? regularRes
+              : (regularRes as any)?.data || [];
+            const seen = new Set<number>();
+            auditorsList = [];
+            for (const u of [...leadList, ...regList]) {
+              const id = Number((u as any).id);
+              if (!isNaN(id) && !seen.has(id)) {
+                seen.add(id);
+                auditorsList.push(u as User);
+              }
+            }
+          }
+          setBulkCompetentAuditors(auditorsList); // ✅
+        } else {
+          const [leadRes, regularRes] = await Promise.all([
+            auditScheduleApi
+              .getLeadAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+            auditScheduleApi
+              .getRegularAuditorsByDepartment(enumDept)
+              .catch(() => [] as User[]),
+          ]);
+          const leadList = Array.isArray(leadRes)
+            ? leadRes
+            : (leadRes as any)?.data || [];
+          const regList = Array.isArray(regularRes)
+            ? regularRes
+            : (regularRes as any)?.data || [];
+          const seen = new Set<number>();
+          const merged: User[] = [];
+          for (const u of [...leadList, ...regList]) {
+            const id = Number((u as any).id);
+            if (!isNaN(id) && !seen.has(id)) {
+              seen.add(id);
+              merged.push(u as User);
+            }
+          }
+          setBulkCompetentAuditors(merged);
+        }
+
+        // --- Auditees ---
+        if (teamAuditeeIds.length > 0) {
+          setBulkCompetentAuditees([]);
+        } else if (auditElements.length > 0) {
+          const auditeesRes =
+            await auditScheduleApi.getCompetentAuditeesByDepartment(
+              enumDept,
+              plantId,
+              auditElements,
+            );
+          const list = Array.isArray(auditeesRes)
+            ? auditeesRes
+            : (auditeesRes as any)?.data || [];
+          setBulkCompetentAuditees(list);
+        } else {
+          const auditeesRes = await auditScheduleApi.getAuditeesByDepartment(
+            enumDept,
+            plantId,
+          );
+          const list = Array.isArray(auditeesRes)
+            ? auditeesRes
+            : (auditeesRes as any)?.data || [];
+          setBulkCompetentAuditees(list);
+        }
+      } catch (err) {
+        console.error("❌ Bulk competent users fetch failed:", err);
+        setBulkCompetentAuditors([]);
+        setBulkCompetentAuditees([]);
+      } finally {
+        setBulkLoadingCompetent(false);
+      }
+    },
+    [user, selectedYear, selectedMonth],
+  );
 
   const fetchBasicSchedules = useCallback(async () => {
     if (!selectedMonth) return;
@@ -1163,18 +1728,27 @@ export default function Form5DetailedView({
         selectedYear,
         selectedMonth as any,
       );
+      if (!user?.id) return;
       const dateSchedules = await auditScheduleApi.getDateSchedulesByMonth(
         selectedYear,
         selectedMonth as any,
+        user.id,
       );
-      const allSchedules = [
+
+      const rawAllSchedules = [
         ...(weekSchedules.data || []),
         ...(dateSchedules.data || []),
       ];
+
+      // ✅ PLANT FILTER
+      const allSchedules = filterByPlant(rawAllSchedules, user?.plantId);
+
       setBasicSchedules(allSchedules);
+
       const hasApprovedSchedules = allSchedules.some(
         (s: any) => s.approvalStatus === "APPROVED",
       );
+
       if (hasApprovedSchedules) {
         setApprovalStatus("APPROVED");
         const first = allSchedules.find(
@@ -1208,7 +1782,6 @@ export default function Form5DetailedView({
       } else {
         setApprovalStatus("NOT_APPROVED");
       }
-      setAuditNumber(`INT/${selectedYear}/01`);
       const auditTypesSet = new Set<string>();
       allSchedules.forEach((schedule: any) => {
         if (schedule.auditElements) {
@@ -1234,17 +1807,24 @@ export default function Form5DetailedView({
       console.error("Error fetching basic schedules:", error);
       setApprovalStatus("ERROR");
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.id]);
 
   const fetchDetailedSchedules = useCallback(async () => {
     if (!selectedMonth) return;
     try {
+      if (!user?.id) return;
       const response = await auditScheduleApi.getDateSchedulesByMonth(
         selectedYear,
         selectedMonth as any,
+        user.id,
       );
       const dateSchedules = response.data || [];
-      const processedSchedules = dateSchedules.map((schedule: any) => {
+
+      // ✅ PLANT FILTER (before any processing)
+      const plantScopedSchedules = filterByPlant(dateSchedules, user?.plantId);
+
+      const processedSchedules = plantScopedSchedules.map((schedule: any) => {
+        // ... existing remark-parsing logic
         if ((!schedule.startTime || !schedule.endTime) && schedule.remarks) {
           try {
             const remarks = JSON.parse(schedule.remarks);
@@ -1266,6 +1846,8 @@ export default function Form5DetailedView({
         return schedule;
       });
       setAuditSchedules(processedSchedules);
+      // ... rest unchanged
+
       if (processedSchedules.length > 0) {
         const dates = [
           ...new Set(processedSchedules.map((s: any) => s.scheduledDate)),
@@ -1279,7 +1861,7 @@ export default function Form5DetailedView({
       console.error("Error fetching detailed schedules:", error);
       setAuditSchedules([]);
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.id]);
 
   const checkTimeConflict = (
     date: string,
@@ -1342,19 +1924,36 @@ export default function Form5DetailedView({
     return null;
   };
 
-  // ═════ HANDLERS ═════
   const handleAuditDepartmentChange = async (departmentCode: string) => {
     setSelectedAuditDepartment(departmentCode);
+
+    const effectiveDate =
+      formData.date ||
+      startDate ||
+      (selectedWeek ? (getWeekLimits(selectedWeek)?.min ?? null) : null);
+
+    // 1. Compute week team from basicSchedules
     const teamInfo = getTeamMembersForDepartment(
       departmentCode,
-      formData.date,
+      effectiveDate,
       globalAuditType,
     );
     setDepartmentTeamInfo(teamInfo);
+
+    // 2. Fetch department users (needed for team filtering in the modal)
     await fetchDepartmentUsers(departmentCode);
+
+    // 3. Fetch competent users, but respect the team
+    const elementsToUse = globalAuditType ? [globalAuditType] : [];
+    await fetchCompetentUsers(
+      departmentCode,
+      elementsToUse,
+      teamInfo.teamAuditorIds,
+      teamInfo.auditeeIds,
+    );
+
     setFormData((prev) => ({ ...prev, auditorId: "", auditeeId: "" }));
   };
-
   const handleSave = async () => {
     if (formData.id) {
       const existingSchedule = auditSchedules.find((s) => s.id === formData.id);
@@ -1440,8 +2039,9 @@ export default function Form5DetailedView({
         timeSlot: `${formData.startTime} - ${formData.endTime}`,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        fromDate: startDate,
-        toDate: endDate,
+        // ✅ Single-day schedule — range = the schedule's own date
+        fromDate: formData.date,
+        toDate: formData.date,
         auditorId:
           formData.auditorId && formData.specialEventType !== "LUNCH"
             ? parseInt(formData.auditorId)
@@ -1460,10 +2060,13 @@ export default function Form5DetailedView({
         isSpecialEvent: formData.isSpecialEvent || false,
         specialEventType: formData.specialEventType || "",
         auditType: auditTypeToUse,
-        auditNumber: auditNumber,
+        auditNumber: "",
         preparedByName:
           headerData.preparedBy || user?.name || user?.username || "",
         preparedByPosition: "Audit Manager",
+        // ✅ NEW: Plant scope (backend resolves from userId as fallback)
+        plantId: (user as any)?.plantId ?? null,
+        plantName: (user as any)?.plantName ?? null,
       };
       if (formData.id) {
         await auditScheduleApi.updateDetailedSchedule(
@@ -1588,8 +2191,10 @@ export default function Form5DetailedView({
           : bulkData.selectedDepartments || [],
         isSpecialEvent: bulkData.isSpecialEvent || false,
         specialEventType: bulkData.specialEventType || "",
+        plantId: (user as any)?.plantId ?? null,
+        plantName: (user as any)?.plantName ?? null,
         auditType: bulkData.auditType || globalAuditType,
-        auditNumber: auditNumber,
+        auditNumber: "",
         preparedByName:
           headerData.preparedBy || user?.name || user?.username || "",
         preparedByPosition: "Audit Manager",
@@ -1692,84 +2297,132 @@ export default function Form5DetailedView({
     ]);
   };
 
- // =====================================================
-// ✅ FIXED: handleDelete function (Works on Web + Mobile)
-// =====================================================
-const handleDelete = (id: number) => {
-  console.log("🗑️ Delete function called for ID:", id);
-  
-  if (!id) {
-    showToast("Invalid schedule ID", "error");
-    return;
-  }
+  // =====================================================
+  // ✅ FIXED: handleDelete function (Works on Web + Mobile)
+  // =====================================================
+  const handleDelete = (id: number) => {
+    console.log("🗑️ Delete function called for ID:", id);
 
-  const scheduleToDelete = auditSchedules.find((s) => s.id === id);
-  console.log("📋 Schedule found:", scheduleToDelete);
-
-  if (!scheduleToDelete) {
-    showToast("Schedule not found", "error");
-    return;
-  }
-
-  // Check if schedule can be deleted
-  if (scheduleToDelete.detailedApprovalStatus === "APPROVED") {
-    showToast("Cannot delete an approved schedule", "warning");
-    return;
-  }
-
-  if (scheduleToDelete.detailedApprovalStatus === "PENDING_APPROVAL") {
-    showToast("Cannot delete a schedule pending approval", "warning");
-    return;
-  }
-
-  // ✅ Confirmation dialog - works on BOTH web and mobile
-  const confirmAndDelete = () => {
-    console.log("🗑️ Confirming delete for schedule:", id);
-    
-    // ✅ WEB: Use browser confirm
-    if (Platform.OS === "web") {
-      const isConfirmed = window.confirm(
-        "Are you sure you want to delete this schedule?"
-      );
-      if (isConfirmed) {
-        performDelete(id);
-      }
+    if (!id) {
+      showToast("Invalid schedule ID", "error");
       return;
     }
 
-    // ✅ MOBILE: Use Alert
-    Alert.alert(
-      "Confirm Delete",
-      "Are you sure you want to delete this schedule?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => performDelete(id),
-        },
-      ]
-    );
+    const scheduleToDelete = auditSchedules.find((s) => s.id === id);
+    console.log("📋 Schedule found:", scheduleToDelete);
+
+    if (!scheduleToDelete) {
+      showToast("Schedule not found", "error");
+      return;
+    }
+
+    // Check if schedule can be deleted
+    if (scheduleToDelete.detailedApprovalStatus === "APPROVED") {
+      showToast("Cannot delete an approved schedule", "warning");
+      return;
+    }
+
+    if (scheduleToDelete.detailedApprovalStatus === "PENDING_APPROVAL") {
+      showToast("Cannot delete a schedule pending approval", "warning");
+      return;
+    }
+
+    // ✅ Confirmation dialog - works on BOTH web and mobile
+    const confirmAndDelete = () => {
+      console.log("🗑️ Confirming delete for schedule:", id);
+
+      // ✅ WEB: Use browser confirm
+      if (Platform.OS === "web") {
+        const isConfirmed = window.confirm(
+          "Are you sure you want to delete this schedule?",
+        );
+        if (isConfirmed) {
+          performDelete(id);
+        }
+        return;
+      }
+
+      // ✅ MOBILE: Use Alert
+      Alert.alert(
+        "Confirm Delete",
+        "Are you sure you want to delete this schedule?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => performDelete(id),
+          },
+        ],
+      );
+    };
+
+    confirmAndDelete();
   };
 
-  confirmAndDelete();
-};
+  // ✅ Separate function to perform the actual API call
+  const performDelete = async (id: number) => {
+    console.log("🗑️ Performing delete for ID:", id);
+    try {
+      await auditScheduleApi.delete(id);
+      showToast("✅ Schedule deleted successfully!", "success");
+      await fetchDetailedSchedules();
+    } catch (error: any) {
+      console.error("❌ Error deleting schedule:", error);
+      showToast(
+        error.response?.data?.message || "Failed to delete schedule",
+        "error",
+      );
+    }
+  };
 
-// ✅ Separate function to perform the actual API call
-const performDelete = async (id: number) => {
-  console.log("🗑️ Performing delete for ID:", id);
-  try {
-    await auditScheduleApi.delete(id);
-    showToast("✅ Schedule deleted successfully!", "success");
-    await fetchDetailedSchedules();
-  } catch (error: any) {
-    console.error("❌ Error deleting schedule:", error);
-    showToast(
-      error.response?.data?.message || "Failed to delete schedule",
-      "error"
-    );
-  }
-};
+  const handleLaConfirmSingle = async (scheduleId: number) => {
+    setSubmitting(true);
+    try {
+      await auditScheduleApi.confirmSingleDailyFeasibility(
+        scheduleId,
+        getUserIdAsNumber(),
+      );
+      showToast("✅ Daily schedule confirmed for feasibility!", "success");
+      await fetchDetailedSchedules();
+    } catch (error: any) {
+      console.error("Error confirming daily feasibility:", error);
+      showToast(
+        error.response?.data?.message || error.message || "Failed to confirm",
+        "error",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleLaRejectSingle = async (scheduleId: number) => {
+    if (!laRejectReason.trim()) {
+      showToast("Please provide a rejection reason", "error");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await auditScheduleApi.rejectSingleDailyFeasibility(
+        scheduleId,
+        getUserIdAsNumber(),
+        laRejectReason,
+      );
+      showToast("❌ Daily schedule rejected", "warning");
+      setShowLaRejectModal(false);
+      setLaRejectReason("");
+      setTempScheduleId(null);
+      await fetchDetailedSchedules();
+    } catch (error: any) {
+      console.error("Error rejecting daily feasibility:", error);
+      showToast(
+        error.response?.data?.message || error.message || "Failed to reject",
+        "error",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSubmitScheduleForApproval = async (scheduleId: number) => {
     setSubmitting(true);
@@ -1977,6 +2630,39 @@ const performDelete = async (id: number) => {
     }
   };
 
+  // Add this function to view PDF (similar to handleViewPDF in other forms):
+  // In Form5DetailedView.tsx - Updated handleViewPDF using pdfService
+  const handleViewPDF = async () => {
+    try {
+      setDownloadingPdf(true);
+
+      await pdfService.viewPDF(
+        {
+          auditId: String(selectedYear),
+          type: "form5",
+          year: selectedYear,
+          month: selectedMonth,
+          fromDetailedView: true,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          auditType: globalAuditType || undefined,
+        },
+        (result) => {
+          setPDFViewer({
+            visible: true,
+            pdfData: result.pdfData,
+            fileName: result.fileName,
+          });
+          setDownloadingPdf(false);
+        },
+      );
+    } catch (error) {
+      console.error("PDF View error:", error);
+      showToast("Failed to load PDF", "error");
+      setDownloadingPdf(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       id: null,
@@ -2108,38 +2794,72 @@ const performDelete = async (id: number) => {
     setShowModal(true);
   };
 
-  // ═════ EFFECTS ═════
+  // ✅ Recompute team whenever the audit date changes in the modal
   useEffect(() => {
-    if (bulkSelectedAuditDepartment) {
-      fetchDepartmentUsers(bulkSelectedAuditDepartment);
-      const enumValue =
-        departmentDisplayToEnum[bulkSelectedAuditDepartment] ||
-        bulkSelectedAuditDepartment.toUpperCase().replace(/[&\s/]+/g, "_");
-      const fetchBulkDepartmentUsers = async () => {
-        try {
-          const auditorsUrl = `${API_BASE_URL}/api/audit-schedule/auditors/by-department/${encodeURIComponent(enumValue)}`;
-          const auditorsRes = await fetch(auditorsUrl);
-          const auditorsData = await auditorsRes.json();
-          setBulkDepartmentAuditors(
-            Array.isArray(auditorsData)
-              ? auditorsData
-              : auditorsData.data || [],
-          );
-          const auditeesUrl = `${API_BASE_URL}/api/audit-schedule/auditees/by-department/${encodeURIComponent(enumValue)}`;
-          const auditeesRes = await fetch(auditeesUrl);
-          const auditeesData = await auditeesRes.json();
-          setBulkDepartmentAuditees(
-            Array.isArray(auditeesData)
-              ? auditeesData
-              : auditeesData.data || [],
-          );
-        } catch (error) {
-          console.error("Error fetching bulk department users:", error);
-        }
-      };
-      fetchBulkDepartmentUsers();
+    if (!showModal) return;
+    if (!selectedAuditDepartment) return;
+    if (!formData.date) return;
+
+    const teamInfo = getTeamMembersForDepartment(
+      selectedAuditDepartment,
+      formData.date,
+      globalAuditType,
+    );
+    setDepartmentTeamInfo(teamInfo);
+
+    const elementsToUse = globalAuditType ? [globalAuditType] : [];
+    fetchCompetentUsers(
+      selectedAuditDepartment,
+      elementsToUse,
+      teamInfo.teamAuditorIds,
+      teamInfo.auditeeIds,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.date, selectedAuditDepartment, showModal]);
+
+  useEffect(() => {
+    if (!bulkSelectedAuditDepartment) {
+      setBulkCompetentAuditors([]);
+      setBulkCompetentAuditees([]);
+      setBulkDepartmentTeamInfo({
+        leadAuditorId: null,
+        leadAuditorName: null,
+        teamAuditorIds: [],
+        teamAuditorNames: [],
+        auditeeIds: [],
+        auditeeNames: [],
+      });
+      return;
     }
-  }, [bulkSelectedAuditDepartment]);
+
+    const teamInfo = getTeamMembersForDepartment(
+      bulkSelectedAuditDepartment,
+      bulkData.fromDate,
+      globalAuditType,
+    );
+    setBulkDepartmentTeamInfo(teamInfo);
+
+    (async () => {
+      await fetchDepartmentUsers(bulkSelectedAuditDepartment, true);
+
+      const elementsToUse =
+        bulkData.selectedDepartments?.flatMap((d) => d.selectedElements) || [];
+      await fetchBulkCompetentUsers(
+        bulkSelectedAuditDepartment,
+        elementsToUse,
+        teamInfo.teamAuditorIds, // ⚠️ this is almost always [] at this point
+        teamInfo.auditeeIds,
+      );
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkSelectedAuditDepartment, bulkData.fromDate]);
+
+  useEffect(() => {
+    if (!bulkSelectedAuditDepartment) return;
+    const elementsToUse =
+      bulkData.selectedDepartments?.flatMap((d) => d.selectedElements) || [];
+    fetchBulkCompetentUsers(bulkSelectedAuditDepartment, elementsToUse);
+  }, [bulkData.selectedDepartments]);
 
   useEffect(() => {
     if (showModal && formData.date && formData.startTime && formData.endTime) {
@@ -2229,7 +2949,35 @@ const performDelete = async (id: number) => {
   }, [fetchUsers, fetchBasicSchedules, fetchDetailedSchedules]);
 
   // ═════ COMPUTED VALUES ═════
-  const availableAuditors = getAvailableAuditors();
+
+  const availableAuditors: User[] = (() => {
+    // ✅ Priority 1: week schedule team (authoritative)
+    if (departmentTeamInfo.teamAuditorIds.length > 0) {
+      return departmentAuditors.filter((auditor) =>
+        departmentTeamInfo.teamAuditorIds.includes(Number(auditor.id)),
+      );
+    }
+    // Priority 2: competent list (fallback when no week team)
+    if (competentAuditors.length > 0) {
+      return competentAuditors;
+    }
+    return [];
+  })();
+
+  const availableAuditees: User[] = (() => {
+    // ✅ Priority 1: week schedule team
+    if (departmentTeamInfo.auditeeIds.length > 0) {
+      return departmentAuditees.filter((auditee) =>
+        departmentTeamInfo.auditeeIds.includes(Number(auditee.id)),
+      );
+    }
+    // Priority 2: competent list (fallback)
+    if (competentAuditees.length > 0) {
+      return competentAuditees;
+    }
+    return [];
+  })();
+
   const canEdit = isAuditManager && approvalStatus === "APPROVED";
   const canApprove = isTopManagement;
   const hasSchedules = auditSchedules.length > 0;
@@ -2353,7 +3101,7 @@ const performDelete = async (id: number) => {
       return (
         <View className={`relative ${className}`}>
           <View
-            className="flex-row items-center justify-between px-3 bg-white border border-gray-200 rounded-lg h-11"
+            className="h-11 flex-row items-center justify-between rounded-lg border border-gray-200 bg-white px-3"
             style={{
               position: "relative",
               overflow: "hidden",
@@ -2406,78 +3154,114 @@ const performDelete = async (id: number) => {
 
     // ✅ MOBILE: Use DateTimePicker
     // ✅ MOBILE: Use DateTimePicker (Fixed for iOS Modal)
-return (
-  <>
-    <TouchableOpacity
-      onPress={() => {
-        if (!disabled) setShowPicker(true);
-      }}
-      disabled={disabled}
-      className={`flex-row items-center justify-between px-3 border border-gray-200 rounded-lg h-11 ${className}`}
-      style={{
-        backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
-        opacity: disabled ? 0.7 : 1,
-      }}
-    >
-      <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
-      <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
-    </TouchableOpacity>
-    
-    {showPicker && Platform.OS === "ios" ? (
-      <Modal
-        visible={showPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPicker(false)}
-      >
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" }}>
-          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 30 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 15 }}>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <Text style={{ color: COLORS.accent, fontSize: 16, fontWeight: "600" }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <Text style={{ color: COLORS.accent, fontSize: 16, fontWeight: "700" }}>Done</Text>
-              </TouchableOpacity>
+    return (
+      <>
+        <TouchableOpacity
+          onPress={() => {
+            if (!disabled) setShowPicker(true);
+          }}
+          disabled={disabled}
+          className={`h-11 flex-row items-center justify-between rounded-lg border border-gray-200 px-3 ${className}`}
+          style={{
+            backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
+            opacity: disabled ? 0.7 : 1,
+          }}
+        >
+          <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
+          <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
+        </TouchableOpacity>
+
+        {showPicker && Platform.OS === "ios" ? (
+          <Modal
+            visible={showPicker}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowPicker(false)}
+          >
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "flex-end",
+                backgroundColor: "rgba(0,0,0,0.4)",
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#fff",
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
+                  padding: 20,
+                  paddingBottom: 30,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 15,
+                  }}
+                >
+                  <TouchableOpacity onPress={() => setShowPicker(false)}>
+                    <Text
+                      style={{
+                        color: COLORS.accent,
+                        fontSize: 16,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowPicker(false)}>
+                    <Text
+                      style={{
+                        color: COLORS.accent,
+                        fontSize: 16,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={pickerValue}
+                  mode="date"
+                  display="spinner"
+                  onChange={(event: any, selectedDate: any) => {
+                    if (selectedDate) {
+                      const isoDate = toISODate(selectedDate);
+                      onChange(getSafeDate(isoDate));
+                    }
+                  }}
+                />
+              </View>
             </View>
+          </Modal>
+        ) : (
+          showPicker && (
             <DateTimePicker
               value={pickerValue}
               mode="date"
-              display="spinner"
+              display="calendar"
               onChange={(event: any, selectedDate: any) => {
+                setShowPicker(false);
                 if (selectedDate) {
                   const isoDate = toISODate(selectedDate);
                   onChange(getSafeDate(isoDate));
                 }
               }}
             />
-          </View>
-        </View>
-      </Modal>
-    ) : (
-      showPicker && (
-        <DateTimePicker
-          value={pickerValue}
-          mode="date"
-          display="calendar"
-          onChange={(event: any, selectedDate: any) => {
-            setShowPicker(false);
-            if (selectedDate) {
-              const isoDate = toISODate(selectedDate);
-              onChange(getSafeDate(isoDate));
-            }
-          }}
-        />
-      )
-    )}
-  </>
-);
+          )
+        )}
+      </>
+    );
   };
 
   // ═════ RENDER ═════
   if (loading) {
     return (
-      <View className="items-center justify-center flex-1 bg-gray-50">
+      <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color={COLORS.accent} />
         <Text className="mt-3 text-sm text-gray-500">Loading schedule...</Text>
       </View>
@@ -2486,11 +3270,11 @@ return (
 
   if (approvalStatus !== "APPROVED") {
     return (
-      <View className="flex-1 p-6 bg-gray-50">
-        <View className="max-w-2xl mx-auto">
+      <View className="flex-1 bg-gray-50 p-6">
+        <View className="mx-auto max-w-2xl">
           <TouchableOpacity
             onPress={onBack || (() => router.back())}
-            className="flex-row items-center gap-2 mb-6"
+            className="mb-6 flex-row items-center gap-2"
           >
             <ArrowLeft size={18} color={COLORS.accent} />
             <Text className="text-sm font-semibold text-blue-600">
@@ -2498,13 +3282,13 @@ return (
             </Text>
           </TouchableOpacity>
           <Card className="items-center p-12">
-            <View className="items-center justify-center w-20 h-20 mb-4 border border-yellow-200 rounded-full bg-yellow-50">
+            <View className="mb-4 h-20 w-20 items-center justify-center rounded-full border border-yellow-200 bg-yellow-50">
               <AlertCircle size={40} color={COLORS.warning} />
             </View>
             <Text className="mb-2 text-xl font-bold text-gray-900">
               Form 5 Not Approved Yet
             </Text>
-            <Text className="mb-6 text-sm text-center text-gray-500">
+            <Text className="mb-6 text-center text-sm text-gray-500">
               Please complete and get approval for the basic schedule in Form 5
               first.{"\n"}
               {monthDisplay[selectedMonth]} {selectedYear} is not approved.
@@ -2611,6 +3395,19 @@ return (
                 justifyContent: isDesktop ? "flex-end" : "flex-start",
               }}
             >
+              {/* ✅ REPLACE the existing PDF button with this */}
+              <ActionButton
+                onPress={handleViewPDF} // ← Changed from handleDownloadPdf
+                loading={downloadingPdf}
+                color="#FFF"
+                bgColor={COLORS.purple} // ← Changed to purple to differentiate
+                icon={FileText} // ← Changed from Printer
+                className="h-10"
+              >
+                View PDF
+              </ActionButton>
+
+              {/* ✅ OPTIONAL: Add a separate Download button if needed */}
               <ActionButton
                 onPress={handleDownloadPdf}
                 loading={downloadingPdf}
@@ -2619,7 +3416,7 @@ return (
                 icon={Printer}
                 className="h-10"
               >
-                PDF
+                Download
               </ActionButton>
               {/* <ActionButton
                 onPress={handleExport}
@@ -2667,9 +3464,9 @@ return (
         showsVerticalScrollIndicator={false}
       >
         <Card className="p-4">
-          <View className="flex-row items-center gap-2 mb-4">
+          <View className="mb-4 flex-row items-center gap-2">
             <Calendar size={16} color={COLORS.accent} />
-            <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+            <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
               Date Range
             </Text>
           </View>
@@ -2720,7 +3517,7 @@ return (
             <View className="flex-row flex-wrap gap-2">
               <TouchableOpacity
                 onPress={() => setGlobalAuditType("")}
-                className={`px-4 py-2 rounded-full border ${!globalAuditType ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                className={`rounded-full border px-4 py-2 ${!globalAuditType ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
               >
                 <Text
                   className={`text-sm font-medium ${!globalAuditType ? "text-blue-600" : "text-gray-700"}`}
@@ -2732,7 +3529,7 @@ return (
                 <TouchableOpacity
                   key={type}
                   onPress={() => setGlobalAuditType(type)}
-                  className={`px-4 py-2 rounded-full border ${globalAuditType === type ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                  className={`rounded-full border px-4 py-2 ${globalAuditType === type ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
                 >
                   <Text
                     className={`text-sm font-medium ${globalAuditType === type ? "text-blue-600" : "text-gray-700"}`}
@@ -2752,32 +3549,32 @@ return (
               {/* Table Header */}
               <View className="flex-row border-b border-gray-200 bg-gray-50">
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
                     Date & Time
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
                     Area / Dept / Event
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
                     Auditor
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
                     Auditee
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-gray-900 uppercase">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
                     Status
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold tracking-wider text-center text-gray-900 uppercase">
+                  <Text className="text-center text-xs font-bold uppercase tracking-wider text-gray-900">
                     Actions
                   </Text>
                 </View>
@@ -2826,7 +3623,7 @@ return (
                             {dateInfo.dayOfWeek}
                           </Text>
                           {daySchedules.length > 0 && (
-                            <View className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
+                            <View className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5">
                               <Text className="text-xs font-semibold text-blue-700">
                                 {
                                   daySchedules.filter(
@@ -2848,7 +3645,7 @@ return (
                     </View>
 
                     {daySchedules.length === 0 ? (
-                      <View className="flex-row bg-white border-b border-gray-200">
+                      <View className="flex-row border-b border-gray-200 bg-white">
                         <View style={{ flex: 1 }} className="p-4">
                           <Text className="text-sm text-gray-900">
                             {dateInfo.displayDate}
@@ -2868,7 +3665,7 @@ return (
                               onPress={() =>
                                 handleAddSchedule(dateInfo.dateStr)
                               }
-                              className="items-center justify-center border border-blue-200 rounded-full w-9 h-9 bg-blue-50"
+                              className="h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50"
                             >
                               <Plus size={18} color={COLORS.accent} />
                             </TouchableOpacity>
@@ -2903,23 +3700,45 @@ return (
                                 border: COLORS.successBorder,
                               }
                             : schedule.detailedApprovalStatus ===
-                                "PENDING_APPROVAL"
+                                "CONFIRMED_BY_LA"
                               ? {
-                                  bg: COLORS.warningLight,
-                                  color: "#92400E",
-                                  border: COLORS.warningBorder,
+                                  bg: "#ECFDF5",
+                                  color: "#065F46",
+                                  border: "#A7F3D0",
                                 }
-                              : schedule.detailedApprovalStatus === "REJECTED"
+                              : schedule.detailedApprovalStatus ===
+                                  "PENDING_LA_CONFIRMATION"
                                 ? {
-                                    bg: COLORS.errorLight,
-                                    color: "#991B1B",
-                                    border: COLORS.errorBorder,
+                                    bg: "#FEF3C7",
+                                    color: "#92400E",
+                                    border: "#FDE68A",
                                   }
-                                : {
-                                    bg: "#F1F5F9",
-                                    color: "#475569",
-                                    border: "#E2E8F0",
-                                  };
+                                : schedule.detailedApprovalStatus ===
+                                    "FEASIBILITY_REJECTED"
+                                  ? {
+                                      bg: COLORS.errorLight,
+                                      color: "#991B1B",
+                                      border: COLORS.errorBorder,
+                                    }
+                                  : schedule.detailedApprovalStatus ===
+                                      "PENDING_APPROVAL"
+                                    ? {
+                                        bg: COLORS.warningLight,
+                                        color: "#92400E",
+                                        border: COLORS.warningBorder,
+                                      }
+                                    : schedule.detailedApprovalStatus ===
+                                        "REJECTED"
+                                      ? {
+                                          bg: COLORS.errorLight,
+                                          color: "#991B1B",
+                                          border: COLORS.errorBorder,
+                                        }
+                                      : {
+                                          bg: "#F1F5F9",
+                                          color: "#475569",
+                                          border: "#E2E8F0",
+                                        };
                         return (
                           <View
                             key={`${idx}-${sIdx}`}
@@ -2931,11 +3750,11 @@ return (
                               schedule.toDate &&
                               schedule.fromDate !== schedule.toDate ? (
                                 <>
-                                  <View className="flex-row items-center gap-1 mb-1">
+                                  <View className="mb-1 flex-row items-center gap-1">
                                     <Text className="text-xs font-semibold text-purple-600">
                                       Range:
                                     </Text>
-                                    <View className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200">
+                                    <View className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5">
                                       <Text className="text-xs font-semibold text-purple-700">
                                         Flexible
                                       </Text>
@@ -2987,7 +3806,7 @@ return (
                                         key={i}
                                         className="flex-row items-center gap-2"
                                       >
-                                        <View className="w-2 h-2 bg-blue-600 rounded-full" />
+                                        <View className="h-2 w-2 rounded-full bg-blue-600" />
                                         <Text className="text-sm text-gray-900">
                                           {dept}
                                         </Text>
@@ -3019,7 +3838,7 @@ return (
                             <View style={{ flex: 1 }} className="p-4">
                               <View className="gap-1">
                                 <View
-                                  className="px-2 py-0.5 rounded-full border self-start"
+                                  className="self-start rounded-full border px-2 py-0.5"
                                   style={{
                                     backgroundColor: statusStyle.bg,
                                     borderColor: statusStyle.border,
@@ -3033,7 +3852,7 @@ return (
                                   </Text>
                                 </View>
                                 <View
-                                  className="px-2 py-0.5 rounded-full border self-start"
+                                  className="self-start rounded-full border px-2 py-0.5"
                                   style={{
                                     backgroundColor: approvalStyle.bg,
                                     borderColor: approvalStyle.border,
@@ -3047,12 +3866,21 @@ return (
                                     "APPROVED"
                                       ? "✓ Approved"
                                       : schedule.detailedApprovalStatus ===
-                                          "PENDING_APPROVAL"
-                                        ? "⏳ Pending"
+                                          "CONFIRMED_BY_LA"
+                                        ? "✅ Confirmed by LA"
                                         : schedule.detailedApprovalStatus ===
-                                            "REJECTED"
-                                          ? "✗ Rejected"
-                                          : "📝 Draft"}
+                                            "PENDING_LA_CONFIRMATION"
+                                          ? "⏳ Pending LA"
+                                          : schedule.detailedApprovalStatus ===
+                                              "FEASIBILITY_REJECTED"
+                                            ? "❌ Rejected by LA"
+                                            : schedule.detailedApprovalStatus ===
+                                                "PENDING_APPROVAL"
+                                              ? "⏳ Pending TM"
+                                              : schedule.detailedApprovalStatus ===
+                                                  "REJECTED"
+                                                ? "✗ Rejected"
+                                                : "📝 Draft"}
                                   </Text>
                                 </View>
                               </View>
@@ -3063,6 +3891,46 @@ return (
                               className="items-center p-4"
                             >
                               <View className="flex-row items-center gap-2">
+                                {/* ✅ NEW: LA confirm/reject for daily schedules */}
+                                {isLeadAuditor &&
+                                  schedule.detailedApprovalStatus ===
+                                    "PENDING_LA_CONFIRMATION" && (
+                                    <>
+                                      <TouchableOpacity
+                                        onPress={() =>
+                                          handleLaConfirmSingle(schedule.id!)
+                                        }
+                                        disabled={submitting}
+                                        className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
+                                      >
+                                        {submitting ? (
+                                          <ActivityIndicator
+                                            size="small"
+                                            color={COLORS.success}
+                                          />
+                                        ) : (
+                                          <CheckSquare
+                                            size={14}
+                                            color={COLORS.success}
+                                          />
+                                        )}
+                                      </TouchableOpacity>
+
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          setTempScheduleId(schedule.id!);
+                                          setLaRejectReason("");
+                                          setShowLaRejectModal(true);
+                                        }}
+                                        className="h-8 w-8 items-center justify-center rounded border border-red-200 bg-red-50"
+                                      >
+                                        <XCircle
+                                          size={14}
+                                          color={COLORS.error}
+                                        />
+                                      </TouchableOpacity>
+                                    </>
+                                  )}
                                 {canEdit &&
                                   (schedule.detailedApprovalStatus ===
                                     "DRAFT" ||
@@ -3077,7 +3945,7 @@ return (
                                         }
                                         delayPressIn={0} // ← ADD THIS
                                         activeOpacity={0.7} // ← ADD THIS
-                                        className="items-center justify-center w-8 h-8 border border-blue-200 rounded bg-blue-50"
+                                        className="h-8 w-8 items-center justify-center rounded border border-blue-200 bg-blue-50"
                                       >
                                         <Edit2
                                           size={14}
@@ -3085,25 +3953,31 @@ return (
                                         />
                                       </TouchableOpacity>
                                       {/* ✅ DELETE BUTTON - FIXED */}
-<TouchableOpacity
-  onPress={() => {
-    console.log("👆 Delete button clicked for schedule:", schedule.id);
-    handleDelete(schedule.id!);
-  }}
-  activeOpacity={0.7}
-  style={{
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    backgroundColor: "#FEF2F2",
-    alignItems: "center",
-    justifyContent: "center",
-  }}
->
-  <Trash2 size={14} color={COLORS.error} />
-</TouchableOpacity>
+                                      <TouchableOpacity
+                                        onPress={() => {
+                                          console.log(
+                                            "👆 Delete button clicked for schedule:",
+                                            schedule.id,
+                                          );
+                                          handleDelete(schedule.id!);
+                                        }}
+                                        activeOpacity={0.7}
+                                        style={{
+                                          width: 32,
+                                          height: 32,
+                                          borderRadius: 8,
+                                          borderWidth: 1,
+                                          borderColor: "#FECACA",
+                                          backgroundColor: "#FEF2F2",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                        }}
+                                      >
+                                        <Trash2
+                                          size={14}
+                                          color={COLORS.error}
+                                        />
+                                      </TouchableOpacity>
                                       {isSubmittableDraft(
                                         schedule.detailedApprovalStatus,
                                       ) && (
@@ -3113,7 +3987,7 @@ return (
                                               schedule.id!,
                                             )
                                           }
-                                          className="items-center justify-center w-8 h-8 border border-green-200 rounded bg-green-50"
+                                          className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
                                         >
                                           <Send
                                             size={14}
@@ -3131,7 +4005,7 @@ return (
                                         onPress={() =>
                                           handleApproveSchedule(schedule.id!)
                                         }
-                                        className="items-center justify-center w-8 h-8 border border-green-200 rounded bg-green-50"
+                                        className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
                                       >
                                         <Check
                                           size={14}
@@ -3146,7 +4020,7 @@ return (
                                           setTempScheduleId(schedule.id!);
                                           setShowRejectModal(true);
                                         }}
-                                        className="items-center justify-center w-8 h-8 border border-red-200 rounded bg-red-50"
+                                        className="h-8 w-8 items-center justify-center rounded border border-red-200 bg-red-50"
                                       >
                                         <X size={14} color={COLORS.error} />
                                       </TouchableOpacity>
@@ -3159,7 +4033,7 @@ return (
                                           setChangeRequestReason("");
                                           setShowChangeRequestModal(true);
                                         }}
-                                        className="items-center justify-center w-8 h-8 border border-yellow-200 rounded bg-yellow-50"
+                                        className="h-8 w-8 items-center justify-center rounded border border-yellow-200 bg-yellow-50"
                                       >
                                         <MessageSquare
                                           size={14}
@@ -3180,7 +4054,7 @@ return (
                                         setChangeRequestReason("");
                                         setShowChangeRequestModal(true);
                                       }}
-                                      className="items-center justify-center w-8 h-8 border border-yellow-200 rounded bg-yellow-50"
+                                      className="h-8 w-8 items-center justify-center rounded border border-yellow-200 bg-yellow-50"
                                     >
                                       <MessageSquare
                                         size={14}
@@ -3202,7 +4076,7 @@ return (
         </Card>
 
         {/* Action Buttons */}
-        <View className="flex-row flex-wrap items-center justify-between gap-4 mb-4">
+        <View className="mb-4 flex-row flex-wrap items-center justify-between gap-4">
           <View className="flex-row flex-wrap gap-2">
             {canEdit &&
               dateRange
@@ -3248,7 +4122,7 @@ return (
 
         {/* Legend */}
         <Card className="p-6">
-          <Text className="mb-4 text-xs font-bold tracking-wider text-gray-900 uppercase">
+          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-900">
             Legend & Criteria
           </Text>
           <View className="flex-row flex-wrap gap-4">
@@ -3265,15 +4139,15 @@ return (
               <Text className="text-xs text-gray-500">Closing Meeting</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 border border-yellow-200 rounded-full bg-yellow-50" />
+              <View className="h-3 w-3 rounded-full border border-yellow-200 bg-yellow-50" />
               <Text className="text-xs text-gray-500">Scheduled</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 border border-blue-200 rounded-full bg-blue-50" />
+              <View className="h-3 w-3 rounded-full border border-blue-200 bg-blue-50" />
               <Text className="text-xs text-gray-500">In Progress</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 border border-green-200 rounded-full bg-green-50" />
+              <View className="h-3 w-3 rounded-full border border-green-200 bg-green-50" />
               <Text className="text-xs text-gray-500">Completed</Text>
             </View>
           </View>
@@ -3295,6 +4169,10 @@ return (
         departmentTeamInfo={departmentTeamInfo}
         departmentAuditors={departmentAuditors}
         departmentAuditees={departmentAuditees}
+        // ✅ NEW: competent auditor/auditee lists from backend
+        competentAuditors={competentAuditors}
+        competentAuditees={competentAuditees}
+        loadingCompetentAuditors={loadingCompetentAuditors}
         saving={saving}
         onSave={handleSave}
         onAuditDepartmentChange={handleAuditDepartmentChange}
@@ -3311,13 +4189,13 @@ return (
           onRequestClose={() => setShowBulkModal(false)}
         >
           <TouchableOpacity
-            className="items-center justify-center flex-1 p-5 bg-black/30"
+            className="flex-1 items-center justify-center bg-black/30 p-5"
             activeOpacity={1}
             onPress={() => setShowBulkModal(false)}
           >
             <TouchableOpacity
               activeOpacity={1}
-              className="bg-white rounded-2xl max-h-[90%] overflow-hidden"
+              className="max-h-[90%] overflow-hidden rounded-2xl bg-white"
               style={{
                 maxWidth: isDesktop ? 800 : "100%",
                 alignSelf: "center",
@@ -3326,7 +4204,7 @@ return (
               }}
             >
               {/* Header */}
-              <View className="flex-row items-center justify-between p-6 border-b border-gray-200">
+              <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
                 <View>
                   <Text className="text-lg font-bold text-gray-900">
                     Bulk Schedule
@@ -3340,7 +4218,7 @@ return (
                     setShowBulkModal(false);
                     setBulkSelectedAuditDepartment("");
                   }}
-                  className="items-center justify-center border border-gray-200 rounded-lg w-9 h-9"
+                  className="h-9 w-9 items-center justify-center rounded-lg border border-gray-200"
                 >
                   <X size={20} color="#64748B" />
                 </TouchableOpacity>
@@ -3350,7 +4228,7 @@ return (
               <ScrollView className="p-6" showsVerticalScrollIndicator={false}>
                 {/* Date Range */}
                 {/* Date Range - Week Locked */}
-                <View className="flex-row gap-4 mb-4">
+                <View className="mb-4 flex-row gap-4">
                   <View className="flex-1">
                     <Text className="mb-2 text-sm font-semibold text-gray-900">
                       From Date *
@@ -3407,13 +4285,13 @@ return (
                     Department to Audit *
                   </Text>
                   {!bulkData.fromDate || !bulkData.toDate ? (
-                    <View className="justify-center px-3 bg-gray-100 border border-gray-200 rounded-lg h-11">
+                    <View className="h-11 justify-center rounded-lg border border-gray-200 bg-gray-100 px-3">
                       <Text className="text-sm text-gray-500">
                         ⚠️ Please select From Date and To Date first
                       </Text>
                     </View>
                   ) : (
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                       <Picker
                         selectedValue={bulkSelectedAuditDepartment}
                         onValueChange={(itemValue: string) => {
@@ -3460,12 +4338,12 @@ return (
                 </View>
 
                 {/* Time Pickers */}
-                <View className="flex-row gap-4 mb-4">
+                <View className="mb-4 flex-row gap-4">
                   <View className="flex-1">
                     <Text className="mb-2 text-sm font-semibold text-gray-900">
                       Start Time *
                     </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                       <Picker
                         selectedValue={bulkData.startTime}
                         onValueChange={(itemValue: string) => {
@@ -3493,7 +4371,7 @@ return (
                     <Text className="mb-2 text-sm font-semibold text-gray-900">
                       End Time *
                     </Text>
-                    <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                       <Picker
                         selectedValue={bulkData.endTime}
                         onValueChange={(itemValue: string) =>
@@ -3517,7 +4395,7 @@ return (
                 </View>
 
                 {/* Special Event Checkbox */}
-                <View className="flex-row items-center gap-3 mb-4">
+                <View className="mb-4 flex-row items-center gap-3">
                   <TouchableOpacity
                     onPress={() =>
                       setBulkData({
@@ -3527,7 +4405,7 @@ return (
                         selectedDepartments: [],
                       })
                     }
-                    className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
+                    className="h-5 w-5 items-center justify-center rounded border border-gray-300"
                     style={{
                       backgroundColor: bulkData.isSpecialEvent
                         ? COLORS.accent
@@ -3549,7 +4427,7 @@ return (
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Event Type *
                       </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                         <Picker
                           selectedValue={bulkData.specialEventType}
                           onValueChange={(itemValue: string) =>
@@ -3574,12 +4452,12 @@ return (
                       </View>
                     </View>
                     {bulkData.specialEventType !== "LUNCH" && (
-                      <View className="flex-row gap-4 mb-4">
+                      <View className="mb-4 flex-row gap-4">
                         <View className="flex-1">
                           <Text className="mb-2 text-sm font-semibold text-gray-900">
                             Auditor *
                           </Text>
-                          <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                          <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                             <Picker
                               selectedValue={bulkData.auditorId}
                               onValueChange={(itemValue: string) =>
@@ -3591,23 +4469,21 @@ return (
                               style={{ height: 50 }}
                             >
                               <Picker.Item label="Select Auditor" value="" />
-                              {bulkTeamInfo.teamAuditorIds.length > 0 ? (
-                                bulkDepartmentAuditors
-                                  .filter((a) =>
-                                    bulkTeamInfo.teamAuditorIds.includes(
-                                      Number(a.id),
-                                    ),
-                                  )
-                                  .map((auditor) => (
-                                    <Picker.Item
-                                      key={auditor.id}
-                                      label={`${auditor.firstName} ${auditor.lastName}`}
-                                      value={auditor.id.toString()}
-                                    />
-                                  ))
+                              {bulkAvailableAuditors.length > 0 ? (
+                                bulkAvailableAuditors.map((auditor) => (
+                                  <Picker.Item
+                                    key={auditor.id}
+                                    label={`${auditor.firstName} ${auditor.lastName}`}
+                                    value={auditor.id.toString()}
+                                  />
+                                ))
                               ) : (
                                 <Picker.Item
-                                  label="No team auditors assigned"
+                                  label={
+                                    bulkLoadingCompetent
+                                      ? "Loading auditors..."
+                                      : "No auditors available"
+                                  }
                                   value=""
                                   enabled={false}
                                 />
@@ -3619,7 +4495,7 @@ return (
                           <Text className="mb-2 text-sm font-semibold text-gray-900">
                             Auditee *
                           </Text>
-                          <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                          <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                             <Picker
                               selectedValue={bulkData.auditeeId}
                               onValueChange={(itemValue: string) =>
@@ -3631,23 +4507,23 @@ return (
                               style={{ height: 50 }}
                             >
                               <Picker.Item label="Select Auditee" value="" />
-                              {bulkTeamInfo.auditeeIds.length > 0 ? (
-                                bulkDepartmentAuditees
-                                  .filter((a) =>
-                                    bulkTeamInfo.auditeeIds.includes(
-                                      Number(a.id),
-                                    ),
-                                  )
-                                  .map((auditee) => (
-                                    <Picker.Item
-                                      key={auditee.id}
-                                      label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                      value={auditee.id.toString()}
-                                    />
-                                  ))
+                              {bulkAvailableAuditees.length > 0 ? (
+                                bulkAvailableAuditees.map((auditee) => (
+                                  <Picker.Item
+                                    key={auditee.id}
+                                    label={`${auditee.firstName} ${auditee.lastName}${
+                                      auditee.role === "HOD" ? " (HOD)" : ""
+                                    }`}
+                                    value={auditee.id.toString()}
+                                  />
+                                ))
                               ) : (
                                 <Picker.Item
-                                  label="No matching auditees found"
+                                  label={
+                                    bulkLoadingCompetent
+                                      ? "Loading auditees..."
+                                      : "No auditees available"
+                                  }
                                   value=""
                                   enabled={false}
                                 />
@@ -3665,9 +4541,9 @@ return (
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Select Audit Elements *
                       </Text>
-                      <View className="p-4 border border-gray-200 rounded-lg max-h-60">
+                      <View className="max-h-60 rounded-lg border border-gray-200 p-4">
                         {!bulkSelectedAuditDepartment ? (
-                          <Text className="text-sm text-center text-gray-500">
+                          <Text className="text-center text-sm text-gray-500">
                             Please select a department first
                           </Text>
                         ) : (
@@ -3683,7 +4559,7 @@ return (
                               deptInfo.auditElements.length === 0
                             ) {
                               return (
-                                <Text className="text-sm text-center text-gray-500">
+                                <Text className="text-center text-sm text-gray-500">
                                   No audit elements available
                                 </Text>
                               );
@@ -3723,10 +4599,10 @@ return (
                                       selectedDepartments: updated,
                                     }));
                                   }}
-                                  className="flex-row items-center gap-3 mb-3"
+                                  className="mb-3 flex-row items-center gap-3"
                                 >
                                   <View
-                                    className="items-center justify-center w-5 h-5 border border-gray-300 rounded"
+                                    className="h-5 w-5 items-center justify-center rounded border border-gray-300"
                                     style={{
                                       backgroundColor:
                                         selectedElements.length ===
@@ -3744,7 +4620,7 @@ return (
                                     {bulkSelectedAuditDepartment}
                                   </Text>
                                 </TouchableOpacity>
-                                <View className="flex-row flex-wrap gap-2 ml-8">
+                                <View className="ml-8 flex-row flex-wrap gap-2">
                                   {deptInfo.auditElements.map((element) => (
                                     <TouchableOpacity
                                       key={element}
@@ -3795,7 +4671,7 @@ return (
                                           selectedDepartments: updated,
                                         }));
                                       }}
-                                      className={`px-3 py-1.5 rounded-full border flex-row items-center gap-2 ${selectedElements.includes(element) ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}
+                                      className={`flex-row items-center gap-2 rounded-full border px-3 py-1.5 ${selectedElements.includes(element) ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}
                                     >
                                       {selectedElements.includes(element) && (
                                         <Check
@@ -3818,11 +4694,11 @@ return (
                       </View>
                     </View>
                     {/* Auditor Picker */}
-                    <View className="flex-1 mb-4">
+                    <View className="mb-4 flex-1">
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Auditor *
                       </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                         <Picker
                           selectedValue={bulkData.auditorId}
                           onValueChange={(itemValue: string) =>
@@ -3831,23 +4707,21 @@ return (
                           style={{ height: 50 }}
                         >
                           <Picker.Item label="Select Auditor" value="" />
-                          {bulkTeamInfo.teamAuditorIds.length > 0 ? (
-                            bulkDepartmentAuditors
-                              .filter((a) =>
-                                bulkTeamInfo.teamAuditorIds.includes(
-                                  Number(a.id),
-                                ),
-                              )
-                              .map((auditor) => (
-                                <Picker.Item
-                                  key={auditor.id}
-                                  label={`${auditor.firstName} ${auditor.lastName}`}
-                                  value={auditor.id.toString()}
-                                />
-                              ))
+                          {bulkAvailableAuditors.length > 0 ? (
+                            bulkAvailableAuditors.map((auditor) => (
+                              <Picker.Item
+                                key={auditor.id}
+                                label={`${auditor.firstName || ""} ${auditor.lastName || ""}`.trim()}
+                                value={String(auditor.id)}
+                              />
+                            ))
                           ) : (
                             <Picker.Item
-                              label="No team auditors assigned"
+                              label={
+                                bulkLoadingCompetent
+                                  ? "Loading auditors..."
+                                  : "No auditors available"
+                              }
                               value=""
                               enabled={false}
                             />
@@ -3855,12 +4729,12 @@ return (
                         </Picker>
                       </View>
                     </View>
-                    {/* Auditee Picker */}
-                    <View className="flex-1 mb-4">
+                    {/* Auditee Picker — team-aware */}
+                    <View className="mb-4 flex-1">
                       <Text className="mb-2 text-sm font-semibold text-gray-900">
                         Auditee *
                       </Text>
-                      <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                         <Picker
                           selectedValue={bulkData.auditeeId}
                           onValueChange={(itemValue: string) =>
@@ -3869,21 +4743,23 @@ return (
                           style={{ height: 50 }}
                         >
                           <Picker.Item label="Select Auditee" value="" />
-                          {bulkTeamInfo.auditeeIds.length > 0 ? (
-                            bulkDepartmentAuditees
-                              .filter((a) =>
-                                bulkTeamInfo.auditeeIds.includes(Number(a.id)),
-                              )
-                              .map((auditee) => (
-                                <Picker.Item
-                                  key={auditee.id}
-                                  label={`${auditee.firstName} ${auditee.lastName}${auditee.role === "HOD" ? " (HOD)" : ""}`}
-                                  value={auditee.id.toString()}
-                                />
-                              ))
+                          {bulkAvailableAuditees.length > 0 ? (
+                            bulkAvailableAuditees.map((auditee) => (
+                              <Picker.Item
+                                key={auditee.id}
+                                label={`${auditee.firstName || ""} ${auditee.lastName || ""}${
+                                  auditee.role === "HOD" ? " (HOD)" : ""
+                                }`.trim()}
+                                value={String(auditee.id)}
+                              />
+                            ))
                           ) : (
                             <Picker.Item
-                              label="No matching auditees found"
+                              label={
+                                bulkLoadingCompetent
+                                  ? "Loading auditees..."
+                                  : "No auditees available"
+                              }
                               value=""
                               enabled={false}
                             />
@@ -3899,7 +4775,7 @@ return (
                   <Text className="mb-2 text-sm font-semibold text-gray-900">
                     Status
                   </Text>
-                  <View className="overflow-hidden bg-white border border-gray-200 rounded-lg">
+                  <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                     <Picker
                       selectedValue={bulkData.status}
                       onValueChange={(itemValue: string) =>
@@ -3917,13 +4793,13 @@ return (
               </ScrollView>
 
               {/* Footer Buttons */}
-              <View className="flex-row justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+              <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
                 <TouchableOpacity
                   onPress={() => {
                     setShowBulkModal(false);
                     setBulkSelectedAuditDepartment("");
                   }}
-                  className="justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
+                  className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
                 >
                   <Text className="text-sm font-semibold text-gray-700">
                     Cancel
@@ -3939,7 +4815,7 @@ return (
                     !bulkData.startTime ||
                     !bulkData.endTime
                   }
-                  className="flex-row items-center h-10 gap-2 px-5 rounded-lg"
+                  className="h-10 flex-row items-center gap-2 rounded-lg px-5"
                   style={{
                     backgroundColor:
                       saving ||
@@ -3996,6 +4872,31 @@ return (
         submitting={submitting}
       />
 
+      {/* ✅ NEW: LA Reject Modal (Daily Feasibility) */}
+      <ActionModal
+        isOpen={showLaRejectModal}
+        onClose={() => {
+          setShowLaRejectModal(false);
+          setLaRejectReason("");
+          setTempScheduleId(null);
+        }}
+        title="Reject Daily Feasibility"
+        description="Please provide a reason for rejecting this daily schedule:"
+        icon={XCircle}
+        iconColor={COLORS.error}
+        iconBg={COLORS.errorLight}
+        iconBorder={COLORS.errorBorder}
+        value={laRejectReason}
+        setValue={setLaRejectReason}
+        placeholder="Explain why this schedule is not feasible..."
+        onSubmit={() => {
+          if (tempScheduleId) handleLaRejectSingle(tempScheduleId);
+        }}
+        submitLabel="Reject Feasibility"
+        submitBg={COLORS.error}
+        submitting={submitting}
+      />
+
       {/* Change Request Modal */}
       <ActionModal
         isOpen={showChangeRequestModal}
@@ -4023,6 +4924,38 @@ return (
         submitLabel="Submit Request"
         submitBg={COLORS.warning}
         submitting={submitting}
+      />
+
+      <PDFViewer
+        visible={pdfViewer.visible}
+        pdfData={pdfViewer.pdfData}
+        fileName={pdfViewer.fileName}
+        auditId={String(selectedYear)}
+        auditNumber={`Form5-Detailed-${selectedYear}`}
+        pdfType="form5"
+        selectedMonth={selectedMonth}
+        fromDetailedView={true} // ✅ ADD THIS
+        forumGroups={[
+          {
+            id: `AUDIT-${selectedYear}`,
+            name: `📋 Audit Review ${selectedYear}`,
+            type: "Audit",
+          },
+          {
+            id: "AUDIT-general-forum",
+            name: "📢 General Discussion",
+            type: "General",
+          },
+        ]}
+        onClose={() =>
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+        }
+        onShareComplete={(forumId?: string) => {
+          showToast("PDF shared to forum successfully!", "success");
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+        }}
+        currentUser={user}
+        allUsers={allUsers}
       />
     </View>
   );

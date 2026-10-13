@@ -58,12 +58,20 @@ const isDesktop = isWeb && SCREEN_WIDTH >= 768;
 
 // --- Types & Interfaces ---
 interface UserData {
+  id?: number;
   email?: string;
   username?: string;
   firstName?: string;
   lastName?: string;
   department?: string;
   role?: string;
+  // ✅ NEW — plant/company scoping
+  plantId?: number | null;
+  plantCode?: string | null;
+  plantName?: string | null;
+  companyId?: number | null;
+  companyCode?: string | null;
+  companyName?: string | null;
 }
 
 interface Department {
@@ -268,9 +276,9 @@ const Tooltip = ({ content, children }: TooltipProps) => {
         {children}
       </Pressable>
       {show && (
-        <View className="absolute left-0 z-50 w-48 px-3 py-2 mb-2 bg-gray-800 rounded-lg shadow-lg bottom-full">
+        <View className="absolute bottom-full left-0 z-50 mb-2 w-48 rounded-lg bg-gray-800 px-3 py-2 shadow-lg">
           <Text className="text-xs text-white">{content}</Text>
-          <View className="absolute bottom-0 w-3 h-3 transform rotate-45 translate-y-1/2 bg-gray-800 left-4" />
+          <View className="absolute bottom-0 left-4 h-3 w-3 translate-y-1/2 rotate-45 transform bg-gray-800" />
         </View>
       )}
     </View>
@@ -292,7 +300,7 @@ const CustomSelect = ({
   return (
     <View className="mb-3">
       {label && (
-        <View className="flex-row items-center mb-1">
+        <View className="mb-1 flex-row items-center">
           <Text className="text-sm font-medium text-gray-600">{label}</Text>
           {required && <Text className="ml-1 text-red-500">*</Text>}
         </View>
@@ -313,17 +321,17 @@ const CustomSelect = ({
       {error && <Text className="mt-1 text-xs text-red-600">{error}</Text>}
       <Modal visible={isOpen} transparent animationType="fade">
         <Pressable
-          className="items-center justify-center flex-1 p-4 bg-black/30"
+          className="flex-1 items-center justify-center bg-black/30 p-4"
           onPress={() => setIsOpen(false)}
         >
           <View
-            className="overflow-hidden bg-white shadow-xl rounded-xl"
+            className="overflow-hidden rounded-xl bg-white shadow-xl"
             style={{
               width: isDesktop ? 320 : Math.min(SCREEN_WIDTH * 0.85, 400),
               maxHeight: 400,
             }}
           >
-            <View className="flex-row items-center justify-between p-3 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-3">
               <Text className="text-base font-semibold text-gray-800">
                 {label || "Select"}
               </Text>
@@ -339,10 +347,10 @@ const CustomSelect = ({
                     onChange(opt.value);
                     setIsOpen(false);
                   }}
-                  className={`p-4 border-b border-gray-100 ${value === opt.value ? "bg-indigo-50" : "bg-white"}`}
+                  className={`border-b border-gray-100 p-4 ${value === opt.value ? "bg-indigo-50" : "bg-white"}`}
                 >
                   <Text
-                    className={`text-sm ${value === opt.value ? "text-indigo-700 font-medium" : "text-gray-700"}`}
+                    className={`text-sm ${value === opt.value ? "font-medium text-indigo-700" : "text-gray-700"}`}
                   >
                     {opt.label}
                   </Text>
@@ -369,7 +377,7 @@ const InputField = ({
 }: InputFieldProps) => (
   <View className="mb-3">
     {label && (
-      <View className="flex-row items-center mb-1">
+      <View className="mb-1 flex-row items-center">
         <Text className="text-sm font-medium text-gray-600">{label}</Text>
         {required && <Text className="ml-1 text-red-500">*</Text>}
       </View>
@@ -423,7 +431,7 @@ const UserDropdown = ({
         }`}
       >
         <Text
-          className={`text-sm flex-1 ${selectedOption ? "text-gray-900" : "text-gray-400"}`}
+          className={`flex-1 text-sm ${selectedOption ? "text-gray-900" : "text-gray-400"}`}
         >
           {selectedOption?.label || placeholder}
         </Text>
@@ -433,22 +441,22 @@ const UserDropdown = ({
       <Modal visible={isOpen} transparent animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="items-center justify-center flex-1 bg-black/30"
+          className="flex-1 items-center justify-center bg-black/30"
         >
           {/* Backdrop to close the popup when clicking outside */}
           <Pressable
-            className="absolute top-0 bottom-0 left-0 right-0"
+            className="absolute bottom-0 left-0 right-0 top-0"
             onPress={() => setIsOpen(false)}
           />
 
           <View
-            className="overflow-hidden bg-white shadow-2xl rounded-2xl"
+            className="overflow-hidden rounded-2xl bg-white shadow-2xl"
             style={{
               maxHeight: "80%",
               width: isDesktop ? 400 : Math.min(SCREEN_WIDTH * 0.9, 400),
             }}
           >
-            <View className="flex-row items-center gap-2 p-4 border-b border-gray-200">
+            <View className="flex-row items-center gap-2 border-b border-gray-200 p-4">
               <Search size={18} color="#6B7280" />
               <TextInput
                 value={searchTerm}
@@ -485,7 +493,7 @@ const UserDropdown = ({
                       onChange(option);
                       setIsOpen(false);
                     }}
-                    className="p-4 border-b border-gray-100 active:bg-indigo-50"
+                    className="border-b border-gray-100 p-4 active:bg-indigo-50"
                   >
                     <Text className="text-sm font-medium text-gray-900">
                       {option.label}
@@ -551,7 +559,7 @@ const TeamMemberField = ({
   };
 
   return (
-    <View className="relative p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50">
+    <View className="relative mb-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
       <Pressable
         onPress={() => onRemove(index)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -566,10 +574,10 @@ const TeamMemberField = ({
       >
         <X size={18} color="#EF4444" />
       </Pressable>
-      <View className="flex-row gap-2 mb-3">
+      <View className="mb-3 flex-row gap-2">
         <Pressable
           onPress={() => handleModeSwitch("dropdown")}
-          className={`px-4 py-2 rounded-lg ${searchMode === "dropdown" ? "bg-indigo-600" : "bg-gray-200"}`}
+          className={`rounded-lg px-4 py-2 ${searchMode === "dropdown" ? "bg-indigo-600" : "bg-gray-200"}`}
         >
           <Text
             className={`text-xs font-medium ${searchMode === "dropdown" ? "text-white" : "text-gray-700"}`}
@@ -579,7 +587,7 @@ const TeamMemberField = ({
         </Pressable>
         <Pressable
           onPress={() => handleModeSwitch("manual")}
-          className={`px-4 py-2 rounded-lg ${searchMode === "manual" ? "bg-indigo-600" : "bg-gray-200"}`}
+          className={`rounded-lg px-4 py-2 ${searchMode === "manual" ? "bg-indigo-600" : "bg-gray-200"}`}
         >
           <Text
             className={`text-xs font-medium ${searchMode === "manual" ? "text-white" : "text-gray-700"}`}
@@ -598,11 +606,11 @@ const TeamMemberField = ({
               value={member.firstName || ""}
               onChangeText={(text) => onChange(index, "firstName", text)}
               placeholderTextColor="#9CA3AF"
-              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm"
               placeholder="First name"
             />
           </View>
-          <View className={isDesktop ? "flex-1" : "w-full mt-2"}>
+          <View className={isDesktop ? "flex-1" : "mt-2 w-full"}>
             <Text className="mb-1 text-sm font-medium text-gray-600">
               Last Name
             </Text>
@@ -610,7 +618,7 @@ const TeamMemberField = ({
               value={member.lastName || ""}
               onChangeText={(text) => onChange(index, "lastName", text)}
               placeholderTextColor="#9CA3AF"
-              className="w-full px-3 py-2.5 text-sm bg-white border border-gray-300 rounded-lg shadow-sm"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm"
               placeholder="Last name"
             />
           </View>
@@ -630,7 +638,7 @@ const TeamMemberField = ({
           />
         </View>
         <View>
-          <View className="flex-row items-center mb-1">
+          <View className="mb-1 flex-row items-center">
             <Text className="text-sm font-medium text-gray-600">
               Email / Username
             </Text>
@@ -648,7 +656,7 @@ const TeamMemberField = ({
                 required
               />
               {member.email && (
-                <View className="p-2 border border-green-200 rounded-lg bg-green-50">
+                <View className="rounded-lg border border-green-200 bg-green-50 p-2">
                   <Text className="text-xs text-green-700">
                     <Text className="font-semibold">Selected:</Text>{" "}
                     {member.firstName} {member.lastName}
@@ -663,14 +671,14 @@ const TeamMemberField = ({
                   value={member.email || ""}
                   onChangeText={(text) => onChange(index, "email", text)}
                   placeholderTextColor="#9CA3AF"
-                  className={`flex-1 rounded-lg border px-3 py-2.5 text-sm shadow-sm bg-white ${error ? "border-red-500" : "border-gray-300"}`}
+                  className={`flex-1 rounded-lg border bg-white px-3 py-2.5 text-sm shadow-sm ${error ? "border-red-500" : "border-gray-300"}`}
                   placeholder="Enter email"
                   keyboardType="email-address"
                 />
                 <Pressable
                   onPress={() => onSearchUser(member.email, index)}
                   disabled={loadingSearch === index || !member.email?.trim()}
-                  className={`justify-center px-4 rounded-lg ${isDesktop ? "" : "mt-2"} ${
+                  className={`justify-center rounded-lg px-4 ${isDesktop ? "" : "mt-2"} ${
                     loadingSearch === index || !member.email?.trim()
                       ? "bg-indigo-300"
                       : "bg-indigo-600 active:bg-indigo-700"
@@ -693,10 +701,10 @@ const TeamMemberField = ({
 };
 
 const LayoutTabs = ({ activeLayout, setActiveLayout }: LayoutTabsProps) => (
-  <View className="flex-row mt-2 mb-4 border-b border-gray-200">
+  <View className="mb-4 mt-2 flex-row border-b border-gray-200">
     <Pressable
       onPress={() => setActiveLayout("basic")}
-      className={`flex-1 items-center py-3 border-b-2 ${activeLayout === "basic" ? "border-indigo-600" : "border-transparent"}`}
+      className={`flex-1 items-center border-b-2 py-3 ${activeLayout === "basic" ? "border-indigo-600" : "border-transparent"}`}
     >
       <Text
         className={`text-sm font-medium ${activeLayout === "basic" ? "text-indigo-600" : "text-gray-500"}`}
@@ -706,7 +714,7 @@ const LayoutTabs = ({ activeLayout, setActiveLayout }: LayoutTabsProps) => (
     </Pressable>
     <Pressable
       onPress={() => setActiveLayout("team")}
-      className={`flex-1 items-center py-3 border-b-2 ${activeLayout === "team" ? "border-indigo-600" : "border-transparent"}`}
+      className={`flex-1 items-center border-b-2 py-3 ${activeLayout === "team" ? "border-indigo-600" : "border-transparent"}`}
     >
       <Text
         className={`text-sm font-medium ${activeLayout === "team" ? "text-indigo-600" : "text-gray-500"}`}
@@ -952,45 +960,87 @@ export default function D0PlanContain({
 
   const userOptions = useMemo<UserOption[]>(() => {
     if (!allUsers || allUsers.length === 0) return [];
-    return allUsers
-      .filter((u): u is UserData => Boolean(u && (u.email || u.username)))
-      .map((u) => ({
-        value: u.email || u.username || "",
-        label:
-          `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
-          u.username ||
-          u.email ||
-          "",
-        email: u.email,
-        username: u.username,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        department: u.department,
-      }))
-      .filter((opt) => opt.value && opt.label);
-  }, [allUsers]);
+
+    const myPlantId = (user as any)?.plantId ?? null;
+    const myCompanyId = (user as any)?.companyId ?? null;
+
+    return (
+      allUsers
+        .filter((u): u is UserData => Boolean(u && (u.email || u.username)))
+        // ✅ Defense-in-depth: same plant (or same company if no plant)
+        .filter((u: any) => {
+          if (myPlantId != null && u.plantId != null) {
+            return u.plantId === myPlantId;
+          }
+          if (myCompanyId != null && u.companyId != null) {
+            return u.companyId === myCompanyId;
+          }
+          return true; // MASTER or un-scoped user — don't filter
+        })
+        .map((u) => ({
+          value: u.email || u.username || "",
+          label:
+            `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+            u.username ||
+            u.email ||
+            "",
+          email: u.email,
+          username: u.username,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          department: u.department,
+        }))
+        .filter((opt) => opt.value && opt.label)
+    );
+  }, [allUsers, (user as any)?.plantId, (user as any)?.companyId]);
 
   useEffect(() => {
+    if (!user?.id) return; // wait for auth to load
     loadUsersAndDepartments();
-  }, []);
+  }, [user?.id, (user as any)?.plantId]);
 
   const loadUsersAndDepartments = async () => {
     try {
       setLoadingUsers(true);
-      const users = await userAPI.getAllUsers();
-      if (users && Array.isArray(users)) {
-        setAllUsers(users);
-        setUsersLoaded(true);
-        setDepartments(extractDepartmentsFromUsers(users));
-        setDepartmentsLoaded(true);
+
+      const myPlantId = (user as any)?.plantId ?? null;
+      const myCompanyId = (user as any)?.companyId ?? null;
+
+      let users: UserData[];
+
+      if (myPlantId != null) {
+        // ✅ Server-scoped fetch: only same-plant users
+        console.log("🔍 [D0] Loading users for plantId:", myPlantId);
+        users = (await userAPI.getUsersByPlant(myPlantId)) as any as UserData[];
       } else {
-        setAllUsers([]);
-        setUsersLoaded(true);
-        setDepartments(defaultDepartments);
-        setDepartmentsLoaded(true);
+        // No plant (MASTER etc.) — fall back to all users, filter by company if available
+        console.log("🔍 [D0] No plantId — falling back to all users");
+        users = (await userAPI.getAllUsers()) as any as UserData[];
+
+        if (myCompanyId != null) {
+          users = users.filter(
+            (u: any) => u.companyId == null || u.companyId === myCompanyId,
+          );
+        }
       }
+
+      console.log(`✅ [D0] Loaded ${users.length} users`);
+      console.log(
+        "   Sample:",
+        users.slice(0, 5).map((u: any) => ({
+          id: u.id,
+          email: u.email,
+          plantId: u.plantId,
+        })),
+      );
+
+      setAllUsers(users);
+      setDepartments(extractDepartmentsFromUsers(users));
+      setUsersLoaded(true);
+      setDepartmentsLoaded(true);
     } catch (err) {
-      console.error("Failed to load users", err);
+      console.error("❌ [D0] Failed to load users:", err);
+      setAllUsers([]);
       setUsersLoaded(true);
       setDepartmentsLoaded(true);
       setDepartments(defaultDepartments);
@@ -1027,7 +1077,15 @@ export default function D0PlanContain({
       if (!safeEventId) return;
       setLoading(true);
       try {
-        const res = await axios.get(`${API_URL_JSON}/${safeEventId}`);
+        const res = await axios.get(`${API_URL_JSON}/${safeEventId}`, {
+          headers: {
+            // ✅ ADD
+            "X-User-Id": String((user as any)?.id ?? ""),
+            "X-Timezone":
+              Intl.DateTimeFormat().resolvedOptions().timeZone ||
+              "Asia/Kolkata",
+          },
+        });
         if (res.data.success && res.data.data) {
           const backendData = res.data.data.content?.d0?.[0];
           if (backendData) {
@@ -1213,11 +1271,22 @@ export default function D0PlanContain({
     searchTerm: string,
   ): UserData | undefined => {
     if (!searchTerm || !allUsers.length) return undefined;
-    return allUsers.find(
-      (u) =>
+
+    const myPlantId = (user as any)?.plantId ?? null;
+    const myCompanyId = (user as any)?.companyId ?? null;
+
+    return allUsers.find((u: any) => {
+      const matches =
         u.email?.toLowerCase() === searchTerm.toLowerCase() ||
-        u.username?.toLowerCase() === searchTerm.toLowerCase(),
-    );
+        u.username?.toLowerCase() === searchTerm.toLowerCase();
+      if (!matches) return false;
+
+      if (myPlantId != null && u.plantId != null)
+        return u.plantId === myPlantId;
+      if (myCompanyId != null && u.companyId != null)
+        return u.companyId === myCompanyId;
+      return true;
+    });
   };
 
   const handleTeamMemberChange = (
@@ -1771,7 +1840,12 @@ export default function D0PlanContain({
       const response = await fetch(url, {
         method: method,
         body: formDataToSend,
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "X-User-Id": String((user as any)?.id ?? ""), // ✅ ADD
+          "X-Timezone":
+            Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+        },
       });
 
       console.log(`📥 [SUBMIT] Response Status Code: ${response.status}`);
@@ -1850,7 +1924,7 @@ export default function D0PlanContain({
   };
   if (loading && !submitted) {
     return (
-      <View className="items-center justify-center flex-1 bg-white">
+      <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#4F46E5" />
         <Text className="mt-4 text-gray-600">Loading...</Text>
       </View>
@@ -1858,13 +1932,13 @@ export default function D0PlanContain({
   }
 
   return (
-    <SafeAreaView className="flex-1 w-full bg-gray-50">
+    <SafeAreaView className="w-full flex-1 bg-gray-50">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 w-full"
+        className="w-full flex-1"
       >
         <ScrollView
-          className="flex-1 w-full px-3 py-2"
+          className="w-full flex-1 px-3 py-2"
           contentContainerStyle={{
             flexGrow: 1, // 👈 keeps content container full height (required for stretch)
             paddingBottom: 16, // 👈 reduced from 50 → removes dead space at bottom
@@ -1876,23 +1950,23 @@ export default function D0PlanContain({
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View className="w-full bg-[#2242a1]/90 p-3 rounded-t-xl border-t-[8px] border-[#ee161f] shadow-md">
+          <View className="w-full rounded-t-xl border-t-[8px] border-[#ee161f] bg-[#2242a1]/90 p-3 shadow-md">
             <View className="flex-row items-start justify-between">
               <View className="flex-1">
-                <View className="flex-row items-center gap-2 mb-1">
+                <View className="mb-1 flex-row items-center gap-2">
                   <Users size={20} color="#FFFFFF" />
                   <Text className="text-lg font-semibold text-white">
                     D0 – Plan & Contain
                   </Text>
                 </View>
                 {safeEventId && (
-                  <View className="self-start px-2 py-0.5 rounded-full bg-white/20 mt-1">
+                  <View className="mt-1 self-start rounded-full bg-white/20 px-2 py-0.5">
                     <Text className="text-xs text-white">{safeEventId}</Text>
                   </View>
                 )}
                 {formData.status !== "draft" && (
                   <View
-                    className={`self-start px-2 py-0.5 rounded-full mt-2 ${
+                    className={`mt-2 self-start rounded-full px-2 py-0.5 ${
                       formData.status === "approval pending"
                         ? "bg-yellow-200"
                         : formData.status === "in progress"
@@ -1916,7 +1990,7 @@ export default function D0PlanContain({
               </View>
               <Pressable
                 onPress={() => setIsPreviewOpen(true)}
-                className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 active:bg-white/20"
+                className="flex-row items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 active:bg-white/20"
               >
                 <Eye size={14} color="#FFFFFF" />
                 <Text className="text-xs font-medium text-white">Preview</Text>
@@ -1932,7 +2006,7 @@ export default function D0PlanContain({
           {/* Form Content */}
           {/* Form Content */}
           <View
-            className="w-full p-3 bg-white border border-gray-100 shadow-lg rounded-b-xl"
+            className="w-full rounded-b-xl border border-gray-100 bg-white p-3 shadow-lg"
             style={{ flexGrow: 1 }} // 👈 card absorbs ALL leftover vertical space
           >
             {activeLayout === "basic" ? (
@@ -2067,7 +2141,7 @@ export default function D0PlanContain({
                   />
 
                   <View>
-                    <View className="flex-row items-center gap-1 mb-1">
+                    <View className="mb-1 flex-row items-center gap-1">
                       <AlertCircle size={16} color="#EF4444" />
                       <Text className="text-sm font-semibold text-gray-800">
                         Defect Code
@@ -2082,7 +2156,7 @@ export default function D0PlanContain({
                         })
                       }
                       placeholderTextColor="#9CA3AF"
-                      className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm bg-white ${errors.defectCode ? "border-red-500" : "border-gray-300"}`}
+                      className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm shadow-sm ${errors.defectCode ? "border-red-500" : "border-gray-300"}`}
                       placeholder="Enter Defect Code"
                     />
                     {errors.defectCode && (
@@ -2093,7 +2167,7 @@ export default function D0PlanContain({
                   </View>
 
                   <View>
-                    <View className="flex-row items-center gap-1 mt-3 mb-1">
+                    <View className="mb-1 mt-3 flex-row items-center gap-1">
                       <CalendarDays size={16} color="#4F46E5" />
                       <Text className="text-sm font-semibold text-gray-800">
                         Date Discovered
@@ -2101,7 +2175,7 @@ export default function D0PlanContain({
                     </View>
 
                     {Platform.OS === "web" ? (
-                      <View className="w-full flex-row items-center px-3 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm">
+                      <View className="w-full flex-row items-center rounded-lg border border-gray-300 bg-white px-3 py-2.5 shadow-sm">
                         <View pointerEvents="none" className="mr-2">
                           <CalendarDays size={18} color="#6B7280" />
                         </View>
@@ -2137,7 +2211,7 @@ export default function D0PlanContain({
                     ) : (
                       <Pressable
                         onPress={showDatepicker}
-                        className="w-full flex-row items-center justify-between px-3 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm active:bg-gray-50"
+                        className="w-full flex-row items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5 shadow-sm active:bg-gray-50"
                       >
                         <Text
                           className={`text-sm ${formData.dateDiscovered ? "text-gray-900" : "text-gray-400"}`}
@@ -2151,13 +2225,13 @@ export default function D0PlanContain({
                 </View>
 
                 {/* Right Column on Desktop */}
-                <View className={isDesktop ? "flex-1 min-w-0" : "w-full mt-2"}>
+                <View className={isDesktop ? "min-w-0 flex-1" : "mt-2 w-full"}>
                   {/* Reported By Section */}
                   <View
-                    className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3"
                     style={{ flexGrow: 1 }} // 👈 right box matches left column height
                   >
-                    <View className="flex-row items-center gap-1 mb-2">
+                    <View className="mb-2 flex-row items-center gap-1">
                       <User size={16} color="#4F46E5" />
                       <Text className="text-sm font-semibold text-gray-800">
                         Reported By
@@ -2189,7 +2263,7 @@ export default function D0PlanContain({
                     />
 
                     {(isNcrBased8D || formData.reportedBy === "self") && (
-                      <View className="gap-1 mt-2">
+                      <View className="mt-2 gap-1">
                         <InputField
                           label="Person Name"
                           name="personName"
@@ -2217,11 +2291,11 @@ export default function D0PlanContain({
                     {(isNcrBased8D ? "self" : formData.reportedBy) ===
                       "customer" &&
                       !isNcrBased8D && (
-                        <View className="gap-1 mt-2">
+                        <View className="mt-2 gap-1">
                           <Text className="mb-1 text-sm font-medium text-gray-600">
                             Company
                           </Text>
-                          <View className="flex-row items-center gap-2 p-2 bg-white border border-gray-300 rounded-lg shadow-sm">
+                          <View className="flex-row items-center gap-2 rounded-lg border border-gray-300 bg-white p-2 shadow-sm">
                             {/* {console.log("🔍 DEBUG 3 - Rendering Image. formData.companyLogo =", formData.companyLogo)} */}
 
                             {!!formData.companyLogo && (
@@ -2238,7 +2312,7 @@ export default function D0PlanContain({
                                         } // ✅ Web: Extract only URI
                                       : { uri: String(formData.companyLogo) } // String URI fallback
                                 }
-                                className="w-10 h-10 border border-gray-200 rounded"
+                                className="h-10 w-10 rounded border border-gray-200"
                                 resizeMode="contain"
                               />
                             )}
@@ -2276,14 +2350,14 @@ export default function D0PlanContain({
                     {(isNcrBased8D ||
                       formData.reportedBy === "self" ||
                       formData.reportedBy === "customer") && (
-                      <View className="gap-1 pt-2 mt-2 border-t border-slate-300">
+                      <View className="mt-2 gap-1 border-t border-slate-300 pt-2">
                         <Text className="mb-1 text-sm font-medium text-gray-600">
                           Phone Number
                         </Text>
-                        <View className="flex-row items-stretch overflow-hidden bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <View className="flex-row items-stretch overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm">
                           <Pressable
                             onPress={() => setShowCountryPicker(true)}
-                            className="flex-row items-center justify-center px-2 border-r border-gray-300 bg-gray-50 shrink-0"
+                            className="shrink-0 flex-row items-center justify-center border-r border-gray-300 bg-gray-50 px-2"
                             style={{ minWidth: 92 }}
                           >
                             <Image
@@ -2339,10 +2413,10 @@ export default function D0PlanContain({
               <View className="w-full gap-4" style={{ flexGrow: 1 }}>
                 {/* Team Members Section */}
                 <View
-                  className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3"
                   style={{ flexGrow: 1 }}
                 >
-                  <View className="flex-row items-center justify-between mb-3">
+                  <View className="mb-3 flex-row items-center justify-between">
                     <View className="flex-row items-center gap-2">
                       <Users size={16} color="#4B5563" />
                       <Text className="text-sm font-medium text-gray-600">
@@ -2351,7 +2425,7 @@ export default function D0PlanContain({
                     </View>
                     <Pressable
                       onPress={addTeamMember}
-                      className="flex-row items-center gap-1 px-3 py-1.5 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                      className="flex-row items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 active:bg-indigo-700"
                     >
                       <Plus size={12} color="#FFFFFF" />
                       <Text className="text-xs font-medium text-white">
@@ -2392,7 +2466,7 @@ export default function D0PlanContain({
                       {formData.teamMembers.length === 0 && (
                         <Pressable
                           onPress={addTeamMember}
-                          className={`items-center py-6 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50 ${isDesktop ? "w-full" : ""}`}
+                          className={`items-center rounded-lg border-2 border-dashed border-gray-300 py-6 active:bg-gray-50 ${isDesktop ? "w-full" : ""}`}
                         >
                           <Users size={24} color="#9CA3AF" />
                           <Text className="mt-2 text-xs text-gray-500">
@@ -2411,7 +2485,7 @@ export default function D0PlanContain({
                 <View className={isDesktop ? "flex-row gap-4" : "gap-4"}>
                   {/* Pictures */}
                   <View className={isDesktop ? "flex-1" : "w-full"}>
-                    <View className="flex-row items-center mb-2">
+                    <View className="mb-2 flex-row items-center">
                       <Text className="text-sm font-medium text-gray-600">
                         Pictures
                       </Text>
@@ -2419,7 +2493,7 @@ export default function D0PlanContain({
                     </View>
                     <Pressable
                       onPress={() => handleFileUpload("image")}
-                      className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                      className="flex-row items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2.5 active:bg-gray-50"
                     >
                       <Plus size={16} color="#4B5563" />
                       <Text className="text-sm text-gray-600">
@@ -2439,7 +2513,7 @@ export default function D0PlanContain({
                       {formData.pictures.map((pic, idx) => (
                         <View
                           key={`pic-${pic.id || idx}`}
-                          className="w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                          className="mr-2 w-32 rounded-lg border border-gray-200 bg-white p-2"
                         >
                           <Image
                             source={{
@@ -2447,7 +2521,7 @@ export default function D0PlanContain({
                                 pic.uri ||
                                 "https://via.placeholder.com/112?text=Img",
                             }}
-                            className="w-full h-24 mb-2 rounded"
+                            className="mb-2 h-24 w-full rounded"
                             resizeMode="cover"
                           />
                           <TextInput
@@ -2462,11 +2536,11 @@ export default function D0PlanContain({
                                 pictures: newPics,
                               }));
                             }}
-                            className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                            className="mb-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs"
                           />
                           <Pressable
                             onPress={() => removeFile(idx, "image")}
-                            className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                            className="absolute right-1 top-1 rounded-full bg-red-500 p-1 active:bg-red-700"
                           >
                             <X size={12} color="#FFFFFF" />
                           </Pressable>
@@ -2482,7 +2556,7 @@ export default function D0PlanContain({
                     </Text>
                     <Pressable
                       onPress={() => handleFileUpload("pdf")}
-                      className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                      className="flex-row items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2.5 active:bg-gray-50"
                     >
                       <Plus size={16} color="#4B5563" />
                       <Text className="text-sm text-gray-600">Add PDFs</Text>
@@ -2495,12 +2569,12 @@ export default function D0PlanContain({
                       {formData.reports.map((rep, idx) => (
                         <View
                           key={`rep-${rep.id || idx}`}
-                          className="items-center w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                          className="mr-2 w-32 items-center rounded-lg border border-gray-200 bg-white p-2"
                         >
-                          <View className="items-center justify-center w-full h-24 mb-2 bg-indigo-100 border border-indigo-300 rounded">
+                          <View className="mb-2 h-24 w-full items-center justify-center rounded border border-indigo-300 bg-indigo-100">
                             <FileText size={24} color="#3730A3" />
                             <Text
-                              className="w-full px-1 mt-1 text-xs text-center text-indigo-800"
+                              className="mt-1 w-full px-1 text-center text-xs text-indigo-800"
                               numberOfLines={2}
                             >
                               {rep.title || `Report ${idx + 1}`}
@@ -2518,11 +2592,11 @@ export default function D0PlanContain({
                                 reports: newReports,
                               }));
                             }}
-                            className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                            className="mb-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs"
                           />
                           <Pressable
                             onPress={() => removeFile(idx, "pdf")}
-                            className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                            className="absolute right-1 top-1 rounded-full bg-red-500 p-1 active:bg-red-700"
                           >
                             <X size={12} color="#FFFFFF" />
                           </Pressable>
@@ -2539,7 +2613,7 @@ export default function D0PlanContain({
                   </Text>
                   <Pressable
                     onPress={() => handleFileUpload("video")}
-                    className="flex-row items-center justify-center gap-2 py-2.5 border-2 border-gray-300 border-dashed rounded-lg active:bg-gray-50"
+                    className="flex-row items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2.5 active:bg-gray-50"
                   >
                     <Plus size={16} color="#4B5563" />
                     <Text className="text-sm text-gray-600">Add Videos</Text>
@@ -2552,12 +2626,12 @@ export default function D0PlanContain({
                     {formData.videos.map((vid, idx) => (
                       <View
                         key={`vid-${vid.id || idx}`}
-                        className="items-center w-32 p-2 mr-2 bg-white border border-gray-200 rounded-lg"
+                        className="mr-2 w-32 items-center rounded-lg border border-gray-200 bg-white p-2"
                       >
-                        <View className="items-center justify-center w-full h-24 mb-2 bg-green-100 border border-green-300 rounded">
+                        <View className="mb-2 h-24 w-full items-center justify-center rounded border border-green-300 bg-green-100">
                           <Video size={24} color="#166534" />
                           <Text
-                            className="w-full px-1 mt-1 text-xs text-center text-green-800"
+                            className="mt-1 w-full px-1 text-center text-xs text-green-800"
                             numberOfLines={2}
                           >
                             {vid.title || `Video ${idx + 1}`}
@@ -2575,11 +2649,11 @@ export default function D0PlanContain({
                               videos: newVideos,
                             }));
                           }}
-                          className="w-full px-2 py-1.5 mb-1 text-xs bg-white border border-gray-300 rounded"
+                          className="mb-1 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs"
                         />
                         <Pressable
                           onPress={() => removeFile(idx, "video")}
-                          className="absolute p-1 bg-red-500 rounded-full top-1 right-1 active:bg-red-700"
+                          className="absolute right-1 top-1 rounded-full bg-red-500 p-1 active:bg-red-700"
                         >
                           <X size={12} color="#FFFFFF" />
                         </Pressable>
@@ -2590,12 +2664,12 @@ export default function D0PlanContain({
               </View>
             )}
             {/* Action Buttons */}
-            <View className="flex-row items-center justify-between pt-4 mt-4 border-t border-gray-200">
+            <View className="mt-4 flex-row items-center justify-between border-t border-gray-200 pt-4">
               <View>
                 {activeLayout === "team" && (
                   <Pressable
                     onPress={() => setActiveLayout("basic")}
-                    className="flex-row items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg active:bg-gray-50"
+                    className="flex-row items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 active:bg-gray-50"
                   >
                     <ChevronLeft size={16} color="#4B5563" />
                     <Text className="text-sm font-medium text-gray-600">
@@ -2609,7 +2683,7 @@ export default function D0PlanContain({
                 {activeLayout === "basic" && (
                   <Pressable
                     onPress={() => setActiveLayout("team")}
-                    className="flex-row items-center gap-1 px-4 py-2 bg-indigo-600 rounded-lg active:bg-indigo-700"
+                    className="flex-row items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 active:bg-indigo-700"
                   >
                     <Text className="text-sm font-medium text-white">Next</Text>
                     <ChevronRight size={16} color="#FFFFFF" />
@@ -2623,7 +2697,7 @@ export default function D0PlanContain({
                       <Pressable
                         onPress={handleSubmit}
                         disabled={submitted || loading}
-                        className={`px-4 py-2 rounded-lg ${submitted || loading ? "bg-green-600" : "bg-cyan-600 active:bg-cyan-700"}`}
+                        className={`rounded-lg px-4 py-2 ${submitted || loading ? "bg-green-600" : "bg-cyan-600 active:bg-cyan-700"}`}
                       >
                         <View className="flex-row items-center gap-2">
                           {loading && (
@@ -2644,7 +2718,7 @@ export default function D0PlanContain({
                         <Pressable
                           onPress={handleApprove}
                           disabled={loading}
-                          className="flex-row items-center gap-1 px-3 py-2 bg-green-600 rounded-lg active:bg-green-700 disabled:opacity-70"
+                          className="flex-row items-center gap-1 rounded-lg bg-green-600 px-3 py-2 active:bg-green-700 disabled:opacity-70"
                         >
                           <CheckCircle size={16} color="#FFFFFF" />
                           <Text className="text-sm font-medium text-white">
@@ -2654,7 +2728,7 @@ export default function D0PlanContain({
                         <Pressable
                           onPress={handleReject}
                           disabled={loading}
-                          className="flex-row items-center gap-1 px-3 py-2 bg-red-600 rounded-lg active:bg-red-700 disabled:opacity-70"
+                          className="flex-row items-center gap-1 rounded-lg bg-red-600 px-3 py-2 active:bg-red-700 disabled:opacity-70"
                         >
                           <XCircle size={16} color="#FFFFFF" />
                           <Text className="text-sm font-medium text-white">
@@ -2663,14 +2737,14 @@ export default function D0PlanContain({
                         </Pressable>
                       </View>
                     ) : formData.status === "in progress" ? (
-                      <View className="flex-row items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+                      <View className="flex-row items-center gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2">
                         <CheckCircle size={16} color="#166534" />
                         <Text className="text-xs font-medium text-green-800">
                           ✓ Approved & Locked
                         </Text>
                       </View>
                     ) : formData.status === "rejected" ? (
-                      <View className="flex-row items-center gap-2 px-3 py-2 bg-red-100 border border-red-300 rounded-lg">
+                      <View className="flex-row items-center gap-2 rounded-lg border border-red-300 bg-red-100 px-3 py-2">
                         <XCircle size={16} color="#991B1B" />
                         <Text className="text-xs font-medium text-red-800">
                           ✗ Rejected
@@ -2679,7 +2753,7 @@ export default function D0PlanContain({
                     ) : formData.status === "approval pending" &&
                       !isHOD &&
                       !isAdmin ? (
-                      <View className="flex-row items-center gap-2 px-3 py-2 bg-yellow-100 border border-yellow-300 rounded-lg">
+                      <View className="flex-row items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-100 px-3 py-2">
                         <ActivityIndicator size="small" color="#854D0E" />
                         <Text className="text-xs font-medium text-yellow-800">
                           ⏳ Awaiting for HOD Approval
@@ -2707,10 +2781,10 @@ export default function D0PlanContain({
         statusBarTranslucent={true}
         onRequestClose={() => setIsPreviewOpen(false)}
       >
-        <View className="flex-row flex-1 bg-black/50">
+        <View className="flex-1 flex-row bg-black/50">
           {/* Left Backdrop (closes the drawer when tapped) */}
           <Pressable
-            className="flex-1 h-full"
+            className="h-full flex-1"
             onPress={() => setIsPreviewOpen(false)}
           />
 
@@ -2727,13 +2801,13 @@ export default function D0PlanContain({
               elevation: 15,
             }}
           >
-            <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 bg-white p-4">
               <Text className="text-lg font-semibold text-gray-800">
                 Preview
               </Text>
               <Pressable
                 onPress={() => setIsPreviewOpen(false)}
-                className="p-2 bg-gray-100 rounded-full active:bg-gray-200"
+                className="rounded-full bg-gray-100 p-2 active:bg-gray-200"
               >
                 <X size={20} color="#4B5563" />
               </Pressable>
@@ -2764,7 +2838,7 @@ export default function D0PlanContain({
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          className="items-center justify-center flex-1 bg-black/40"
+          className="flex-1 items-center justify-center bg-black/40"
         >
           <Pressable
             className="absolute inset-0"
@@ -2772,13 +2846,13 @@ export default function D0PlanContain({
           />
 
           <View
-            className="overflow-hidden bg-white shadow-2xl rounded-2xl"
+            className="overflow-hidden rounded-2xl bg-white shadow-2xl"
             style={{
               width: isDesktop ? 400 : Math.min(SCREEN_WIDTH * 0.92, 480),
               maxHeight: SCREEN_HEIGHT * 0.78,
             }}
           >
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
               <Text className="text-base font-semibold text-gray-800">
                 Select Country
               </Text>
@@ -2787,15 +2861,15 @@ export default function D0PlanContain({
               </Pressable>
             </View>
 
-            <View className="px-4 py-3 border-b border-gray-200">
-              <View className="flex-row items-center px-3 bg-gray-100 rounded-lg">
+            <View className="border-b border-gray-200 px-4 py-3">
+              <View className="flex-row items-center rounded-lg bg-gray-100 px-3">
                 <Search size={16} color="#6B7280" />
                 <TextInput
                   value={countrySearch}
                   onChangeText={setCountrySearch}
                   placeholder="Search country or code..."
                   placeholderTextColor="#9CA3AF"
-                  className="flex-1 py-2.5 px-2 text-sm text-gray-900"
+                  className="flex-1 px-2 py-2.5 text-sm text-gray-900"
                   autoFocus={Platform.OS !== "android"}
                 />
               </View>
@@ -2874,9 +2948,9 @@ export default function D0PlanContain({
           visible={showDatePicker}
           onRequestClose={() => setShowDatePicker(false)}
         >
-          <View className="justify-end flex-1 bg-black/40">
-            <View className="p-4 pb-8 bg-white rounded-t-2xl">
-              <View className="flex-row items-center justify-between mb-3">
+          <View className="flex-1 justify-end bg-black/40">
+            <View className="rounded-t-2xl bg-white p-4 pb-8">
+              <View className="mb-3 flex-row items-center justify-between">
                 <Pressable onPress={() => setShowDatePicker(false)}>
                   <Text className="text-base font-medium text-red-500">
                     Cancel

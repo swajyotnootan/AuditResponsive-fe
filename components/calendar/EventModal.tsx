@@ -300,25 +300,41 @@ export default function EventModal({
                 </View>
 
                 {/* Co-Auditors if any */}
-                {event.coAuditorNames && event.coAuditorNames.length > 0 && (
-                  <View style={styles.infoRow}>
-                    <UserCheck size={16} color="#8b5cf6" />
-                    <Text style={styles.infoLabel}>Co-Auditors:</Text>
-                    <View style={styles.coAuditorContainer}>
-                      {event.coAuditorNames.map(
-                        (name: string, index: number) => (
-                          <UserAvatar
-                            key={index}
-                            userId={event.coAuditorIdList?.[index]}
-                            userName={name}
-                            size="xs"
-                            showName={true}
-                          />
-                        ),
-                      )}
+                {/* Co-Auditors if any */}
+                {(() => {
+                  // ✅ Filter out the main auditor's name from co-auditors
+                  const cleanCoAuditors = (event.coAuditorNames || []).filter(
+                    (name: string) =>
+                      name && name.trim() !== "" && name !== event.auditorName,
+                  );
+
+                  // ✅ Only render if there are actual co-auditors
+                  if (cleanCoAuditors.length === 0) return null;
+
+                  return (
+                    <View style={styles.infoRow}>
+                      <UserCheck size={16} color="#8b5cf6" />
+                      <Text style={styles.infoLabel}>Co-Auditors:</Text>
+                      <View style={styles.coAuditorContainer}>
+                        {cleanCoAuditors.map((name: string, index: number) => {
+                          // ✅ Find the correct ID for this name
+                          const originalIndex = (
+                            event.coAuditorNames || []
+                          ).indexOf(name);
+                          return (
+                            <UserAvatar
+                              key={`${name}-${index}`}
+                              userId={event.coAuditorIdList?.[originalIndex]}
+                              userName={name}
+                              size="xs"
+                              showName={true}
+                            />
+                          );
+                        })}
+                      </View>
                     </View>
-                  </View>
-                )}
+                  );
+                })()}
               </View>
 
               {/* Description */}

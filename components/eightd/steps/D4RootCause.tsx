@@ -19,11 +19,16 @@ import { useToast } from "../../context/ToastContext";
 const { width } = Dimensions.get("window");
 const isMobile = width < 768;
 
+/* ------------------------------------------------------------------ */
+/* Types                                                               */
+/* ------------------------------------------------------------------ */
 interface D4FormData {
   eventId: string;
   rootCauseSummary: string;
   businessProcessFlaws: string;
   whyNotDetected: string;
+
+  // ⭐ NEW — fishbone categories
 }
 
 interface D4RootCauseProps {
@@ -31,6 +36,9 @@ interface D4RootCauseProps {
   updateParent?: (data: D4FormData[]) => void;
 }
 
+/* ------------------------------------------------------------------ */
+/* Component                                                           */
+/* ------------------------------------------------------------------ */
 export default function D4RootCause({
   eventId,
   updateParent,
@@ -47,6 +55,9 @@ export default function D4RootCause({
     whyNotDetected: "",
   });
 
+  /* -------------------------------------------------------------- */
+  /* Load                                                            */
+  /* -------------------------------------------------------------- */
   useEffect(() => {
     const fetchData = async () => {
       if (!eventId) {
@@ -63,6 +74,7 @@ export default function D4RootCause({
             rootCauseSummary: d4Data.rootCauseSummary || "",
             businessProcessFlaws: d4Data.businessProcessFlaws || "Yes",
             whyNotDetected: d4Data.whyNotDetected || "",
+            // ⭐ load saved categories, fallback to 6M default
           });
           setRecordId(eventId);
         }
@@ -77,7 +89,11 @@ export default function D4RootCause({
     fetchData();
   }, [eventId]);
 
-  const handleChange = (field: keyof D4FormData, value: string) => {
+  /* -------------------------------------------------------------- */
+  /* Handlers                                                        */
+  /* -------------------------------------------------------------- */
+  // ⭐ CHANGED: value is now "any" so it accepts FishboneCategory[]
+  const handleChange = (field: keyof D4FormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -128,6 +144,9 @@ export default function D4RootCause({
     }
   };
 
+  /* -------------------------------------------------------------- */
+  /* Render                                                          */
+  /* -------------------------------------------------------------- */
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -139,6 +158,7 @@ export default function D4RootCause({
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Icon name="lightbulb" size={20} color="#FFFFFF" />
@@ -154,7 +174,12 @@ export default function D4RootCause({
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Event ID */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Event ID</Text>
           <TextInput
@@ -166,6 +191,7 @@ export default function D4RootCause({
           />
         </View>
 
+        {/* Root Cause Summary */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>
             Root Cause Summary <Text style={styles.required}>*</Text>
@@ -181,6 +207,7 @@ export default function D4RootCause({
           />
         </View>
 
+        {/* Business Process Flaws */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>
             Does the Root Cause reveal flaws in business processes?
@@ -213,6 +240,7 @@ export default function D4RootCause({
           </View>
         </View>
 
+        {/* Why Not Detected */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>
             Reason problem was not detected/resolved
@@ -228,6 +256,7 @@ export default function D4RootCause({
           />
         </View>
 
+        {/* Submit */}
         <TouchableOpacity
           style={[styles.submitButton, saving && styles.submitDisabled]}
           onPress={handleSubmit}
@@ -244,6 +273,9 @@ export default function D4RootCause({
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Styles                                                              */
+/* ------------------------------------------------------------------ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -277,26 +309,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    flex: 1, // 👈 ADD THIS
-    minWidth: 0, // 👈 ADD THIS
-    marginRight: 8, // 👈 ADD THIS
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   headerTitle: {
-    fontSize: isMobile ? 14 : 20, // 👈 Smaller font on mobile
+    fontSize: isMobile ? 14 : 20,
     fontWeight: "600",
     color: "#FFFFFF",
-    flexShrink: 1, // 👈 ADD THIS (Allows text to truncate with "...")
+    flexShrink: 1,
   },
   headerBadge: {
     backgroundColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
-    flexShrink: 0, // 👈 ADD THIS
-  },
-  headerBadgeText: {
-    fontSize: 10, // 👈 Smaller font on mobile
+    flexShrink: 0,
     color: "#FFFFFF",
+    fontSize: 10,
   },
   autoFillButton: {
     flexDirection: "row",
@@ -306,7 +336,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    flexShrink: 0, // 👈 ADD THIS (Prevents button from being squished)
+    flexShrink: 0,
+  },
+  autoFillButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
   },
   content: {
     flex: 1,
@@ -332,6 +367,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: "#1F2937",
+    backgroundColor: "#FFFFFF",
   },
   textArea: {
     minHeight: 80,
@@ -387,11 +423,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
-  },
-
-  autoFillButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
   },
 });

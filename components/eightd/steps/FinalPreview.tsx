@@ -109,9 +109,9 @@ const SimpleTooltip = ({ content, children }: TooltipProps) => {
         {children}
       </TouchableOpacity>
       {visible && (
-        <View className="absolute bottom-full mb-2 left-0 bg-gray-800 px-3 py-2 rounded-lg z-50 min-w-[150px]">
+        <View className="absolute bottom-full left-0 z-50 mb-2 min-w-[150px] rounded-lg bg-gray-800 px-3 py-2">
           <Text className="text-xs text-white">{content}</Text>
-          <View className="absolute bottom-[-6px] left-4 w-3 h-3 bg-gray-800 transform rotate-45" />
+          <View className="absolute bottom-[-6px] left-4 h-3 w-3 rotate-45 transform bg-gray-800" />
         </View>
       )}
     </View>
@@ -694,9 +694,9 @@ export default function FinalPreview({
           (value[0].action && typeof value[0].action === "string"))
       ) {
         return (
-          <View className="pl-5 mt-1">
+          <View className="mt-1 pl-5">
             {value.map((item: any, idx: number) => (
-              <View key={idx} className="flex-row mb-1">
+              <View key={idx} className="mb-1 flex-row">
                 <Text className="text-gray-700">
                   • {typeof item === "string" ? item : item.action}
                 </Text>
@@ -711,7 +711,7 @@ export default function FinalPreview({
             {value.map((member: any, idx: number) => (
               <View
                 key={idx}
-                className="p-2 mb-2 border border-gray-200 rounded bg-gray-50"
+                className="mb-2 rounded border border-gray-200 bg-gray-50 p-2"
               >
                 <Text>
                   <Text className="font-semibold">Name: </Text>
@@ -735,9 +735,9 @@ export default function FinalPreview({
         );
       }
       return (
-        <View className="flex-row flex-wrap gap-2 mt-1">
+        <View className="mt-1 flex-row flex-wrap gap-2">
           {value.map((email: string, idx: number) => (
-            <View key={idx} className="px-2 py-1 bg-blue-100 rounded-full">
+            <View key={idx} className="rounded-full bg-blue-100 px-2 py-1">
               <Text className="text-sm text-blue-800">{email}</Text>
             </View>
           ))}
@@ -753,7 +753,7 @@ export default function FinalPreview({
 
   if (loading) {
     return (
-      <View className="items-center justify-center flex-1 h-64 bg-white">
+      <View className="h-64 flex-1 items-center justify-center bg-white">
         <ActivityIndicator size="large" color="#4F46E5" />
         <Text className="mt-2 text-lg text-gray-600">
           Loading final preview...
@@ -763,7 +763,7 @@ export default function FinalPreview({
   }
   if (!eventData) {
     return (
-      <View className="items-center justify-center flex-1 p-6 bg-white">
+      <View className="flex-1 items-center justify-center bg-white p-6">
         <Text className="text-center text-gray-600">
           No data available for this event.
         </Text>
@@ -788,19 +788,19 @@ export default function FinalPreview({
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      <View className="p-4 bg-white border border-gray-200 shadow-lg rounded-xl">
-        <View className="flex-row items-center justify-between pb-4 mb-4 border-b border-gray-200">
+      <View className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
+        <View className="mb-4 flex-row items-center justify-between border-b border-gray-200 pb-4">
           <View className="flex-row items-center">
             <Image
               source={require("@/assets/Stratum.png")}
-              className="w-10 h-10 mr-3"
+              className="mr-3 h-10 w-10"
               style={{ width: 70, height: 70 }}
               resizeMode="contain"
             />
-            <View className="pl-3 border-l border-gray-300" />
+            <View className="border-l border-gray-300 pl-3" />
           </View>
-          <View className="items-center flex-1 mx-4">
-            <Text className="text-xl font-bold text-center text-gray-900">
+          <View className="mx-4 flex-1 items-center">
+            <Text className="text-center text-xl font-bold text-gray-900">
               8D Report - Preview
             </Text>
             <Text className="mt-1 text-center text-gray-600">
@@ -811,7 +811,7 @@ export default function FinalPreview({
         </View>
 
         {eventData.status === "submitted" && (
-          <View className="p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+          <View className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3">
             <View className="flex-row items-center gap-2">
               <CheckCircle size={20} color="#16A34A" />
               <Text className="font-semibold text-green-800">
@@ -821,7 +821,7 @@ export default function FinalPreview({
           </View>
         )}
         {memberError && (
-          <View className="p-3 mb-4 border border-red-200 rounded-lg bg-red-50">
+          <View className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
             <View className="flex-row items-center gap-2">
               <XCircle size={16} color="#DC2626" />
               <Text className="text-sm text-red-800">{memberError}</Text>
@@ -829,7 +829,7 @@ export default function FinalPreview({
           </View>
         )}
         {memberSuccess && (
-          <View className="p-3 mb-4 border border-green-200 rounded-lg bg-green-50">
+          <View className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3">
             <View className="flex-row items-center gap-2">
               <CheckCircle size={16} color="#16A34A" />
               <Text className="text-sm text-green-800">{memberSuccess}</Text>
@@ -845,15 +845,15 @@ export default function FinalPreview({
             return (
               <View
                 key={stepKey}
-                className="pb-6 mb-6 border-b border-gray-200 last:border-b-0"
+                className="mb-6 border-b border-gray-200 pb-6 last:border-b-0"
               >
-                <View className="flex-row items-center gap-2 mb-3">
+                <View className="mb-3 flex-row items-center gap-2">
                   <Icon size={24} color="#4F46E5" />
                   <Text className="text-lg font-semibold">
                     {stepTitles[stepKey]}
                   </Text>
                 </View>
-                <View className="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50">
+                <View className="rounded-lg border border-gray-200 bg-gray-50 p-4 shadow-sm">
                   {stepFields[stepKey].map((field) => {
                     const value = stepData[field.key];
                     if (field.key === "additionalEmails" && stepKey === "d0") {
@@ -870,18 +870,18 @@ export default function FinalPreview({
                       return (
                         <View
                           key={field.key}
-                          className="py-2 border-b border-gray-200 last:border-b-0"
+                          className="border-b border-gray-200 py-2 last:border-b-0"
                         >
                           <Text className="mb-2 font-medium text-gray-800">
                             {field.label}:
                           </Text>
                           {isEditingMembers ? (
                             <View className="space-y-3">
-                              <View className="p-3 bg-white border border-gray-200 rounded-lg max-h-96">
+                              <View className="max-h-96 rounded-lg border border-gray-200 bg-white p-3">
                                 {tempTeamMembers.map((member, idx) => (
                                   <View
                                     key={idx}
-                                    className="flex-row items-start gap-2 p-3 mb-2 border border-gray-200 rounded-lg bg-gray-50"
+                                    className="mb-2 flex-row items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3"
                                   >
                                     <View className="flex-1">
                                       <View className="mb-2">
@@ -897,7 +897,7 @@ export default function FinalPreview({
                                               text,
                                             )
                                           }
-                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                           placeholder="First name"
                                         />
                                       </View>
@@ -914,7 +914,7 @@ export default function FinalPreview({
                                               text,
                                             )
                                           }
-                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                           placeholder="Last name"
                                         />
                                       </View>
@@ -931,7 +931,7 @@ export default function FinalPreview({
                                               text,
                                             )
                                           }
-                                          className={`w-full px-3 py-2 text-sm bg-white border rounded-lg ${member.email && !isValidEmail(member.email) ? "border-red-300 bg-red-50" : "border-gray-300"}`}
+                                          className={`w-full rounded-lg border bg-white px-3 py-2 text-sm ${member.email && !isValidEmail(member.email) ? "border-red-300 bg-red-50" : "border-gray-300"}`}
                                           placeholder="team.member@example.com"
                                           keyboardType="email-address"
                                           autoCapitalize="none"
@@ -956,11 +956,11 @@ export default function FinalPreview({
                                               text,
                                             )
                                           }
-                                          className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                                          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                           placeholder="Department"
                                         />
                                       </View>
-                                      <View className="flex-row items-center gap-2 mt-2">
+                                      <View className="mt-2 flex-row items-center gap-2">
                                         <TouchableOpacity
                                           onPress={() =>
                                             updateMemberField(
@@ -969,10 +969,10 @@ export default function FinalPreview({
                                               !member.isExternal,
                                             )
                                           }
-                                          className="items-center justify-center w-5 h-5 bg-white border border-gray-300 rounded"
+                                          className="h-5 w-5 items-center justify-center rounded border border-gray-300 bg-white"
                                         >
                                           {member.isExternal && (
-                                            <View className="w-3 h-3 bg-blue-500 rounded-sm" />
+                                            <View className="h-3 w-3 rounded-sm bg-blue-500" />
                                           )}
                                         </TouchableOpacity>
                                         <Text className="text-xs text-gray-600">
@@ -982,7 +982,7 @@ export default function FinalPreview({
                                     </View>
                                     <TouchableOpacity
                                       onPress={() => removeMemberField(idx)}
-                                      className="p-2 bg-red-100 rounded-full"
+                                      className="rounded-full bg-red-100 p-2"
                                     >
                                       <Trash2 size={16} color="#EF4444" />
                                     </TouchableOpacity>
@@ -1000,7 +1000,7 @@ export default function FinalPreview({
                               <View className="flex-row flex-wrap gap-2">
                                 <TouchableOpacity
                                   onPress={addNewMemberField}
-                                  className="flex-row items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg active:bg-blue-700"
+                                  className="flex-row items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 active:bg-blue-700"
                                 >
                                   <Plus size={16} color="white" />
                                   <Text className="text-sm text-white">
@@ -1017,7 +1017,7 @@ export default function FinalPreview({
                                         !isValidEmail(member.email),
                                     )
                                   }
-                                  className={`flex-row items-center gap-2 px-4 py-2 rounded-lg ${updatingMembers || tempTeamMembers.some((member) => !member.email || !isValidEmail(member.email)) ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
+                                  className={`flex-row items-center gap-2 rounded-lg px-4 py-2 ${updatingMembers || tempTeamMembers.some((member) => !member.email || !isValidEmail(member.email)) ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
                                 >
                                   {updatingMembers ? (
                                     <ActivityIndicator
@@ -1036,7 +1036,7 @@ export default function FinalPreview({
                                 <TouchableOpacity
                                   onPress={cancelEditingMembers}
                                   disabled={updatingMembers}
-                                  className="flex-row items-center gap-2 px-4 py-2 bg-gray-600 rounded-lg active:bg-gray-700"
+                                  className="flex-row items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 active:bg-gray-700"
                                 >
                                   <X size={16} color="white" />
                                   <Text className="text-sm text-white">
@@ -1044,7 +1044,7 @@ export default function FinalPreview({
                                   </Text>
                                 </TouchableOpacity>
                               </View>
-                              <View className="p-3 border border-blue-200 rounded-lg bg-blue-50">
+                              <View className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                                 <Text className="text-xs text-blue-800">
                                   <Text className="font-semibold">
                                     Instructions:
@@ -1065,12 +1065,12 @@ export default function FinalPreview({
                                     (member: any, idx: number) => (
                                       <View
                                         key={idx}
-                                        className="p-3 bg-white border border-gray-200 rounded-lg"
+                                        className="rounded-lg border border-gray-200 bg-white p-3"
                                       >
                                         <View className="flex-row items-start justify-between">
                                           <View className="flex-1">
-                                            <View className="flex-row items-center gap-2 mb-2">
-                                              <View className="items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
+                                            <View className="mb-2 flex-row items-center gap-2">
+                                              <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-100">
                                                 <Users
                                                   size={14}
                                                   color="#2563EB"
@@ -1135,12 +1135,12 @@ export default function FinalPreview({
                                                   </Text>
                                                 </SimpleTooltip>
                                               )}
-                                              <View className="flex-row items-center gap-2 mt-1">
+                                              <View className="mt-1 flex-row items-center gap-2">
                                                 <Text className="text-xs font-medium text-gray-600">
                                                   Status:
                                                 </Text>
                                                 <View
-                                                  className={`px-2 py-0.5 rounded-full ${member.isExternal ? "bg-orange-100" : "bg-green-100"}`}
+                                                  className={`rounded-full px-2 py-0.5 ${member.isExternal ? "bg-orange-100" : "bg-green-100"}`}
                                                 >
                                                   <Text
                                                     className={`text-xs ${member.isExternal ? "text-orange-800" : "text-green-800"}`}
@@ -1159,7 +1159,7 @@ export default function FinalPreview({
                                   )}
                                 </View>
                               ) : (
-                                <View className="items-center py-6 border-2 border-gray-300 border-dashed rounded-lg">
+                                <View className="items-center rounded-lg border-2 border-dashed border-gray-300 py-6">
                                   <Users size={32} color="#9CA3AF" />
                                   <Text className="mt-2 text-gray-500">
                                     No team members added yet
@@ -1167,10 +1167,10 @@ export default function FinalPreview({
                                 </View>
                               )}
                               {(isHOD || checkIsInitiator) && (
-                                <View className="pt-3 border-t border-gray-200">
+                                <View className="border-t border-gray-200 pt-3">
                                   <TouchableOpacity
                                     onPress={startEditingTeamMembers}
-                                    className="flex-row items-center self-start gap-2 px-4 py-2 bg-blue-500 rounded-lg active:bg-blue-600"
+                                    className="flex-row items-center gap-2 self-start rounded-lg bg-blue-500 px-4 py-2 active:bg-blue-600"
                                   >
                                     <Edit3 size={16} color="white" />
                                     <Text className="text-sm text-white">
@@ -1187,7 +1187,7 @@ export default function FinalPreview({
                     return (
                       <View
                         key={field.key}
-                        className="flex-row items-start gap-3 py-2 border-b border-gray-200 last:border-b-0"
+                        className="flex-row items-start gap-3 border-b border-gray-200 py-2 last:border-b-0"
                       >
                         <Text className="w-40 font-medium text-gray-800 sm:w-48">
                           {field.label}:
@@ -1199,17 +1199,17 @@ export default function FinalPreview({
                 </View>
                 {stepFiles.length > 0 && (
                   <View className="mt-4">
-                    <View className="flex-row items-center gap-1 mb-2">
+                    <View className="mb-2 flex-row items-center gap-1">
                       <Camera size={16} color="#374151" />
                       <Text className="font-semibold text-gray-800">
                         Attachments ({stepFiles.length})
                       </Text>
                     </View>
-                    <View className="flex-row flex-wrap justify-between mt-2">
+                    <View className="mt-2 flex-row flex-wrap justify-between">
                       {stepFiles.map((file) => (
                         <TouchableOpacity
                           key={file.id}
-                          className="w-[48%] mb-3 border border-gray-200 rounded-lg overflow-hidden bg-white"
+                          className="mb-3 w-[48%] overflow-hidden rounded-lg border border-gray-200 bg-white"
                           activeOpacity={0.8}
                           onPress={() =>
                             handleFileClick(
@@ -1223,21 +1223,21 @@ export default function FinalPreview({
                             <Image
                               source={{ uri: getEightDFileUrl(file.id) }}
                               style={{ width: "100%", height: 96 }}
-                              className="w-full h-24"
+                              className="h-24 w-full"
                               resizeMode="cover"
                             />
                           ) : file.mimeType === "application/pdf" ? (
-                            <View className="items-center justify-center h-20 bg-red-100 sm:h-24">
+                            <View className="h-20 items-center justify-center bg-red-100 sm:h-24">
                               <File size={32} color="#DC2626" />
                             </View>
                           ) : (
-                            <View className="items-center justify-center h-20 bg-blue-100 sm:h-24">
+                            <View className="h-20 items-center justify-center bg-blue-100 sm:h-24">
                               <File size={32} color="#2563EB" />
                             </View>
                           )}
-                          <View className="p-2 bg-white">
+                          <View className="bg-white p-2">
                             <Text
-                              className="text-[10px] sm:text-xs text-gray-700"
+                              className="text-[10px] text-gray-700 sm:text-xs"
                               numberOfLines={2}
                             >
                               {file.fileName}
@@ -1253,8 +1253,8 @@ export default function FinalPreview({
           })}
 
           {isHOD && isApprovalPending && (
-            <View className="p-4 mt-8 border border-yellow-200 rounded-lg bg-yellow-50">
-              <View className="flex-row items-center gap-2 mb-3">
+            <View className="mt-8 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+              <View className="mb-3 flex-row items-center gap-2">
                 <Eye size={16} color="#854D0E" />
                 <Text className="font-semibold text-yellow-800">
                   HOD Approval Required
@@ -1277,7 +1277,7 @@ export default function FinalPreview({
                   placeholder="Enter your comment (min. 10 characters)..."
                   multiline
                   numberOfLines={3}
-                  className="w-full p-3 text-sm bg-white border border-gray-300 rounded-lg"
+                  className="w-full rounded-lg border border-gray-300 bg-white p-3 text-sm"
                   textAlignVertical="top"
                 />
               </View>
@@ -1289,7 +1289,7 @@ export default function FinalPreview({
                     !approvalComment.trim() ||
                     approvalComment.trim().length < 10
                   }
-                  className={`flex-row items-center gap-2 px-4 py-2 rounded ${approving || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
+                  className={`flex-row items-center gap-2 rounded px-4 py-2 ${approving || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
                 >
                   {approving && (
                     <ActivityIndicator size="small" color="white" />
@@ -1306,7 +1306,7 @@ export default function FinalPreview({
                     !approvalComment.trim() ||
                     approvalComment.trim().length < 10
                   }
-                  className={`flex-row items-center gap-2 px-4 py-2 rounded ${rejecting || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-red-600 active:bg-red-700"}`}
+                  className={`flex-row items-center gap-2 rounded px-4 py-2 ${rejecting || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-red-600 active:bg-red-700"}`}
                 >
                   {rejecting && (
                     <ActivityIndicator size="small" color="white" />
@@ -1318,7 +1318,7 @@ export default function FinalPreview({
             </View>
           )}
 
-          <View className="flex-row justify-end gap-3 pt-4 mt-6 border-t border-gray-200">
+          <View className="mt-6 flex-row justify-end gap-3 border-t border-gray-200 pt-4">
             <Generate8DPdf
               title={`8D_Report_${eventId}`}
               eventId={eventId}
@@ -1336,9 +1336,9 @@ export default function FinalPreview({
         >
           <View className="flex-1 bg-black/90">
             {/* Header */}
-            <View className="flex-row items-center justify-between px-4 py-3 bg-gray-800">
+            <View className="flex-row items-center justify-between bg-gray-800 px-4 py-3">
               <Text
-                className="flex-1 mr-2 text-sm font-semibold text-white truncate"
+                className="mr-2 flex-1 truncate text-sm font-semibold text-white"
                 numberOfLines={1}
               >
                 {previewFile?.fileName}
@@ -1347,21 +1347,21 @@ export default function FinalPreview({
                 {/* Download Button */}
                 <TouchableOpacity
                   onPress={handleDownloadFile}
-                  className="p-2 bg-blue-600 rounded-full active:bg-blue-700"
+                  className="rounded-full bg-blue-600 p-2 active:bg-blue-700"
                 >
                   <Download size={20} color="white" />
                 </TouchableOpacity>
                 {/* Share Button */}
                 <TouchableOpacity
                   onPress={handleDownloadOrShare}
-                  className="p-2 bg-gray-700 rounded-full active:bg-gray-600"
+                  className="rounded-full bg-gray-700 p-2 active:bg-gray-600"
                 >
                   <Users size={20} color="white" />
                 </TouchableOpacity>
                 {/* Close Button */}
                 <TouchableOpacity
                   onPress={closePreview}
-                  className="p-2 bg-gray-700 rounded-full active:bg-gray-600"
+                  className="rounded-full bg-gray-700 p-2 active:bg-gray-600"
                 >
                   <X size={24} color="white" />
                 </TouchableOpacity>
@@ -1402,7 +1402,7 @@ export default function FinalPreview({
                 ) : (
                   // Mobile: Native Video Player with expo-av
                   // Mobile: Native Video Player with expo-av
-                  <View className="items-center justify-center flex-1 bg-black">
+                  <View className="flex-1 items-center justify-center bg-black">
                     <Video
                       source={{ uri: previewUrl as string }}
                       style={{
@@ -1421,22 +1421,22 @@ export default function FinalPreview({
                   </View>
                 )
               ) : previewFile?.mimeType === "application/pdf" ? (
-                <View className="items-center justify-center flex-1 p-6">
-                  <View className="items-center justify-center w-24 h-24 mb-6 bg-red-600 rounded-full">
+                <View className="flex-1 items-center justify-center p-6">
+                  <View className="mb-6 h-24 w-24 items-center justify-center rounded-full bg-red-600">
                     <File size={48} color="white" />
                   </View>
-                  <Text className="mb-2 text-xl font-semibold text-center text-white">
+                  <Text className="mb-2 text-center text-xl font-semibold text-white">
                     PDF Document
                   </Text>
                   <Text
-                    className="px-4 mb-6 text-sm text-center text-gray-300"
+                    className="mb-6 px-4 text-center text-sm text-gray-300"
                     numberOfLines={2}
                   >
                     {previewFile?.fileName}
                   </Text>
                   <View className="flex-row gap-3">
                     <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 bg-blue-600 rounded-xl active:bg-blue-700"
+                      className="flex-row items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 active:bg-blue-700"
                       onPress={handleDownloadFile}
                     >
                       <Download size={20} color="white" />
@@ -1445,7 +1445,7 @@ export default function FinalPreview({
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 bg-indigo-600 rounded-xl active:bg-indigo-700"
+                      className="flex-row items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 active:bg-indigo-700"
                       onPress={handleDownloadOrShare}
                     >
                       <Users size={20} color="white" />
@@ -1457,19 +1457,19 @@ export default function FinalPreview({
                 </View>
               ) : (
                 // Other file types
-                <View className="items-center justify-center flex-1 p-6">
-                  <View className="items-center justify-center w-24 h-24 mb-6 bg-gray-600 rounded-full">
+                <View className="flex-1 items-center justify-center p-6">
+                  <View className="mb-6 h-24 w-24 items-center justify-center rounded-full bg-gray-600">
                     <File size={48} color="white" />
                   </View>
                   <Text
-                    className="px-4 mb-6 text-base text-center text-gray-300"
+                    className="mb-6 px-4 text-center text-base text-gray-300"
                     numberOfLines={2}
                   >
                     {previewFile?.fileName}
                   </Text>
                   <View className="flex-row gap-3">
                     <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 bg-blue-600 rounded-xl active:bg-blue-700"
+                      className="flex-row items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 active:bg-blue-700"
                       onPress={handleDownloadFile}
                     >
                       <Download size={20} color="white" />
@@ -1478,7 +1478,7 @@ export default function FinalPreview({
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      className="flex-row items-center gap-2 px-6 py-3 bg-indigo-600 rounded-xl active:bg-indigo-700"
+                      className="flex-row items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 active:bg-indigo-700"
                       onPress={handleDownloadOrShare}
                     >
                       <Users size={20} color="white" />

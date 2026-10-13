@@ -2,33 +2,29 @@
 
 import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
+// ✅ Single source of truth for authenticated requests
 const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   const token = await AsyncStorage.getItem("authToken");
-  const headers: any = {
+  const userId = await AsyncStorage.getItem("userId");
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...options.headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(userId ? { "X-User-Id": userId } : {}),
+    "X-Timezone":
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+    ...((options.headers as Record<string, string>) || {}),
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return fetch(url, {
-    ...options,
-    headers,
-  });
+  return fetch(url, { ...options, headers });
 };
 
 // ===== SMART API DETECTION =====
 const getApiBase = (groupId: string): string => {
   const groupIdStr = String(groupId);
-  
-  // 1. If it's purely numeric, use Main Forum
   if (!isNaN(Number(groupIdStr)) && groupIdStr !== "") {
     return "/forum";
   }
-  
-  // 2. If it's ANY string (like "AUDIT-...", "EVT-...", etc.), use 8D Forum
-  // This exactly matches your working Web app logic!
   return "/forum/8d";
 };
 
@@ -47,9 +43,7 @@ export const createForumGroup = (groupData: any) =>
 export const deleteForumGroup = (groupId: string, requestedBy: string) =>
   fetchWithAuth(
     `${API_BASE_URL}/api/forum/groups/${groupId}?requestedBy=${encodeURIComponent(requestedBy)}`,
-    {
-      method: "DELETE",
-    },
+    { method: "DELETE" },
   ).then(async (r) => {
     if (!r.ok) throw new Error("Failed to delete group");
     return r.json();
@@ -93,12 +87,93 @@ export const fetchLineGroupByCode = (lineCode: string) =>
     return r.json();
   });
 
+// ✅ Admin-aware member management
+export const addGroupMembersSecure = async (
+  groupId: string,
+  newMembers: string[],
+  requester: string,
+) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}/members`,
+    {
+      method: "POST",
+      body: JSON.stringify({ requester, newMembers }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to add members");
+  }
+  return data;
+};
+
+export const removeGroupMembersSecure = async (
+  groupId: string,
+  membersToRemove: string[],
+  requester: string,
+) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}/members`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({ requester, membersToRemove }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to remove members");
+  }
+  return data;
+};
+
+export const changeGroupAdmin = async (
+  groupId: string,
+  newAdminEmail: string,
+  requester: string,
+) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}/admin`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ requester, newAdminEmail }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to change admin");
+  }
+  return data;
+};
+
 // ===== THREADS/POSTS =====
 
-export const fetchGroupThreads = (groupId: string) => {
+export const fetchGroupThreads = (
+  groupId: string,
+  options?: {
+    beforeId?: number;
+    sinceId?: number;
+    limit?: number;
+    daysBack?: number;
+    requester?: string;
+  },
+) => {
   const base = getApiBase(groupId);
   const endpoint = base === "/forum" ? "posts" : "threads";
-  const url = `${API_BASE_URL}/api${base}/groups/${encodeURIComponent(groupId)}/${endpoint}`;
+
+  const params = new URLSearchParams();
+  if (base !== "/forum" && options) {
+    if (options.beforeId != null)
+      params.append("beforeId", String(options.beforeId));
+    if (options.sinceId != null)
+      params.append("sinceId", String(options.sinceId));
+    if (options.limit != null) params.append("limit", String(options.limit));
+    if (options.daysBack != null)
+      params.append("daysBack", String(options.daysBack));
+    if (options.requester) params.append("requester", options.requester);
+  }
+
+  const qs = params.toString();
+  const url = `${API_BASE_URL}/api${base}/groups/${encodeURIComponent(groupId)}/${endpoint}${qs ? "?" + qs : ""}`;
   console.log("📥 Fetching threads from:", url);
 
   return fetchWithAuth(url).then(async (r) => {
@@ -116,13 +191,65 @@ export const fetchGroupThreads = (groupId: string) => {
   });
 };
 
-// ✅ FIXED: createForumPost with proper error handling
+export async function exportGroupThreads(
+  groupId: string,
+  opts: {
+    format: "csv" | "json" | "pdf";
+    scope: "all" | "days" | "limit";
+    requester?: string;
+    daysBack?: number;
+    limit?: number;
+  },
+) {
+  const params = new URLSearchParams();
+  params.append("scope", opts.scope);
+
+  if (opts.scope === "days" && opts.daysBack) {
+    params.append("daysBack", String(opts.daysBack));
+  }
+  if (opts.scope === "limit" && opts.limit) {
+    params.append("limit", String(opts.limit));
+  }
+
+  let path: string;
+  if (opts.format === "pdf") {
+    if (opts.requester) {
+      params.append("requester", opts.requester);
+    }
+    path = `/api/forum/8d/groups/${groupId}/threads/export/pdf`;
+  } else {
+    path = `/api/forum/8d/groups/${groupId}/threads/export`;
+    params.append("format", opts.format);
+  }
+
+  const url = `${API_BASE_URL}${path}?${params.toString()}`;
+
+  if (Platform.OS === "web") {
+    // ✅ Fetch with auth, then trigger browser download from blob
+    const res = await fetchWithAuth(url);
+    if (!res.ok) {
+      throw new Error(`Export failed: ${res.status}`);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `forum-${groupId}-${opts.scope}.${opts.format}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+    return url;
+  }
+
+  return url;
+}
+
 export const createForumPost = async (groupId: string, postData: any) => {
   const base = getApiBase(groupId);
   const endpoint = base === "/forum" ? "posts" : "threads";
   const url = `${API_BASE_URL}/api${base}/groups/${groupId}/${endpoint}`;
 
-  // ✅ Ensure postData has the correct structure
   const payload = {
     content: postData.content || "",
     createdBy: postData.createdBy || "anonymous",
@@ -201,14 +328,8 @@ export const uploadForumAttachment = async (groupId: string, file: any) => {
 };
 
 export const downloadForumAttachment = async (attachmentId: string) => {
-  const token = await AsyncStorage.getItem("authToken");
-  const response = await fetch(
+  const response = await fetchWithAuth(
     `${API_BASE_URL}/api/forum/attachments/${attachmentId}`,
-    {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    },
   );
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status}`);
@@ -283,6 +404,53 @@ export const getGroupMembers = (groupId: string) =>
       return r.json();
     },
   );
+
+// =====================================================
+// GROUP ADMIN ACTIONS
+// =====================================================
+
+export const leaveGroup = async (groupId: string, userEmail: string) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}/leave?userEmail=${encodeURIComponent(userEmail)}`,
+    { method: "DELETE" },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to leave group");
+  }
+  return data;
+};
+
+export const renameGroup = async (
+  groupId: string,
+  newName: string,
+  requester: string,
+) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}/name`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ newName, requester }),
+    },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to rename group");
+  }
+  return data;
+};
+
+export const deleteGroup = async (groupId: string, requester: string) => {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${groupId}?requester=${encodeURIComponent(requester)}`,
+    { method: "DELETE" },
+  );
+  const data = await res.json();
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "Failed to delete group");
+  }
+  return data;
+};
 
 export const getGroupMembersWithDetails = (
   groupId: string,
@@ -391,3 +559,82 @@ export const checkNCRForumMembership = (formId: string, userEmail: string) =>
     if (!r.ok) throw new Error("Failed to check NCR forum membership");
     return r.json();
   });
+
+// ───────────────────────────────────────────────────────────
+// FORUM HOME — WhatsApp-style group management
+// ───────────────────────────────────────────────────────────
+
+export async function fetchUser8DGroups(
+  userEmail: string,
+  plantId?: string | number | null,
+) {
+  if (!userEmail) return [];
+  const params = new URLSearchParams({ userEmail });
+  if (plantId != null && plantId !== "") {
+    params.append("plantId", String(plantId));
+  }
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups?${params.toString()}`,
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Failed to load groups (${res.status})`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createCustomGroup(payload: {
+  groupId: string;
+  groupName: string;
+  description?: string;
+  createdBy: string;
+  members: string[];
+  adminEmail?: string;
+  plantId?: string | null;
+  plantName?: string | null;
+  companyId?: string | null;
+}) {
+  const res = await fetchWithAuth(`${API_BASE_URL}/api/forum/8d/groups`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Failed to create group (${res.status})`);
+  }
+  return await res.json();
+}
+
+// ───────────────────────────────────────────────────────────
+// GROUP APPEARANCE (photo / emoji / description) — admin only
+// ───────────────────────────────────────────────────────────
+
+export async function updateGroupAppearance(
+  groupId: string,
+  payload: {
+    requester: string;
+    photoUrl?: string | null;
+    emoji?: string | null;
+    description?: string | null;
+  },
+) {
+  const res = await fetchWithAuth(
+    `${API_BASE_URL}/api/forum/8d/groups/${encodeURIComponent(groupId)}/appearance`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        requester: payload.requester,
+        photoUrl: payload.photoUrl ?? null,
+        emoji: payload.emoji ?? null,
+        description: payload.description ?? null,
+      }),
+    },
+  );
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.success === false) {
+    throw new Error(data?.error || "Failed to update group appearance");
+  }
+  return data;
+}

@@ -1,8 +1,8 @@
-import { X } from 'lucide-react-native';
-import React, { useEffect, useState } from 'react';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import CalendarView from './CalendarView';
+import { X } from "lucide-react-native";
+import React, { useEffect, useState } from "react";
+import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { useAuth } from "../context/AuthContext";
+import CalendarView from "./CalendarView";
 
 export default function CalendarModal({ isOpen, onClose }: any) {
   const { user } = useAuth();
@@ -20,12 +20,22 @@ export default function CalendarModal({ isOpen, onClose }: any) {
   if (!isVisible && !isOpen) return null;
 
   return (
-    <Modal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-center items-center">
-        <View className="w-[95%] h-[90%] bg-white rounded-2xl shadow-2xl flex-col">
-          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
-            <Text className="text-lg font-semibold text-gray-800">Audit Calendar</Text>
-            <TouchableOpacity onPress={onClose} className="p-2 bg-gray-100 rounded-lg">
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 items-center justify-center bg-black/50">
+        <View className="h-[90%] w-[95%] flex-col rounded-2xl bg-white shadow-2xl">
+          <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
+            <Text className="text-lg font-semibold text-gray-800">
+              Audit Calendar
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              className="rounded-lg bg-gray-100 p-2"
+            >
               <X size={20} color="#374151" />
             </TouchableOpacity>
           </View>

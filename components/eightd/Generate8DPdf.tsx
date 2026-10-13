@@ -1,3 +1,4 @@
+import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import * as FileSystem from "expo-file-system/legacy";
@@ -19,6 +20,11 @@ export default function Generate8DPdf({
   attachments = [],
 }: Generate8DPdfProps) {
   const [generating, setGenerating] = useState<boolean>(false);
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
 
   const generatePdf = async () => {
     if (!eventId) {
@@ -28,11 +34,9 @@ export default function Generate8DPdf({
 
     setGenerating(true);
     try {
-      
-      // ✅ FIX 1: DO NOT send 'attachments'. Your Java PdfRequest DTO doesn't accept it!
       const payload = {
         title: title || "8D_Report",
-        eventId: String(eventId), // Force String
+        eventId: String(eventId),
         formData: formData || {},
       };
 
@@ -75,7 +79,6 @@ export default function Generate8DPdf({
         }
       }
     } catch (error: any) {
-      // ✅ FIX 2: DECODE THE 5207-BYTE BLOB TO SEE THE JAVA STACK TRACE
       if (error.response) {
         if (error.response.data instanceof Blob) {
           const errorText = await error.response.data.text();
@@ -98,25 +101,134 @@ export default function Generate8DPdf({
     }
   };
 
+  const handleViewPDF = async () => {
+    if (!eventId) {
+      Alert.alert("Error", "Event ID is missing.");
+      return;
+    }
+    setGenerating(true);
+    try {
+      const payload = {
+        title: title || "8D_Report",
+        eventId: String(eventId),
+        formData: formData || {},
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/eightd/generate-pdf`,
+        payload,
+        { responseType: "arraybuffer" },
+      );
+
+      const buffer: ArrayBuffer = response.data;
+
+      // ✅ Verify it's a real PDF
+      const head = new TextDecoder("utf-8").decode(buffer.slice(0, 5));
+      console.log("🔎 [8D] PDF header:", head);
+      if (!head.startsWith("%PDF-")) {
+        const txt = new TextDecoder("utf-8").decode(buffer);
+        console.error("❌ [8D] Not a PDF:", txt.substring(0, 300));
+        Alert.alert("Error", "Server did not return a PDF");
+        return;
+      }
+
+      // ✅ Blob URL (no base64, no data: URI size limits, no encoding drift)
+      const blob = new Blob([buffer], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+      console.log("✅ [8D] Blob URL:", blobUrl, "size:", blob.size);
+
+      setPDFViewer({
+        visible: true,
+        pdfData: blobUrl, // ← now a blob: URL
+        fileName: `${title || "8D_Report"}.pdf`,
+      });
+    } catch (error: any) {
+      console.error("Error viewing PDF:", error);
+      Alert.alert("Error", "Failed to load PDF");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <Pressable
-      onPress={generatePdf}
-      disabled={generating || !eventId}
-      className="flex flex-row items-center gap-2 px-4 py-2 bg-indigo-600 rounded-lg shadow disabled:opacity-50 active:bg-indigo-700"
-    >
-      <View className="flex-row items-center gap-2">
-        {generating ? (
+    <>
+      {/* Button Container */}
+      <View className="flex-row items-center gap-3">
+        {/* Download PDF Button */}
+        <Pressable
+          onPress={generatePdf}
+          disabled={generating || !eventId}
+          className="flex flex-row items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow active:bg-indigo-700 disabled:opacity-50"
+        >
           <View className="flex-row items-center gap-2">
-            <View className="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin" />
-            <Text className="font-medium text-white">Generating PDF...</Text>
+            {generating ? (
+              <View className="flex-row items-center gap-2">
+                <View className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <Text className="font-medium text-white">
+                  Generating PDF...
+                </Text>
+              </View>
+            ) : (
+              <View className="flex-row items-center gap-2">
+                <Text className="text-lg text-white">📥</Text>
+                <Text className="font-medium text-white">Download PDF</Text>
+              </View>
+            )}
           </View>
-        ) : (
+        </Pressable>
+
+        {/* View PDF Button */}
+        <Pressable
+          onPress={handleViewPDF}
+          disabled={generating || !eventId}
+          className="flex flex-row items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 shadow active:bg-purple-700 disabled:opacity-50"
+        >
           <View className="flex-row items-center gap-2">
-            <Text className="text-lg text-white">📥</Text>
-            <Text className="font-medium text-white">Download PDF</Text>
+            {generating ? (
+              <View className="flex-row items-center gap-2">
+                <View className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <Text className="font-medium text-white">Loading...</Text>
+              </View>
+            ) : (
+              <View className="flex-row items-center gap-2">
+                <Text className="text-lg text-white">📄</Text>
+                <Text className="font-medium text-white">View PDF</Text>
+              </View>
+            )}
           </View>
-        )}
+        </Pressable>
       </View>
-    </Pressable>
+
+      {/* PDF Viewer Modal */}
+      <PDFViewer
+        visible={pdfViewer.visible}
+        pdfData={pdfViewer.pdfData}
+        fileName={pdfViewer.fileName}
+        auditId={String(eventId || "")}
+        auditNumber={`8D-${eventId || ""}`}
+        pdfType="8d"
+        forumGroups={[
+          {
+            id: `8D-${eventId || ""}`,
+            name: `📋 8D Report ${eventId || ""}`,
+            type: "8D",
+          },
+          {
+            id: "AUDIT-general-forum",
+            name: "📢 General Discussion",
+            type: "General",
+          },
+        ]}
+        onClose={() =>
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+        }
+        onShareComplete={(forumId?: string) => {
+          Alert.alert("Success", "PDF shared to forum successfully!");
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+        }}
+        currentUser={null}
+        allUsers={[]}
+      />
+    </>
   );
 }

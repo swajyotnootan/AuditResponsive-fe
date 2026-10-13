@@ -16,14 +16,13 @@ import {
   FileText,
   Filter,
   List,
-  MessageCircle,
   MessageSquare,
   RefreshCw,
   Send,
   ThumbsDown,
   ThumbsUp,
   TrendingUp,
-  X,
+  X
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -39,7 +38,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Path, Svg } from "react-native-svg"; // ✅ ADD THIS IMPORT
+import { Path, Svg } from "react-native-svg"; // ? ADD THIS IMPORT
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
@@ -107,6 +106,42 @@ const AUDIT_ELEMENTS_MAP: Record<string, string> = {
   "Product Audit": "E",
 };
 
+// ============================================================================
+// PLANT FILTER CONSTANTS
+// ============================================================================
+const PLANT_FIELD_CANDIDATES = [
+  "plantId",
+  "plant_id",
+  "plant",
+  "plantCode",
+  "plantName",
+  "unitId",
+  "unit_id",
+  "locationId",
+  "location_id",
+] as const;
+
+const plantOf = (row: any): string | number | null => {
+  if (!row) return null;
+  for (const k of PLANT_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+};
+
+const samePlant = (row: any, plantId: string | number | null): boolean => {
+  if (plantId === null || plantId === undefined || plantId === "") return true;
+  const rowPlant = plantOf(row);
+  if (rowPlant === null) return true; // fail-open when row has no plant
+  return String(rowPlant) === String(plantId);
+};
+
+const filterByPlant = <T,>(rows: T[], plantId: string | number | null): T[] => {
+  if (plantId === null || plantId === undefined || plantId === "") return rows;
+  return rows.filter((r) => samePlant(r as any, plantId));
+};
+
 const normalizeMonth = (monthVal: any): string => {
   if (!monthVal) return "";
   const str = String(monthVal).toLowerCase().trim();
@@ -157,11 +192,11 @@ const getAuditElementCode = (element: string | undefined | null): string => {
 // ============================================================================
 const KpiCard = ({ title, value, icon, color, isDesktop }: any) => (
   <View
-    className="w-full bg-white border shadow-sm border-slate-200 rounded-2xl"
+    className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
     style={{ padding: isDesktop ? 24 : 12 }}
   >
-    <View className="flex-row items-start justify-between mb-2">
-      <View className="p-2 rounded-xl" style={{ backgroundColor: color.bg }}>
+    <View className="mb-2 flex-row items-start justify-between">
+      <View className="rounded-xl p-2" style={{ backgroundColor: color.bg }}>
         {React.cloneElement(icon, {
           color: color.text,
           size: isDesktop ? 24 : 18,
@@ -169,13 +204,13 @@ const KpiCard = ({ title, value, icon, color, isDesktop }: any) => (
       </View>
     </View>
     <Text
-      className={`font-bold text-slate-800 ${isDesktop ? "text-3xl mb-1" : "text-xl mb-1"}`}
+      className={`font-bold text-slate-800 ${isDesktop ? "mb-1 text-3xl" : "mb-1 text-xl"}`}
       numberOfLines={1}
     >
       {value}
     </Text>
     <Text
-      className="text-[10px] md:text-xs font-medium tracking-wide uppercase text-slate-500"
+      className="text-[10px] font-medium uppercase tracking-wide text-slate-500 md:text-xs"
       numberOfLines={2}
       style={{ lineHeight: 14 }}
     >
@@ -189,11 +224,11 @@ const KpiCard = ({ title, value, icon, color, isDesktop }: any) => (
 // ============================================================================
 const AnalyticsCard = ({ title, subtitle, children, className = "" }: any) => (
   <View
-    className={`p-6 bg-white border border-slate-200 shadow-sm rounded-2xl flex-1 min-w-[300px] ${className}`}
+    className={`min-w-[300px] flex-1 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}
   >
     <Text className="text-lg font-bold text-slate-800">{title}</Text>
     {subtitle && (
-      <Text className="mt-1 mb-4 text-xs text-slate-500">{subtitle}</Text>
+      <Text className="mb-4 mt-1 text-xs text-slate-500">{subtitle}</Text>
     )}
     {children}
   </View>
@@ -220,14 +255,14 @@ const NativeGroupedBarChart = ({
 
   return (
     <View
-      className="flex-1 p-4 bg-white rounded-xl"
+      className="flex-1 rounded-xl bg-white p-4"
       style={{ overflow: "visible" }}
     >
       <Text className="mb-1 font-bold text-slate-800">{title}</Text>
       <Text className="mb-4 text-xs text-slate-500">{subtitle}</Text>
 
       {isAllZero ? (
-        <View className="items-center justify-center h-48 border border-dashed rounded-lg bg-slate-50 border-slate-200">
+        <View className="h-48 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50">
           <Text className="text-sm font-medium text-slate-400">
             No data available for this period
           </Text>
@@ -235,39 +270,39 @@ const NativeGroupedBarChart = ({
       ) : (
         <>
           <View
-            className="flex-row items-end h-48 gap-2 px-2"
+            className="h-48 flex-row items-end gap-2 px-2"
             style={{ overflow: "visible" }}
           >
             {data.map((item: any, idx: number) => (
-              // ✅ CHANGED <View> TO <Pressable>
+              // ? CHANGED <View> TO <Pressable>
               <Pressable
                 key={idx}
-                className="items-center justify-end flex-1 h-full"
-                // ✅ Web Hover Events
+                className="h-full flex-1 items-center justify-end"
+                // ? Web Hover Events
                 onHoverIn={() => setActiveIndex(idx)}
                 onHoverOut={() => setActiveIndex(null)}
-                // ✅ Mobile Touch Events
+                // ? Mobile Touch Events
                 onPressIn={() => setActiveIndex(idx)}
                 onPressOut={() => setActiveIndex(null)}
               >
                 {/* FLOATING TOOLTIP */}
                 {activeIndex === idx && (
                   <View
-                    className="absolute z-50 px-3 py-2 mb-2 rounded-lg shadow-xl bg-slate-800"
+                    className="absolute z-50 mb-2 rounded-lg bg-slate-800 px-3 py-2 shadow-xl"
                     style={{ bottom: "100%", minWidth: 120 }}
                     pointerEvents="none"
                   >
-                    <Text className="mb-1 text-xs font-bold text-center text-white">
+                    <Text className="mb-1 text-center text-xs font-bold text-white">
                       {item.name || item.month}
                     </Text>
                     {keys.map((key: string, kIdx: number) => (
                       <View
                         key={key}
-                        className="flex-row items-center justify-between gap-2 mt-0.5"
+                        className="mt-0.5 flex-row items-center justify-between gap-2"
                       >
                         <View className="flex-row items-center gap-1">
                           <View
-                            className="w-2 h-2 rounded-full"
+                            className="h-2 w-2 rounded-full"
                             style={{ backgroundColor: colors[kIdx] }}
                           />
                           <Text className="text-[10px] text-slate-300">
@@ -279,12 +314,12 @@ const NativeGroupedBarChart = ({
                         </Text>
                       </View>
                     ))}
-                    <View className="absolute w-2 h-2 -ml-1 rotate-45 bg-slate-800 -bottom-1 left-1/2" />
+                    <View className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 bg-slate-800" />
                   </View>
                 )}
 
                 {/* BARS */}
-                <View className="flex-row items-end justify-center flex-1 w-full gap-1">
+                <View className="w-full flex-1 flex-row items-end justify-center gap-1">
                   {keys.map((key: string, kIdx: number) => (
                     <View
                       key={key}
@@ -301,7 +336,7 @@ const NativeGroupedBarChart = ({
                   ))}
                 </View>
                 <Text
-                  className="text-[10px] text-slate-500 mt-2 text-center"
+                  className="mt-2 text-center text-[10px] text-slate-500"
                   numberOfLines={1}
                 >
                   {item.name || item.month}
@@ -311,11 +346,11 @@ const NativeGroupedBarChart = ({
           </View>
 
           {/* LEGEND */}
-          <View className="flex-row justify-center gap-4 mt-4">
+          <View className="mt-4 flex-row justify-center gap-4">
             {keys.map((key: string, kIdx: number) => (
               <View key={key} className="flex-row items-center gap-1">
                 <View
-                  className="w-3 h-3 rounded-sm"
+                  className="h-3 w-3 rounded-sm"
                   style={{ backgroundColor: colors[kIdx] }}
                 />
                 <Text className="text-xs text-slate-600">{key}</Text>
@@ -368,12 +403,12 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
   };
 
   return (
-    <View className="flex-1 p-4 bg-white rounded-xl">
+    <View className="flex-1 rounded-xl bg-white p-4">
       <Text className="mb-1 font-bold text-slate-800">{title}</Text>
       <Text className="mb-4 text-xs text-slate-500">{subtitle}</Text>
 
       {!hasData ? (
-        <View className="items-center justify-center h-48 border border-dashed rounded-lg bg-slate-50 border-slate-200">
+        <View className="h-48 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50">
           <Text className="text-sm font-medium text-slate-400">
             No data available
           </Text>
@@ -381,7 +416,7 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
       ) : (
         <View className="items-center py-3">
           {/* Donut Chart SVG */}
-          <View className="items-center justify-center mb-6 w-36 h-36">
+          <View className="mb-6 h-36 w-36 items-center justify-center">
             <Svg width="144" height="144" viewBox="0 0 120 120">
               {
                 data.reduce(
@@ -397,10 +432,10 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
                         opacity={
                           activeIndex !== null && activeIndex !== idx ? 0.4 : 1
                         }
-                        // ✅ Mobile Touch & Basic Web Click (Safe from TS errors)
+                        // ? Mobile Touch & Basic Web Click (Safe from TS errors)
                         onPressIn={() => setActiveIndex(idx)}
                         onPressOut={() => setActiveIndex(null)}
-                        // ❌ REMOVED: style={{ cursor: "pointer" }} (Not supported by PathProps)
+                        // ? REMOVED: style={{ cursor: "pointer" }} (Not supported by PathProps)
                       />,
                     );
                     acc.currentAngle = endAngle;
@@ -419,7 +454,7 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
                 {displayTotal}
               </Text>
               <Text
-                className="px-2 text-xs text-center text-slate-500"
+                className="px-2 text-center text-xs text-slate-500"
                 numberOfLines={2}
               >
                 {displayLabel}
@@ -428,23 +463,23 @@ const NativePieChart = ({ data, title, subtitle, total }: any) => {
           </View>
 
           {/* Legend (Changed <View> to <Pressable> for Web Hover & Mobile Touch) */}
-          <View className="w-full gap-2 mt-2">
+          <View className="mt-2 w-full gap-2">
             {data.map((item: any, idx: number) => (
               <Pressable
                 key={idx}
-                className={`flex-row items-center justify-between px-2 py-2 rounded-lg ${
+                className={`flex-row items-center justify-between rounded-lg px-2 py-2 ${
                   activeIndex === idx ? "bg-slate-200" : "bg-slate-50"
                 }`}
-                // ✅ Web Hover Events
+                // ? Web Hover Events
                 onHoverIn={() => setActiveIndex(idx)}
                 onHoverOut={() => setActiveIndex(null)}
-                // ✅ Mobile Touch Events
+                // ? Mobile Touch Events
                 onPressIn={() => setActiveIndex(idx)}
                 onPressOut={() => setActiveIndex(null)}
               >
-                <View className="flex-row items-center flex-1 gap-2">
+                <View className="flex-1 flex-row items-center gap-2">
                   <View
-                    className="w-3 h-3 rounded-full"
+                    className="h-3 w-3 rounded-full"
                     style={{
                       backgroundColor: chartColors[idx % chartColors.length],
                     }}
@@ -521,15 +556,15 @@ const PlanSectionCard = ({
     : filteredPlans.slice(0, 4);
 
   return (
-    <View className="flex-1 mb-6 overflow-hidden bg-white border shadow-sm border-slate-200 rounded-2xl">
+    <View className="mb-6 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <View
-        className="px-5 py-4 border-b"
+        className="border-b px-5 py-4"
         style={{ backgroundColor: color.bg, borderColor: color.border }}
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-3">
             <View
-              className="p-2 rounded-lg"
+              className="rounded-lg p-2"
               style={{ backgroundColor: "rgba(255,255,255,0.6)" }}
             >
               <Icon size={20} style={{ color: color.text }} />
@@ -537,7 +572,7 @@ const PlanSectionCard = ({
             <Text className="font-bold text-slate-800">{title}</Text>
           </View>
           <View
-            className="px-3 py-1 rounded-full shadow-sm"
+            className="rounded-full px-3 py-1 shadow-sm"
             style={{ backgroundColor: color.badge.bg }}
           >
             <Text
@@ -551,10 +586,10 @@ const PlanSectionCard = ({
       </View>
 
       {showAll && onSearchChange && (
-        <View className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+        <View className="border-b border-slate-100 bg-slate-50 px-5 py-3">
           <View className="relative">
             <TextInput
-              className="w-full px-4 py-2 pl-10 text-sm border rounded-lg border-slate-200 text-slate-800"
+              className="w-full rounded-lg border border-slate-200 px-4 py-2 pl-10 text-sm text-slate-800"
               value={searchQuery}
               onChangeText={(text) => {
                 onSearchChange(text);
@@ -580,29 +615,31 @@ const PlanSectionCard = ({
           displayPlans.map((plan: any, idx: number) => (
             <TouchableOpacity
               key={idx}
-              className="p-4 border-b border-slate-100"
+              className="border-b border-slate-100 p-4"
               onPress={() => onViewPlan(plan)}
             >
               <View className="flex-row items-start justify-between">
                 <View className="flex-1">
-                  <Text className="text-sm font-semibold text-slate-800">
-                    {plan.year
-                      ? `${getFormTypeLabel()} ${plan.year}`
-                      : plan.month
-                        ? `${monthDisplay[plan.month] || plan.month} ${plan.year}`
-                        : getFormTypeLabel()}
-                  </Text>
+                  <View className="flex-row flex-wrap items-center gap-2">
+                    <Text className="text-sm font-semibold text-slate-800">
+                      {plan.month
+                        ? `${getFormTypeLabel()} - ${monthDisplay[plan.month] || plan.month} ${plan.year}`
+                        : `${getFormTypeLabel()} ${plan.year}`}
+                    </Text>
+                    {plan.isPartiallyConfirmed && ( // ? NEW
+                      <View className="rounded-full bg-purple-100 px-2 py-0.5">
+                        <Text className="text-xs font-medium text-purple-700">
+                          Partially Confirmed by LA
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   {plan.preparedBy && (
                     <Text
                       className="mt-1 text-xs text-slate-500"
                       numberOfLines={1}
                     >
                       Prepared by: {plan.preparedBy}
-                    </Text>
-                  )}
-                  {plan.scheduleCount && (
-                    <Text className="mt-1 text-xs text-slate-500">
-                      {plan.scheduleCount} schedule(s)
                     </Text>
                   )}
                 </View>
@@ -614,7 +651,7 @@ const PlanSectionCard = ({
       </ScrollView>
 
       {showAll && totalPages > 1 && (
-        <View className="px-5 py-3 border-t border-slate-100 bg-slate-50">
+        <View className="border-t border-slate-100 bg-slate-50 px-5 py-3">
           <View className="flex-row items-center justify-between">
             <Text className="text-xs text-slate-600">
               Page {currentPage} of {totalPages} ({filteredPlans.length} total)
@@ -623,7 +660,7 @@ const PlanSectionCard = ({
               <TouchableOpacity
                 onPress={() => onPageChange && onPageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-1 bg-white border rounded-lg border-slate-200 disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
               >
                 <Text className="text-xs font-medium text-slate-600">
                   Previous
@@ -632,7 +669,7 @@ const PlanSectionCard = ({
               <TouchableOpacity
                 onPress={() => onPageChange && onPageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-white border rounded-lg border-slate-200 disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
               >
                 <Text className="text-xs font-medium text-slate-600">Next</Text>
               </TouchableOpacity>
@@ -642,7 +679,7 @@ const PlanSectionCard = ({
       )}
 
       {!showAll && filteredPlans.length > 0 && (
-        <View className="px-4 py-3 border-t border-slate-100 bg-slate-50">
+        <View className="border-t border-slate-100 bg-slate-50 px-4 py-3">
           <TouchableOpacity
             onPress={() => onViewPlan(filteredPlans[0])}
             className="items-center"
@@ -723,7 +760,7 @@ const DailyScheduleCard = ({
   const getStatusBadge = (plan: any) => {
     if (plan.isChangeRequested)
       return (
-        <View className="px-2 py-0.5 bg-orange-100 rounded-full">
+        <View className="rounded-full bg-orange-100 px-2 py-0.5">
           <Text className="text-xs font-medium text-orange-700">
             Changes Requested
           </Text>
@@ -731,7 +768,7 @@ const DailyScheduleCard = ({
       );
     if (plan.pendingCount > 0)
       return (
-        <View className="px-2 py-0.5 bg-yellow-100 rounded-full">
+        <View className="rounded-full bg-yellow-100 px-2 py-0.5">
           <Text className="text-xs font-medium text-yellow-700">
             {plan.pendingCount} pending
           </Text>
@@ -739,7 +776,7 @@ const DailyScheduleCard = ({
       );
     if (plan.rejectedCount > 0)
       return (
-        <View className="px-2 py-0.5 bg-red-100 rounded-full">
+        <View className="rounded-full bg-red-100 px-2 py-0.5">
           <Text className="text-xs font-medium text-red-700">
             {plan.rejectedCount} rejected
           </Text>
@@ -749,15 +786,15 @@ const DailyScheduleCard = ({
   };
 
   return (
-    <View className="flex-1 mb-6 overflow-hidden bg-white border shadow-sm border-slate-200 rounded-2xl">
+    <View className="mb-6 flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <View
-        className="px-5 py-4 border-b"
+        className="border-b px-5 py-4"
         style={{ backgroundColor: color.bg, borderColor: color.border }}
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-3">
             <View
-              className="p-2 rounded-lg"
+              className="rounded-lg p-2"
               style={{ backgroundColor: "rgba(255,255,255,0.6)" }}
             >
               <Icon size={20} style={{ color: color.text }} />
@@ -767,7 +804,7 @@ const DailyScheduleCard = ({
           <View className="flex-row gap-2">
             {filteredPendingPlans.length > 0 && (
               <View
-                className="px-3 py-1 rounded-full shadow-sm"
+                className="rounded-full px-3 py-1 shadow-sm"
                 style={{ backgroundColor: color.badge.bg }}
               >
                 <Text
@@ -779,7 +816,7 @@ const DailyScheduleCard = ({
               </View>
             )}
             {filteredApprovedPlans.length > 0 && (
-              <View className="px-3 py-1 bg-green-100 rounded-full shadow-sm">
+              <View className="rounded-full bg-green-100 px-3 py-1 shadow-sm">
                 <Text className="text-xs font-bold text-green-700">
                   {filteredApprovedPlans.length} History
                 </Text>
@@ -790,9 +827,9 @@ const DailyScheduleCard = ({
       </View>
 
       {showAll && onSearchChange && (
-        <View className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+        <View className="border-b border-slate-100 bg-slate-50 px-5 py-3">
           <TextInput
-            className="w-full px-4 py-2 text-sm border rounded-lg border-slate-200 text-slate-800"
+            className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-800"
             value={searchQuery}
             onChangeText={(text) => {
               onSearchChange(text);
@@ -807,7 +844,7 @@ const DailyScheduleCard = ({
         {displayPending.map((plan: any, idx: number) => (
           <TouchableOpacity
             key={`pending-${plan.year}-${plan.month}`}
-            className="p-4 border-b border-slate-100"
+            className="border-b border-slate-100 p-4"
             onPress={() => onViewPlan(plan, "pending")}
           >
             <View className="flex-row items-start justify-between">
@@ -819,7 +856,7 @@ const DailyScheduleCard = ({
                   {getStatusBadge(plan)}
                 </View>
                 <Text className="mt-1 text-xs text-slate-500">
-                  Prepared by: {plan.preparedBy || "N/A"} •{" "}
+                  Prepared by: {plan.preparedBy || "N/A"} �{" "}
                   {plan.scheduleCount || 0} schedule(s)
                 </Text>
               </View>
@@ -833,10 +870,10 @@ const DailyScheduleCard = ({
           return (
             <TouchableOpacity
               key={`approved-${plan.year}-${plan.month}`}
-              className={`p-4 border rounded-lg mx-2 my-2 ${
+              className={`mx-2 my-2 rounded-lg border p-4 ${
                 isRejected
-                  ? "bg-red-50 border-red-200"
-                  : "bg-green-50 border-green-200"
+                  ? "border-red-200 bg-red-50"
+                  : "border-green-200 bg-green-50"
               }`}
               onPress={() =>
                 onViewHistoryPlan
@@ -851,13 +888,13 @@ const DailyScheduleCard = ({
                       {monthDisplay[plan.month] || plan.month} {plan.year}
                     </Text>
                     {isRejected ? (
-                      <View className="px-2 py-0.5 bg-red-100 rounded-full">
+                      <View className="rounded-full bg-red-100 px-2 py-0.5">
                         <Text className="text-xs font-medium text-red-700">
                           {plan.rejectedCount} rejected
                         </Text>
                       </View>
                     ) : (
-                      <View className="px-2 py-0.5 bg-green-100 rounded-full">
+                      <View className="rounded-full bg-green-100 px-2 py-0.5">
                         <Text className="text-xs font-medium text-green-700">
                           {plan.approvedCount || plan.scheduleCount || 0}{" "}
                           approved
@@ -868,10 +905,10 @@ const DailyScheduleCard = ({
                   <Text className="mt-1 text-xs text-slate-500">
                     {plan.approvedBy &&
                       plan.approvedBy !== "Not approved yet" &&
-                      `Approved by: ${plan.approvedBy} • `}
+                      `Approved by: ${plan.approvedBy} � `}
                     {plan.scheduleCount || 0} schedule(s)
                     {plan.approvedAt &&
-                      ` • ${new Date(plan.approvedAt).toLocaleDateString()}`}
+                      ` � ${new Date(plan.approvedAt).toLocaleDateString()}`}
                   </Text>
                 </View>
                 <ChevronRight size={20} color="#94a3b8" />
@@ -894,7 +931,7 @@ const DailyScheduleCard = ({
       </ScrollView>
 
       {showAll && totalPages > 1 && (
-        <View className="px-5 py-3 border-t border-slate-100 bg-slate-50">
+        <View className="border-t border-slate-100 bg-slate-50 px-5 py-3">
           <View className="flex-row items-center justify-between">
             <Text className="text-xs text-slate-600">
               Page {currentPage} of {totalPages} ({allFilteredPlans.length}{" "}
@@ -904,7 +941,7 @@ const DailyScheduleCard = ({
               <TouchableOpacity
                 onPress={() => onPageChange && onPageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-1 bg-white border rounded-lg border-slate-200 disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
               >
                 <Text className="text-xs font-medium text-slate-600">
                   Previous
@@ -913,7 +950,7 @@ const DailyScheduleCard = ({
               <TouchableOpacity
                 onPress={() => onPageChange && onPageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-white border rounded-lg border-slate-200 disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1 disabled:opacity-50"
               >
                 <Text className="text-xs font-medium text-slate-600">Next</Text>
               </TouchableOpacity>
@@ -923,7 +960,7 @@ const DailyScheduleCard = ({
       )}
 
       {!showAll && totalMonths > 0 && (
-        <View className="px-4 py-3 border-t border-slate-100 bg-slate-50">
+        <View className="border-t border-slate-100 bg-slate-50 px-4 py-3">
           <TouchableOpacity
             onPress={() => {
               if (filteredPendingPlans.length > 0)
@@ -953,10 +990,10 @@ export default function TopManagementDashboard() {
   const isDesktop = width >= 768;
   const params = useLocalSearchParams();
 
-  // ✅ FIXED: Single source of truth for tab routing (matches Audit Manager)
+  // ? FIXED: Single source of truth for tab routing (matches Audit Manager)
   const [activeSection, setActiveSection] = useState("overview");
 
-  // ✅ FIXED: Listen for param changes and update activeSection
+  // ? FIXED: Listen for param changes and update activeSection
   useEffect(() => {
     if (params?.tab) {
       const tabValue = Array.isArray(params.tab)
@@ -977,13 +1014,19 @@ export default function TopManagementDashboard() {
       setActiveSection("overview"); // Default fallback
     }
   }, [params?.tab]);
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("pending");
 
-  // ✅ STRICTLY USE AUTH CONTEXT (No default fallback data)
-  const { user } = useAuth();
+  // ? PLANT FILTER
+  const [selectedPlant, setSelectedPlant] = useState<string | number | null>(
+    () => (user as any)?.plantId ?? null,
+  );
+  const [availablePlants, setAvailablePlants] = useState<any[]>([]);
+
+  // ? STRICTLY USE AUTH CONTEXT (No default fallback data)
 
   // Annual Plan states
   const [pendingPlans, setPendingPlans] = useState<any[]>([]);
@@ -1098,13 +1141,12 @@ export default function TopManagementDashboard() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users`, {
         method: "GET",
-        credentials: "include",
       });
       if (response.ok) {
         const data = await response.json();
 
         setAllUsersList(data || []);
-        console.log(`✅ Fetched ${data.length} users for forum`);
+        console.log(`? Fetched ${data.length} users for forum`);
       } else {
         console.error("Failed to fetch users:", response.status);
       }
@@ -1122,11 +1164,23 @@ export default function TopManagementDashboard() {
       let allPlans: any[] = [];
       for (const year of years) {
         try {
+          if (!user?.id) {
+            console.warn(
+              "?? [TM Dashboard] No user.id � skipping annual plans fetch",
+            );
+            return {
+              totalPlanned: 0,
+              totalCompleted: 0,
+              allPlans: [],
+              pending: [],
+              approved: [],
+            };
+          }
+
           const response = await fetch(
-            `${API_BASE_URL}/api/audit-plan/${year}`,
+            `${API_BASE_URL}/api/audit-plan/${year}?userId=${user.id}`,
             {
               method: "GET",
-              credentials: "include",
             },
           );
           const data = await response.json();
@@ -1195,11 +1249,23 @@ export default function TopManagementDashboard() {
       let allDeptPlans: any[] = [];
       for (const year of years) {
         try {
+          if (!user?.id) {
+            console.warn(
+              "?? [TM Dashboard] No user.id � skipping dept plans fetch",
+            );
+            return {
+              pendingCount: 0,
+              approvedCount: 0,
+              allPlans: [],
+              pending: [],
+              approved: [],
+            };
+          }
+
           const response = await fetch(
-            `${API_BASE_URL}/api/department-plan/${year}`,
+            `${API_BASE_URL}/api/department-plan/${year}?userId=${user.id}`,
             {
               method: "GET",
-              credentials: "include",
             },
           );
           const data = await response.json();
@@ -1223,6 +1289,17 @@ export default function TopManagementDashboard() {
         } catch (err) {
           console.error(`Error fetching dept plan for year ${year}:`, err);
         }
+      }
+
+      allDeptPlans = allDeptPlans.map((plan: any) => {
+        const items = Array.isArray(plan.planItems) ? plan.planItems : [];
+        return { ...plan, planItems: filterByPlant(items, selectedPlant) };
+      });
+
+      if (selectedPlant != null && selectedPlant !== "") {
+        allDeptPlans = allDeptPlans.filter(
+          (p: any) => (p.planItems?.length ?? 0) > 0,
+        );
       }
 
       const pending = allDeptPlans.filter(
@@ -1267,19 +1344,35 @@ export default function TopManagementDashboard() {
         try {
           const response = await fetch(
             `${API_BASE_URL}/api/audit-schedule/year/${year}`,
-            {
-              method: "GET",
-              credentials: "include",
-            },
+            { method: "GET" },
           );
-          const allSchedules = await response.json();
+          const raw = await response.json();
+          const allSchedulesRaw: any[] = Array.isArray(raw)
+            ? raw
+            : raw?.data && Array.isArray(raw.data)
+              ? raw.data
+              : [];
+
+          // ? PLANT SCOPE
+          const allSchedules = filterByPlant(allSchedulesRaw, selectedPlant);
+
           const weekSchedules = allSchedules.filter(
             (s: any) => !s.scheduledDate,
           );
 
-          if (weekSchedules.length > 0) {
+          const tmVisibleSchedules = weekSchedules.filter((s: any) => {
+            const status = (s.approvalStatus || "DRAFT").toUpperCase();
+            return [
+              "CONFIRMED_BY_LA",
+              "APPROVED",
+              "REJECTED",
+              "CHANGE_REQUESTED",
+            ].includes(status);
+          });
+
+          if (tmVisibleSchedules.length > 0) {
             const monthMap = new Map();
-            weekSchedules.forEach((schedule: any) => {
+            tmVisibleSchedules.forEach((schedule: any) => {
               const month = schedule.month;
               if (!monthMap.has(month)) {
                 monthMap.set(month, {
@@ -1302,10 +1395,86 @@ export default function TopManagementDashboard() {
             });
 
             for (const [month, monthData] of monthMap) {
-              if (monthData.approvalStatus === "PENDING_APPROVAL")
+              const schedules: any[] = monthData.schedules;
+
+              // Compute booleans from the TM-visible schedules only
+              const anyConfirmed = schedules.some(
+                (s: any) =>
+                  (s.approvalStatus || "").toUpperCase() === "CONFIRMED_BY_LA",
+              );
+              const allConfirmed =
+                schedules.length > 0 &&
+                schedules.every(
+                  (s: any) =>
+                    (s.approvalStatus || "").toUpperCase() ===
+                    "CONFIRMED_BY_LA",
+                );
+
+              const allApprovedStatus =
+                schedules.length > 0 &&
+                schedules.every(
+                  (s: any) =>
+                    (s.approvalStatus || "").toUpperCase() === "APPROVED",
+                );
+
+              const anyPendingConfirmation = schedules.some(
+                (s: any) =>
+                  (s.approvalStatus || "").toUpperCase() ===
+                  "PENDING_LA_CONFIRMATION",
+              );
+
+              const anyTmRejected = schedules.some(
+                (s: any) =>
+                  (s.approvalStatus || "").toUpperCase() === "REJECTED",
+              );
+
+              const anyTmChangeRequested = schedules.some(
+                (s: any) =>
+                  (s.approvalStatus || "").toUpperCase() === "CHANGE_REQUESTED",
+              );
+
+              // Derive a single status for the month
+              let derivedStatus:
+                | "APPROVED"
+                | "CONFIRMED_BY_LA"
+                | "PARTIALLY_CONFIRMED_BY_LA"
+                | "PENDING_LA_CONFIRMATION"
+                | "REJECTED"
+                | "CHANGE_REQUESTED"
+                | "DRAFT";
+
+              if (allApprovedStatus) {
+                derivedStatus = "APPROVED";
+              } else if (allConfirmed) {
+                derivedStatus = "CONFIRMED_BY_LA";
+              } else if (anyConfirmed) {
+                derivedStatus = "PARTIALLY_CONFIRMED_BY_LA";
+              } else if (anyPendingConfirmation) {
+                derivedStatus = "PENDING_LA_CONFIRMATION";
+              } else if (anyTmRejected) {
+                derivedStatus = "REJECTED";
+              } else if (anyTmChangeRequested) {
+                derivedStatus = "CHANGE_REQUESTED";
+              } else {
+                derivedStatus = "DRAFT";
+              }
+
+              monthData.approvalStatus = derivedStatus;
+              monthData.isPartiallyConfirmed =
+                derivedStatus === "PARTIALLY_CONFIRMED_BY_LA";
+
+              if (
+                derivedStatus === "CONFIRMED_BY_LA" ||
+                derivedStatus === "PARTIALLY_CONFIRMED_BY_LA"
+              ) {
                 allPendingApprovals.push(monthData);
-              else if (monthData.approvalStatus === "APPROVED")
+              } else if (
+                derivedStatus === "APPROVED" ||
+                derivedStatus === "REJECTED" ||
+                derivedStatus === "CHANGE_REQUESTED"
+              ) {
                 allApproved.push(monthData);
+              }
             }
           }
         } catch (err) {
@@ -1330,182 +1499,292 @@ export default function TopManagementDashboard() {
 
   const fetchDetailedPlans = useCallback(async () => {
     try {
+      if (!user?.id) {
+        return {
+          pendingCount: 0,
+          approvedCount: 0,
+          pending: [],
+          approved: [],
+          allSchedules: [],
+        };
+      }
+
       const currentYear = new Date().getFullYear();
       const years: number[] = [];
       for (let i = currentYear - 5; i <= currentYear + 2; i++) years.push(i);
 
-      let allDailySchedules: any[] = [];
+      const allPendingMonths: any[] = [];
+      const allApprovedMonths: any[] = [];
+      const allDailySchedules: any[] = [];
+
       for (const year of years) {
-        for (const month of monthOrder) {
-          try {
-            // ✅ FIX: Handle both cases — if API returns raw array OR AxiosResponse
+        try {
+          // ? 1. PENDING � only CONFIRMED_BY_LA months (TM approval queue)
+          const pendingRes = await fetch(
+            `${API_BASE_URL}/api/audit-schedule/pending-date-approvals/${year}/detailed?userId=${user.id}`,
+            {},
+          );
+          const rawPending = await pendingRes.json();
+          const pendingRowsRaw: any[] = Array.isArray(rawPending)
+            ? rawPending
+            : Array.isArray(rawPending?.data)
+              ? rawPending.data
+              : [];
+
+          // ? PLANT SCOPE
+          const pendingRows = filterByPlant(pendingRowsRaw, selectedPlant);
+          // Group by month
+          const pendingByMonth = new Map<string, any>();
+          for (const row of pendingRows) {
+            const month = row.month;
+            if (!month) continue;
+
+            if (!pendingByMonth.has(month)) {
+              pendingByMonth.set(month, {
+                year,
+                month,
+                schedules: [],
+                scheduleCount: 0,
+                preparedBy: row.preparedBy || "N/A",
+                approvedBy: "Not approved yet",
+                pendingCount: 0,
+                rejectedCount: 0,
+                changeRequestedCount: 0,
+                isChangeRequested: false,
+              });
+            }
+            const m = pendingByMonth.get(month);
+            m.scheduleCount += 1;
+            m.pendingCount += 1;
+
+            // ? Keep ALL DTO fields and normalize arrays
+            const coNames = Array.isArray(row.coAuditorNames)
+              ? row.coAuditorNames
+              : typeof row.coAuditorNames === "string"
+                ? (() => {
+                    try {
+                      const p = JSON.parse(row.coAuditorNames);
+                      return Array.isArray(p) ? p : [row.coAuditorNames];
+                    } catch {
+                      return [row.coAuditorNames];
+                    }
+                  })()
+                : [];
+
+            const audNames = Array.isArray(row.auditeeNames)
+              ? row.auditeeNames
+              : typeof row.auditeeNames === "string"
+                ? (() => {
+                    try {
+                      const p = JSON.parse(row.auditeeNames);
+                      return Array.isArray(p) ? p : [row.auditeeNames];
+                    } catch {
+                      return [row.auditeeNames];
+                    }
+                  })()
+                : [];
+
+            m.schedules.push({
+              ...row, // ? all DTO fields
+              scheduledDate: row.scheduledDate || row.date, // ? correct field
+              department:
+                row.department ||
+                (Array.isArray(row.departments)
+                  ? row.departments.join(", ")
+                  : ""),
+              detailedApprovalStatus:
+                row.detailedApprovalStatus || "CONFIRMED_BY_LA",
+              auditorName:
+                row.auditorName ||
+                (coNames.length > 0 ? coNames.join(", ") : ""),
+              auditeeName:
+                row.auditeeName ||
+                (audNames.length > 0 ? audNames.join(", ") : ""),
+              coAuditorNames: coNames,
+              auditeeNames: audNames,
+              month,
+              planYear: year,
+            });
+          }
+
+          pendingByMonth.forEach((m) => allPendingMonths.push(m));
+        } catch (err) {
+          console.error(
+            `Error fetching pending date approvals for ${year}:`,
+            err,
+          );
+        }
+
+        try {
+          // ? 2. APPROVED HISTORY � fetch all daily schedules and keep only APPROVED
+          for (const month of monthOrder) {
             const response = await auditScheduleApi.getDateSchedulesByMonth(
               year,
               month as any,
+              user.id,
             );
-            const rawData = Array.isArray(response) ? response : response?.data;
-            // ADD THIS
-            const schedules: any[] = Array.isArray(rawData) ? rawData : [];
+            const raw = Array.isArray(response) ? response : response?.data;
+            const rawList: any[] = Array.isArray(raw) ? raw : [];
 
-            schedules.forEach((schedule: any) => {
-              schedule.planYear = year;
-              schedule.month = month;
-              if (!schedule.preparedByName && schedule.preparedBy)
-                schedule.preparedByName = schedule.preparedBy;
-              if (!schedule.approvedByName && schedule.approvedBy)
-                schedule.approvedByName = schedule.approvedBy;
-              if (!schedule.detailedApprovalStatus && schedule.approvalStatus)
-                schedule.detailedApprovalStatus = schedule.approvalStatus;
+            // ? PLANT SCOPE
+            const scopedList = filterByPlant(rawList, selectedPlant);
+
+            const schedules: any[] = scopedList.map((s: any) => {
+              const coNames = Array.isArray(s.coAuditorNames)
+                ? s.coAuditorNames
+                : typeof s.coAuditorNames === "string"
+                  ? (() => {
+                      try {
+                        const p = JSON.parse(s.coAuditorNames);
+                        return Array.isArray(p) ? p : [s.coAuditorNames];
+                      } catch {
+                        return [s.coAuditorNames];
+                      }
+                    })()
+                  : [];
+
+              const audNames = Array.isArray(s.auditeeNames)
+                ? s.auditeeNames
+                : typeof s.auditeeNames === "string"
+                  ? (() => {
+                      try {
+                        const p = JSON.parse(s.auditeeNames);
+                        return Array.isArray(p) ? p : [s.auditeeNames];
+                      } catch {
+                        return [s.auditeeNames];
+                      }
+                    })()
+                  : [];
+
+              // ? NEW: Resolve the display name for approved/rejected by
+              const resolveUserName = (
+                rawName: any,
+                rawId: any,
+              ): string | null => {
+                // 1. Prefer an explicit name string
+                if (
+                  typeof rawName === "string" &&
+                  rawName.trim() &&
+                  rawName !== "null" &&
+                  rawName !== "N/A" &&
+                  rawName !== "undefined"
+                ) {
+                  return rawName.trim();
+                }
+                // 2. Fall back to looking up the ID in allUsersList
+                if (rawId != null) {
+                  const u = allUsersList.find(
+                    (x: any) =>
+                      String(x.id) === String(rawId) ||
+                      Number(x.id) === Number(rawId),
+                  );
+                  if (u) {
+                    const full =
+                      u.name ||
+                      `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+                      u.email;
+                    if (full) return full;
+                  }
+                }
+                return null;
+              };
+
+              const approvedByName =
+                resolveUserName(s.approvedByName, s.approvedBy) ||
+                (typeof s.approvedByName === "string"
+                  ? s.approvedByName
+                  : null);
+
+              const rejectedByName =
+                resolveUserName(s.rejectedByName, s.rejectedBy) || null;
+
+              return {
+                ...s,
+                planYear: year,
+                month,
+                coAuditorNames: coNames,
+                auditeeNames: audNames,
+                auditorName:
+                  s.auditorName ||
+                  (coNames.length > 0 ? coNames.join(", ") : ""),
+                auditeeName:
+                  s.auditeeName ||
+                  (audNames.length > 0 ? audNames.join(", ") : ""),
+                // ? Guarantee these fields exist on every schedule object
+                approvedByName,
+                rejectedByName,
+              };
             });
 
             allDailySchedules.push(...schedules);
-          } catch (err) {
-            console.error(
-              `Error fetching detailed plan for ${year} ${month}:`,
-              err,
-            );
+
+            // Keep only approved + rejected schedules for history
+            const historySchedules = schedules.filter((s: any) => {
+              const status =
+                s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
+              return status === "APPROVED" || status === "REJECTED";
+            });
+
+            if (historySchedules.length === 0) continue;
+
+            const approvedCount = historySchedules.filter(
+              (s: any) =>
+                (s.detailedApprovalStatus || s.approvalStatus) === "APPROVED",
+            ).length;
+            const rejectedCount = historySchedules.filter(
+              (s: any) =>
+                (s.detailedApprovalStatus || s.approvalStatus) === "REJECTED",
+            ).length;
+
+            const approvedBySet = new Set<string>();
+            let latestApprovedAt: string | null = null;
+            historySchedules.forEach((s: any) => {
+              const name = s.approvedByName || s.approvedBy;
+              if (name && name !== "N/A" && name !== "null") {
+                approvedBySet.add(name);
+              }
+              const date = s.approvedAt || s.approvedDate;
+              if (
+                date &&
+                (!latestApprovedAt ||
+                  new Date(date) > new Date(latestApprovedAt))
+              ) {
+                latestApprovedAt = date;
+              }
+            });
+
+            allApprovedMonths.push({
+              year,
+              month,
+              schedules: historySchedules,
+              scheduleCount: historySchedules.length,
+              approvedCount,
+              rejectedCount,
+              preparedBy:
+                historySchedules[0]?.preparedByName ||
+                historySchedules[0]?.preparedBy ||
+                "N/A",
+              approvedBy:
+                approvedBySet.size > 0
+                  ? Array.from(approvedBySet).join(", ")
+                  : "Not approved yet",
+              approvedAt: latestApprovedAt,
+            });
           }
+        } catch (err) {
+          console.error(`Error fetching history for ${year}:`, err);
         }
       }
 
+      setPendingDetailedPlans(allPendingMonths);
+      setApprovedDetailedPlans(allApprovedMonths);
       setAllDetailedSchedules(allDailySchedules);
 
-      // --- Grouping logic ---
-      const monthMap = new Map<string, any>();
-      allDailySchedules.forEach((schedule: any) => {
-        const year = schedule.planYear;
-        const month = schedule.month;
-        const key = `${year}-${month}`;
-
-        if (!monthMap.has(key)) {
-          monthMap.set(key, {
-            year,
-            month,
-            preparedBySet: new Set(),
-            approvedBySet: new Set(),
-            approvedAt: null,
-            leadAuditorName: schedule.leadAuditorName,
-            schedules: [],
-          });
-        }
-
-        const monthData = monthMap.get(key);
-
-        if (
-          schedule.preparedBy &&
-          schedule.preparedBy !== "N/A" &&
-          schedule.preparedBy !== "null"
-        )
-          monthData.preparedBySet.add(schedule.preparedBy);
-        else if (schedule.preparedByName && schedule.preparedByName !== "N/A")
-          monthData.preparedBySet.add(schedule.preparedByName);
-
-        if (
-          schedule.approvedBy &&
-          schedule.approvedBy !== "N/A" &&
-          schedule.approvedBy !== "null"
-        )
-          monthData.approvedBySet.add(schedule.approvedBy);
-        else if (schedule.approvedByName && schedule.approvedByName !== "N/A")
-          monthData.approvedBySet.add(schedule.approvedByName);
-
-        const approvalDate = schedule.approvedAt || schedule.approvedDate;
-        if (
-          approvalDate &&
-          (!monthData.approvedAt ||
-            new Date(approvalDate) > new Date(monthData.approvedAt))
-        )
-          monthData.approvedAt = approvalDate;
-
-        monthData.schedules.push(schedule);
-      });
-
-      const pendingMonths: any[] = [];
-      const approvedMonths: any[] = [];
-
-      for (const [, monthData] of monthMap) {
-        const schedules = monthData.schedules;
-        const uniquePreparedBy = Array.from(monthData.preparedBySet);
-        const uniqueApprovedBy = Array.from(monthData.approvedBySet);
-
-        monthData.displayPreparedBy =
-          uniquePreparedBy.length > 0
-            ? uniquePreparedBy.join(", ")
-            : "Not available";
-        monthData.displayApprovedBy =
-          uniqueApprovedBy.length > 0
-            ? uniqueApprovedBy.join(", ")
-            : "Not approved yet";
-
-        const getStatus = (s: any) =>
-          s.detailedApprovalStatus || s.approvalStatus || "DRAFT";
-
-        const allApproved =
-          schedules.length > 0 &&
-          schedules.every((s: any) => getStatus(s) === "APPROVED");
-        const hasPending = schedules.some(
-          (s: any) => getStatus(s) === "PENDING_APPROVAL",
-        );
-        const hasChangeRequested = schedules.some(
-          (s: any) => getStatus(s) === "CHANGE_REQUESTED",
-        );
-        const hasRejected = schedules.some(
-          (s: any) => getStatus(s) === "REJECTED",
-        );
-
-        if (hasPending || hasChangeRequested) {
-          pendingMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            pendingCount: schedules.filter(
-              (s: any) => getStatus(s) === "PENDING_APPROVAL",
-            ).length,
-            changeRequestedCount: schedules.filter(
-              (s: any) => getStatus(s) === "CHANGE_REQUESTED",
-            ).length,
-            isChangeRequested: hasChangeRequested,
-            rejectedCount: schedules.filter(
-              (s: any) => getStatus(s) === "REJECTED",
-            ).length,
-            schedules,
-          });
-        } else if (allApproved && schedules.length > 0) {
-          approvedMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            approvedCount: schedules.length,
-            approvedAt: monthData.approvedAt,
-            schedules,
-          });
-        } else if (hasRejected) {
-          approvedMonths.push({
-            ...monthData,
-            preparedBy: monthData.displayPreparedBy,
-            approvedBy: monthData.displayApprovedBy,
-            scheduleCount: schedules.length,
-            rejectedCount: schedules.filter(
-              (s: any) => getStatus(s) === "REJECTED",
-            ).length,
-            approvedCount: schedules.filter(
-              (s: any) => getStatus(s) === "APPROVED",
-            ).length,
-            schedules,
-          });
-        }
-      }
-
-      setPendingDetailedPlans(pendingMonths);
-      setApprovedDetailedPlans(approvedMonths);
-
       return {
-        pendingCount: pendingMonths.length,
-        approvedCount: approvedMonths.length,
-        pending: pendingMonths,
-        approved: approvedMonths,
+        pendingCount: allPendingMonths.length,
+        approvedCount: allApprovedMonths.length,
+        pending: allPendingMonths,
+        approved: allApprovedMonths,
         allSchedules: allDailySchedules,
       };
     } catch (error) {
@@ -1518,8 +1797,7 @@ export default function TopManagementDashboard() {
         allSchedules: [],
       };
     }
-  }, []);
-
+  }, [user?.id, selectedPlant]);
   const prepareAnalyticsData = useCallback(
     (annualData: any, deptData: any, form5Data: any, detailedData: any) => {
       try {
@@ -1560,7 +1838,7 @@ export default function TopManagementDashboard() {
           });
 
           detailedData.allSchedules.forEach((schedule: any) => {
-            // ✅ Use normalizeMonth here too
+            // ? Use normalizeMonth here too
             if (
               schedule.planYear === year &&
               normalizeMonth(schedule.month) === monthAbbr
@@ -1707,9 +1985,34 @@ export default function TopManagementDashboard() {
   };
 
   useEffect(() => {
-    fetchAllUsers(); // ✅ ADD THIS
-    fetchDashboardData();
-  }, []);
+    if (!user?.id) return;
+    (async () => {
+      await fetchAllUsers();
+      await fetchDashboardData();
+    })();
+  }, [user?.id, selectedPlant]); // ? added
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchPlants = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/plants`, {});
+        const raw = await res.json();
+        const list = Array.isArray(raw) ? raw : raw?.data || [];
+        setAvailablePlants(list);
+
+        // If the user has a plant, prefer it, unless user already picked
+        setSelectedPlant((prev) =>
+          prev == null ? ((user as any)?.plantId ?? null) : prev,
+        );
+      } catch (e) {
+        console.warn("Failed to load plants:", e);
+      }
+    };
+
+    fetchPlants();
+  }, [user?.id]);
 
   // ============================================================================
   // HANDLERS
@@ -1733,7 +2036,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ comments: planApprovalComment }),
         },
       );
@@ -1767,7 +2069,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ reason: planRejectionReason }),
         },
       );
@@ -1802,7 +2103,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ comments: "" }),
         },
       );
@@ -1835,7 +2135,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ reason: deptRejectionReason }),
         },
       );
@@ -1872,7 +2171,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ comments: form5ApprovalComment }),
         },
       );
@@ -1906,7 +2204,6 @@ export default function TopManagementDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ reason: form5RejectionReason }),
         },
       );
@@ -1938,19 +2235,20 @@ export default function TopManagementDashboard() {
       ) || 0,
     );
 
+    // ? Treat CONFIRMED_BY_LA as pending too
     const hasPendingSchedules = plan.schedules.some(
       (s: any) =>
         s.detailedApprovalStatus === "PENDING_APPROVAL" ||
-        s.detailedApprovalStatus === "CHANGE_REQUESTED",
+        s.detailedApprovalStatus === "CHANGE_REQUESTED" ||
+        s.detailedApprovalStatus === "CONFIRMED_BY_LA",
     );
-    setActiveTab(!hasPendingSchedules ? "history" : tab);
+    setActiveTab(hasPendingSchedules ? "pending" : tab);
 
     setDetailedRejectionReason("");
     setDetailedAuditTypeFilter("");
     setDetailedApprovalComment("");
     setShowDetailedDetails(true);
   };
-
   const handleApproveSingleSchedule = (schedule: any) => {
     setSelectedScheduleForAction(schedule);
     setScheduleApprovalComment("");
@@ -1979,8 +2277,9 @@ export default function TopManagementDashboard() {
                 ...s,
                 detailedApprovalStatus: "APPROVED",
                 approvedByName: user?.name,
-                approvedBy: user?.name,
+                approvedBy: user?.id ?? user?.name,
                 approvedAt: new Date().toISOString(),
+                detailedRejectionReason: null,
               }
             : s,
         ),
@@ -2124,35 +2423,35 @@ export default function TopManagementDashboard() {
     switch (status) {
       case "APPROVED":
         return (
-          <View className="flex-row items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
+          <View className="flex-row items-center gap-1 rounded-full bg-green-100 px-2 py-1">
             <CheckCircle size={12} color="#166534" />
             <Text className="text-xs text-green-700">Approved</Text>
           </View>
         );
       case "REJECTED":
         return (
-          <View className="flex-row items-center gap-1 px-2 py-1 bg-red-100 rounded-full">
+          <View className="flex-row items-center gap-1 rounded-full bg-red-100 px-2 py-1">
             <X size={12} color="#e11d48" />
             <Text className="text-xs text-red-700">Rejected</Text>
           </View>
         );
       case "PENDING_APPROVAL":
         return (
-          <View className="flex-row items-center gap-1 px-2 py-1 bg-yellow-100 rounded-full">
+          <View className="flex-row items-center gap-1 rounded-full bg-yellow-100 px-2 py-1">
             <Clock size={12} color="#b45309" />
             <Text className="text-xs text-yellow-700">Pending</Text>
           </View>
         );
       case "CHANGE_REQUESTED":
         return (
-          <View className="flex-row items-center gap-1 px-2 py-1 bg-orange-100 rounded-full">
+          <View className="flex-row items-center gap-1 rounded-full bg-orange-100 px-2 py-1">
             <MessageSquare size={12} color="#ea580c" />
             <Text className="text-xs text-orange-700">Changes Requested</Text>
           </View>
         );
       default:
         return (
-          <View className="px-2 py-1 bg-gray-100 rounded-full">
+          <View className="rounded-full bg-gray-100 px-2 py-1">
             <Text className="text-xs text-gray-600">Draft</Text>
           </View>
         );
@@ -2192,7 +2491,8 @@ export default function TopManagementDashboard() {
     const pendingSchedules = detailedSchedulesList.filter((s: any) => {
       const isPending =
         s.detailedApprovalStatus === "PENDING_APPROVAL" ||
-        s.detailedApprovalStatus === "CHANGE_REQUESTED";
+        s.detailedApprovalStatus === "CHANGE_REQUESTED" ||
+        s.detailedApprovalStatus === "CONFIRMED_BY_LA"; // ? ADD
       if (!isPending) return false;
       return doesScheduleMatchFilter(s, detailedAuditTypeFilter);
     });
@@ -2269,7 +2569,8 @@ export default function TopManagementDashboard() {
     const pendingSchedules = detailedSchedulesList.filter((s: any) => {
       const isPending =
         s.detailedApprovalStatus === "PENDING_APPROVAL" ||
-        s.detailedApprovalStatus === "CHANGE_REQUESTED";
+        s.detailedApprovalStatus === "CHANGE_REQUESTED" ||
+        s.detailedApprovalStatus === "CONFIRMED_BY_LA"; // ? ADD
       if (!isPending) return false;
       return doesScheduleMatchFilter(s, detailedAuditTypeFilter);
     });
@@ -2352,7 +2653,7 @@ export default function TopManagementDashboard() {
   // ============================================================================
   if (loading) {
     return (
-      <View className="items-center justify-center flex-1 bg-slate-50">
+      <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text className="mt-4 font-medium text-slate-500">
           Loading dashboard...
@@ -2366,7 +2667,7 @@ export default function TopManagementDashboard() {
     return (
       <Form3View
         year={new Date().getFullYear()}
-        onBack={() => setActiveSection("overview")} // ✅ Goes back to Overview
+        onBack={() => setActiveSection("overview")} // ? Goes back to Overview
       />
     );
   }
@@ -2374,7 +2675,7 @@ export default function TopManagementDashboard() {
     return (
       <Form4View
         year={new Date().getFullYear()}
-        onBack={() => setActiveSection("overview")} // ✅ Goes back to Overview
+        onBack={() => setActiveSection("overview")} // ? Goes back to Overview
       />
     );
   }
@@ -2382,7 +2683,7 @@ export default function TopManagementDashboard() {
     return (
       <Form5View
         year={new Date().getFullYear()}
-        onBack={() => setActiveSection("overview")} // ✅ Goes back to Overview
+        onBack={() => setActiveSection("overview")} // ? Goes back to Overview
       />
     );
   }
@@ -2401,98 +2702,28 @@ export default function TopManagementDashboard() {
         }
       >
         {/* Header */}
-        <View className="w-full pt-4 pb-2 md:pt-6 md:pb-4">
-          <View className="flex-col w-full gap-4 px-4 md:px-8 lg:px-16 md:max-w-7xl md:mx-auto md:flex-row md:items-center md:justify-between">
+        <View className="w-full pb-2 pt-4 md:pb-4 md:pt-6">
+          <View className="w-full flex-col gap-4 px-4 md:mx-auto md:max-w-7xl md:flex-row md:items-center md:justify-between md:px-8 lg:px-16">
             <View className="flex-1">
-              <Text className="text-xl font-bold md:text-3xl text-slate-800">
+              <Text className="text-xl font-bold text-slate-800 md:text-3xl">
                 {activeSection === "overview" && "Dashboard Overview"}
                 {activeSection === "annual" && "Annual Audit Plans"}
                 {activeSection === "dept" && "Department Audit Plans"}
                 {activeSection === "week" && "Week Schedules"}
                 {activeSection === "daily" && "Daily Schedules"}
               </Text>
-              <Text className="mt-1 text-sm md:text-base text-slate-500">
+              <Text className="mt-1 text-sm text-slate-500 md:text-base">
                 Welcome back,{" "}
                 <Text className="font-semibold text-slate-700">
                   {user?.name}
                 </Text>
               </Text>
             </View>
-            <View className="flex-row items-center self-start gap-3 md:self-auto">
-              <TouchableOpacity
-                onPress={() => {
-                  const getFullName = (u: any) => {
-                    if (!u) return "Unknown User";
-                    if (u.name) return u.name;
-                    return (
-                      `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
-                      u.email ||
-                      "Unknown User"
-                    );
-                  };
-
-                  // Find Audit Manager
-                  const auditManager = allUsersList.find((u: any) =>
-                    u.role?.toUpperCase().includes("AUDIT_MANAGER"),
-                  );
-
-                  // Find Top Management
-                  const topManagement = allUsersList.find((u: any) =>
-                    u.role?.toUpperCase().includes("TOP_MANAGEMENT"),
-                  );
-
-                  // Build member emails - ONLY Audit Manager and Top Management
-                  const memberEmails: string[] = [];
-                  if (auditManager?.email)
-                    memberEmails.push(auditManager.email);
-                  if (
-                    topManagement?.email &&
-                    topManagement.email !== auditManager?.email
-                  ) {
-                    memberEmails.push(topManagement.email);
-                  }
-
-                  // Add current user if they are either Audit Manager or Top Management
-                  if (user?.email && !memberEmails.includes(user.email)) {
-                    const userRole = user.role?.toUpperCase() || "";
-                    if (
-                      userRole.includes("AUDIT_MANAGER") ||
-                      userRole.includes("TOP_MANAGEMENT")
-                    ) {
-                      memberEmails.push(user.email);
-                    }
-                  }
-
-                  const forumData = {
-                    id: "general-forum", // ✅ Keep this static so messages persist
-                    auditNumber: "TOP-MGMT-FORUM",
-                    auditType: "Management Discussion",
-                    department: "Management",
-                    auditorId: auditManager?.id || user?.id,
-                    auditorName: getFullName(auditManager || user), // ✅ GUARANTEED NAME
-                    auditeeId: topManagement?.id,
-                    auditeeName: getFullName(topManagement), // ✅ GUARANTEED NAME
-                    hodEmail: null,
-                    hodName: null,
-                    memberEmails: memberEmails,
-                    auditStatus: "ACTIVE",
-                    auditTitle: "Top Management Communication Forum",
-                  };
-
-                  // ✅ USE THE FUNCTION instead of inline code
-                  openAuditForum(forumData);
-                }}
-                className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm"
-                style={{ backgroundColor: COLORS.primary }}
-                activeOpacity={0.8}
-              >
-                <MessageCircle size={18} color="#ffffff" />
-                <Text className="text-sm font-semibold text-white">Forum</Text>
-              </TouchableOpacity>
+            <View className="flex-row items-center gap-3 self-start md:self-auto">
               <TouchableOpacity
                 onPress={handleRefresh}
                 disabled={refreshing}
-                className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm active:bg-slate-50 disabled:opacity-50"
+                className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm active:bg-slate-50 disabled:opacity-50"
                 activeOpacity={0.7}
               >
                 <RefreshCw size={18} color="#475569" />
@@ -2505,7 +2736,7 @@ export default function TopManagementDashboard() {
         </View>
 
         {/* Main Content Views */}
-        <View className="w-full px-4 pb-6 md:px-8 lg:px-16 md:max-w-7xl md:mx-auto">
+        <View className="w-full px-4 pb-6 md:mx-auto md:max-w-7xl md:px-8 lg:px-16">
           {activeSection === "overview" && (
             <View className="gap-4">
               {isDesktop ? (
@@ -2639,13 +2870,13 @@ export default function TopManagementDashboard() {
               </View>
 
               <View className={`${isDesktop ? "flex-row" : "flex-col"} gap-4`}>
-                <View className="flex-1 p-4 bg-white border rounded-2xl border-slate-200">
+                <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-4">
                   <Text className="mb-3 font-bold text-slate-800">
                     Approved Plans Summary
                   </Text>
                   {isDesktop ? (
                     <View className="flex-row gap-4">
-                      <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                      <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                         <Text className="mb-1 text-xs font-bold text-slate-800">
                           Annual
                         </Text>
@@ -2653,7 +2884,7 @@ export default function TopManagementDashboard() {
                           {approvedPlans.length}
                         </Text>
                       </View>
-                      <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                      <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                         <Text className="mb-1 text-xs font-bold text-slate-800">
                           Department
                         </Text>
@@ -2661,7 +2892,7 @@ export default function TopManagementDashboard() {
                           {approvedDeptPlans.length}
                         </Text>
                       </View>
-                      <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                      <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                         <Text className="mb-1 text-xs font-bold text-slate-800">
                           Week
                         </Text>
@@ -2669,7 +2900,7 @@ export default function TopManagementDashboard() {
                           {approvedForm5Plans.length}
                         </Text>
                       </View>
-                      <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                      <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                         <Text className="mb-1 text-xs font-bold text-slate-800">
                           Daily
                         </Text>
@@ -2681,7 +2912,7 @@ export default function TopManagementDashboard() {
                   ) : (
                     <View className="gap-3">
                       <View className="flex-row gap-3">
-                        <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                        <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                           <Text className="mb-1 text-xs font-bold text-slate-800">
                             Annual
                           </Text>
@@ -2689,7 +2920,7 @@ export default function TopManagementDashboard() {
                             {approvedPlans.length}
                           </Text>
                         </View>
-                        <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                        <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                           <Text className="mb-1 text-xs font-bold text-slate-800">
                             Department
                           </Text>
@@ -2699,7 +2930,7 @@ export default function TopManagementDashboard() {
                         </View>
                       </View>
                       <View className="flex-row gap-3">
-                        <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                        <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                           <Text className="mb-1 text-xs font-bold text-slate-800">
                             Week
                           </Text>
@@ -2707,7 +2938,7 @@ export default function TopManagementDashboard() {
                             {approvedForm5Plans.length}
                           </Text>
                         </View>
-                        <View className="flex-1 p-3 bg-white border rounded-2xl border-slate-200">
+                        <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3">
                           <Text className="mb-1 text-xs font-bold text-slate-800">
                             Daily
                           </Text>
@@ -2722,9 +2953,9 @@ export default function TopManagementDashboard() {
               </View>
 
               <View className={`${isDesktop ? "flex-row" : "flex-col"} gap-4`}>
-                <View className="flex-1 p-5 bg-white border shadow-sm border-slate-200 rounded-2xl">
-                  <View className="flex-row items-center gap-3 mb-4">
-                    <View className="p-2.5 rounded-xl bg-indigo-50">
+                <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <View className="mb-4 flex-row items-center gap-3">
+                    <View className="rounded-xl bg-indigo-50 p-2.5">
                       <TrendingUp size={20} color="#4f46e5" />
                     </View>
                     <View>
@@ -2737,8 +2968,8 @@ export default function TopManagementDashboard() {
                     </View>
                   </View>
                   <View className="flex-row gap-3">
-                    <View className="flex-1 p-3 rounded-lg bg-slate-50">
-                      <Text className="text-[10px] font-semibold text-slate-500 uppercase">
+                    <View className="flex-1 rounded-lg bg-slate-50 p-3">
+                      <Text className="text-[10px] font-semibold uppercase text-slate-500">
                         Pending Actions
                       </Text>
                       <Text className="mt-1 text-lg font-bold text-amber-600">
@@ -2748,8 +2979,8 @@ export default function TopManagementDashboard() {
                           stats.pendingDetailedApproval}
                       </Text>
                     </View>
-                    <View className="flex-1 p-3 rounded-lg bg-slate-50">
-                      <Text className="text-[10px] font-semibold text-slate-500 uppercase">
+                    <View className="flex-1 rounded-lg bg-slate-50 p-3">
+                      <Text className="text-[10px] font-semibold uppercase text-slate-500">
                         Completion
                       </Text>
                       <Text className="mt-1 text-lg font-bold text-green-600">
@@ -2759,17 +2990,17 @@ export default function TopManagementDashboard() {
                   </View>
                 </View>
 
-                <View className="flex-1 p-5 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <Text className="mb-4 text-base font-bold text-slate-800">
                     Audit Plans
                   </Text>
                   <View
                     className={`${isDesktop ? "flex-row" : "flex-col"} gap-3`}
                   >
-                    {/* ✅ Annual Plan -> Opens Form3View */}
+                    {/* ? Annual Plan -> Opens Form3View */}
                     <TouchableOpacity
                       onPress={() => setActiveSection("form3")}
-                      className="items-center justify-center flex-1 p-3 rounded-xl bg-blue-50 active:bg-blue-100"
+                      className="flex-1 items-center justify-center rounded-xl bg-blue-50 p-3 active:bg-blue-100"
                     >
                       <FileText
                         size={18}
@@ -2781,10 +3012,10 @@ export default function TopManagementDashboard() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* ✅ Dept Plan -> Opens Form4View */}
+                    {/* ? Dept Plan -> Opens Form4View */}
                     <TouchableOpacity
                       onPress={() => setActiveSection("form4")}
-                      className="items-center justify-center flex-1 p-3 rounded-xl bg-green-50 active:bg-green-100"
+                      className="flex-1 items-center justify-center rounded-xl bg-green-50 p-3 active:bg-green-100"
                     >
                       <List
                         size={18}
@@ -2796,10 +3027,10 @@ export default function TopManagementDashboard() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* ✅ Week Schedule -> Opens Form5View */}
+                    {/* ? Week Schedule -> Opens Form5View */}
                     <TouchableOpacity
                       onPress={() => setActiveSection("form5")}
-                      className="items-center justify-center flex-1 p-3 rounded-xl bg-indigo-50 active:bg-indigo-100"
+                      className="flex-1 items-center justify-center rounded-xl bg-indigo-50 p-3 active:bg-indigo-100"
                     >
                       <Calendar
                         size={18}
@@ -3065,8 +3296,8 @@ export default function TopManagementDashboard() {
 
       {showScheduleApproveModal && selectedScheduleForAction && (
         <Modal visible={true} transparent animationType="fade">
-          <View className="items-center justify-center flex-1 p-4 bg-black/50">
-            <View className="w-full max-w-md p-6 bg-white shadow-2xl rounded-2xl">
+          <View className="flex-1 items-center justify-center bg-black/50 p-4">
+            <View className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
               <Text className="mb-2 text-xl font-bold text-slate-800">
                 Approve Schedule
               </Text>
@@ -3085,7 +3316,7 @@ export default function TopManagementDashboard() {
                 onChangeText={setScheduleApprovalComment}
                 multiline
                 numberOfLines={3}
-                className="w-full p-3 mb-4 text-sm bg-white border rounded-lg border-slate-200 text-slate-800"
+                className="mb-4 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800"
                 placeholder="Add any comments for approval..."
                 textAlignVertical="top"
               />
@@ -3096,14 +3327,14 @@ export default function TopManagementDashboard() {
                     setScheduleApprovalComment("");
                     setSelectedScheduleForAction(null);
                   }}
-                  className="px-4 py-2 font-medium border rounded-lg border-slate-200"
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-medium"
                 >
                   <Text className="text-slate-600">Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleConfirmApproveSingleSchedule}
                   disabled={submitting}
-                  className="px-4 py-2 font-medium text-white bg-green-600 rounded-lg shadow-sm disabled:opacity-50"
+                  className="rounded-lg bg-green-600 px-4 py-2 font-medium text-white shadow-sm disabled:opacity-50"
                 >
                   {submitting ? (
                     <ActivityIndicator color="white" size="small" />
@@ -3119,8 +3350,8 @@ export default function TopManagementDashboard() {
 
       {showChangeRequestModal && selectedScheduleForAction && (
         <Modal visible={true} transparent animationType="fade">
-          <View className="items-center justify-center flex-1 p-4 bg-black/50">
-            <View className="w-full max-w-md p-6 bg-white shadow-2xl rounded-2xl">
+          <View className="flex-1 items-center justify-center bg-black/50 p-4">
+            <View className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
               <Text className="mb-2 text-xl font-bold text-slate-800">
                 Request Changes
               </Text>
@@ -3139,7 +3370,7 @@ export default function TopManagementDashboard() {
                 onChangeText={setChangeRequestReason}
                 multiline
                 numberOfLines={3}
-                className="w-full p-3 mb-4 text-sm bg-white border rounded-lg border-slate-200 text-slate-800"
+                className="mb-4 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800"
                 placeholder="Describe what changes are needed..."
                 textAlignVertical="top"
               />
@@ -3150,14 +3381,14 @@ export default function TopManagementDashboard() {
                     setChangeRequestReason("");
                     setSelectedScheduleForAction(null);
                   }}
-                  className="px-4 py-2 font-medium border rounded-lg border-slate-200"
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-medium"
                 >
                   <Text className="text-slate-600">Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleRequestChangesForSchedule}
                   disabled={submitting}
-                  className="px-4 py-2 font-medium text-white bg-orange-600 rounded-lg shadow-sm disabled:opacity-50"
+                  className="rounded-lg bg-orange-600 px-4 py-2 font-medium text-white shadow-sm disabled:opacity-50"
                 >
                   {submitting ? (
                     <ActivityIndicator color="white" size="small" />
@@ -3241,20 +3472,20 @@ export default function TopManagementDashboard() {
           hodName={selectedAuditForForum.hodName}
           memberEmails={selectedAuditForForum.memberEmails || []}
           currentUser={user}
-          allUsers={allUsersList} // ✅ PASS THE ACTUAL USERS LIST - THIS IS THE KEY FIX
+          allUsers={allUsersList} // ? PASS THE ACTUAL USERS LIST - THIS IS THE KEY FIX
         />
       )}
 
       {showForm5Details && selectedForm5Plan && (
         <Modal visible={true} transparent animationType="fade">
-          <View className="items-center justify-center flex-1 p-4 bg-black/50">
+          <View className="flex-1 items-center justify-center bg-black/50 p-4">
             <View
-              className={`bg-white shadow-2xl rounded-2xl overflow-hidden ${isDesktop ? "w-full max-w-6xl max-h-[100%]" : "w-full flex-1 max-h-[92%]"}`}
+              className={`overflow-hidden rounded-2xl bg-white shadow-2xl ${isDesktop ? "max-h-[100%] w-full max-w-6xl" : "max-h-[92%] w-full flex-1"}`}
             >
-              <View className="flex-row items-center justify-between flex-shrink-0 p-4 bg-white border-b border-slate-200">
+              <View className="flex-shrink-0 flex-row items-center justify-between border-b border-slate-200 bg-white p-4">
                 <View className="flex-1 pr-4">
                   <Text
-                    className="text-base font-bold md:text-xl text-slate-800"
+                    className="text-base font-bold text-slate-800 md:text-xl"
                     numberOfLines={2}
                   >
                     Week Schedule - {monthDisplay[selectedForm5Plan.month]}{" "}
@@ -3274,7 +3505,7 @@ export default function TopManagementDashboard() {
                 </View>
                 <TouchableOpacity
                   onPress={() => setShowForm5Details(false)}
-                  className="p-2 rounded-lg bg-slate-100"
+                  className="rounded-lg bg-slate-100 p-2"
                 >
                   <X size={20} color="#475569" />
                 </TouchableOpacity>
@@ -3286,55 +3517,48 @@ export default function TopManagementDashboard() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={true}
-                  className="m-2 bg-white border rounded-lg border-slate-200"
+                  className="m-2 rounded-lg border border-slate-200 bg-white"
                 >
                   <View style={{ minWidth: isDesktop ? 1130 : 750 }}>
-                    <View className="flex-row border-b bg-slate-50 border-slate-200">
+                    <View className="flex-row border-b border-slate-200 bg-slate-50">
                       <View
                         style={{ width: isDesktop ? 150 : 120 }}
-                        className="px-2 py-3 border-r border-slate-200"
+                        className="border-r border-slate-200 px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-center text-slate-600 uppercase">
+                        <Text className="text-center text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
                           Department
                         </Text>
                       </View>
                       <View
                         style={{ width: isDesktop ? 120 : 70 }}
-                        className="justify-center px-2 py-3 border-r border-slate-200"
+                        className="justify-center border-r border-slate-200 px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase text-center">
+                        <Text className="text-center text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
                           Week
                         </Text>
                       </View>
                       <View
                         style={{ width: isDesktop ? 120 : 100 }}
-                        className="px-2 py-3 border-r border-slate-200"
+                        className="border-r border-slate-200 px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
                           Elements
                         </Text>
                       </View>
+                      {/* ? Team ? Auditor */}
                       <View
-                        style={{ width: isDesktop ? 180 : 130 }}
-                        className="px-2 py-3 border-r border-slate-200"
+                        style={{ width: isDesktop ? 260 : 180 }}
+                        className="border-r border-slate-200 px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase">
-                          Lead Auditor
+                        <Text className="text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
+                          Auditor
                         </Text>
                       </View>
                       <View
                         style={{ width: isDesktop ? 180 : 120 }}
-                        className="px-2 py-3 border-r border-slate-200"
+                        className="border-r border-slate-200 px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase">
-                          Team
-                        </Text>
-                      </View>
-                      <View
-                        style={{ width: isDesktop ? 180 : 120 }}
-                        className="px-2 py-3 border-r border-slate-200"
-                      >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
                           Auditees
                         </Text>
                       </View>
@@ -3342,41 +3566,57 @@ export default function TopManagementDashboard() {
                         style={{ width: isDesktop ? 100 : 100 }}
                         className="justify-center px-2 py-3"
                       >
-                        <Text className="text-[10px] md:text-[11px] font-bold text-slate-600 uppercase text-center">
+                        <Text className="text-center text-[10px] font-bold uppercase text-slate-600 md:text-[11px]">
                           Status
                         </Text>
                       </View>
                     </View>
                     {form5SchedulesDetail.map((schedule: any, idx: number) => {
-                      let teamAuditorNames =
-                        typeof schedule.teamAuditorNames === "string"
-                          ? (() => {
-                              try {
-                                return JSON.parse(schedule.teamAuditorNames);
-                              } catch (e) {
-                                return [];
-                              }
-                            })()
-                          : Array.isArray(schedule.teamAuditorNames)
-                            ? schedule.teamAuditorNames
-                            : [];
+                      // ? Use the SAME priority as ScheduleMatrixView / ScheduleListView:
+                      //    coAuditorNames (primary + co-auditors) ? teamAuditorNames ? auditorName
+                      let teamAuditorNames: string[] = [];
 
-                      if (
-                        teamAuditorNames.length === 0 &&
-                        schedule.coAuditorNames
-                      ) {
-                        teamAuditorNames =
-                          typeof schedule.coAuditorNames === "string"
-                            ? (() => {
-                                try {
-                                  return JSON.parse(schedule.coAuditorNames);
-                                } catch (e) {
-                                  return [];
-                                }
-                              })()
-                            : Array.isArray(schedule.coAuditorNames)
-                              ? schedule.coAuditorNames
+                      // Priority 1: coAuditorNames (this is where the full team lives)
+                      const primarySource =
+                        schedule.coAuditorNames ??
+                        schedule.teamAuditorNames ??
+                        schedule.auditorNames ??
+                        null;
+
+                      if (typeof primarySource === "string") {
+                        try {
+                          const parsed = JSON.parse(primarySource);
+                          teamAuditorNames = Array.isArray(parsed)
+                            ? parsed.filter(
+                                (n: any) => typeof n === "string" && n.trim(),
+                              )
+                            : primarySource.trim()
+                              ? [primarySource.trim()]
                               : [];
+                        } catch {
+                          teamAuditorNames = primarySource.trim()
+                            ? [primarySource.trim()]
+                            : [];
+                        }
+                      } else if (Array.isArray(primarySource)) {
+                        teamAuditorNames = primarySource.filter(
+                          (n: any) => typeof n === "string" && n.trim(),
+                        );
+                      }
+
+                      // Priority 2: fall back to scalar single-name fields
+                      if (teamAuditorNames.length === 0) {
+                        const single =
+                          schedule.leadAuditorName ||
+                          schedule.auditorName ||
+                          null;
+                        if (
+                          single &&
+                          typeof single === "string" &&
+                          single.trim()
+                        ) {
+                          teamAuditorNames = [single.trim()];
+                        }
                       }
 
                       let auditeeNames =
@@ -3394,9 +3634,6 @@ export default function TopManagementDashboard() {
                               ? [schedule.auditeeName]
                               : [];
 
-                      const leadAuditorName =
-                        schedule.leadAuditorName || schedule.auditorName || "-";
-
                       const renderElements = () => {
                         if (!schedule.auditElements)
                           return (
@@ -3410,9 +3647,9 @@ export default function TopManagementDashboard() {
                             return parsed.map((el: string, i: number) => (
                               <View
                                 key={i}
-                                className="px-1.5 py-0.5 bg-blue-100 rounded mr-1 mb-1"
+                                className="mb-1 mr-1 rounded bg-blue-100 px-1.5 py-0.5"
                               >
-                                <Text className="text-[14px] md:text-[14px] font-medium text-blue-700">
+                                <Text className="text-[14px] font-medium text-blue-700 md:text-[14px]">
                                   {getAuditElementCode(String(el))}
                                 </Text>
                               </View>
@@ -3430,9 +3667,9 @@ export default function TopManagementDashboard() {
                             (el: string, i: number) => (
                               <View
                                 key={i}
-                                className="px-1.5 py-0.5 bg-blue-100 rounded mr-1 mb-1"
+                                className="mb-1 mr-1 rounded bg-blue-100 px-1.5 py-0.5"
                               >
-                                <Text className="text-[18px] md:text-[14px] font-medium text-blue-700">
+                                <Text className="text-[18px] font-medium text-blue-700 md:text-[14px]">
                                   {getAuditElementCode(String(el))}
                                 </Text>
                               </View>
@@ -3449,57 +3686,53 @@ export default function TopManagementDashboard() {
                       return (
                         <View
                           key={idx}
-                          className="flex-row bg-white border-b border-slate-100"
+                          className="flex-row border-b border-slate-100 bg-white"
                         >
+                          {/* Department */}
                           <View
                             style={{ width: isDesktop ? 150 : 120 }}
-                            className="px-2 py-3 border-r border-slate-100"
+                            className="border-r border-slate-100 px-2 py-3"
                           >
                             <Text
-                              className="text-xs font-medium text-center md:text-sm text-slate-800"
+                              className="text-center text-xs font-medium text-slate-800 md:text-sm"
                               numberOfLines={2}
                             >
                               {schedule.department || "-"}
                             </Text>
                           </View>
+
+                          {/* Week */}
                           <View
                             style={{ width: isDesktop ? 120 : 70 }}
-                            className="px-2 py-3 border-r border-slate-100"
+                            className="border-r border-slate-100 px-2 py-3"
                           >
-                            <Text className="text-xs text-center md:text-sm text-slate-800">
+                            <Text className="text-center text-xs text-slate-800 md:text-sm">
                               {schedule.week || "-"}
                             </Text>
                           </View>
+
+                          {/* Elements */}
                           <View
                             style={{ width: isDesktop ? 120 : 100 }}
-                            className="flex-row flex-wrap px-2 py-3 border-r border-slate-100"
+                            className="flex-row flex-wrap border-r border-slate-100 px-2 py-3"
                           >
                             {renderElements()}
                           </View>
+
+                          {/* ? Auditor (was "Team") � now shows the full audit team */}
                           <View
-                            style={{ width: isDesktop ? 180 : 130 }}
-                            className="px-2 py-3 border-r border-slate-100"
-                          >
-                            <Text
-                              className="text-xs font-medium md:text-sm text-slate-800"
-                              numberOfLines={2}
-                            >
-                              {leadAuditorName}
-                            </Text>
-                          </View>
-                          <View
-                            style={{ width: isDesktop ? 180 : 120 }}
-                            className="flex-row flex-wrap px-2 py-3 border-r border-slate-100"
+                            style={{ width: isDesktop ? 260 : 180 }}
+                            className="flex-row flex-wrap border-r border-slate-100 px-2 py-3"
                           >
                             {teamAuditorNames.length > 0 ? (
                               teamAuditorNames.map(
                                 (name: string, i: number) => (
                                   <View
                                     key={i}
-                                    className="px-1.5 py-0.5 bg-indigo-100 rounded mr-1 mb-1"
+                                    className="mb-1 mr-1 rounded bg-indigo-100 px-1.5 py-0.5"
                                   >
                                     <Text
-                                      className="text-[14px] md:text-[14px] text-indigo-700 text-center"
+                                      className="text-center text-[12px] text-indigo-700 md:text-[12px]"
                                       numberOfLines={1}
                                     >
                                       {name}
@@ -3508,23 +3741,25 @@ export default function TopManagementDashboard() {
                                 ),
                               )
                             ) : (
-                              <Text className="w-full text-xs text-center text-slate-400">
+                              <Text className="w-full text-center text-xs text-slate-400">
                                 -
                               </Text>
                             )}
                           </View>
+
+                          {/* Auditees */}
                           <View
                             style={{ width: isDesktop ? 180 : 120 }}
-                            className="flex-row flex-wrap px-2 py-3 border-r border-slate-100"
+                            className="flex-row flex-wrap border-r border-slate-100 px-2 py-3"
                           >
                             {auditeeNames.length > 0 ? (
                               auditeeNames.map((name: string, i: number) => (
                                 <View
                                   key={i}
-                                  className="px-1.5 py-0.5 bg-green-100 rounded mr-1 mb-1"
+                                  className="mb-1 mr-1 rounded bg-green-100 px-1.5 py-0.5"
                                 >
                                   <Text
-                                    className="text-[12px] md:text-[12px] text-green-700 text-center"
+                                    className="text-center text-[12px] text-green-700 md:text-[12px]"
                                     numberOfLines={1}
                                   >
                                     {name}
@@ -3532,17 +3767,19 @@ export default function TopManagementDashboard() {
                                 </View>
                               ))
                             ) : (
-                              <Text className="w-full text-xs text-center text-slate-400">
+                              <Text className="w-full text-center text-xs text-slate-400">
                                 -
                               </Text>
                             )}
                           </View>
+
+                          {/* Status */}
                           <View
                             style={{ width: isDesktop ? 100 : 100 }}
                             className="justify-center px-2 py-3"
                           >
-                            <View className="self-center px-2 py-1 bg-yellow-100 rounded-full">
-                              <Text className="text-[9px] md:text-[10px] font-bold text-yellow-700 text-center">
+                            <View className="self-center rounded-full bg-yellow-100 px-2 py-1">
+                              <Text className="text-center text-[9px] font-bold text-yellow-700 md:text-[10px]">
                                 {schedule.status || "SCHEDULED"}
                               </Text>
                             </View>
@@ -3552,7 +3789,7 @@ export default function TopManagementDashboard() {
                     })}
                   </View>
                 </ScrollView>
-                <View className="p-3 m-2 border rounded-lg bg-slate-50 border-slate-100">
+                <View className="m-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <Text className="mb-1 text-xs font-bold text-slate-600">
                     Legend - Audit Elements codes:
                   </Text>
@@ -3575,13 +3812,13 @@ export default function TopManagementDashboard() {
                   </View>
                 </View>
                 {selectedForm5Plan.approvalStatus !== "APPROVED" ? (
-                  <View className="px-6 pt-2 pb-6">
+                  <View className="px-6 pb-6 pt-2">
                     <View className="mb-4">
                       <Text className="mb-2 text-sm font-bold text-slate-700">
                         Approval Comments (Optional)
                       </Text>
                       <TextInput
-                        className="w-full p-3 text-sm bg-white border rounded-lg border-slate-200 text-slate-800"
+                        className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-800"
                         multiline
                         numberOfLines={2}
                         value={form5ApprovalComment}
@@ -3589,10 +3826,10 @@ export default function TopManagementDashboard() {
                         placeholder="Add any comments for approval..."
                       />
                     </View>
-                    <View className="flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <View className="flex-row items-center justify-end gap-3 border-t border-slate-100 pt-4">
                       <TouchableOpacity
                         onPress={() => setShowForm5RejectModal(true)}
-                        className="flex-row items-center justify-center gap-2 px-5 py-2.5 bg-red-600 rounded-lg shadow-sm active:bg-red-700"
+                        className="flex-row items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 shadow-sm active:bg-red-700"
                       >
                         <X size={16} color="#FFF" />
                         <Text className="font-medium text-white">Reject</Text>
@@ -3600,7 +3837,7 @@ export default function TopManagementDashboard() {
                       <TouchableOpacity
                         onPress={handleApproveForm5Plan}
                         disabled={submitting}
-                        className="flex-row items-center justify-center gap-2 px-5 py-2.5 bg-green-600 rounded-lg shadow-sm active:bg-green-700 disabled:opacity-50"
+                        className="flex-row items-center justify-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 shadow-sm active:bg-green-700 disabled:opacity-50"
                       >
                         {submitting ? (
                           <ActivityIndicator color="white" size="small" />
@@ -3612,7 +3849,7 @@ export default function TopManagementDashboard() {
                     </View>
                   </View>
                 ) : (
-                  <View className="flex-row items-center justify-center p-4 mx-6 mb-6 border border-green-200 rounded-lg bg-green-50">
+                  <View className="mx-6 mb-6 flex-row items-center justify-center rounded-lg border border-green-200 bg-green-50 p-4">
                     <CheckCircle size={20} color="#166534" />
                     <Text className="ml-2 font-semibold text-green-700">
                       This week schedule has already been approved.
@@ -3631,7 +3868,9 @@ export default function TopManagementDashboard() {
           const filteredPending = detailedSchedulesList.filter((s: any) => {
             const isPending =
               s.detailedApprovalStatus === "PENDING_APPROVAL" ||
-              s.detailedApprovalStatus === "CHANGE_REQUESTED";
+              s.detailedApprovalStatus === "CHANGE_REQUESTED" ||
+              s.detailedApprovalStatus === "CONFIRMED_BY_LA"; // <--- ADD THIS
+            // ... rest of filter
             if (!isPending) return false;
             if (!detailedAuditTypeFilter.trim()) return true;
             const filter = detailedAuditTypeFilter.toLowerCase();
@@ -3654,10 +3893,10 @@ export default function TopManagementDashboard() {
 
           return (
             <Modal visible={true} transparent animationType="slide">
-              <View className="items-center justify-center flex-1 p-4 bg-black/50">
-                <View className="w-full max-w-6xl bg-white shadow-2xl rounded-2xl flex-1 max-h-[90%]">
-                  <View className="p-3 border-b border-slate-100">
-                    <View className="flex-row items-center justify-between mb-4">
+              <View className="flex-1 items-center justify-center bg-black/50 p-4">
+                <View className="max-h-[90%] w-full max-w-6xl flex-1 rounded-2xl bg-white shadow-2xl">
+                  <View className="border-b border-slate-100 p-3">
+                    <View className="mb-4 flex-row items-center justify-between">
                       <View>
                         <Text className="text-xl font-bold text-slate-800">
                           Daily Schedule -{" "}
@@ -3676,7 +3915,7 @@ export default function TopManagementDashboard() {
                       </View>
                       <TouchableOpacity
                         onPress={() => setShowDetailedDetails(false)}
-                        className="p-2 rounded-lg bg-slate-100"
+                        className="rounded-lg bg-slate-100 p-2"
                       >
                         <X size={20} color="#475569" />
                       </TouchableOpacity>
@@ -3684,7 +3923,7 @@ export default function TopManagementDashboard() {
                     <View className="flex-row border-b border-slate-200">
                       <TouchableOpacity
                         onPress={() => setActiveTab("pending")}
-                        className={`py-2 px-2 ${activeTab === "pending" ? "border-b-2 border-teal-600" : ""}`}
+                        className={`px-2 py-2 ${activeTab === "pending" ? "border-b-2 border-teal-600" : ""}`}
                       >
                         <View className="flex-row items-center gap-2">
                           <Clock
@@ -3702,7 +3941,7 @@ export default function TopManagementDashboard() {
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => setActiveTab("history")}
-                        className={`py-2 px-3 ${activeTab === "history" ? "border-b-2 border-teal-600" : ""}`}
+                        className={`px-3 py-2 ${activeTab === "history" ? "border-b-2 border-teal-600" : ""}`}
                       >
                         <View className="flex-row items-center gap-2">
                           <Archive
@@ -3733,7 +3972,7 @@ export default function TopManagementDashboard() {
                     showsVerticalScrollIndicator={false}
                   >
                     <View className="p-6">
-                      <View className="flex-row items-center gap-2 p-2 mb-4 border rounded-lg border-slate-200 bg-slate-50">
+                      <View className="mb-4 flex-row items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <Filter size={16} color="#64748b" />
                         <TextInput
                           className="flex-1 py-1 text-sm text-slate-800"
@@ -3742,55 +3981,55 @@ export default function TopManagementDashboard() {
                           placeholder="Filter by audit type or elements..."
                         />
                       </View>
-                      <View className="mb-4 overflow-hidden border rounded-lg border-slate-200">
+                      <View className="mb-4 overflow-hidden rounded-lg border border-slate-200">
                         <ScrollView
                           horizontal
                           showsHorizontalScrollIndicator={false}
                         >
                           <View style={{ minWidth: 1100 }}>
-                            <View className="flex-row p-3 border-b bg-slate-100 border-slate-200">
+                            <View className="flex-row border-b border-slate-200 bg-slate-100 p-3">
                               <View className="w-28">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Date
                                 </Text>
                               </View>
                               <View className="w-24">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Time Slot
                                 </Text>
                               </View>
                               <View className="w-36">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Dept/Event
                                 </Text>
                               </View>
                               <View className="w-32">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Audit Type
                                 </Text>
                               </View>
                               <View className="w-28">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Auditor
                                 </Text>
                               </View>
                               <View className="w-28">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Auditee
                                 </Text>
                               </View>
                               <View className="w-32">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Status
                                 </Text>
                               </View>
                               <View className="w-40">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Approved/Rejected By
                                 </Text>
                               </View>
-                              <View className="items-center w-28">
-                                <Text className="text-xs font-bold tracking-wider uppercase text-slate-600">
+                              <View className="w-28 items-center">
+                                <Text className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   Actions
                                 </Text>
                               </View>
@@ -3802,7 +4041,9 @@ export default function TopManagementDashboard() {
                                     s.detailedApprovalStatus ===
                                       "PENDING_APPROVAL" ||
                                     s.detailedApprovalStatus ===
-                                      "CHANGE_REQUESTED"
+                                      "CHANGE_REQUESTED" ||
+                                    s.detailedApprovalStatus ===
+                                      "CONFIRMED_BY_LA"
                                   );
                                 else
                                   return (
@@ -3840,26 +4081,26 @@ export default function TopManagementDashboard() {
                                 return (
                                   <View
                                     key={schedule.id || idx}
-                                    className={`flex-row p-3 border-b border-slate-100 items-center min-w-[1100px] ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
+                                    className={`min-w-[1100px] flex-row items-center border-b border-slate-100 p-3 ${idx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}
                                   >
                                     <View className="w-28">
                                       {schedule.fromDate &&
                                       schedule.toDate &&
                                       schedule.fromDate !== schedule.toDate ? (
                                         <>
-                                          <View className="flex-row items-center gap-1 mb-0.5">
+                                          <View className="mb-0.5 flex-row items-center gap-1">
                                             <Text className="text-[10px] text-purple-600">
-                                              📅
+                                              ??
                                             </Text>
                                             <Text className="text-[10px] font-bold text-slate-700">
                                               Range:
                                             </Text>
-                                            <Text className="text-[10px] bg-purple-100 text-purple-700 px-1 py-0.5 rounded-full font-medium">
+                                            <Text className="rounded-full bg-purple-100 px-1 py-0.5 text-[10px] font-medium text-purple-700">
                                               Flexible
                                             </Text>
                                           </View>
                                           <Text className="text-xs font-medium text-slate-600">
-                                            {schedule.fromDate} →{" "}
+                                            {schedule.fromDate} ?{" "}
                                             {schedule.toDate}
                                           </Text>
                                         </>
@@ -3882,11 +4123,11 @@ export default function TopManagementDashboard() {
                                           <Text className="text-sm font-medium text-slate-800">
                                             {schedule.specialEventType ===
                                             "OPENING"
-                                              ? "☀️ Opening"
+                                              ? "?? Opening"
                                               : schedule.specialEventType ===
                                                   "LUNCH"
-                                                ? "🍽️ Lunch"
-                                                : "🌙 Closing"}
+                                                ? "??? Lunch"
+                                                : "?? Closing"}
                                           </Text>
                                         </View>
                                       ) : (
@@ -3899,7 +4140,7 @@ export default function TopManagementDashboard() {
                                               (dept: string, i: number) => (
                                                 <Text
                                                   key={i}
-                                                  className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium"
+                                                  className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
                                                 >
                                                   {dept}
                                                 </Text>
@@ -3921,95 +4162,183 @@ export default function TopManagementDashboard() {
                                         {schedule.auditType || "-"}
                                       </Text>
                                     </View>
+                                    {/* Auditor */}
                                     <View className="w-28">
                                       <Text
                                         className="text-sm text-slate-700"
-                                        numberOfLines={1}
+                                        numberOfLines={2}
                                       >
-                                        {schedule.auditorName || "-"}
+                                        {(() => {
+                                          const names =
+                                            Array.isArray(
+                                              schedule.coAuditorNames,
+                                            ) &&
+                                            schedule.coAuditorNames.length > 0
+                                              ? schedule.coAuditorNames
+                                              : Array.isArray(
+                                                    schedule.teamAuditorNames,
+                                                  ) &&
+                                                  schedule.teamAuditorNames
+                                                    .length > 0
+                                                ? schedule.teamAuditorNames
+                                                : schedule.auditorName
+                                                  ? [schedule.auditorName]
+                                                  : [];
+                                          return names.length > 0
+                                            ? names.join(", ")
+                                            : "-";
+                                        })()}
                                       </Text>
                                     </View>
+
+                                    {/* Auditee */}
                                     <View className="w-28">
+                                      <Text
+                                        className="text-sm text-slate-700"
+                                        numberOfLines={2}
+                                      >
+                                        {(() => {
+                                          const names =
+                                            Array.isArray(
+                                              schedule.auditeeNames,
+                                            ) &&
+                                            schedule.auditeeNames.length > 0
+                                              ? schedule.auditeeNames
+                                              : schedule.auditeeName
+                                                ? [schedule.auditeeName]
+                                                : [];
+                                          return names.length > 0
+                                            ? names.join(", ")
+                                            : "-";
+                                        })()}
+                                      </Text>
+                                    </View>
+                                    {/* <View className="w-28">
                                       <Text
                                         className="text-sm text-slate-700"
                                         numberOfLines={1}
                                       >
                                         {schedule.auditeeName || "-"}
                                       </Text>
-                                    </View>
+                                    </View> */}
                                     <View className="w-32">
                                       {getStatusBadge(approvalStatus)}
                                     </View>
                                     <View className="w-40">
-                                      {approvalStatus === "APPROVED" &&
-                                        schedule.approvedByName && (
-                                          <Text
-                                            className="text-xs font-medium text-green-700"
-                                            numberOfLines={2}
-                                          >
-                                            {schedule.approvedByName}
-                                          </Text>
-                                        )}
-                                      {approvalStatus === "REJECTED" && (
-                                        <View>
-                                          {(schedule.rejectedByName ||
-                                            schedule.approvedByName) && (
+                                      {(() => {
+                                        const resolveDisplay = (
+                                          rawName: any,
+                                          rawId: any,
+                                        ): string => {
+                                          if (
+                                            typeof rawName === "string" &&
+                                            rawName.trim() &&
+                                            rawName !== "null" &&
+                                            rawName !== "N/A"
+                                          ) {
+                                            return rawName.trim();
+                                          }
+                                          if (rawId != null) {
+                                            const u = allUsersList.find(
+                                              (x: any) =>
+                                                String(x.id) ===
+                                                  String(rawId) ||
+                                                Number(x.id) === Number(rawId),
+                                            );
+                                            if (u) {
+                                              const full =
+                                                u.name ||
+                                                `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+                                                u.email;
+                                              if (full) return full;
+                                            }
+                                          }
+                                          return "�";
+                                        };
+
+                                        if (approvalStatus === "APPROVED") {
+                                          const name = resolveDisplay(
+                                            schedule.approvedByName ||
+                                              schedule.approvedBy,
+                                            schedule.approvedBy,
+                                          );
+                                          return (
+                                            <Text
+                                              className="text-xs font-medium text-green-700"
+                                              numberOfLines={2}
+                                            >
+                                              {name}
+                                            </Text>
+                                          );
+                                        }
+
+                                        if (approvalStatus === "REJECTED") {
+                                          const name = resolveDisplay(
+                                            schedule.rejectedByName ||
+                                              schedule.laRejectedBy ||
+                                              schedule.approvedByName,
+                                            schedule.rejectedBy ||
+                                              schedule.approvedBy,
+                                          );
+                                          return (
                                             <Text
                                               className="text-xs font-medium text-red-600"
-                                              numberOfLines={1}
+                                              numberOfLines={2}
                                             >
-                                              {schedule.rejectedByName ||
-                                                schedule.approvedByName}
+                                              {name}
                                             </Text>
-                                          )}
-                                          {schedule.detailedRejectionReason && (
-                                            <Text
-                                              className="text-[10px] text-red-500"
-                                              numberOfLines={1}
-                                            >
-                                              {schedule.detailedRejectionReason
-                                                .length > 30
-                                                ? schedule.detailedRejectionReason.substring(
-                                                    0,
-                                                    30,
-                                                  ) + "..."
-                                                : schedule.detailedRejectionReason}
+                                          );
+                                        }
+
+                                        if (
+                                          approvalStatus === "CHANGE_REQUESTED"
+                                        ) {
+                                          const name = resolveDisplay(
+                                            schedule.rejectedByName ||
+                                              schedule.approvedByName,
+                                            schedule.rejectedBy ||
+                                              schedule.approvedBy,
+                                          );
+                                          return (
+                                            <View>
+                                              <Text
+                                                className="text-xs font-medium text-orange-600"
+                                                numberOfLines={1}
+                                              >
+                                                {name}
+                                              </Text>
+                                              <Text
+                                                className="text-[10px] text-orange-500"
+                                                numberOfLines={1}
+                                              >
+                                                Changes requested
+                                              </Text>
+                                            </View>
+                                          );
+                                        }
+
+                                        if (
+                                          approvalStatus === "PENDING_APPROVAL"
+                                        ) {
+                                          return (
+                                            <Text className="text-xs font-medium text-slate-400">
+                                              Awaiting review
                                             </Text>
-                                          )}
-                                        </View>
-                                      )}
-                                      {approvalStatus ===
-                                        "CHANGE_REQUESTED" && (
-                                        <View>
-                                          {(schedule.rejectedByName ||
-                                            schedule.approvedByName) && (
-                                            <Text
-                                              className="text-xs font-medium text-orange-600"
-                                              numberOfLines={1}
-                                            >
-                                              {schedule.rejectedByName ||
-                                                schedule.approvedByName}
-                                            </Text>
-                                          )}
-                                          <Text
-                                            className="text-[10px] text-orange-500"
-                                            numberOfLines={1}
-                                          >
-                                            Changes requested
+                                          );
+                                        }
+
+                                        return (
+                                          <Text className="text-xs text-slate-400">
+                                            �
                                           </Text>
-                                        </View>
-                                      )}
-                                      {approvalStatus ===
-                                        "PENDING_APPROVAL" && (
-                                        <Text className="text-xs font-medium text-slate-400">
-                                          Awaiting review
-                                        </Text>
-                                      )}
+                                        );
+                                      })()}
                                     </View>
-                                    <View className="items-center justify-center w-28">
+                                    <View className="w-28 items-center justify-center">
                                       {(approvalStatus === "PENDING_APPROVAL" ||
+                                        approvalStatus === "CHANGE_REQUESTED" ||
                                         approvalStatus ===
-                                          "CHANGE_REQUESTED") && (
+                                          "CONFIRMED_BY_LA") && (
                                         <View className="flex-row gap-2">
                                           <TouchableOpacity
                                             onPress={() =>
@@ -4017,7 +4346,7 @@ export default function TopManagementDashboard() {
                                                 schedule,
                                               )
                                             }
-                                            className="p-1.5 bg-green-100 rounded-lg active:bg-green-200"
+                                            className="rounded-lg bg-green-100 p-1.5 active:bg-green-200"
                                           >
                                             <ThumbsUp
                                               size={16}
@@ -4032,7 +4361,7 @@ export default function TopManagementDashboard() {
                                               setDetailedRejectionReason("");
                                               setShowScheduleRejectModal(true);
                                             }}
-                                            className="p-1.5 bg-red-100 rounded-lg active:bg-red-200"
+                                            className="rounded-lg bg-red-100 p-1.5 active:bg-red-200"
                                           >
                                             <ThumbsDown
                                               size={16}
@@ -4047,7 +4376,7 @@ export default function TopManagementDashboard() {
                                               setChangeRequestReason("");
                                               setShowChangeRequestModal(true);
                                             }}
-                                            className="p-1.5 bg-orange-100 rounded-lg active:bg-orange-200"
+                                            className="rounded-lg bg-orange-100 p-1.5 active:bg-orange-200"
                                           >
                                             <MessageSquare
                                               size={16}
@@ -4061,6 +4390,11 @@ export default function TopManagementDashboard() {
                                           Approved
                                         </Text>
                                       )}
+                                      {approvalStatus === "REJECTED" && (
+                                        <Text className="text-xs font-bold text-red-600">
+                                          Rejected
+                                        </Text>
+                                      )}
                                     </View>
                                   </View>
                                 );
@@ -4072,7 +4406,9 @@ export default function TopManagementDashboard() {
                                     s.detailedApprovalStatus ===
                                       "PENDING_APPROVAL" ||
                                     s.detailedApprovalStatus ===
-                                      "CHANGE_REQUESTED"
+                                      "CHANGE_REQUESTED" ||
+                                    s.detailedApprovalStatus ===
+                                      "CONFIRMED_BY_LA"
                                   );
                                 else
                                   return (
@@ -4102,7 +4438,7 @@ export default function TopManagementDashboard() {
                                 }
                                 return false;
                               }).length === 0 && (
-                              <View className="items-center justify-center py-12 min-w-[1100px]">
+                              <View className="min-w-[1100px] items-center justify-center py-12">
                                 <Text className="text-sm text-slate-400">
                                   No schedules found for selected filter and
                                   tab.
@@ -4114,8 +4450,8 @@ export default function TopManagementDashboard() {
                       </View>
                       {activeTab === "pending" &&
                         filteredPending.length > 0 && (
-                          <View className="p-4 mb-4 border rounded-xl bg-amber-50 border-amber-200">
-                            <View className="flex-row items-center gap-2 mb-2">
+                          <View className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <View className="mb-2 flex-row items-center gap-2">
                               <AlertCircle size={16} color="#92400e" />
                               <Text className="text-sm font-bold text-amber-800">
                                 Bulk Actions: {filteredPending.length} pending
@@ -4135,7 +4471,7 @@ export default function TopManagementDashboard() {
                                 numberOfLines={2}
                                 value={detailedApprovalComment || ""}
                                 onChangeText={setDetailedApprovalComment}
-                                className="w-full p-2 text-sm bg-white border rounded-lg border-slate-200"
+                                className="w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
                                 placeholder="Add comments for bulk action..."
                                 textAlignVertical="top"
                               />
@@ -4143,7 +4479,7 @@ export default function TopManagementDashboard() {
                             <View className="flex-row justify-end gap-3">
                               <TouchableOpacity
                                 onPress={() => setShowDetailedRejectModal(true)}
-                                className="flex-row items-center gap-2 px-4 py-2 bg-red-600 rounded-lg shadow-sm active:bg-red-700"
+                                className="flex-row items-center gap-2 rounded-lg bg-red-600 px-4 py-2 shadow-sm active:bg-red-700"
                               >
                                 <X size={16} color="#ffffff" />
                                 <Text className="font-medium text-white">
@@ -4152,7 +4488,7 @@ export default function TopManagementDashboard() {
                               </TouchableOpacity>
                               <TouchableOpacity
                                 onPress={handleBulkApproveByAuditType}
-                                className="flex-row items-center gap-2 px-4 py-2 bg-green-600 rounded-lg shadow-sm active:bg-green-700"
+                                className="flex-row items-center gap-2 rounded-lg bg-green-600 px-4 py-2 shadow-sm active:bg-green-700"
                               >
                                 <CheckSquare size={16} color="#ffffff" />
                                 <Text className="font-medium text-white">
@@ -4168,7 +4504,6 @@ export default function TopManagementDashboard() {
               </View>
             </Modal>
           );
- 
         })()}
     </View>
   );

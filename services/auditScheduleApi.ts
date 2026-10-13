@@ -1,32 +1,34 @@
 // app/services/auditScheduleApi.ts
 
+import { API_BASE_URL as APP_BASE_URL } from "@/config/apiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios, { AxiosResponse } from "axios";
 import { Platform } from "react-native";
 
-// ============================================================================
-// BASE URL CONFIGURATION
-// ============================================================================
-const getBaseURL = (): string => {
-  if (__DEV__) {
-    return (
-      Platform.select({
-        ios: "http://10.2.0.95:8080/api",
-        android: "http://10.2.0.73:8080/api",
-        default: "http://10.2.0.73:8080/api",
-      }) || "http://10.2.0.73:8080/api"
-    );
-  }
-  return "https://auditchecksheetncr-be.hub.swajyot.co.in:9443/api";
-};
-
-const API_BASE_URL = getBaseURL();
+const API_BASE_URL = `${APP_BASE_URL}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
-  withCredentials: true,
 });
+
+// Attach JWT to every request
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (token) {
+        config.headers = config.headers ?? {};
+        (config.headers as any).Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // ignore — no token available
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
 
 // ============================================================================
 // TYPES
@@ -156,6 +158,10 @@ export interface AuditResponse {
   evidences?: EvidenceFile[]; // Array of evidence files
 }
 
+// Add near the top of the file (after api client)
+const ensureArray = <T>(v: any): T[] =>
+  Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
+
 // ✅ ADD THIS INTERFACE - Evidence Upload Request
 export interface EvidenceUploadRequest {
   questionSlNo: number;
@@ -184,8 +190,6 @@ export interface EvidenceFile {
 // ============================================================================
 // EVIDENCE HELPER FUNCTIONS
 // ============================================================================
-
-
 
 /**
  * Convert a file URI to Base64 data URI
@@ -307,15 +311,14 @@ export const prepareEvidenceForApi = async (
     capturedAt: string;
   },
 ): Promise<any> => {
-  // Validate the evidence
   if (!validateEvidence(evidence)) {
     throw new Error(`Invalid evidence for question ${questionSlNo}`);
   }
 
   let processedUri = evidence.uri;
 
-  // ✅ Convert blob URLs to base64 (for Web)
-  if (evidence.uri && evidence.uri.startsWith("blob:")) {
+  // ✅ 1. Convert Web blob URLs to Base64
+  if (Platform.OS === "web" && evidence.uri.startsWith("blob:")) {
     try {
       const response = await fetch(evidence.uri);
       const blob = await response.blob();
@@ -324,37 +327,61 @@ export const prepareEvidenceForApi = async (
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(blob);
       });
-      console.log(`✅ Converted blob to base64 for ${evidence.name}`);
+      console.log(`✅ Converted web blob to base64 for ${evidence.name}`);
     } catch (error) {
-      console.error("Failed to convert blob to base64:", error);
-      processedUri = evidence.uri;
+      console.error("Failed to convert web blob to base64:", error);
     }
   }
-
-  // ✅ Convert file:// URIs to base64 (for Native)
-  if (Platform.OS !== "web" && evidence.uri && evidence.uri.startsWith("file://")) {
+  // ✅ 2. Convert Native local URIs (file://, content://, etc.) to Base64
+  else if (
+    Platform.OS !== "web" &&
+    !evidence.uri.startsWith("data:") &&
+    !evidence.uri.startsWith("http")
+  ) {
     try {
       const FileSystem = require("expo-file-system/legacy");
+
+      // ✅ CRITICAL FIX: Check file size BEFORE Base64 conversion to prevent Android OOM crashes
+      const fileInfo = await FileSystem.getInfoAsync(evidence.uri);
+      if (fileInfo.exists && fileInfo.size) {
+        const sizeInMB = fileInfo.size / (1024 * 1024);
+        // Base64 adds ~33% overhead. A 20MB file becomes a ~26MB string.
+        // Limit to 20MB to prevent JS Heap OOM crashes on Android.
+        if (sizeInMB > 20) {
+          throw new Error(
+            `Video is too large (${sizeInMB.toFixed(1)}MB). Please record a shorter video (max 30s).`,
+          );
+        }
+      }
+
       const base64 = await FileSystem.readAsStringAsync(evidence.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: "base64", // Must be exact string literal
       });
-      const mimeType = evidence.type === "image" ? "image/jpeg" : 
-                      evidence.type === "video" ? "video/mp4" : "audio/m4a";
+
+      const mimeType =
+        evidence.type === "image"
+          ? "image/jpeg"
+          : evidence.type === "video"
+            ? "video/mp4"
+            : "audio/m4a";
+
       processedUri = `data:${mimeType};base64,${base64}`;
-      console.log(`✅ Converted file to base64 for ${evidence.name}`);
-    } catch (error) {
-      console.error("Failed to convert file to base64:", error);
-      processedUri = evidence.uri;
+      console.log(`✅ Converted native file to base64 for ${evidence.name}`);
+    } catch (error: any) {
+      console.error("Failed to convert native file to base64:", error);
+      // ✅ Throw error so UI can catch it and show a Toast instead of failing silently
+      throw new Error(
+        `Failed to process ${evidence.type}: ${error.message || "File may be too large or invalid URI"}`,
+      );
     }
   }
 
-  // Return in the format expected by the API
   return {
     questionSlNo,
     type: evidence.type,
-    uri: processedUri,
+    uri: processedUri, // This will now be a valid Base64 string
     name: evidence.name,
-    quality: evidence.quality || "720p",
+    quality: evidence.quality || "480p",
     capturedAt: evidence.capturedAt || new Date().toISOString(),
   };
 };
@@ -542,8 +569,14 @@ export const auditScheduleApi = {
     ),
 
   // ========== DATE-BASED SCHEDULES ==========
-  getDateSchedulesByMonth: (year: number, month: number): ApiResponse<any> =>
-    api.get(`/audit-schedule/date-schedules/${year}/${month}`),
+  getDateSchedulesByMonth: (
+    year: number,
+    month: string | number,
+    userId: string | number,
+  ): ApiResponse<any> =>
+    api.get(`/audit-schedule/date-schedules/${year}/${month}`, {
+      params: { userId },
+    }),
 
   submitDetailedSchedule: (
     year: number,
@@ -597,24 +630,32 @@ export const auditScheduleApi = {
   getPendingRequests: (): ApiResponse<PendingRequest[]> =>
     api.get("/audit-schedule/pending-requests"),
   // ========== SCHEDULE CRUD ==========
-  getByYear: (year: number): ApiResponse<AuditSchedule[]> =>
-    api.get(`/audit-schedule/year/${year}`),
+  getByYear: (
+    year: number,
+    userId?: string | number,
+  ): ApiResponse<AuditSchedule[]> =>
+    api.get(`/audit-schedule/year/${year}`, {
+      params: userId ? { userId } : undefined,
+    }),
 
   getByYearAndMonth: (
     year: number,
-    month: number,
+    month: string | number,
+    userId?: string | number,
   ): ApiResponse<AuditSchedule[]> =>
-    api.get(`/audit-schedule/year/${year}/month/${month}`),
-
+    api.get(`/audit-schedule/year/${year}/month/${month}`, {
+      params: userId ? { userId } : undefined,
+    }),
   getByYearMonthAndDepartment: (
     year: number,
-    month: number,
+    month: string | number,
     department: string,
+    userId?: string | number,
   ): ApiResponse<AuditSchedule[]> =>
     api.get(
-      `/audit-schedule/year/${year}/month/${month}/department/${department}`,
+      `/audit-schedule/year/${year}/month/${month}/department/${encodeURIComponent(department)}`,
+      { params: userId ? { userId } : undefined },
     ),
-
   getSchedulesWithStatus: (
     userId: string | number,
   ): ApiResponse<AuditSchedule[]> =>
@@ -638,51 +679,48 @@ export const auditScheduleApi = {
     api.put(`/audit-schedule/${id}/status?status=${status}`, {}),
 
   // ========== AVAILABLE DATA APIs ==========
-  getAvailableMonths: (year: number): ApiResponse<any[]> =>
-    api.get(`/audit-schedule/available-months/${year}`),
-
+  // ========== AVAILABLE DATA APIs ==========
+  getAvailableMonths: (
+    year: number,
+    userId: string | number,
+  ): ApiResponse<any[]> =>
+    api.get(`/audit-schedule/available-months/${year}`, {
+      params: { userId },
+    }),
   getAvailableDepartments: (
     year: number,
-    month: number,
+    month: string | number,
+    userId: string | number,
   ): ApiResponse<string[]> =>
-    api.get(`/audit-schedule/available-departments/${year}/${month}`),
+    api.get(`/audit-schedule/available-departments/${year}/${month}`, {
+      params: { userId },
+    }),
 
   getAuditElements: (
     year: number,
-    month: number,
+    month: string | number,
     department: string,
+    userId: string | number,
   ): ApiResponse<any[]> =>
-    api.get(`/audit-schedule/audit-elements/${year}/${month}/${department}`),
+    api.get(
+      `/audit-schedule/audit-elements/${year}/${month}/${encodeURIComponent(department)}`,
+      { params: { userId } },
+    ),
 
-  getSummary: (year: number, month: number): ApiResponse<any> =>
-    api.get(`/audit-schedule/summary/${year}/${month}`),
-
+  getSummary: (
+    year: number,
+    month: string | number,
+    userId: string | number,
+  ): ApiResponse<any> =>
+    api.get(`/audit-schedule/summary/${year}/${month}`, {
+      params: { userId },
+    }),
   // ========== DEPARTMENT & COMPETENCY APIs ==========
-
-   getFullyCompetentAuditors: async (
-    department: string,
-    auditElements: string[],
-    planYear: number,
-    month: string,
-  ): Promise<User[]> => {
-    const response = await api.get(
-      "/audit-schedule/fully-competent-auditors/for-schedule",
-      {
-        params: {
-          department,
-          auditElements: JSON.stringify(auditElements),
-          planYear,
-          month,
-        },
-      },
-    );
-    return response.data;
-  },
- 
   getAuditorCompetencyStatus: async (
     auditorId: string | number,
     department: string,
     auditElements: string[],
+    auditType?: string, // ✅ ADD
   ): Promise<any> => {
     const response = await api.get(
       `/audit-schedule/auditor-competency-status/${auditorId}`,
@@ -690,19 +728,56 @@ export const auditScheduleApi = {
         params: {
           department,
           auditElements: JSON.stringify(auditElements),
+          ...(auditType ? { auditType } : {}),
         },
       },
     );
     return response.data;
   },
- 
+
+  getCompetentAuditeesByDepartment: async (
+    department: string,
+    plantId: string | number,
+    auditElements: string[] = [],
+    auditType?: string,
+  ): Promise<User[]> => {
+    if (!auditElements || auditElements.length === 0) {
+      console.log(
+        "⚠️ getCompetentAuditeesByDepartment: no elements → returning []",
+      );
+      return [];
+    }
+
+    // ✅ Department as QUERY param — avoids %2F routing problems for "QA/QC", "IMS (BE)", etc.
+    const response = await api.get(
+      "/audit-schedule/competent-auditees/by-department",
+      {
+        params: {
+          department,
+          plantId,
+          auditElementsJson: JSON.stringify(auditElements),
+          ...(auditType ? { auditType } : {}),
+        },
+      },
+    );
+
+    return Array.isArray(response.data) ? response.data : [];
+  },
   getLeadAuditorsByDepartment: async (department: string): Promise<User[]> => {
     const response = await api.get(
       `/audit-schedule/lead-auditors/by-department/${encodeURIComponent(department)}`,
     );
     return response.data;
   },
- 
+
+  /** ✅ NEW: Get both lead + regular auditors for a department */
+  getAuditorsByDepartment: async (department: string): Promise<User[]> => {
+    const response = await api.get(
+      `/audit-schedule/auditors/by-department/${encodeURIComponent(department)}`,
+    );
+    return response.data;
+  },
+
   getRegularAuditorsByDepartment: async (
     department: string,
   ): Promise<User[]> => {
@@ -711,22 +786,65 @@ export const auditScheduleApi = {
     );
     return response.data;
   },
- 
-  getAuditeesByDepartment: async (department: string): Promise<User[]> => {
+  getUsersByIds: async (ids: number[]): Promise<User[]> => {
+    if (!ids || ids.length === 0) return [];
+    const params = new URLSearchParams();
+    ids.forEach((id) => params.append("ids", String(id)));
+    const res = await api.get(
+      `/api/audit-schedule/users/by-ids?${params.toString()}`,
+    );
+    return Array.isArray(res.data) ? res.data : res.data?.data || [];
+  },
+
+  getAuditeesByDepartment: async (
+    department: string,
+    plantId: string | number,
+  ): Promise<User[]> => {
+    console.warn(
+      "⚠️ getAuditeesByDepartment is DEPRECATED — returns UNFILTERED auditees. " +
+        "Use getCompetentAuditeesByDepartment instead.",
+    );
     const response = await api.get(
       `/audit-schedule/auditees/by-department/${encodeURIComponent(department)}`,
+      { params: { plantId } },
     );
-    return response.data;
+    return ensureArray<User>(response.data);
   },
- 
+
+  getFullyCompetentAuditors: async (
+    auditElements: string[],
+    planYear: number,
+    month: string,
+    plantId: string | number,
+    excludeAuditorId?: string | number,
+    auditType?: string, // ✅ ADD
+  ): Promise<User[]> => {
+    const response = await api.get(
+      "/audit-schedule/fully-competent-auditors/for-schedule",
+      {
+        params: {
+          auditElements: JSON.stringify(auditElements),
+          planYear,
+          month,
+          plantId,
+          ...(excludeAuditorId ? { excludeAuditorId } : {}),
+          ...(auditType ? { auditType } : {}), // ✅ ADD
+        },
+      },
+    );
+
+    // ✅ SAFETY: Backend MUST return only competent auditors.
+    // If backend is buggy and returns everyone, filter defensively? NO —
+    // trust backend. But ensure we always return an array.
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
   getDepartmentMapping: async (department: string): Promise<any> => {
     const response = await api.get(
       `/audit-schedule/department-mapping/${encodeURIComponent(department)}`,
     );
     return response.data;
   },
- 
- 
 
   // ========== APPROVAL WORKFLOW ==========
   submitForApproval: (
@@ -737,7 +855,7 @@ export const auditScheduleApi = {
 
   submitMonth: (
     year: number,
-    month: number,
+    month: string | number,
     userId: string | number,
   ): ApiResponse<any> =>
     api.post(`/audit-schedule/${year}/${month}/submit?userId=${userId}`, {}),
@@ -788,7 +906,10 @@ export const auditScheduleApi = {
   saveAuditResponse: (
     responseData: AuditResponse,
   ): ApiResponse<AuditResponse> => {
-    console.log("Saving audit response to:", `${API_BASE_URL}/templates/responses`);
+    console.log(
+      "Saving audit response to:",
+      `${API_BASE_URL}/templates/responses`,
+    );
     return api.post("/templates/responses", responseData);
   },
 
@@ -868,24 +989,38 @@ export const auditScheduleApi = {
   // ========== EVIDENCE APIs ==========
 
   // Upload evidence for a response
-  uploadEvidence: (
+  uploadEvidence: async (
     responseId: string | number,
     questionSlNo: number,
     evidenceData: {
       type: "image" | "video" | "audio";
-      uri: string; // Base64 data
+      uri: string;
       name: string;
       quality?: string;
       capturedAt: string;
     },
-  ): ApiResponse<EvidenceFile> => {
+  ): Promise<any> => {
     console.log(
-      `Uploading evidence for response ${responseId}, question ${questionSlNo}`,
+      `📤 Uploading evidence (JSON) for response ${responseId}, question ${questionSlNo}, file: ${evidenceData.name}`,
     );
-    return api.post(`/templates/responses/${responseId}/evidence`, {
-      questionSlNo,
-      ...evidenceData,
-    });
+
+    return api.post(
+      `/templates/responses/${responseId}/evidence/single`,
+      {
+        questionSlNo,
+        type: evidenceData.type,
+        uri: evidenceData.uri, // This is now the Base64 string
+        name: evidenceData.name,
+        quality: evidenceData.quality || "480p",
+        capturedAt: evidenceData.capturedAt,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 120000, // 2 minutes for large videos
+      },
+    );
   },
 
   // Get all evidence for a response
@@ -949,32 +1084,238 @@ export const auditScheduleApi = {
       evidences: evidences, // This matches BulkEvidenceUploadRequest
     });
   },
+
+  // Inside your auditScheduleApi object/class
+
+  // ========== LEAD AUDITOR FEASIBILITY METHODS ==========
+  // ========== LEAD AUDITOR FEASIBILITY METHODS ==========
+
+  confirmFeasibility: async (
+    year: number,
+    month: string,
+    userId: string | number,
+    comments?: string,
+  ) => {
+    const response = await api.post(
+      `/audit-schedule/${year}/${month}/confirm-feasibility`,
+      { comments: comments || "" },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  rejectFeasibility: async (
+    year: number,
+    month: string,
+    userId: string | number,
+    reason: string,
+  ) => {
+    if (!reason || !reason.trim()) {
+      throw new Error("Rejection reason is required");
+    }
+    const response = await api.post(
+      `/audit-schedule/${year}/${month}/reject-feasibility`,
+      { reason },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  getPendingLaConfirmations: async (year: number, userId: string | number) => {
+    const response = await api.get(
+      `/audit-schedule/pending-la-confirmations/${year}`,
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  // ========== DAILY SCHEDULE — LA FEASIBILITY ==========
+
+  /** LA: Get daily schedules pending feasibility (summary, grouped by month) */
+  getPendingDailyLaConfirmations: async (
+    year: number,
+    userId: string | number,
+  ) => {
+    const response = await api.get(
+      `/audit-schedule/pending-daily-la-confirmations/${year}`,
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** LA: Get daily schedules pending feasibility (full DTOs) */
+  getPendingDailyLaConfirmationsDetailed: async (
+    year: number,
+    userId: string | number,
+  ) => {
+    const response = await api.get(
+      `/audit-schedule/pending-daily-la-confirmations/${year}/detailed`,
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** LA: Confirm ALL daily schedules in a month */
+  confirmDailyFeasibilityMonth: async (
+    year: number,
+    month: string,
+    userId: string | number,
+    comments?: string,
+  ) => {
+    const response = await api.post(
+      `/audit-schedule/detailed/${year}/${month}/confirm-feasibility`,
+      { comments: comments || "" },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** LA: Reject ALL daily schedules in a month */
+  rejectDailyFeasibilityMonth: async (
+    year: number,
+    month: string,
+    userId: string | number,
+    reason: string,
+  ) => {
+    if (!reason || !reason.trim()) {
+      throw new Error("Rejection reason is required");
+    }
+    const response = await api.post(
+      `/audit-schedule/detailed/${year}/${month}/reject-feasibility`,
+      { reason },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** LA: Confirm a SINGLE daily schedule */
+  confirmSingleDailyFeasibility: async (
+    scheduleId: string | number,
+    userId: string | number,
+    comments?: string,
+  ) => {
+    const response = await api.post(
+      `/audit-schedule/daily-schedule/${scheduleId}/confirm-feasibility`,
+      { comments: comments || "" },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** LA: Reject a SINGLE daily schedule */
+  rejectSingleDailyFeasibility: async (
+    scheduleId: string | number,
+    userId: string | number,
+    reason: string,
+  ) => {
+    if (!reason || !reason.trim()) {
+      throw new Error("Rejection reason is required");
+    }
+    const response = await api.post(
+      `/audit-schedule/daily-schedule/${scheduleId}/reject-feasibility`,
+      { reason },
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  /** TM: Get all pending date approvals (daily schedules awaiting TM approval) */
+  getPendingDateApprovals: async (year: number, userId: string | number) => {
+    const response = await api.get(
+      `/audit-schedule/pending-date-approvals/${year}`,
+      { params: { userId } },
+    );
+    return response.data;
+  },
+
+  // ========== PLANTS API ==========
+  getPlants: async (): Promise<any[]> => {
+    try {
+      const response = await api.get("/plants");
+      return response.data;
+    } catch (error: any) {
+      console.warn("⚠️ /api/plants not found, using fallback plants list");
+      // Fallback: return hardcoded plants so UI still works
+      return [
+        { id: 1, name: "Bangalore Plant", code: "PLT_BLR" },
+        { id: 2, name: "Chennai Plant", code: "PLT_CHN" },
+        { id: 3, name: "Pune Plant", code: "PLT_PUN" },
+      ];
+    }
+  },
 };
-
-
-
 
 // ============================================================================
 // AUDIT PLAN API (Form 3)
 // ============================================================================
 
 export const auditPlanApi = {
-  getPlanByYear: (year: number): ApiResponse<any> =>
-    api.get(`/audit-plan/${year}`),
+  // ✅ GET — userId required
+  getPlanByYear: (year: number, userId: string | number): ApiResponse<any> =>
+    api.get(`/audit-plan/${year}`, { params: { userId } }),
 
-  savePlan: (data: any): ApiResponse<any> => api.post("/audit-plan", data),
+  // ✅ SAVE — userId required
+  savePlan: (data: any, userId: string | number): ApiResponse<any> =>
+    api.post(`/audit-plan/save`, data, { params: { userId } }),
 
-  updatePlan: (id: string | number, data: any): ApiResponse<any> =>
-    api.put(`/audit-plan/${id}`, data),
+  // ✅ MONTH STATUS — userId required
+  updateMonthStatus: (data: any, userId: string | number): ApiResponse<any> =>
+    api.put(`/audit-plan/status`, data, { params: { userId } }),
 
-  submitForApproval: (year: number): ApiResponse<any> =>
-    api.post(`/audit-plan/${year}/submit`, {}),
+  // ✅ PLANNED MONTHS LOOKUP — userId required
+  getPlannedMonths: (year: number, userId: string | number): ApiResponse<any> =>
+    api.get(`/audit-plan/${year}/planned-months`, { params: { userId } }),
 
-  approvePlan: (year: number, comments?: string): ApiResponse<any> =>
-    api.post(`/audit-plan/${year}/approve`, { comments }),
+  // ✅ PLANNED AUDIT ELEMENTS LOOKUP — userId required
+  getAuditElements: (year: number, userId: string | number): ApiResponse<any> =>
+    api.get(`/audit-plan/${year}/audit-elements`, { params: { userId } }),
 
-  rejectPlan: (year: number, reason: string): ApiResponse<any> =>
-    api.post(`/audit-plan/${year}/reject`, { reason }),
+  // ✅ SUBMIT — userId required
+  submitForApproval: (
+    year: number,
+    userId: string | number,
+  ): ApiResponse<any> =>
+    api.post(`/audit-plan/${year}/submit`, {}, { params: { userId } }),
+
+  // ✅ APPROVE — userId required
+  approvePlan: (
+    year: number,
+    userId: string | number,
+    comments?: string,
+  ): ApiResponse<any> =>
+    api.post(
+      `/audit-plan/${year}/approve`,
+      { comments },
+      { params: { userId } },
+    ),
+
+  // ✅ REJECT — userId required
+  rejectPlan: (
+    year: number,
+    userId: string | number,
+    reason: string,
+  ): ApiResponse<any> =>
+    api.post(`/audit-plan/${year}/reject`, { reason }, { params: { userId } }),
+
+  // ✅ REQUEST CHANGES — userId required
+  requestChanges: (
+    year: number,
+    userId: string | number,
+    reason: string,
+  ): ApiResponse<any> =>
+    api.post(
+      `/audit-plan/${year}/request-changes`,
+      { reason },
+      { params: { userId } },
+    ),
+
+  // ✅ RESUBMIT — userId required
+  resubmitPlan: (year: number, userId: string | number): ApiResponse<any> =>
+    api.post(`/audit-plan/${year}/resubmit`, {}, { params: { userId } }),
+
+  // ✅ PDF EXPORT URL — now includes userId
+  getPdfUrl: (year: number, userId: string | number): string =>
+    `${API_BASE_URL}/audit-plan/${year}/export-pdf?userId=${userId}`,
 };
 
 // ============================================================================
@@ -1045,6 +1386,8 @@ export const forumApi = {
     description: string;
     createdBy: string;
     members: string[];
+    plantId?: string | null; // 👈 ADD
+    plantName?: string | null; // 👈 ADD
   }) => api.post("/forum/8d/groups", data),
 
   get8DGroup: (groupId: string) => api.get(`/forum/8d/groups/${groupId}`),
@@ -1093,42 +1436,41 @@ export const userApi = {
  */
 export const uploadSingleEvidence = async (
   responseId: string | number,
-  evidence: EvidenceUploadRequest
+  evidence: EvidenceUploadRequest,
 ): Promise<{ data: any }> => {
   try {
     const url = `${API_BASE_URL}/templates/responses/${responseId}/evidence/single`;
-    
+
     // For Web: use fetch directly for better progress tracking
-    if (Platform.OS === 'web') {
+    if (Platform.OS === "web") {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        credentials: 'include',
         body: JSON.stringify(evidence),
       });
-      
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || 'Upload failed');
+        throw new Error(error.message || "Upload failed");
       }
-      
+
       const data = await response.json();
       return { data };
     }
-    
+
     // Native: use axios
     const response = await axios.post(url, evidence, {
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       timeout: 60000, // 60 second timeout per file
     });
-    
+
     return response;
   } catch (error: any) {
-    console.error('❌ Single evidence upload failed:', error);
+    console.error("❌ Single evidence upload failed:", error);
     throw error;
   }
 };
@@ -1140,41 +1482,51 @@ export const uploadSingleEvidence = async (
 export const uploadEvidenceChunked = async (
   responseId: string | number,
   evidences: EvidenceUploadRequest[],
-  onProgress?: (completed: number, total: number, current: EvidenceUploadRequest) => void
+  onProgress?: (
+    completed: number,
+    total: number,
+    current: EvidenceUploadRequest,
+  ) => void,
 ): Promise<{ success: boolean; failed: any[]; uploaded: number }> => {
   const failed: any[] = [];
   let uploaded = 0;
   const total = evidences.length;
-  
+
   console.log(`📤 Starting chunked upload: ${total} files`);
-  
+
   // Upload ONE AT A TIME
   for (let i = 0; i < evidences.length; i++) {
     const evidence = evidences[i];
-    
+
     try {
-      console.log(`📤 Uploading ${i + 1}/${total}: ${evidence.type} - ${evidence.name}`);
-      
+      console.log(
+        `📤 Uploading ${i + 1}/${total}: ${evidence.type} - ${evidence.name}`,
+      );
+
       await uploadSingleEvidence(responseId, evidence);
       uploaded++;
-      
+
       // Call progress callback
       if (onProgress) {
         onProgress(uploaded, total, evidence);
       }
-      
     } catch (error) {
-      console.error(`❌ Failed to upload ${evidence.type} for question ${evidence.questionSlNo}:`, error);
+      console.error(
+        `❌ Failed to upload ${evidence.type} for question ${evidence.questionSlNo}:`,
+        error,
+      );
       failed.push({
         ...evidence,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       // Continue with next file - don't stop on failure
     }
   }
-  
-  console.log(`✅ Chunked upload complete: ${uploaded}/${total} files uploaded`);
-  
+
+  console.log(
+    `✅ Chunked upload complete: ${uploaded}/${total} files uploaded`,
+  );
+
   return {
     success: failed.length === 0,
     failed,

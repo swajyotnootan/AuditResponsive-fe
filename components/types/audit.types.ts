@@ -42,7 +42,7 @@ export interface AuditSchedule {
 export interface PendingRequest {
   requestId: string;
   scheduleId: string | number;
-  type: 'RESCHEDULE' | 'EXTENSION';
+  type: "RESCHEDULE" | "EXTENSION";
   auditType: string;
   department: string;
   auditorId: number | string;
@@ -85,7 +85,7 @@ export interface Stats {
 }
 
 export interface FormStatus {
-  status: 'APPROVED' | 'PENDING_APPROVAL' | 'NOT_STARTED' | 'DRAFT';
+  status: "APPROVED" | "PENDING_APPROVAL" | "NOT_STARTED" | "DRAFT";
   year: number;
 }
 
@@ -93,7 +93,7 @@ export interface WorkflowStep {
   id: number;
   title: string;
   description: string;
-  status: 'completed' | 'in-progress' | 'pending' | 'locked';
+  status: "completed" | "in-progress" | "pending" | "locked";
   icon: string;
   time?: string;
 }
@@ -110,7 +110,7 @@ export interface DepartmentTeamMembers {
 }
 
 export interface ConflictWarning {
-  type: 'reassign' | 'coauditor';
+  type: "reassign" | "coauditor";
   auditorId: string | number;
   auditorName: string;
   conflicts: {

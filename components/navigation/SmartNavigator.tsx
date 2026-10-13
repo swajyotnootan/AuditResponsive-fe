@@ -9,7 +9,14 @@ import {
 } from "expo-router";
 import * as Icons from "lucide-react-native";
 import React from "react";
-import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useTodayWorkPopup } from "../context/TodayWorkPopupContext";
 
 // In your component:
 
@@ -25,7 +32,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   const pathname = usePathname();
   const params = useLocalSearchParams();
   const globalParams = useGlobalSearchParams();
-
+  const { open: openTodayWork } = useTodayWorkPopup();
 
   if (!user) return null;
 
@@ -33,6 +40,13 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
 
   const handleNavigation = (item: any) => {
     onClose?.();
+
+    // ✅ Today's Work opens the popup instead of routing
+    if (item.route?.includes("today-work")) {
+      openTodayWork(0); // 0 = stays open until user closes
+      return;
+    }
+
     router.push(item.route as any);
   };
 
@@ -54,73 +68,78 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   };
 
   // ✅ Extract tab/section from URL
- 
 
-const getParam = (key: string) => {
-  console.log(`🔍 Looking for param: ${key}`);
-  
-  // 1. Try local params first
-  const p = params as any;
-  console.log("Local params:", JSON.stringify(p));
-  
-  if (p[key]) {
-    console.log(`✅ Found in local params: ${p[key]}`);
-    return Array.isArray(p[key]) ? p[key][0] : p[key];
-  }
-  
-  // 2. Try global params (works better for nested navigators)
-  const gp = globalParams as any;
-  console.log("Global params:", JSON.stringify(gp));
-  
-  if (gp[key]) {
-    console.log(`✅ Found in global params: ${gp[key]}`);
-    return Array.isArray(gp[key]) ? gp[key][0] : gp[key];
-  }
-  
-  // 3. Try nested params
-  if (p.params && typeof p.params === "object") {
-    if (p.params[key]) {
-      console.log(`✅ Found in nested params: ${p.params[key]}`);
-      return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
+  const getParam = (key: string) => {
+    console.log(`🔍 Looking for param: ${key}`);
+
+    // 1. Try local params first
+    const p = params as any;
+    console.log("Local params:", JSON.stringify(p));
+
+    if (p[key]) {
+      console.log(`✅ Found in local params: ${p[key]}`);
+      return Array.isArray(p[key]) ? p[key][0] : p[key];
     }
-    if (p.params.params && typeof p.params.params === "object") {
-      if (p.params.params[key]) {
-        console.log(`✅ Found in double-nested params: ${p.params.params[key]}`);
-        return Array.isArray(p.params.params[key]) 
-          ? p.params.params[key][0] 
-          : p.params.params[key];
+
+    // 2. Try global params (works better for nested navigators)
+    const gp = globalParams as any;
+    console.log("Global params:", JSON.stringify(gp));
+
+    if (gp[key]) {
+      console.log(`✅ Found in global params: ${gp[key]}`);
+      return Array.isArray(gp[key]) ? gp[key][0] : gp[key];
+    }
+
+    // 3. Try nested params
+    if (p.params && typeof p.params === "object") {
+      if (p.params[key]) {
+        console.log(`✅ Found in nested params: ${p.params[key]}`);
+        return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
+      }
+      if (p.params.params && typeof p.params.params === "object") {
+        if (p.params.params[key]) {
+          console.log(
+            `✅ Found in double-nested params: ${p.params.params[key]}`,
+          );
+          return Array.isArray(p.params.params[key])
+            ? p.params.params[key][0]
+            : p.params.params[key];
+        }
       }
     }
-  }
-  
-  // 4. Try extracting from pathname
-  if (pathname) {
-    console.log("Pathname:", pathname);
-    const match = pathname.match(new RegExp(`[?&]${key}=([^&]+)`));
-    if (match && match[1]) {
-      const value = decodeURIComponent(match[1]);
-      console.log(`✅ Found in pathname: ${value}`);
-      return value;
-    }
-  }
-  
-  // 5. Web-specific
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.has(key)) {
-        const value = urlParams.get(key);
-        console.log(`✅ Found in web URL: ${value}`);
+
+    // 4. Try extracting from pathname
+    if (pathname) {
+      console.log("Pathname:", pathname);
+      const match = pathname.match(new RegExp(`[?&]${key}=([^&]+)`));
+      if (match && match[1]) {
+        const value = decodeURIComponent(match[1]);
+        console.log(`✅ Found in pathname: ${value}`);
         return value;
       }
-    } catch (e) {
-      console.log("❌ Error parsing web URL:", e);
     }
-  }
-  
-  console.log(`❌ Param "${key}" not found`);
-  return undefined;
-};
+
+    // 5. Web-specific
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      window.location
+    ) {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has(key)) {
+          const value = urlParams.get(key);
+          console.log(`✅ Found in web URL: ${value}`);
+          return value;
+        }
+      } catch (e) {
+        console.log("❌ Error parsing web URL:", e);
+      }
+    }
+
+    console.log(`❌ Param "${key}" not found`);
+    return undefined;
+  };
   // ✅ Helper to check if this is a "first tab" (should be active when no tab is selected)
   const isFirstTab = (tab: string): boolean => {
     const firstTabs = ["dashboard", "overview", "my-audits", "audits"];
@@ -136,24 +155,29 @@ const getParam = (key: string) => {
 
     // ✅ For Master role with section param
     if (item.action) {
-      const routeMatches = currentPath === itemBaseRoute || 
-                           currentPath.includes(itemBaseRoute);
+      const routeMatches =
+        currentPath === itemBaseRoute || currentPath.includes(itemBaseRoute);
       const sectionMatches = String(currentSection) === String(item.action);
       return routeMatches && sectionMatches;
     }
 
     // ✅ For roles with tab param (Auditor, Lead Auditor, Audit Manager, etc.)
     if (item.tab) {
-      const routeMatches = currentPath === itemBaseRoute || 
-                           currentPath.includes(itemBaseRoute);
+      const routeMatches =
+        currentPath === itemBaseRoute || currentPath.includes(itemBaseRoute);
       const tabMatches = String(currentTab) === String(item.tab);
-      
+
       // ✅ FIX: On Android, when there's no tab param, the first tab should be active
       // This preserves web behavior while fixing Android
-      if (routeMatches && !currentTab && !currentSection && isFirstTab(item.tab)) {
+      if (
+        routeMatches &&
+        !currentTab &&
+        !currentSection &&
+        isFirstTab(item.tab)
+      ) {
         return true;
       }
-      
+
       return routeMatches && tabMatches;
     }
 
@@ -163,8 +187,15 @@ const getParam = (key: string) => {
     }
 
     // ✅ For Dashboard (Home) - preserves existing logic
-    if (item.route === "/(app)/(tabs)" || item.route === "/(app)/(tabs)/" || item.route === "/") {
-      const isHomeRoute = currentPath === "/" || currentPath === "" || currentPath === "/(app)/(tabs)";
+    if (
+      item.route === "/(app)/(tabs)" ||
+      item.route === "/(app)/(tabs)/" ||
+      item.route === "/"
+    ) {
+      const isHomeRoute =
+        currentPath === "/" ||
+        currentPath === "" ||
+        currentPath === "/(app)/(tabs)";
       if (isHomeRoute) {
         return true;
       }
@@ -201,6 +232,7 @@ const getParam = (key: string) => {
       Home: Icons.Home,
       Award: Icons.Award,
       Calendar: Icons.Calendar,
+      Sun: Icons.Sun,
       CheckCircle: Icons.CheckCircle,
       Users: Icons.Users,
       Building: Icons.Building,
@@ -243,57 +275,63 @@ const getParam = (key: string) => {
 
   return (
     <View
-      style={{ 
-        flex: 1, 
-        backgroundColor: '#FFFFFF', 
-        borderRightWidth: 1, 
-        borderRightColor: '#E2E8F0',
-        width: 256 
+      style={{
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+        borderRightWidth: 1,
+        borderRightColor: "#E2E8F0",
+        width: 256,
       }}
     >
       {/* Header */}
-      <View style={{ 
-        paddingHorizontal: 20, 
-        paddingTop: 24, 
-        paddingBottom: 20, 
-        borderBottomWidth: 1, 
-        borderBottomColor: '#F1F5F9' 
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 24,
+          paddingBottom: 20,
+          borderBottomWidth: 1,
+          borderBottomColor: "#F1F5F9",
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
               width: 40,
               height: 40,
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.25,
               shadowRadius: 4,
               elevation: 4,
               borderRadius: 12,
-              backgroundColor: '#2563EB',
+              backgroundColor: "#2563EB",
             }}
           >
             <Icons.LayoutGrid size={20} color="#FFFFFF" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ 
-              fontSize: 16, 
-              fontWeight: 'bold', 
-              color: '#1E293B',
-              lineHeight: 20
-            }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "bold",
+                color: "#1E293B",
+                lineHeight: 20,
+              }}
+            >
               {user.role
                 .split("_")
                 .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
                 .join(" ")}
             </Text>
-            <Text style={{ 
-              fontSize: 12, 
-              color: '#64748B',
-              marginTop: 2 
-            }}>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#64748B",
+                marginTop: 2,
+              }}
+            >
               Management Console
             </Text>
           </View>
@@ -301,12 +339,17 @@ const getParam = (key: string) => {
       </View>
 
       {/* Navigation Items */}
-      <ScrollView style={{ flex: 1, paddingTop: 8 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
         {navigationItems.map((item: any, index: number) => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
-          
-          console.log(`📌 ${item.title}: active=${active}, tab=${item.tab || 'none'}, action=${item.action || 'none'}`);
+
+          console.log(
+            `📌 ${item.title}: active=${active}, tab=${item.tab || "none"}, action=${item.action || "none"}`,
+          );
 
           return (
             <TouchableOpacity
@@ -397,6 +440,39 @@ const getParam = (key: string) => {
         })}
       </ScrollView>
 
+      {/* ✅ Security — always visible, navigates to biometric settings */}
+      <TouchableOpacity
+        onPress={() => {
+          onClose?.();
+          router.push("/(app)/settings/security" as any);
+        }}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          marginHorizontal: 12,
+          marginBottom: 4,
+          borderRadius: 12,
+          backgroundColor: "transparent",
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={{ padding: 8, borderRadius: 8 }}>
+          <Icons.Shield size={20} color="#64748b" strokeWidth={1.5} />
+        </View>
+        <Text
+          style={{
+            marginLeft: 12,
+            fontSize: 14,
+            fontWeight: "600",
+            color: "#475569",
+          }}
+        >
+          Security
+        </Text>
+      </TouchableOpacity>
+
       {/* Logout */}
       <TouchableOpacity
         onPress={handleLogout}
@@ -415,20 +491,30 @@ const getParam = (key: string) => {
         <View style={{ padding: 8, borderRadius: 8 }}>
           <Icons.LogOut size={20} color="#ef4444" strokeWidth={1.5} />
         </View>
-        <Text style={{ 
-          marginLeft: 12, 
-          fontSize: 14, 
-          fontWeight: '600', 
-          color: '#ef4444' 
-        }}>Logout</Text>
+        <Text
+          style={{
+            marginLeft: 12,
+            fontSize: 14,
+            fontWeight: "600",
+            color: "#ef4444",
+          }}
+        >
+          Logout
+        </Text>
       </TouchableOpacity>
 
-      <View style={{ paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 }}>
-        <Text style={{ 
-          fontSize: 12, 
-          textAlign: 'center', 
-          color: '#D1D5DB' 
-        }}>v2.0.1</Text>
+      <View
+        style={{ paddingHorizontal: 20, paddingVertical: 8, marginBottom: 8 }}
+      >
+        <Text
+          style={{
+            fontSize: 12,
+            textAlign: "center",
+            color: "#D1D5DB",
+          }}
+        >
+          v2.0.1
+        </Text>
       </View>
     </View>
   );

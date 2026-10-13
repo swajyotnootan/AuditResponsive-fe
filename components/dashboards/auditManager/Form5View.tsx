@@ -1,3 +1,4 @@
+import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ Added import for the API service
 import axios from "axios";
@@ -17,8 +18,7 @@ import {
   MessageSquare,
   Plus,
   RefreshCw,
-  X,
-} from "lucide-react-native";
+  X } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -30,15 +30,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-} from "react-native";
+  useWindowDimensions } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext"; // Adjust path if needed
 import DocumentControlSection from "./DocumentControlSection";
 import ScheduleListView from "./ScheduleListView";
 import ScheduleMatrixView from "./ScheduleMatrixView";
 import ScheduleModal from "./ScheduleModal";
-
-
 
 // ═════ MNC STANDARD PALETTE ═════
 const COLORS = {
@@ -59,7 +57,40 @@ const COLORS = {
   errorBorder: "#FECACA",
   warning: "#F59E0B",
   warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
+  warningBorder: "#FDE68A" };
+
+// Add these constants and helpers at the top of Form5View.tsx
+const PLANT_FIELD_CANDIDATES = [
+  "plantId",
+  "plant_id",
+  "plant",
+  "plantCode",
+  "plantName",
+  "unitId",
+  "unit_id",
+  "locationId",
+  "location_id",
+] as const;
+
+const plantOf = (row: any): string | number | null => {
+  if (!row) return null;
+  for (const k of PLANT_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+};
+
+const samePlant = (row: any, plantId: string | number | null): boolean => {
+  if (plantId === null || plantId === undefined || plantId === "") return true;
+  const rowPlant = plantOf(row);
+  if (rowPlant === null) return true; // fail-open when row has no plant
+  return String(rowPlant) === String(plantId);
+};
+
+const filterByPlant = <T,>(rows: T[], plantId: string | number | null): T[] => {
+  if (plantId === null || plantId === undefined || plantId === "") return rows;
+  return rows.filter((r) => samePlant(r as any, plantId));
 };
 
 const weeks = ["W-1", "W-2", "W-3", "W-4", "W-5", "W-6"];
@@ -75,20 +106,18 @@ const monthDisplay: Record<string, string> = {
   Dec: "December",
   Jan: "January",
   Feb: "February",
-  Mar: "March",
-};
+  Mar: "March" };
 const auditElementsMap: Record<string, string> = {
   "System Audit (ISO9001)": "A",
   "System Audit (IATF16949)": "B",
   "5S Audit": "C",
   "Process Audit": "D",
-  "Product Audit": "E",
-};
+  "Product Audit": "E" };
 
 // ═════ REUSABLE UI COMPONENTS ═════
 const Card = ({ children, className }: any) => (
   <View
-    className={`rounded-xl border border-gray-200 bg-white shadow-sm mb-6 ${className || ""}`}
+    className={`mb-6 rounded-xl border border-gray-200 bg-white shadow-sm ${className || ""}`}
   >
     {children}
   </View>
@@ -102,17 +131,15 @@ const ActionButton = ({
   bgColor,
   borderColor,
   icon: Icon,
-  children,
-}: any) => (
+  children }: any) => (
   <TouchableOpacity
     onPress={onPress}
     disabled={disabled || loading}
-    className={`h-10 px-5 rounded-lg border flex-row items-center justify-center gap-2 ${disabled || loading ? "bg-gray-100 border-gray-200" : ""}`}
+    className={`h-10 flex-row items-center justify-center gap-2 rounded-lg border px-5 ${disabled || loading ? "border-gray-200 bg-gray-100" : ""}`}
     style={{
       backgroundColor: disabled || loading ? undefined : bgColor,
       borderColor:
-        disabled || loading ? undefined : borderColor || "transparent",
-    }}
+        disabled || loading ? undefined : borderColor || "transparent" }}
   >
     {loading ? (
       <ActivityIndicator size="small" color={color} />
@@ -134,35 +161,30 @@ const AlertBanner = ({ type, title, message, footer, icon: Icon }: any) => {
       bg: COLORS.errorLight,
       border: COLORS.errorBorder,
       color: "#991B1B",
-      iconColor: "#DC2626",
-    },
+      iconColor: "#DC2626" },
     warning: {
       bg: COLORS.warningLight,
       border: COLORS.warningBorder,
       color: "#92400E",
-      iconColor: "#D97706",
-    },
+      iconColor: "#D97706" },
     success: {
       bg: COLORS.successLight,
       border: COLORS.successBorder,
       color: "#065F46",
-      iconColor: "#059669",
-    },
+      iconColor: "#059669" },
     info: {
       bg: COLORS.accentLight,
       border: COLORS.accentBorder,
       color: "#1E3A8A",
-      iconColor: COLORS.accent,
-    },
-  };
+      iconColor: COLORS.accent } };
   const s = stylesMap[type] || stylesMap.info;
   return (
     <View
-      className="flex-row gap-3 p-4 mb-6 border rounded-xl"
+      className="mb-6 flex-row gap-3 rounded-xl border p-4"
       style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
       <View
-        className="items-center justify-center bg-white border rounded-lg w-9 h-9"
+        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
         style={{ borderColor: s.border }}
       >
         <Icon size={18} color={s.iconColor} />
@@ -199,8 +221,7 @@ const ActionModal = ({
   onSubmit,
   submitLabel,
   submitBg,
-  submitting,
-}: any) => {
+  submitting }: any) => {
   if (!isOpen) return null;
   return (
     <Modal
@@ -210,17 +231,17 @@ const ActionModal = ({
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        className="items-center justify-center flex-1 p-5 bg-black/30"
+        className="flex-1 items-center justify-center bg-black/30 p-5"
         activeOpacity={1}
         onPress={onClose}
       >
         <TouchableOpacity
           activeOpacity={1}
-          className="w-full max-w-md overflow-hidden bg-white rounded-2xl"
+          className="w-full max-w-md overflow-hidden rounded-2xl bg-white"
         >
-          <View className="flex-row items-center gap-4 p-6 border-b border-gray-200">
+          <View className="flex-row items-center gap-4 border-b border-gray-200 p-6">
             <View
-              className="items-center justify-center border w-11 h-11 rounded-xl"
+              className="h-11 w-11 items-center justify-center rounded-xl border"
               style={{ backgroundColor: iconBg, borderColor: iconBorder }}
             >
               <Icon size={22} color={iconColor} />
@@ -232,7 +253,7 @@ const ActionModal = ({
           </View>
           <View className="p-6">
             <TextInput
-              className="w-full p-3 rounded-lg border border-gray-200 bg-gray-50 text-gray-800 min-h-[120px]"
+              className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-800"
               value={value}
               onChangeText={setValue}
               multiline
@@ -242,10 +263,10 @@ const ActionModal = ({
               textAlignVertical="top"
             />
           </View>
-          <View className="flex-row justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+          <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
             <TouchableOpacity
               onPress={onClose}
-              className="justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
+              className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
             >
               <Text className="text-sm font-semibold text-gray-700">
                 Cancel
@@ -254,11 +275,10 @@ const ActionModal = ({
             <TouchableOpacity
               onPress={onSubmit}
               disabled={!value.trim() || submitting}
-              className="flex-row items-center justify-center h-10 gap-2 px-5 rounded-lg"
+              className="h-10 flex-row items-center justify-center gap-2 rounded-lg px-5"
               style={{
                 backgroundColor:
-                  !value.trim() || submitting ? "#F1F5F9" : submitBg,
-              }}
+                  !value.trim() || submitting ? "#F1F5F9" : submitBg }}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="#FFF" />
@@ -282,6 +302,8 @@ interface Form5ViewProps {
   preselectedYear?: number;
   preselectedMonth?: string;
   onBack?: () => void;
+  allUsers?: any[]; // ← Add this
+  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
 }
 
 export default function Form5View({
@@ -289,12 +311,21 @@ export default function Form5View({
   preselectedYear: propPreselectedYear,
   preselectedMonth: propPreselectedMonth,
   onBack,
-}: Form5ViewProps = {}) {
+  onOpenForum,
+  allUsers = [] }: Form5ViewProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement } = useAuth();
+
+  console.log("🟢🟢🟢 [Form5View] user from useAuth:");
+  console.log("   user?.id:", user?.id);
+  console.log("   user?.role:", user?.role);
+  console.log("   user?.plantId:", user?.plantId);
+  console.log("   user?.plantName:", user?.plantName);
+  console.log("   FULL USER:", JSON.stringify(user, null, 2));
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
+  const { addToast } = useToast();
 
   const urlYear = params?.year ? parseInt(params.year as string) : null;
   const preselectedYear = params?.preselectedYear
@@ -342,15 +373,17 @@ export default function Form5View({
     rejectedAt: null as string | null,
     changeRequestedBy: "",
     changeRequestedAt: null as string | null,
-  });
+    // ✅ NEW
+    laRejectionReason: "",
+    laRejectedBy: "",
+    laRejectedAt: null as string | null });
   const [summary, setSummary] = useState({
     totalSchedules: 0,
     departmentsCount: 0,
     weeksCovered: 0,
     completed: 0,
     inProgress: 0,
-    scheduled: 0,
-  });
+    scheduled: 0 });
   const [documentInfo, setDocumentInfo] = useState({
     documentRevision: "1.0",
     revisionDate: new Date().toISOString().split("T")[0],
@@ -358,8 +391,7 @@ export default function Form5View({
     auditFrequency: "Half yearly",
     preparedBy: "",
     approvedBy: "",
-    approvedAt: null,
-  });
+    approvedAt: null });
   const [auditObjective, setAuditObjective] =
     useState(`* To assess the effectiveness and efficiency of the quality management system.
 * To verify compliance with IATF16949:2016 requirement.
@@ -369,17 +401,22 @@ export default function Form5View({
     "All elements of quality system",
   );
   const [formData, setFormData] = useState({
+    plantId: user?.plantId || "",
+    plantName: user?.plantName || "",
     department: "",
     month: "",
     week: "",
     auditElements: [] as string[],
     auditorId: "",
     auditeeId: "",
-    status: "SCHEDULED",
-  });
+    status: "SCHEDULED" });
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [showYearModal, setShowYearModal] = useState(false);
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "" });
 
   const getWeeksForMonth = useCallback((year: number, month: string) => {
     const monthMap: Record<string, number> = {
@@ -394,8 +431,7 @@ export default function Form5View({
       Dec: 11,
       Jan: 0,
       Feb: 1,
-      Mar: 2,
-    };
+      Mar: 2 };
     const monthNum = monthMap[month];
     if (monthNum === undefined) return 4;
     const actualYear =
@@ -412,8 +448,15 @@ export default function Form5View({
 
   // ════ API CALLS (Using auditScheduleApi) ═════
   const fetchAvailableMonths = useCallback(async () => {
+    if (!user?.id) {
+      console.warn("⚠️ No userId, skipping availableMonths fetch");
+      return;
+    }
     try {
-      const response = await auditScheduleApi.getAvailableMonths(selectedYear);
+      const response = await auditScheduleApi.getAvailableMonths(
+        selectedYear,
+        user.id,
+      );
       const months = Array.isArray(response) ? response : response?.data || [];
       setAvailableMonths(months);
       const initialStatus: Record<string, string> = {};
@@ -428,14 +471,19 @@ export default function Form5View({
     } catch (error: any) {
       showToast("Failed to load available months", "error");
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.id]);
 
   const fetchAvailableDepartments = useCallback(async () => {
     if (!selectedMonth) return;
+    if (!user?.id) {
+      console.warn("⚠️ No userId, skipping departments fetch");
+      return;
+    }
     try {
       const response = await auditScheduleApi.getAvailableDepartments(
         selectedYear,
         selectedMonth as any,
+        user.id,
       );
       const departments = Array.isArray(response)
         ? response
@@ -444,7 +492,7 @@ export default function Form5View({
     } catch (error: any) {
       setAvailableDepartments([]);
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.id]);
 
   const fetchSchedules = useCallback(async () => {
     if (!selectedMonth) {
@@ -453,51 +501,46 @@ export default function Form5View({
     }
     try {
       setLoading(true);
+
       const response = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
         selectedMonth as any,
+        user?.id,
       );
       const allSchedules = Array.isArray(response)
         ? response
         : response?.data || [];
-      const weekSchedules = allSchedules.filter(
+
+      // ✅ ADD PLANT FILTER HERE
+      const plantScopedSchedules = filterByPlant(
+        allSchedules,
+        user?.plantId ?? null,
+      );
+
+      const weekSchedules = plantScopedSchedules.filter(
         (schedule: any) => !schedule.scheduledDate,
       );
+
       setSchedules(weekSchedules);
-      if (weekSchedules.length > 0) {
-        const firstSchedule = weekSchedules[0];
-        const preparedByValue =
-          firstSchedule.preparedBy ||
-          firstSchedule.preparedByName ||
-          "Not available";
-        if (preparedByValue && preparedByValue !== "Not available") {
-          setDocumentInfo((prev) => ({ ...prev, preparedBy: preparedByValue }));
-        }
-        setMonthComments({
-          approvalComments: firstSchedule.approvalComments || "",
-          rejectionReason: firstSchedule.rejectionReason || "",
-          rejectedBy: firstSchedule.rejectedByName || "",
-          rejectedAt: firstSchedule.rejectedAt || null,
-          changeRequestedBy: firstSchedule.changeRequestedBy || "",
-          changeRequestedAt: firstSchedule.changeRequestedAt || null,
-        });
-        if (firstSchedule.rejectionReason)
-          setRejectionReason(firstSchedule.rejectionReason);
-      }
+      // ... rest of the logic
     } catch (error: any) {
       showToast("Failed to load schedules", "error");
       setSchedules([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedMonth]);
-
+  }, [selectedYear, selectedMonth, user?.plantId]); // ✅ Add user?.plantId dependency
   const fetchSummary = useCallback(async () => {
     if (!selectedMonth) return;
+    if (!user?.id) {
+      console.warn("⚠️ No userId, skipping summary fetch");
+      return;
+    }
     try {
       const response = await auditScheduleApi.getSummary(
         selectedYear,
         selectedMonth as any,
+        user.id,
       );
       const summaryData = response?.data ||
         response || {
@@ -506,37 +549,51 @@ export default function Form5View({
           weeksCovered: 0,
           completed: 0,
           inProgress: 0,
-          scheduled: 0,
-        };
+          scheduled: 0 };
       setSummary(summaryData);
     } catch (error: any) {
       console.error("❌ ERROR fetching summary:", error);
     }
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, user?.id]);
 
   useEffect(() => {
     const loadData = async () => {
+      if (!user?.id) {
+        console.warn("⚠️ No userId, skipping loadData");
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const yearToFetch = preselectedYear || urlYear || selectedYear;
-        const response = await auditScheduleApi.getAvailableMonths(yearToFetch);
+        const response = await auditScheduleApi.getAvailableMonths(
+          yearToFetch,
+          user.id,
+        );
         const months = Array.isArray(response)
           ? response
           : response?.data || [];
+
+        console.log("🟩 [loadData] availableMonths count =", months.length);
+        console.log("🟩 [loadData] preselectedMonth =", preselectedMonth);
+
         setAvailableMonths(months);
         const initialStatus: Record<string, string> = {};
         months.forEach((month: any) => {
           initialStatus[month.month] = month.approvalStatus || "DRAFT";
         });
         setPlanStatus((prev) => ({ ...prev, ...initialStatus }));
+
+        let finalMonth = "";
         if (preselectedMonth) {
-          setSelectedMonth(preselectedMonth);
+          finalMonth = preselectedMonth;
         } else if (months.length > 0) {
           const firstWithPlan = months.find((m: any) => m.hasPlannedAudits);
-          setSelectedMonth(
-            firstWithPlan ? firstWithPlan.month : months[0].month,
-          );
+          finalMonth = firstWithPlan ? firstWithPlan.month : months[0].month;
         }
+
+        console.log("🟩 [loadData] computed finalMonth =", finalMonth);
+        if (finalMonth) setSelectedMonth(finalMonth);
       } catch (error) {
         console.error("Error fetching available months:", error);
         showToast("Failed to load available months", "error");
@@ -545,7 +602,6 @@ export default function Form5View({
       }
     };
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -563,11 +619,15 @@ export default function Form5View({
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
+    if (!user?.id) return;
     const refetchMonths = async () => {
       setLoading(true);
       try {
-        const response =
-          await auditScheduleApi.getAvailableMonths(selectedYear);
+        const response = await auditScheduleApi.getAvailableMonths(
+          selectedYear,
+          user.id,
+        );
+        // ...
         const months = Array.isArray(response)
           ? response
           : response?.data || [];
@@ -595,7 +655,7 @@ export default function Form5View({
     };
     refetchMonths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear]);
+  }, [selectedYear, user?.id]);
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -611,6 +671,85 @@ export default function Form5View({
     fetchSummary();
   };
 
+  // Form5View.tsx - Replace handleDownloadPDF with handleViewPDF
+
+  // ✅ View PDF with Viewer (replaces direct download)
+  const handleViewPDF = async () => {
+    if (!selectedMonth) {
+      showToast("Please select a month first", "warning");
+      return;
+    }
+    setDownloading(true);
+    try {
+      const fileName = `Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
+      const endpoint = `${API_BASE_URL}/api/audit-schedule/${selectedYear}/${selectedMonth}/download`;
+
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          Accept: "application/pdf" },});
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch PDF: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+
+      // ✅ Convert blob to base64 for PDF viewer
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      setPDFViewer({
+        visible: true,
+        pdfData: base64,
+        fileName: fileName });
+      setDownloading(false);
+    } catch (error: any) {
+      console.error("PDF View error:", error);
+      showToast(error?.message || "Failed to load PDF", "error");
+      setDownloading(false);
+    }
+  };
+
+  const handleShareComplete = (forumId?: string) => {
+    console.log("🟡 [Form4View] onShareComplete called with forumId:", forumId);
+
+    // Close PDF viewer
+    setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+
+    // Show toast
+    addToast("✅ PDF shared to forum successfully!", "success");
+
+    // Navigate to forum
+    if (forumId && onOpenForum) {
+      console.log("🟢 [Form4View] Calling onOpenForum with:", forumId);
+      setTimeout(() => {
+        onOpenForum(forumId);
+      }, 300);
+    }
+  };
+
+  // ✅ Handle Navigate to Forum
+  const handleNavigateToForum = (forumId: string) => {
+    console.log("🟣 [Form4View] onNavigateToForum called with:", forumId);
+    if (onOpenForum) {
+      console.log("🟢 [Form4View] Direct navigation via onOpenForum:", forumId);
+      onOpenForum(forumId);
+      setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+    } else {
+      console.log("🔴 [Form4View] onOpenForum not available!");
+      addToast("Please open the forum from the main menu", "info");
+    }
+  };
+
+  // ✅ Keep this for direct download (optional)
   const handleDownloadPDF = async () => {
     if (!selectedMonth) {
       showToast("Please select a month first", "warning");
@@ -618,15 +757,11 @@ export default function Form5View({
     }
     setDownloading(true);
     try {
-      // ✅ FIXED ENDPOINT: Changed to '/download' to match your React Web backend
       const pdfUrl = `${API_BASE_URL}/api/audit-schedule/${selectedYear}/${selectedMonth}/download`;
 
       if (Platform.OS === "web") {
-        // ✅ WEB / DESKTOP: Standard Blob Download
         const response = await axios.get(pdfUrl, {
-          responseType: "blob",
-          withCredentials: true,
-        });
+          responseType: "blob" });
 
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement("a");
@@ -642,39 +777,30 @@ export default function Form5View({
 
         showToast("PDF downloaded successfully!", "success");
       } else {
-        // ✅ MOBILE / TABLET: FileSystem Download + Native Share Sheet (Save to Files)
-
-        // 1. Get Auth Token
         let token = null;
         try {
           const AsyncStorage = (
             await import("@react-native-async-storage/async-storage")
           ).default;
-          token = await AsyncStorage.getItem("token");
+          token = await AsyncStorage.getItem("authToken");
         } catch (e) {
           console.warn("AsyncStorage not found, proceeding without token.");
         }
 
-        // 2. Setup headers and file URI
         const headers: Record<string, string> = token
           ? { Authorization: `Bearer ${token}` }
           : {};
-
         const fileUri = `${FileSystem.documentDirectory}Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
 
-        // 3. Download the file to the app's local directory
         const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri, {
-          headers,
-        });
+          headers });
 
-        // 4. Open the native Share Sheet so the user can save it to "Files" or share it
         if (downloadResult.status === 200) {
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(downloadResult.uri, {
               mimeType: "application/pdf",
               dialogTitle: "Save or Share Audit Schedule",
-              UTI: "com.adobe.pdf", // iOS specific
-            });
+              UTI: "com.adobe.pdf" });
             showToast("PDF downloaded successfully!", "success");
           } else {
             showToast("PDF downloaded to app directory.", "success");
@@ -703,7 +829,8 @@ export default function Form5View({
     if (
       currentStatus !== "DRAFT" &&
       currentStatus !== "REJECTED" &&
-      currentStatus !== "CHANGE_REQUESTED"
+      currentStatus !== "CHANGE_REQUESTED" &&
+      currentStatus !== "FEASIBILITY_REJECTED"
     ) {
       showToast(
         `Cannot modify schedule when status is ${currentStatus}`,
@@ -711,27 +838,57 @@ export default function Form5View({
       );
       return false;
     }
+
+    // ✅ Validate that a primary auditor (first team member) exists
+    const parsedAuditorId = scheduleData.auditorId
+      ? parseInt(String(scheduleData.auditorId), 10)
+      : NaN;
+
+    if (!parsedAuditorId || isNaN(parsedAuditorId)) {
+      showToast(
+        "Primary auditor is missing. Please select at least one team member.",
+        "error",
+      );
+      return false;
+    }
+
     setSaving(true);
     try {
       const saveData = {
         id: scheduleData.id,
         planYear: selectedYear,
+
+        // ✅ Plant info
+        plantId: scheduleData.plantId || null,
+        plantName: scheduleData.plantName || "",
+
         department: scheduleData.department,
         month: scheduleData.month,
         week: scheduleData.week,
-        auditorId: parseInt(scheduleData.auditorId),
-        auditeeIdList: scheduleData.auditeeIdList || [],
-        auditeeNames: scheduleData.auditeeNames || [],
+
+        // ✅ Auto-derived lead auditor (first team member)
+        auditorId: parsedAuditorId,
+        leadAuditorId: parsedAuditorId,
+        leadAuditorName: scheduleData.leadAuditorName || "",
+
+        // ✅ Team auditors (single source of truth)
+        // Sent as coAuditorIdList / coAuditorNames to match backend createSchedule()
         coAuditorIdList: scheduleData.coAuditorIdList || [],
         coAuditorNames: scheduleData.coAuditorNames || [],
+
+        // Auditees
+        auditeeIdList: scheduleData.auditeeIdList || [],
+        auditeeNames: scheduleData.auditeeNames || [],
+
         status: scheduleData.status || "SCHEDULED",
-        auditElements: scheduleData.auditElements || [],
-      };
+        auditElements: scheduleData.auditElements || [] };
+
       if (editingSchedule && editingSchedule.id) {
         await auditScheduleApi.update(editingSchedule.id, saveData);
       } else {
         await auditScheduleApi.create(saveData, user?.id as string | number);
       }
+
       showToast("Schedule saved successfully!", "success");
       await fetchSchedules();
       await fetchSummary();
@@ -754,7 +911,8 @@ export default function Form5View({
     if (
       currentStatus !== "DRAFT" &&
       currentStatus !== "REJECTED" &&
-      currentStatus !== "CHANGE_REQUESTED"
+      currentStatus !== "CHANGE_REQUESTED" &&
+      currentStatus !== "FEASIBILITY_REJECTED" // ✅ ADD
     ) {
       showToast(
         `Cannot delete schedule when status is ${currentStatus}`,
@@ -800,9 +958,13 @@ export default function Form5View({
     if (
       currentStatus !== "DRAFT" &&
       currentStatus !== "REJECTED" &&
-      currentStatus !== "CHANGE_REQUESTED"
+      currentStatus !== "CHANGE_REQUESTED" &&
+      currentStatus !== "FEASIBILITY_REJECTED" // ✅ ADD
     ) {
-      showToast(`Only draft or rejected plans can be saved`, "warning");
+      showToast(
+        `Only draft, rejected, or feasibility-rejected plans can be saved`,
+        "warning",
+      );
       return;
     }
     setSaving(true);
@@ -824,8 +986,7 @@ export default function Form5View({
         auditFrequency: documentInfo.auditFrequency,
         preparedBy: preparedByName,
         preparedByName,
-        approvalStatus: "DRAFT",
-      };
+        approvalStatus: "DRAFT" };
       await auditScheduleApi.saveMonthDocument(
         saveData,
         user?.id as string | number,
@@ -867,7 +1028,7 @@ export default function Form5View({
         auditFrequency: documentInfo.auditFrequency,
         preparedBy: preparedByName,
         preparedByName,
-        approvalStatus: "PENDING_APPROVAL",
+        approvalStatus: "PENDING_LA_CONFIRMATION", // ✅ CORRECT
       };
       await auditScheduleApi.saveMonthDocument(
         saveData,
@@ -880,10 +1041,9 @@ export default function Form5View({
       );
       setPlanStatus((prev) => ({
         ...prev,
-        [selectedMonth]: "PENDING_APPROVAL",
-      }));
+        [selectedMonth]: "PENDING_LA_CONFIRMATION" }));
       showToast(
-        `${monthDisplay[selectedMonth]} schedule submitted for approval!`,
+        `${monthDisplay[selectedMonth]} schedule submitted to Lead Auditor for feasibility confirmation.`,
         "success",
       );
       await fetchSchedules();
@@ -900,6 +1060,13 @@ export default function Form5View({
       showToast("Please provide approval comments", "warning");
       return;
     }
+    if (planStatus[selectedMonth] !== "CONFIRMED_BY_LA") {
+      showToast(
+        "This schedule has not been confirmed by the Lead Auditor yet.",
+        "warning",
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       await auditScheduleApi.approveMonth(
@@ -910,13 +1077,15 @@ export default function Form5View({
       );
       setPlanStatus((prev) => ({ ...prev, [selectedMonth]: "APPROVED" }));
       setMonthComments({
-        approvalComments: tempApprovalComment,
+        approvalComments: tempApprovalComment, // ✅ Use the actual comment
         rejectionReason: "",
         rejectedBy: "",
         rejectedAt: null,
         changeRequestedBy: "",
         changeRequestedAt: null,
-      });
+        laRejectionReason: "",
+        laRejectedBy: "",
+        laRejectedAt: null });
       setShowApproveModal(false);
       setTempApprovalComment("");
       showToast(
@@ -949,12 +1118,15 @@ export default function Form5View({
       setRejectionReason(tempRejectionReason);
       setMonthComments({
         approvalComments: "",
-        rejectionReason: tempRejectionReason,
-        rejectedBy: user?.name || user?.username || "",
-        rejectedAt: new Date().toISOString(),
+        rejectionReason: tempRejectionReason, // ✅ Correct
+        rejectedBy: user?.name || user?.username || "", // ✅ Set this
+        rejectedAt: new Date().toISOString(), // ✅ Set this
         changeRequestedBy: "",
         changeRequestedAt: null,
-      });
+        // ✅ ADD
+        laRejectionReason: "",
+        laRejectedBy: "",
+        laRejectedAt: null });
       setShowRejectModal(false);
       setTempRejectionReason("");
       showToast(`${monthDisplay[selectedMonth]} schedule rejected`, "error");
@@ -985,8 +1157,7 @@ export default function Form5View({
 
       setPlanStatus((prev) => ({
         ...prev,
-        [selectedMonth]: "CHANGE_REQUESTED",
-      }));
+        [selectedMonth]: "CHANGE_REQUESTED" }));
       setMonthComments({
         approvalComments: "",
         rejectionReason: changeRequestReason,
@@ -994,7 +1165,10 @@ export default function Form5View({
         rejectedAt: null,
         changeRequestedBy: user?.name || user?.username || "",
         changeRequestedAt: new Date().toISOString(),
-      });
+        // ✅ ADD
+        laRejectionReason: "",
+        laRejectedBy: "",
+        laRejectedAt: null });
       showToast(
         `Change request submitted for ${monthDisplay[selectedMonth]}`,
         "warning",
@@ -1019,7 +1193,8 @@ export default function Form5View({
     return (
       status === "DRAFT" ||
       status === "REJECTED" ||
-      status === "CHANGE_REQUESTED"
+      status === "CHANGE_REQUESTED" ||
+      status === "FEASIBILITY_REJECTED" // ✅ NEW — AM can rework LA rejections
     );
   };
 
@@ -1027,9 +1202,9 @@ export default function Form5View({
   const canEdit = isAuditManager && isMonthEditable(selectedMonth);
   const canSubmit =
     isAuditManager && isMonthEditable(selectedMonth) && hasSchedules;
+  // ✅ TM can ONLY approve when LA has confirmed feasibility
   const canApprove =
-    isTopManagement && planStatus[selectedMonth] === "PENDING_APPROVAL";
-
+    isTopManagement && planStatus[selectedMonth] === "CONFIRMED_BY_LA";
   const getPlanStatusBadge = () => {
     const status = planStatus[selectedMonth] || "DRAFT";
     const stylesMap: any = {
@@ -1038,41 +1213,57 @@ export default function Form5View({
         color: "#065F46",
         border: COLORS.successBorder,
         text: "Approved",
-        icon: CheckCircle,
-      },
+        icon: CheckCircle },
+      // ✅ NEW
+      PENDING_LA_CONFIRMATION: {
+        bg: "#EFF6FF", // light blue
+        color: "#1E40AF",
+        border: "#BFDBFE",
+        text: "Awaiting LA",
+        icon: Clock },
+      // ✅ NEW
+      CONFIRMED_BY_LA: {
+        bg: "#EDE9FE", // light purple
+        color: "#5B21B6",
+        border: "#DDD6FE",
+        text: "Confirmed by LA",
+        icon: CheckCircle },
+      // ✅ NEW
+      FEASIBILITY_REJECTED: {
+        bg: "#FEF2F2",
+        color: "#991B1B",
+        border: "#FECACA",
+        text: "Feasibility Rejected",
+        icon: X },
       PENDING_APPROVAL: {
         bg: COLORS.warningLight,
         color: "#92400E",
         border: COLORS.warningBorder,
         text: "Pending",
-        icon: Clock,
-      },
+        icon: Clock },
       REJECTED: {
         bg: COLORS.errorLight,
         color: "#991B1B",
         border: COLORS.errorBorder,
         text: "Rejected",
-        icon: X,
-      },
+        icon: X },
       CHANGE_REQUESTED: {
         bg: "#FFF7ED",
         color: "#9A3412",
         border: "#FED7AA",
         text: "Changes Requested",
-        icon: MessageSquare,
-      },
-    };
+        icon: MessageSquare } };
+
     const s = stylesMap[status] || {
       bg: "#F1F5F9",
       color: "#475569",
       border: "#E2E8F0",
       text: "Draft",
-      icon: FileText,
-    };
+      icon: FileText };
     const Icon = s.icon;
     return (
       <View
-        className="flex-row items-center gap-1.5 px-3 py-1 rounded-full border"
+        className="flex-row items-center gap-1.5 rounded-full border px-3 py-1"
         style={{ backgroundColor: s.bg, borderColor: s.border }}
       >
         <Icon size={12} color={s.color} />
@@ -1088,27 +1279,22 @@ export default function Form5View({
       COMPLETED: {
         bg: COLORS.successLight,
         color: "#065F46",
-        border: COLORS.successBorder,
-      },
+        border: COLORS.successBorder },
       IN_PROGRESS: {
         bg: COLORS.accentLight,
         color: "#1E40AF",
-        border: COLORS.accentBorder,
-      },
+        border: COLORS.accentBorder },
       CANCELLED: {
         bg: COLORS.errorLight,
         color: "#991B1B",
-        border: COLORS.errorBorder,
-      },
-    };
+        border: COLORS.errorBorder } };
     const s = stylesMap[status] || {
       bg: COLORS.warningLight,
       color: "#92400E",
-      border: COLORS.warningBorder,
-    };
+      border: COLORS.warningBorder };
     return (
       <View
-        className="flex-row items-center px-2 py-0.5 rounded-full border"
+        className="flex-row items-center rounded-full border px-2 py-0.5"
         style={{ backgroundColor: s.bg, borderColor: s.border }}
       >
         <Text className="text-[11px] font-semibold" style={{ color: s.color }}>
@@ -1120,7 +1306,7 @@ export default function Form5View({
 
   if (loading && !selectedMonth) {
     return (
-      <View className="items-center justify-center flex-1 bg-gray-50">
+      <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color={COLORS.accent} />
         <Text className="mt-3 text-sm text-gray-500">Loading schedule...</Text>
       </View>
@@ -1138,8 +1324,7 @@ export default function Form5View({
           paddingBottom: isDesktop ? 20 : 16,
           backgroundColor: "#FFFFFF",
           borderBottomWidth: 1,
-          borderBottomColor: "#E5E7EB",
-        }}
+          borderBottomColor: "#E5E7EB" }}
       >
         <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
           <View
@@ -1147,15 +1332,13 @@ export default function Form5View({
               flexDirection: isDesktop ? "row" : "column",
               alignItems: isDesktop ? "center" : "stretch",
               justifyContent: isDesktop ? "space-between" : "flex-start",
-              gap: isDesktop ? 24 : 16,
-            }}
+              gap: isDesktop ? 24 : 16 }}
           >
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                flexShrink: 1,
-              }}
+                flexShrink: 1 }}
             >
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
@@ -1166,8 +1349,7 @@ export default function Form5View({
                   backgroundColor: "#F3F4F6",
                   borderRadius: 12,
                   alignItems: "center",
-                  justifyContent: "center",
-                }}
+                  justifyContent: "center" }}
               >
                 <ArrowLeft size={20} color="#6b7280" />
               </TouchableOpacity>
@@ -1180,8 +1362,7 @@ export default function Form5View({
                   borderWidth: 1,
                   borderColor: COLORS.accentBorder,
                   alignItems: "center",
-                  justifyContent: "center",
-                }}
+                  justifyContent: "center" }}
               >
                 <Calendar size={22} color={COLORS.accent} />
               </View>
@@ -1190,8 +1371,7 @@ export default function Form5View({
                   style={{
                     fontSize: isDesktop ? 20 : 18,
                     fontWeight: "700",
-                    color: "#111827",
-                  }}
+                    color: "#111827" }}
                   numberOfLines={1}
                 >
                   Internal Quality Audit Schedule
@@ -1200,8 +1380,7 @@ export default function Form5View({
                   style={{
                     fontSize: isDesktop ? 14 : 12,
                     color: "#6B7280",
-                    marginTop: 2,
-                  }}
+                    marginTop: 2 }}
                   numberOfLines={1}
                 >
                   Form 5 - Week-wise Audit Planning
@@ -1214,8 +1393,7 @@ export default function Form5View({
                 flexWrap: "wrap",
                 alignItems: "center",
                 gap: 8,
-                justifyContent: isDesktop ? "flex-end" : "flex-start",
-              }}
+                justifyContent: isDesktop ? "flex-end" : "flex-start" }}
             >
               {getPlanStatusBadge()}
               <TouchableOpacity
@@ -1227,15 +1405,13 @@ export default function Form5View({
                   borderRadius: 8,
                   borderWidth: 1,
                   borderColor: COLORS.border,
-                  backgroundColor: COLORS.card,
-                }}
+                  backgroundColor: COLORS.card }}
               >
                 <Text
                   style={{
                     fontSize: isDesktop ? 14 : 12,
                     fontWeight: "500",
-                    color: "#374151",
-                  }}
+                    color: "#374151" }}
                 >
                   {isDesktop
                     ? `${selectedYear}-${selectedYear + 1}`
@@ -1251,15 +1427,13 @@ export default function Form5View({
                   borderRadius: 8,
                   borderWidth: 1,
                   borderColor: COLORS.border,
-                  backgroundColor: COLORS.card,
-                }}
+                  backgroundColor: COLORS.card }}
               >
                 <Text
                   style={{
                     fontSize: isDesktop ? 14 : 12,
                     fontWeight: "500",
-                    color: "#374151",
-                  }}
+                    color: "#374151" }}
                 >
                   {selectedMonth
                     ? isDesktop
@@ -1276,11 +1450,42 @@ export default function Form5View({
                   backgroundColor: "#F3F4F6",
                   borderRadius: 8,
                   alignItems: "center",
-                  justifyContent: "center",
-                }}
+                  justifyContent: "center" }}
               >
                 <RefreshCw size={isDesktop ? 18 : 16} color="#6b7280" />
               </TouchableOpacity>
+
+              {/* View PDF Button - Opens PDF Viewer */}
+              <TouchableOpacity
+                onPress={handleViewPDF}
+                disabled={!selectedMonth || downloading}
+                style={{
+                  height: isDesktop ? 40 : 36,
+                  paddingHorizontal: isDesktop ? 20 : 12,
+                  backgroundColor:
+                    !selectedMonth || downloading ? "#E5E7EB" : "#8B5CF6",
+                  borderRadius: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8 }}
+              >
+                {downloading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <FileText size={isDesktop ? 18 : 16} color="#FFF" />
+                )}
+                <Text
+                  style={{
+                    fontSize: isDesktop ? 14 : 12,
+                    fontWeight: "600",
+                    color: "#FFF" }}
+                >
+                  View PDF
+                </Text>
+              </TouchableOpacity>
+
+              {/* Download PDF Button - Direct Download */}
               <TouchableOpacity
                 onPress={handleDownloadPDF}
                 disabled={!selectedMonth || downloading}
@@ -1293,8 +1498,7 @@ export default function Form5View({
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 8,
-                }}
+                  gap: 8 }}
               >
                 {downloading ? (
                   <ActivityIndicator size="small" color="#FFF" />
@@ -1305,8 +1509,7 @@ export default function Form5View({
                   style={{
                     fontSize: isDesktop ? 14 : 12,
                     fontWeight: "600",
-                    color: "#FFF",
-                  }}
+                    color: "#FFF" }}
                 >
                   PDF
                 </Text>
@@ -1318,8 +1521,7 @@ export default function Form5View({
                   backgroundColor: "#F3F4F6",
                   borderWidth: 1,
                   borderColor: "#E5E7EB",
-                  borderRadius: 8,
-                }}
+                  borderRadius: 8 }}
               >
                 <TouchableOpacity
                   onPress={() => setViewMode("matrix")}
@@ -1339,8 +1541,7 @@ export default function Form5View({
                         : undefined,
                     shadowOpacity: viewMode === "matrix" ? 0.05 : 0,
                     shadowRadius: viewMode === "matrix" ? 2 : 0,
-                    elevation: viewMode === "matrix" ? 1 : 0,
-                  }}
+                    elevation: viewMode === "matrix" ? 1 : 0 }}
                 >
                   <Grid
                     size={isDesktop ? 16 : 14}
@@ -1350,8 +1551,7 @@ export default function Form5View({
                     style={{
                       fontSize: isDesktop ? 14 : 12,
                       fontWeight: "600",
-                      color: viewMode === "matrix" ? "#2563EB" : "#64748B",
-                    }}
+                      color: viewMode === "matrix" ? "#2563EB" : "#64748B" }}
                   >
                     Matrix
                   </Text>
@@ -1372,8 +1572,7 @@ export default function Form5View({
                       viewMode === "list" ? { width: 0, height: 1 } : undefined,
                     shadowOpacity: viewMode === "list" ? 0.05 : 0,
                     shadowRadius: viewMode === "list" ? 2 : 0,
-                    elevation: viewMode === "list" ? 1 : 0,
-                  }}
+                    elevation: viewMode === "list" ? 1 : 0 }}
                 >
                   <List
                     size={isDesktop ? 16 : 14}
@@ -1383,8 +1582,7 @@ export default function Form5View({
                     style={{
                       fontSize: isDesktop ? 14 : 12,
                       fontWeight: "600",
-                      color: viewMode === "list" ? "#2563EB" : "#64748B",
-                    }}
+                      color: viewMode === "list" ? "#2563EB" : "#64748B" }}
                   >
                     List
                   </Text>
@@ -1404,8 +1602,7 @@ export default function Form5View({
                 maxWidth: 1400,
                 alignSelf: "center",
                 width: "100%",
-                padding: 24,
-              }
+                padding: 24 }
             : { padding: 16 }
         }
         showsVerticalScrollIndicator={false}
@@ -1427,6 +1624,47 @@ export default function Form5View({
             message="Waiting for Top Management review. No changes allowed."
           />
         )}
+
+        {/* ✅ NEW: Awaiting LA confirmation */}
+        {selectedMonth &&
+          planStatus[selectedMonth] === "PENDING_LA_CONFIRMATION" && (
+            <AlertBanner
+              type="info"
+              icon={Clock}
+              title="Awaiting Lead Auditor Confirmation"
+              message="This schedule has been submitted to the Lead Auditor for feasibility review. You'll be notified once confirmed."
+            />
+          )}
+
+        {/* ✅ NEW: Confirmed by LA — waiting for TM approval */}
+        {selectedMonth && planStatus[selectedMonth] === "CONFIRMED_BY_LA" && (
+          <AlertBanner
+            type="info"
+            icon={CheckCircle}
+            title="Confirmed by Lead Auditor"
+            message="Feasibility confirmed. The schedule has been forwarded to Top Management for final approval."
+          />
+        )}
+
+        {/* ✅ NEW: LA rejected feasibility */}
+        {selectedMonth &&
+          planStatus[selectedMonth] === "FEASIBILITY_REJECTED" && (
+            <AlertBanner
+              type="error"
+              icon={X}
+              title="Feasibility Rejected by Lead Auditor"
+              message={
+                monthComments.laRejectionReason ||
+                "The Lead Auditor rejected this schedule's feasibility. Please rework and resubmit."
+              }
+              footer={
+                monthComments.laRejectedBy
+                  ? `Rejected by: ${monthComments.laRejectedBy}`
+                  : undefined
+              }
+            />
+          )}
+
         {selectedMonth &&
           planStatus[selectedMonth] === "APPROVED" &&
           monthComments.approvalComments && (
@@ -1463,7 +1701,7 @@ export default function Form5View({
         {/* Departments Info */}
         {availableDepartments.length > 0 && (
           <Card className="p-6">
-            <View className="flex-row items-center gap-2 mb-4">
+            <View className="mb-4 flex-row items-center gap-2">
               <Text className="text-sm font-bold text-gray-900">
                 Departments for {monthDisplay[selectedMonth]}
               </Text>
@@ -1484,7 +1722,7 @@ export default function Form5View({
                 return (
                   <View
                     key={dept.department}
-                    className={`flex-row items-center gap-2 px-3 py-1.5 rounded-full border ${hasSchedule ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}
+                    className={`flex-row items-center gap-2 rounded-full border px-3 py-1.5 ${hasSchedule ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}
                   >
                     <Text
                       className={`text-xs font-medium ${hasSchedule ? "text-green-800" : "text-gray-700"}`}
@@ -1498,14 +1736,15 @@ export default function Form5View({
                         onPress={() => {
                           setEditingSchedule(null);
                           setFormData({
+                            plantId: user?.plantId || "",
+                            plantName: user?.plantName || "",
                             department: dept.department,
                             month: selectedMonth,
                             week: "",
                             auditElements: dept.auditElements || [],
                             auditorId: "",
                             auditeeId: "",
-                            status: "SCHEDULED",
-                          });
+                            status: "SCHEDULED" });
                           setShowForm(true);
                         }}
                       >
@@ -1544,6 +1783,8 @@ export default function Form5View({
               weeks={displayWeeks}
               selectedYear={selectedYear}
               canEdit={canEdit}
+              userRole={user?.role}
+              currentUserPlantId={user?.plantId}
               onCellClick={(
                 department: string,
                 week: string,
@@ -1555,25 +1796,27 @@ export default function Form5View({
                 if (existingSchedule) {
                   setEditingSchedule(existingSchedule);
                   setFormData({
+                    plantId: existingSchedule.plantId || "", // ✅ NEW
+                    plantName: existingSchedule.plantName || "", // ✅ NEW
                     department: existingSchedule.department,
                     month: existingSchedule.month,
                     week: existingSchedule.week,
                     auditElements: existingSchedule.auditElements || [],
                     auditorId: existingSchedule.auditorId?.toString() || "",
                     auditeeId: existingSchedule.auditeeId?.toString() || "",
-                    status: existingSchedule.status || "SCHEDULED",
-                  });
+                    status: existingSchedule.status || "SCHEDULED" });
                 } else {
                   setEditingSchedule(null);
                   setFormData({
+                    plantId: user?.plantId || "",
+                    plantName: user?.plantName || "",
                     department,
                     month: selectedMonth,
                     week,
                     auditElements: deptData?.auditElements || [],
                     auditorId: "",
                     auditeeId: "",
-                    status: "SCHEDULED",
-                  });
+                    status: "SCHEDULED" });
                 }
                 setShowForm(true);
               }}
@@ -1584,19 +1827,20 @@ export default function Form5View({
           ) : (
             <View className="p-6">
               {canEdit && availableDepartments.length > 0 && (
-                <View className="flex-row justify-end mb-5">
+                <View className="mb-5 flex-row justify-end">
                   <ActionButton
                     onPress={() => {
                       setEditingSchedule(null);
                       setFormData({
+                        plantId: user?.plantId || "",
+                        plantName: user?.plantName || "",
                         department: "",
                         month: selectedMonth,
                         week: "",
                         auditElements: [],
                         auditorId: "",
                         auditeeId: "",
-                        status: "SCHEDULED",
-                      });
+                        status: "SCHEDULED" });
                       setShowForm(true);
                     }}
                     color="#FFF"
@@ -1613,14 +1857,16 @@ export default function Form5View({
                 onEdit={(schedule: any) => {
                   setEditingSchedule(schedule);
                   setFormData({
+                    plantId: schedule.plantId || "", // ✅ NEW
+                    plantName: schedule.plantName || "", // ✅ NEW
                     department: schedule.department,
                     month: schedule.month,
                     week: schedule.week,
                     auditElements: schedule.auditElements || [],
                     auditorId: schedule.auditorId?.toString() || "",
                     auditeeId: schedule.auditeeId?.toString() || "",
-                    status: schedule.status || "SCHEDULED",
-                  });
+                    status: schedule.status || "SCHEDULED" });
+
                   setShowForm(true);
                 }}
                 onDelete={handleDeleteSchedule}
@@ -1654,9 +1900,29 @@ export default function Form5View({
           />
         </Card>
 
+        {/* ✅ NEW: Resubmit button for AM when plan was rejected */}
+        {isAuditManager &&
+          (planStatus[selectedMonth] === "FEASIBILITY_REJECTED" ||
+            planStatus[selectedMonth] === "CHANGE_REQUESTED" ||
+            planStatus[selectedMonth] === "REJECTED") &&
+          hasSchedules && (
+            <View className="mb-6 flex-row justify-end">
+              <ActionButton
+                onPress={handleSubmitForApproval}
+                disabled={submitting}
+                loading={submitting}
+                color="#FFF"
+                bgColor={COLORS.accent}
+                icon={RefreshCw}
+              >
+                Resubmit to Lead Auditor
+              </ActionButton>
+            </View>
+          )}
+
         {/* Request Changes Button */}
         {isTopManagement && planStatus[selectedMonth] === "APPROVED" && (
-          <View className="flex-row justify-end mb-6">
+          <View className="mb-6 flex-row justify-end">
             <ActionButton
               onPress={() => setShowChangeRequestModal(true)}
               color="#FFF"
@@ -1670,24 +1936,24 @@ export default function Form5View({
 
         {/* Legend & Criteria */}
         <Card className="p-6">
-          <Text className="mb-4 text-xs font-bold tracking-wider text-gray-900 uppercase">
+          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-900">
             Legend & Criteria
           </Text>
-          <View className="flex-row flex-wrap gap-6 mb-4">
+          <View className="mb-4 flex-row flex-wrap gap-6">
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 bg-blue-500 rounded-full"></View>
+              <View className="h-3 w-3 rounded-full bg-blue-500"></View>
               <Text className="text-xs text-gray-500">P - Planned</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 bg-green-500 rounded-full"></View>
+              <View className="h-3 w-3 rounded-full bg-green-500"></View>
               <Text className="text-xs text-gray-500">C - Completed</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="w-3 h-3 bg-gray-300 rounded-full"></View>
+              <View className="h-3 w-3 rounded-full bg-gray-300"></View>
               <Text className="text-xs text-gray-500">— - Not Planned</Text>
             </View>
           </View>
-          <View className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+          <View className="rounded-lg border border-gray-200 bg-gray-50 p-4">
             <Text className="text-xs leading-5 text-gray-600">
               <Text className="font-bold text-gray-800">Audit Criteria:</Text>{" "}
               ISO9001:2015 IATF16949 Standard, QMS Manual, QMS Procedures, WI,
@@ -1791,6 +2057,8 @@ export default function Form5View({
         saving={saving}
         selectedYear={selectedYear}
         allSchedules={schedules}
+        currentUserPlantId={user?.plantId}
+        currentUserPlantName={user?.plantName}
       />
 
       {/* Year Selection Modal */}
@@ -1801,15 +2069,15 @@ export default function Form5View({
         onRequestClose={() => setShowYearModal(false)}
       >
         <TouchableOpacity
-          className="items-center justify-center flex-1 p-5 bg-black/30"
+          className="flex-1 items-center justify-center bg-black/30 p-5"
           activeOpacity={1}
           onPress={() => setShowYearModal(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[80%]"
+            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-2xl bg-white"
           >
-            <View className="flex-row items-center justify-between p-6 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
               <Text className="text-lg font-bold text-gray-900">
                 Select Year
               </Text>
@@ -1825,10 +2093,10 @@ export default function Form5View({
                     setSelectedYear(year);
                     setShowYearModal(false);
                   }}
-                  className={`p-4 rounded-xl border mb-2 flex-row justify-between items-center ${selectedYear === year ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedYear === year ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
                 >
                   <Text
-                    className={`text-sm font-medium ${selectedYear === year ? "text-blue-600 font-bold" : "text-gray-800"}`}
+                    className={`text-sm font-medium ${selectedYear === year ? "font-bold text-blue-600" : "text-gray-800"}`}
                   >
                     {year} - {year + 1}
                   </Text>
@@ -1848,15 +2116,15 @@ export default function Form5View({
         onRequestClose={() => setShowMonthModal(false)}
       >
         <TouchableOpacity
-          className="items-center justify-center flex-1 p-5 bg-black/30"
+          className="flex-1 items-center justify-center bg-black/30 p-5"
           activeOpacity={1}
           onPress={() => setShowMonthModal(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[80%]"
+            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-2xl bg-white"
           >
-            <View className="flex-row items-center justify-between p-6 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
               <Text className="text-lg font-bold text-gray-900">
                 Select Month
               </Text>
@@ -1872,11 +2140,11 @@ export default function Form5View({
                     setSelectedMonth(month.month);
                     setShowMonthModal(false);
                   }}
-                  className={`p-4 rounded-xl border mb-2 flex-row justify-between items-center ${selectedMonth === month.month ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedMonth === month.month ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
                   disabled={!month.hasPlannedAudits}
                 >
                   <Text
-                    className={`text-sm font-medium ${selectedMonth === month.month ? "text-blue-600 font-bold" : "text-gray-800"}`}
+                    className={`text-sm font-medium ${selectedMonth === month.month ? "font-bold text-blue-600" : "text-gray-800"}`}
                   >
                     {monthDisplay[month.month]}{" "}
                     {!month.hasPlannedAudits && "(No plan)"}
@@ -1890,6 +2158,41 @@ export default function Form5View({
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ✅ PDF Viewer with Sharing */}
+      <PDFViewer
+        visible={pdfViewer.visible}
+        pdfData={pdfViewer.pdfData}
+        fileName={pdfViewer.fileName}
+        auditId={String(selectedYear)}
+        auditNumber={`Form5-${selectedYear}`}
+        pdfType="form5"
+        selectedMonth={selectedMonth} // ← NEW PROP
+        forumGroups={[
+          {
+            id: `AUDIT-${selectedYear}`,
+            name: `📋 Audit Review ${selectedYear}`,
+            type: "Audit" },
+          {
+            id: "AUDIT-general-forum",
+            name: "📢 General Discussion",
+            type: "General" },
+        ]}
+        onClose={() =>
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+        }
+        onShareComplete={(forumId?: string) => {
+          showToast("PDF shared to forum successfully!", "success");
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+          // Navigate to forum if needed
+          if (forumId) {
+            // You can add navigation logic here if needed
+            // For Form5, you might want to navigate to forum or just close
+          }
+        }}
+        currentUser={user}
+        allUsers={allUsers} // ✅ PASS allUsers from props to PDFViewer
+      />
     </View>
   );
 }

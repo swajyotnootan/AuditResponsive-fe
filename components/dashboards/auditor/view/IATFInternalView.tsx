@@ -1,3 +1,4 @@
+import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { userAPI } from "@/services/api";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
@@ -50,8 +51,6 @@ const NAVBAR_COLORS = {
   bg: "#eff6ff",
   white: "#ffffff",
 };
-
-
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -166,6 +165,34 @@ export default function IATFInternalView({
     null,
   );
   const [loadingSignatures, setLoadingSignatures] = useState(false);
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
+
+  // ✅ 1. Add state for users
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // ✅ 2. Fetch users on mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/users`, {
+          headers: { Accept: "application/json" },
+          // Add auth header if your API needs it:
+          // 'Authorization': `Bearer ${token}`,
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setAllUsers(Array.isArray(data) ? data : data.users || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users for email:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -224,7 +251,7 @@ export default function IATFInternalView({
     return null;
   };
 
- const fetchAuditDetails = async () => {
+  const fetchAuditDetails = async () => {
     try {
       setLoading(true);
       const response = await auditScheduleApi.getAuditResponse(
@@ -274,7 +301,6 @@ export default function IATFInternalView({
       setDepartmentName(deptName);
       setProcessName(procName);
 
-      
       let auditor = "";
       if (auditData.auditorId) {
         try {
@@ -339,7 +365,9 @@ export default function IATFInternalView({
       const checkSheetId = auditData.checkSheet?.id;
       if (checkSheetId) {
         try {
-          const sheetRes = await fetch(`${API_BASE_URL}/api/templates/${checkSheetId}`);
+          const sheetRes = await fetch(
+            `${API_BASE_URL}/api/templates/${checkSheetId}`,
+          );
           const sheet = await sheetRes.json();
           if (sheet.questions) {
             let parsedQuestions = safeParseQuestions(sheet.questions);
@@ -496,6 +524,46 @@ export default function IATFInternalView({
     }
   };
 
+  const handleViewPDF = async () => {
+    if (!audit || !audit.id) {
+      addToast("Audit data not available", "error");
+      return;
+    }
+    setDownloading(true);
+    try {
+      const responseId = audit.id;
+      const endpoint = `${API_BASE_URL}/api/iatf-audits/${responseId}/pdf`;
+
+      const response = await fetch(endpoint, {
+        headers: { Accept: "application/pdf" },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch PDF");
+
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      setPDFViewer({
+        visible: true,
+        pdfData: base64,
+        fileName: `IATF_Audit_Report_${responseId}.pdf`,
+      });
+      setDownloading(false);
+    } catch (error: any) {
+      console.error("Error viewing PDF:", error);
+      addToast(`Failed to load PDF: ${error.message}`, "error");
+      setDownloading(false);
+    }
+  };
+
   const handleApprove = async () => {
     let signatureToSave: string = auditeeSignature;
     if (auditeeSignatureUrl && !auditeeSignatureUrl.startsWith("blob:")) {
@@ -530,7 +598,6 @@ export default function IATFInternalView({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
             signature: signatureToSave,
             comment: auditeeComment || "No comments provided",
@@ -571,7 +638,6 @@ export default function IATFInternalView({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({ comment: auditeeComment }),
         },
       );
@@ -645,10 +711,10 @@ export default function IATFInternalView({
   if (loading) {
     return (
       <View
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="p-8 text-center bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <ActivityIndicator
             size="large"
             color={NAVBAR_COLORS.primary}
@@ -665,17 +731,17 @@ export default function IATFInternalView({
   if (!audit) {
     return (
       <View
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="p-8 text-center bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <AlertCircle size={48} color="#f43f5e" className="mx-auto mb-4" />
           <Text className="text-lg font-bold text-slate-800">
             Audit not found
           </Text>
           <TouchableOpacity
             onPress={() => (onClose ? onClose() : router.back())}
-            className="px-5 py-2.5 mt-4 rounded-xl shadow-md"
+            className="mt-4 rounded-xl px-5 py-2.5 shadow-md"
             style={{ backgroundColor: NAVBAR_COLORS.primary }}
           >
             <Text className="text-sm font-medium text-white">Go Back</Text>
@@ -696,11 +762,11 @@ export default function IATFInternalView({
         style={{ maxWidth: 1200, alignSelf: "center", width: "100%" }}
       >
         {/* Header with Action Buttons */}
-        <View className="flex-row flex-wrap items-center justify-between gap-3 mb-6">
-          <View className="flex-row items-center flex-1 gap-2">
+        <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
+          <View className="flex-1 flex-row items-center gap-2">
             <TouchableOpacity
               onPress={() => (onClose ? onClose() : router.back())}
-              className="flex-row items-center flex-shrink-0 gap-2 px-3 py-2 bg-white border shadow-sm border-slate-200 rounded-xl"
+              className="flex-shrink-0 flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
             >
               <ArrowLeft size={18} color="#334155" />
               <Text className="text-sm font-medium text-slate-700">Back</Text>
@@ -712,7 +778,7 @@ export default function IATFInternalView({
               >
                 IATF Internal Audit Report
               </Text>
-              <Text className="text-xs text-slate-500 mt-0.5" numberOfLines={1}>
+              <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
                 View audit details and findings
               </Text>
             </View>
@@ -720,7 +786,7 @@ export default function IATFInternalView({
           <TouchableOpacity
             onPress={handleDownloadPDF}
             disabled={downloading}
-            className="flex-row items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-md disabled:opacity-50 flex-shrink-0"
+            className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
             style={{ backgroundColor: NAVBAR_COLORS.primary }}
           >
             {downloading ? (
@@ -732,11 +798,25 @@ export default function IATFInternalView({
               {downloading ? "Generating..." : "Download PDF"}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleViewPDF}
+            disabled={downloading}
+            className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
+            style={{ backgroundColor: "#8B5CF6" }}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <FileText size={16} color="#ffffff" />
+            )}
+            <Text className="text-sm font-medium text-white">View PDF</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Approval Status Banners */}
         {isApproved && (
-          <View className="p-4 mb-6 text-center border rounded-xl bg-emerald-50 border-emerald-200">
+          <View className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
             <View className="flex-row items-center justify-center gap-2">
               <CheckCircle size={20} color="#047857" />
               <Text className="text-lg font-bold text-emerald-800">
@@ -755,7 +835,7 @@ export default function IATFInternalView({
         )}
 
         {isRejected && (
-          <View className="p-4 mb-6 text-center border rounded-xl bg-rose-50 border-rose-200">
+          <View className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-center">
             <View className="flex-row items-center justify-center gap-2">
               <XCircle size={20} color="#be123c" />
               <Text className="text-lg font-bold text-rose-800">
@@ -775,23 +855,23 @@ export default function IATFInternalView({
 
         {/* Main Banner */}
         <View
-          className="p-4 mb-6 text-center shadow-md rounded-2xl"
+          className="mb-6 rounded-2xl p-4 text-center shadow-md"
           style={{ backgroundColor: NAVBAR_COLORS.primary }}
         >
-          <View className="flex-row items-center justify-center gap-2 mb-1">
+          <View className="mb-1 flex-row items-center justify-center gap-2">
             <FileText size={24} color="#ffffff" />
             <Text className="text-xl font-bold text-white">
               IATF 16949 INTERNAL AUDIT CHECK SHEET
             </Text>
           </View>
-          <Text className="text-sm text-center text-blue-100">
+          <Text className="text-center text-sm text-blue-100">
             IATF 16949:2016 | Process Audit Compliance
           </Text>
           {(departmentName || processName) && (
-            <View className="pt-2 mt-3 border-t border-white/20">
+            <View className="mt-3 border-t border-white/20 pt-2">
               <View className="flex-row flex-wrap items-center justify-center gap-3">
                 {departmentName && (
-                  <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 border border-white/20">
+                  <View className="flex-row items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1">
                     <Building size={12} color="#ffffff" />
                     <Text className="text-sm text-white">
                       Dept: {departmentName}
@@ -799,7 +879,7 @@ export default function IATFInternalView({
                   </View>
                 )}
                 {processName && (
-                  <View className="flex-row items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 border border-white/20">
+                  <View className="flex-row items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1">
                     <Layers size={12} color="#ffffff" />
                     <Text className="text-sm text-white">
                       Process: {processName}
@@ -811,98 +891,106 @@ export default function IATFInternalView({
           )}
         </View>
 
-{/* Audit Information */}
-<View className="p-6 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-  <View className="flex-row items-center gap-2 mb-4">
-    <FileText size={18} color={NAVBAR_COLORS.primary} />
-    <Text className="text-base font-bold text-slate-800">
-      Audit Information
-    </Text>
-  </View>
-  <View className="flex-row flex-wrap -mx-2">
-    {[
-      {
-        icon: FileText,
-        label: "Document Number",
-        value: answers.documentNumber || `IATF-${audit.id}`,
-      },
-      {
-        icon: Calendar,
-        label: "Audit Date",
-        value: answers.date || formatDate(audit.auditDate),
-      },
-      {
-        icon: User,
-        label: "Auditor",
-        value: auditorName || answers.auditorName || "N/A",
-      },
-      {
-        icon: User,
-        label: "Auditee",
-        value: auditeeName || answers.auditeeName || "N/A",
-      },
-      {
-        icon: MapPin,
-        label: "Location",
-        value: answers.location || "-",
-      },
-      {
-        icon: Clock,
-        label: "Shift",
-        value: audit.shift || answers.shift || "-",
-      },
-      {
-        icon: Building,
-        label: "Department",
-        value: departmentName || answers.departmentName || "-",
-      },
-      {
-        icon: Layers,
-        label: "Process",
-        value: processName || answers.processName || "-",
-      },
-    ].map((item, idx) => (
-      <View key={idx} className="w-full px-2 mb-4 md:w-1/2 lg:w-1/4">
-        <View className="flex-row items-start gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100 min-h-[60px]">
-          <item.icon size={16} color="#94a3b8" className="flex-shrink-0 mt-0.5" />
-          <View className="flex-1 min-w-0">
-            <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              {item.label}
-            </Text>
-            <Text 
-              className="text-sm font-semibold text-slate-800"
-              numberOfLines={2}
-              ellipsizeMode="tail"
-            >
-              {item.value}
+        {/* Audit Information */}
+        <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <View className="mb-4 flex-row items-center gap-2">
+            <FileText size={18} color={NAVBAR_COLORS.primary} />
+            <Text className="text-base font-bold text-slate-800">
+              Audit Information
             </Text>
           </View>
-        </View>
-      </View>
-    ))}
-    {finalPercentage > 0 && (
-      <View className="w-full px-2 mb-4 md:w-1/2 lg:w-1/4">
-        <View className="flex-row items-start gap-2 p-3 border rounded-xl bg-slate-50 border-slate-100 min-h-[60px]">
-          <Award size={16} color="#94a3b8" className="flex-shrink-0 mt-0.5" />
-          <View className="flex-1 min-w-0">
-            <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Score
-            </Text>
-            <Text
-              className="text-sm font-bold"
-              style={{ color: NAVBAR_COLORS.primary }}
-            >
-              {finalPercentage}%
-            </Text>
+          <View className="-mx-2 flex-row flex-wrap">
+            {[
+              {
+                icon: FileText,
+                label: "Document Number",
+                value: answers.documentNumber || `IATF-${audit.id}`,
+              },
+              {
+                icon: Calendar,
+                label: "Audit Date",
+                value: answers.date || formatDate(audit.auditDate),
+              },
+              {
+                icon: User,
+                label: "Auditor",
+                value: auditorName || answers.auditorName || "N/A",
+              },
+              {
+                icon: User,
+                label: "Auditee",
+                value: auditeeName || answers.auditeeName || "N/A",
+              },
+              {
+                icon: MapPin,
+                label: "Location",
+                value: answers.location || "-",
+              },
+              {
+                icon: Clock,
+                label: "Shift",
+                value: audit.shift || answers.shift || "-",
+              },
+              {
+                icon: Building,
+                label: "Department",
+                value: departmentName || answers.departmentName || "-",
+              },
+              {
+                icon: Layers,
+                label: "Process",
+                value: processName || answers.processName || "-",
+              },
+            ].map((item, idx) => (
+              <View key={idx} className="mb-4 w-full px-2 md:w-1/2 lg:w-1/4">
+                <View className="min-h-[60px] flex-row items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <item.icon
+                    size={16}
+                    color="#94a3b8"
+                    className="mt-0.5 flex-shrink-0"
+                  />
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {item.label}
+                    </Text>
+                    <Text
+                      className="text-sm font-semibold text-slate-800"
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {item.value}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+            {finalPercentage > 0 && (
+              <View className="mb-4 w-full px-2 md:w-1/2 lg:w-1/4">
+                <View className="min-h-[60px] flex-row items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                  <Award
+                    size={16}
+                    color="#94a3b8"
+                    className="mt-0.5 flex-shrink-0"
+                  />
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Score
+                    </Text>
+                    <Text
+                      className="text-sm font-bold"
+                      style={{ color: NAVBAR_COLORS.primary }}
+                    >
+                      {finalPercentage}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
         </View>
-      </View>
-    )}
-  </View>
-</View>
 
         {/* Score Summary Cards */}
-        <View className="flex-row flex-wrap mb-6 -mx-2">
+        <View className="-mx-2 mb-6 flex-row flex-wrap">
           {[
             {
               label: "Total",
@@ -930,12 +1018,12 @@ export default function IATFInternalView({
               color: "text-[#00529B]",
             },
           ].map((item, idx) => (
-            <View key={idx} className="w-1/2 px-2 mb-4 md:w-1/5">
-              <View className="p-4 text-center bg-white border shadow-sm border-slate-200 rounded-2xl">
+            <View key={idx} className="mb-4 w-1/2 px-2 md:w-1/5">
+              <View className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
                 <Text className={`text-2xl font-bold ${item.color}`}>
                   {item.value}
                 </Text>
-                <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1">
+                <Text className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   {item.label}
                 </Text>
               </View>
@@ -944,8 +1032,8 @@ export default function IATFInternalView({
         </View>
 
         {/* Audit Findings Table - MOBILE OPTIMIZED */}
-        <View className="p-4 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-          <View className="flex-row items-center gap-2 mb-4">
+        <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <View className="mb-4 flex-row items-center gap-2">
             <ClipboardList size={20} color={NAVBAR_COLORS.primary} />
             <Text className="text-base font-bold text-slate-800">
               Audit Findings
@@ -961,53 +1049,53 @@ export default function IATFInternalView({
             {/* ✅ Increased minWidth to 1060 to perfectly fit the optimized column proportions */}
             <View style={{ minWidth: 1060, width: "100%" }}>
               {/* ✅ TABLE HEADER (Optimized Widths + flex-shrink-0) */}
-              <View className="flex-row border-b-2 bg-slate-50 border-slate-200">
-                <View className="items-center justify-center flex-shrink-0 w-12 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+              <View className="flex-row border-b-2 border-slate-200 bg-slate-50">
+                <View className="w-12 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     S.No.
                   </Text>
                 </View>
-                <View className="items-center justify-center flex-shrink-0 w-16 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+                <View className="w-16 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     Clause
                   </Text>
                 </View>
                 {/* ✅ Increased from w-48 to w-56 for better text wrapping */}
-                <View className="justify-start flex-shrink-0 w-64 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-left uppercase text-slate-600">
+                <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
                     Check Point
                   </Text>
                 </View>
                 {/* ✅ Increased from w-56 to w-64 for maximum readability */}
-                <View className="justify-start flex-shrink-0 w-64 px-2 py-3 bg-slate-100/50">
-                  <Text className="text-[10px] font-bold text-left uppercase text-slate-600">
+                <View className="w-64 flex-shrink-0 justify-start bg-slate-100/50 px-2 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
                     What to look for
                   </Text>
                 </View>
                 {/* ✅ Increased from w-48 to w-56 for better text wrapping */}
-                <View className="justify-start flex-shrink-0 w-64 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-left uppercase text-slate-600">
+                <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
                     Observation
                   </Text>
                 </View>
-                <View className="items-center justify-center flex-shrink-0 w-12 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+                <View className="w-12 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     Ma
                   </Text>
                 </View>
-                <View className="items-center justify-center flex-shrink-0 w-12 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+                <View className="w-12 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     Mi
                   </Text>
                 </View>
-                <View className="items-center justify-center flex-shrink-0 w-12 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+                <View className="w-12 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     O
                   </Text>
                 </View>
                 {/* ✅ Decreased from w-28 to w-24 (96px is perfect for "MAJOR NC") */}
-                <View className="items-center justify-center flex-shrink-0 w-20 px-2 py-3">
-                  <Text className="text-[10px] font-bold text-center uppercase text-slate-600">
+                <View className="w-20 flex-shrink-0 items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
                     Compliance
                   </Text>
                 </View>
@@ -1058,17 +1146,17 @@ export default function IATFInternalView({
                       key={q.slNo || idx}
                       className="flex-row border-b border-slate-100"
                     >
-                      <View className="items-center justify-start flex-shrink-0 w-12 px-2 py-3">
-                        <Text className="text-xs font-medium text-center text-slate-600">
+                      <View className="w-12 flex-shrink-0 items-center justify-start px-2 py-3">
+                        <Text className="text-center text-xs font-medium text-slate-600">
                           {q.slNo || idx + 1}
                         </Text>
                       </View>
-                      <View className="items-center justify-start flex-shrink-0 w-16 px-2 py-3">
-                        <Text className="text-xs text-center text-slate-600">
+                      <View className="w-16 flex-shrink-0 items-center justify-start px-2 py-3">
+                        <Text className="text-center text-xs text-slate-600">
                           {q.clause || "-"}
                         </Text>
                       </View>
-                      <View className="justify-start flex-shrink-0 w-64 px-2 py-3">
+                      <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
                         <Text
                           className="text-xs text-slate-800"
                           numberOfLines={4}
@@ -1076,7 +1164,7 @@ export default function IATFInternalView({
                           {q.checkpoint}
                         </Text>
                       </View>
-                      <View className="justify-start flex-shrink-0 w-64 px-2 py-3 bg-slate-50/50">
+                      <View className="w-64 flex-shrink-0 justify-start bg-slate-50/50 px-2 py-3">
                         <Text
                           className="text-xs text-slate-600"
                           numberOfLines={4}
@@ -1084,7 +1172,7 @@ export default function IATFInternalView({
                           {formattedWhatToLookFor}
                         </Text>
                       </View>
-                      <View className="justify-start flex-shrink-0 w-64 px-2 py-3">
+                      <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
                         <Text
                           className="text-xs text-slate-600"
                           numberOfLines={4}
@@ -1092,26 +1180,26 @@ export default function IATFInternalView({
                           {observation || "-"}
                         </Text>
                       </View>
-                      <View className="items-center justify-start flex-shrink-0 w-12 px-2 py-3">
-                        <Text className="text-xs font-bold text-center text-rose-600">
+                      <View className="w-12 flex-shrink-0 items-center justify-start px-2 py-3">
+                        <Text className="text-center text-xs font-bold text-rose-600">
                           {ma}
                         </Text>
                       </View>
-                      <View className="items-center justify-start flex-shrink-0 w-12 px-2 py-3">
-                        <Text className="text-xs font-bold text-center text-amber-600">
+                      <View className="w-12 flex-shrink-0 items-center justify-start px-2 py-3">
+                        <Text className="text-center text-xs font-bold text-amber-600">
                           {mi}
                         </Text>
                       </View>
-                      <View className="items-center justify-start flex-shrink-0 w-12 px-2 py-3">
-                        <Text className="text-xs font-bold text-center text-emerald-600">
+                      <View className="w-12 flex-shrink-0 items-center justify-start px-2 py-3">
+                        <Text className="text-center text-xs font-bold text-emerald-600">
                           {o}
                         </Text>
                       </View>
-                      <View className="items-center justify-start flex-shrink-0 w-20 px-2 py-3">
+                      <View className="w-20 flex-shrink-0 items-center justify-start px-2 py-3">
                         <View
-                          className={`px-2 py-1.5 rounded-md border ${complianceBadgeClass}`}
+                          className={`rounded-md border px-2 py-1.5 ${complianceBadgeClass}`}
                         >
-                          <Text className="text-[10px] font-semibold text-center">
+                          <Text className="text-center text-[10px] font-semibold">
                             {complianceText}
                           </Text>
                         </View>
@@ -1131,18 +1219,18 @@ export default function IATFInternalView({
         </View>
 
         {/* Signature Section */}
-        <View className="p-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-          <View className="flex-row items-center gap-2 mb-4">
+        <View className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <View className="mb-4 flex-row items-center gap-2">
             <Award size={18} color={NAVBAR_COLORS.primary} />
             <Text className="text-base font-bold text-slate-800">
               Signatures & Comments
             </Text>
           </View>
-          <View className="flex-row flex-wrap -mx-2">
+          <View className="-mx-2 flex-row flex-wrap">
             {/* AUDITOR SIGNATURE SECTION */}
-            <View className="w-full px-2 mb-4 md:w-1/2">
-              <View className="p-5 border rounded-xl bg-slate-50 border-slate-200">
-                <Text className="text-xs font-bold tracking-wider uppercase text-slate-500">
+            <View className="mb-4 w-full px-2 md:w-1/2">
+              <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Auditor Signature
                 </Text>
                 <View className="mt-3">
@@ -1156,7 +1244,7 @@ export default function IATFInternalView({
                   ) : auditorSignatureUrl ? (
                     <Image
                       source={{ uri: auditorSignatureUrl }}
-                      className="object-contain p-3 bg-white border rounded-lg shadow-sm border-slate-200"
+                      className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
                       style={{ height: 96, width: "100%" }}
                       resizeMode="contain"
                     />
@@ -1172,14 +1260,14 @@ export default function IATFInternalView({
                 <Text className="mt-3 text-sm font-semibold text-slate-700">
                   Name: {auditorName}
                 </Text>
-                <Text className="text-xs text-slate-500 mt-0.5">
+                <Text className="mt-0.5 text-xs text-slate-500">
                   Date:{" "}
                   {auditorSignedAt
                     ? formatDateTime(auditorSignedAt)
                     : answers.date || formatDate(audit.auditDate) || "-"}
                 </Text>
                 {auditorComment && (
-                  <View className="p-3 mt-3 bg-white border rounded-lg border-slate-200">
+                  <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
                     <Text className="text-xs text-slate-600">
                       <Text className="font-bold">Comment:</Text>{" "}
                       {auditorComment}
@@ -1190,17 +1278,17 @@ export default function IATFInternalView({
             </View>
 
             {/* AUDITEE SIGNATURE SECTION */}
-            <View className="w-full px-2 mb-4 md:w-1/2">
-              <View className="p-5 border rounded-xl bg-slate-50 border-slate-200">
+            <View className="mb-4 w-full px-2 md:w-1/2">
+              <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                 {showAuditeeActions ? (
                   <>
-                    <Text className="text-xs font-bold tracking-wider uppercase text-slate-500">
+                    <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                       Your Electronic Signature
                     </Text>
                     <View className="mt-3">
                       {!auditeeSignatureUrl && !auditeeSignature ? (
                         <View>
-                          <View className="flex-row items-center gap-2 mb-2">
+                          <View className="mb-2 flex-row items-center gap-2">
                             <AlertTriangle size={16} color="#94a3b8" />
                             <Text className="text-sm font-medium text-slate-400">
                               No signature uploaded in profile
@@ -1210,7 +1298,7 @@ export default function IATFInternalView({
                             value={auditeeSignature}
                             onChangeText={setAuditeeSignature}
                             placeholder="Type your full name as signature (fallback)"
-                            className="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"
                           />
                         </View>
                       ) : (
@@ -1218,7 +1306,7 @@ export default function IATFInternalView({
                           {auditeeSignatureUrl && (
                             <Image
                               source={{ uri: auditeeSignatureUrl }}
-                              className="object-contain p-3 bg-white border rounded-lg shadow-sm border-slate-200"
+                              className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
                               style={{ height: 96, width: "100%" }}
                               resizeMode="contain"
                             />
@@ -1233,7 +1321,7 @@ export default function IATFInternalView({
                       )}
                     </View>
 
-                    <Text className="mt-4 text-xs font-bold tracking-wider uppercase text-slate-500">
+                    <Text className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                       Comments / Remarks
                     </Text>
                     <TextInput
@@ -1242,18 +1330,18 @@ export default function IATFInternalView({
                       placeholder="Enter your comments (required for rejection)"
                       multiline
                       numberOfLines={3}
-                      className="w-full px-4 py-3 mt-2 text-sm bg-white border border-slate-200 rounded-xl"
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
                       style={{ textAlignVertical: "top" }}
                     />
 
-                    <View className="flex-row gap-3 mt-4">
+                    <View className="mt-4 flex-row gap-3">
                       <TouchableOpacity
                         onPress={handleApprove}
                         disabled={
                           submitting ||
                           (!auditeeSignatureUrl && !auditeeSignature.trim())
                         }
-                        className="flex-1 flex-row items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 rounded-xl disabled:opacity-50 shadow-md"
+                        className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 shadow-md disabled:opacity-50"
                       >
                         <ThumbsUp size={16} color="#ffffff" />
                         <Text className="text-sm font-medium text-white">
@@ -1263,7 +1351,7 @@ export default function IATFInternalView({
                       <TouchableOpacity
                         onPress={handleReject}
                         disabled={submitting}
-                        className="flex-1 flex-row items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 rounded-xl disabled:opacity-50 shadow-md"
+                        className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 shadow-md disabled:opacity-50"
                       >
                         <ThumbsDown size={16} color="#ffffff" />
                         <Text className="text-sm font-medium text-white">
@@ -1274,7 +1362,7 @@ export default function IATFInternalView({
                   </>
                 ) : (
                   <>
-                    <Text className="text-xs font-bold tracking-wider uppercase text-slate-500">
+                    <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                       Auditee Signature
                     </Text>
                     <View className="mt-3">
@@ -1282,12 +1370,12 @@ export default function IATFInternalView({
                         auditeeSignatureUrl ? (
                           <Image
                             source={{ uri: auditeeSignatureUrl }}
-                            className="object-contain p-3 bg-white border rounded-lg shadow-sm border-slate-200"
+                            className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
                             style={{ height: 96, width: "100%" }}
                             resizeMode="contain"
                           />
                         ) : auditeeSignature ? (
-                          <View className="p-3 bg-white border rounded-lg shadow-sm border-slate-200">
+                          <View className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                             <Text className="text-sm font-semibold text-slate-800">
                               {auditeeSignature}
                             </Text>
@@ -1301,12 +1389,12 @@ export default function IATFInternalView({
                           </View>
                         )
                       ) : (
-                        <View className="items-center justify-center p-6 border-2 border-dashed rounded-xl bg-amber-50 border-amber-200">
+                        <View className="items-center justify-center rounded-xl border-2 border-dashed border-amber-200 bg-amber-50 p-6">
                           <Clock size={32} color="#f59e0b" className="mb-2" />
                           <Text className="text-sm font-bold text-amber-700">
                             Waiting for Approval
                           </Text>
-                          <Text className="text-xs text-amber-600 mt-0.5 text-center">
+                          <Text className="mt-0.5 text-center text-xs text-amber-600">
                             Signature will appear after auditee approval
                           </Text>
                         </View>
@@ -1315,7 +1403,7 @@ export default function IATFInternalView({
                     <Text className="mt-3 text-sm font-semibold text-slate-700">
                       Name: {auditeeName}
                     </Text>
-                    <Text className="text-xs text-slate-500 mt-0.5">
+                    <Text className="mt-0.5 text-xs text-slate-500">
                       Date:{" "}
                       {auditeeSignedAt
                         ? formatDateTime(auditeeSignedAt)
@@ -1326,7 +1414,7 @@ export default function IATFInternalView({
 
                     {(answers.auditeeComment || auditeeComment) &&
                       (isApproved || isRejected) && (
-                        <View className="p-3 mt-3 bg-white border rounded-lg border-slate-200">
+                        <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
                           <Text className="text-xs text-slate-600">
                             <Text className="font-bold">Comment:</Text>{" "}
                             {answers.auditeeComment || auditeeComment}
@@ -1335,26 +1423,26 @@ export default function IATFInternalView({
                       )}
 
                     <View className="mt-4">
-                      <Text className="text-xs font-bold tracking-wider uppercase text-slate-500">
+                      <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                         Status
                       </Text>
                       <View className="mt-2">
                         {isApproved ? (
-                          <View className="flex-row items-center gap-1.5 px-3 py-1.5 self-start bg-emerald-50 border border-emerald-200 rounded-lg">
+                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5">
                             <CheckCircle size={12} color="#047857" />
                             <Text className="text-xs font-semibold text-emerald-700">
                               Approved
                             </Text>
                           </View>
                         ) : isRejected ? (
-                          <View className="flex-row items-center gap-1.5 px-3 py-1.5 self-start bg-rose-50 border border-rose-200 rounded-lg">
+                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5">
                             <XCircle size={12} color="#be123c" />
                             <Text className="text-xs font-semibold text-rose-700">
                               Rejected
                             </Text>
                           </View>
                         ) : (
-                          <View className="flex-row items-center gap-1.5 px-3 py-1.5 self-start bg-amber-50 border border-amber-200 rounded-lg">
+                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5">
                             <AlertCircle size={12} color="#b45309" />
                             <Text className="text-xs font-semibold text-amber-700">
                               Pending Approval
@@ -1371,16 +1459,46 @@ export default function IATFInternalView({
         </View>
 
         {/* Footer */}
-        <View className="items-center pb-6 mt-8">
-          <Text className="text-xs text-center text-slate-400">
+        <View className="mt-8 items-center pb-6">
+          <Text className="text-center text-xs text-slate-400">
             IATF 16949 Internal Audit Report | Generated on{" "}
             {formatDate(new Date().toISOString())}
           </Text>
-          <Text className="mt-1 text-xs text-center text-slate-400">
+          <Text className="mt-1 text-center text-xs text-slate-400">
             This is an electronic document and does not require a physical
             signature
           </Text>
         </View>
+
+        <PDFViewer
+          visible={pdfViewer.visible}
+          pdfData={pdfViewer.pdfData}
+          fileName={pdfViewer.fileName}
+          auditId={String(audit?.id || "")}
+          auditNumber={`IATF-${audit?.id || ""}`}
+          pdfType="iatf"
+          forumGroups={[
+            {
+              id: `AUDIT-${audit?.auditScheduleId || audit?.scheduleId || ""}`,
+              name: `📋 IATF Audit ${audit?.scheduleId || ""}`,
+              type: "Audit",
+            },
+            {
+              id: "AUDIT-general-forum",
+              name: "📢 General Discussion",
+              type: "General",
+            },
+          ]}
+          onClose={() =>
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+          }
+          onShareComplete={(forumId?: string) => {
+            addToast("PDF shared to forum successfully!", "success");
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+          }}
+          currentUser={user}
+          allUsers={allUsers}
+        />
       </View>
     </ScrollView>
   );

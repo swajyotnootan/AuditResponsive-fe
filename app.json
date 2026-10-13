@@ -15,7 +15,8 @@
         "NSCameraUsageDescription": "This app uses the camera to capture photos and videos.",
         "NSMicrophoneUsageDescription": "This app uses the microphone to record audio and video.",
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to attach images.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Allow AuditResponsive to use Face ID for secure login."
       },
       "bundleIdentifier": "com.nootan.auditresponsive"
     },
@@ -31,9 +32,13 @@
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.nootan.auditresponsive"
@@ -70,7 +75,14 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

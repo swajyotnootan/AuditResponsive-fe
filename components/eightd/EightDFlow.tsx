@@ -21,6 +21,7 @@ import Animated, {
   SlideOutLeft,
   SlideOutRight,
 } from "react-native-reanimated";
+import { useAuth } from "../context/AuthContext"; // adjust path
 import LandingPage from "../dashboards/LandingPage";
 import EightDStepper, { Orientation } from "./EightDStepper";
 import D0PlanContain from "./steps/D0PlanContain";
@@ -96,7 +97,7 @@ export default function EightDFlow({
 }: EightDFlowProps) {
   const navigation = useNavigation();
   const route = useRoute();
-
+  const { user } = useAuth();
   const routeParams = (route.params as RouteParams) || {};
 
   // Prioritize props passed from wrapper, fallback to route params
@@ -250,6 +251,15 @@ export default function EightDFlow({
       try {
         const response = await axios.get(
           `${API_BASE_URL}/api/eightd/data/${eventNo}`,
+          {
+            headers: {
+              // ✅ ADD THIS WHOLE BLOCK
+              "X-User-Id": String((user as any)?.id ?? ""),
+              "X-Timezone":
+                Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                "Asia/Kolkata",
+            },
+          },
         );
         if (response.data?.success && response.data.data?.content) {
           const content = response.data.data.content;
@@ -323,16 +333,28 @@ export default function EightDFlow({
       const formDataToSend = new FormData();
       formDataToSend.append("jsonContent", JSON.stringify(payload));
 
+      const userHeaders = {
+        "X-User-Id": String((user as any)?.id ?? ""), // ✅ ADD
+        "X-Timezone":
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+      };
+
       let response;
       const baseURL = `${API_BASE_URL}/api/eightd/data`;
 
       if (eventNo) {
         response = await axios.put(`${baseURL}/${eventNo}`, formDataToSend, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+            ...userHeaders, // ✅ MERGE
+          },
         });
       } else {
         response = await axios.post(baseURL, formDataToSend, {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+            ...userHeaders, // ✅ MERGE
+          },
         });
       }
 
@@ -649,11 +671,11 @@ export default function EightDFlow({
                 {renderStepContent()}
               </Animated.View>
 
-              <View className="flex flex-col items-stretch justify-between gap-2 pt-3 mt-3 border-t border-gray-200 sm:flex-row sm:items-center">
+              <View className="mt-3 flex flex-col items-stretch justify-between gap-2 border-t border-gray-200 pt-3 sm:flex-row sm:items-center">
                 <TouchableOpacity
                   onPress={prevStep}
                   disabled={currentStep === 0}
-                  className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border bg-gray-100 border-gray-300 ${currentStep === 0 ? "opacity-50" : ""}`}
+                  className={`w-full min-w-[100px] items-center justify-center rounded-lg border border-gray-300 bg-gray-100 px-4 py-2.5 sm:w-auto ${currentStep === 0 ? "opacity-50" : ""}`}
                 >
                   <Text className="text-sm font-medium text-gray-700">
                     ⬅ Back
@@ -664,7 +686,7 @@ export default function EightDFlow({
                   <TouchableOpacity
                     onPress={nextStep}
                     disabled={isSubmitting}
-                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${isSubmitting ? "bg-gray-400 border-gray-500" : "bg-blue-600 border-blue-700 active:bg-blue-700"}`}
+                    className={`w-full min-w-[100px] items-center justify-center rounded-lg border px-4 py-2.5 sm:w-auto ${isSubmitting ? "border-gray-500 bg-gray-400" : "border-blue-700 bg-blue-600 active:bg-blue-700"}`}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="white" />
@@ -675,7 +697,7 @@ export default function EightDFlow({
                     )}
                   </TouchableOpacity>
                 ) : isSubmitted ? (
-                  <View className="px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center bg-green-100 border border-green-300">
+                  <View className="w-full min-w-[100px] items-center justify-center rounded-lg border border-green-300 bg-green-100 px-4 py-2.5 sm:w-auto">
                     <Text className="text-sm font-bold text-green-700">
                       ✓ Submitted
                     </Text>
@@ -684,7 +706,7 @@ export default function EightDFlow({
                   <TouchableOpacity
                     onPress={handleFinalSubmit}
                     disabled={isSubmitting}
-                    className={`px-4 py-2.5 w-full sm:w-auto min-w-[100px] rounded-lg items-center justify-center border ${isSubmitting ? "bg-gray-400 border-gray-500" : "bg-green-600 border-green-700 active:bg-green-700"}`}
+                    className={`w-full min-w-[100px] items-center justify-center rounded-lg border px-4 py-2.5 sm:w-auto ${isSubmitting ? "border-gray-500 bg-gray-400" : "border-green-700 bg-green-600 active:bg-green-700"}`}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="white" />

@@ -104,6 +104,38 @@ interface WeekSelectionViewProps {
   }) => void;
 }
 
+// ═════ PLANT FILTER HELPERS ═════
+type PlantKey = string | number | null | undefined;
+
+const PLANT_FIELD_CANDIDATES = [
+  "plantId",
+  "plant_id",
+  "plant",
+  "plantCode",
+  "plantName",
+] as const;
+
+const plantOf = (row: any): string | number | null => {
+  if (!row) return null;
+  for (const k of PLANT_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+};
+
+const samePlant = (row: any, plantId: PlantKey): boolean => {
+  if (plantId === null || plantId === undefined || plantId === "") return true;
+  const rowPlant = plantOf(row);
+  if (rowPlant === null) return true;
+  return String(rowPlant) === String(plantId);
+};
+
+const filterByPlant = <T,>(rows: T[], plantId: PlantKey): T[] => {
+  if (plantId === null || plantId === undefined || plantId === "") return rows;
+  return rows.filter((r) => samePlant(r as any, plantId));
+};
+
 // ═════ MAIN COMPONENT ═════
 export default function WeekSelectionView({
   year: propYear,
@@ -221,9 +253,20 @@ export default function WeekSelectionView({
   const fetchAvailableMonths = async () => {
     setLoading(true);
     try {
-      const response = await auditScheduleApi.getAvailableMonths(selectedYear);
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
+      const response = await auditScheduleApi.getAvailableMonths(
+        selectedYear,
+        user.id,
+      );
       const months = Array.isArray(response) ? response : response?.data || [];
-      const approvedMonths = months.filter(
+
+      // ✅ PLANT FILTER
+      const plantScopedMonths = filterByPlant(months, user?.plantId);
+
+      const approvedMonths = plantScopedMonths.filter(
         (month: any) =>
           month.approvalStatus === "APPROVED" && month.hasPlannedAudits,
       );
@@ -250,7 +293,10 @@ export default function WeekSelectionView({
         if (Array.isArray(response.data)) schedules = response.data;
       }
 
-      const approvedSchedules = schedules.filter(
+      // ✅ PLANT FILTER (before week grouping)
+      const plantScopedSchedules = filterByPlant(schedules, user?.plantId);
+
+      const approvedSchedules = plantScopedSchedules.filter(
         (s: any) => s.approvalStatus === "APPROVED",
       );
 
@@ -283,14 +329,14 @@ export default function WeekSelectionView({
 
   useEffect(() => {
     fetchAvailableMonths();
-  }, [selectedYear]);
+  }, [selectedYear, user?.plantId]); // ✅ add plantId
 
   useEffect(() => {
     if (selectedMonth) {
       fetchWeeklyData(selectedMonth);
       setViewMode("weeks");
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, user?.plantId]); // ✅ add plantId
 
   useEffect(() => {
     if (params?.year) {
@@ -648,7 +694,9 @@ export default function WeekSelectionView({
                 >
                   <Calendar size={24} color={currentMonthTheme.icon} />
                 </View>
-                <View>
+                <View style={{ flexShrink: 1 }}>
+                  {" "}
+                  {/* 👈 Add this wrapper */}
                   <Text
                     style={[
                       styles.weekViewTitle,
@@ -902,7 +950,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   monthTitle: { fontSize: 18, fontWeight: "700" },
-  subtitle: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  subtitle: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+    flexShrink: 1,
+  },
   cardBody: { padding: 20 },
   actionRow: {
     padding: 12,
@@ -1053,7 +1106,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   legendContent: { flexDirection: "row", flexWrap: "wrap", gap: 24 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
+  },
   legendIconSuccess: {
     width: 16,
     height: 16,
@@ -1074,5 +1132,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  legendText: { fontSize: 13, color: COLORS.textMuted },
+  legendText: { fontSize: 13, color: COLORS.textMuted, flexShrink: 1 },
 });

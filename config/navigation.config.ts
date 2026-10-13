@@ -71,6 +71,12 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
       return [
         { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
         {
+          route: "/(app)/(tabs)/today-work",
+          title: "Today's Work",
+          icon: "Sun",
+          badge: true,
+        },
+        {
           route: "/(app)/(tabs)/auditor?tab=my-audits",
           title: "My Audits",
           icon: "ClipboardCheck",
@@ -115,7 +121,12 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
 
     case UserRole.LEAD_AUDITOR:
       return [
-        { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
+        {
+          route: "/(app)/(tabs)/today-work",
+          title: "Today's Work",
+          icon: "Sun",
+          // badge: true,
+        },
         {
           route: "/(app)/(tabs)/lead-auditor?tab=overview",
           title: "Dashboard Overview",
@@ -123,34 +134,33 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           tab: "overview",
         },
         {
-          route: "/(app)/(tabs)/lead-auditor?tab=audits",
-          title: "Audits",
-          icon: "Calendar",
-          tab: "audits",
+          route: "/(app)/(tabs)/lead-auditor?tab=feasibility",
+          title: "Weekly Schedule Confirmation",
+          icon: "CheckSquare",
+          tab: "feasibility",
+          // badge: true,
         },
         {
-          route: "/(app)/(tabs)/lead-auditor?tab=responses",
-          title: "CheckSheets",
+          route: "/(app)/(tabs)/lead-auditor?tab=daily-feasibility",
+          title: "Daily Schedule Confirmation",
+          icon: "CalendarCheck",
+          tab: "daily-feasibility",
+          // badge: true,
+        },
+        // ✅ REMOVED: "audits" tab
+        // ✅ MERGED: CheckSheets + NCRs in one tab
+        {
+          route: "/(app)/(tabs)/lead-auditor?tab=checksheets-ncrs",
+          title: "Check Sheets & NCRs",
           icon: "FileText",
-          tab: "responses",
+          tab: "checksheets-ncrs",
         },
+        // ✅ MERGED: Auditors + Auditees in one tab
         {
-          route: "/(app)/(tabs)/lead-auditor?tab=ncrs",
-          title: "NCR Management",
-          icon: "AlertTriangle",
-          tab: "ncrs",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=auditors",
-          title: "Auditors",
+          route: "/(app)/(tabs)/lead-auditor?tab=stakeholders",
+          title: "Stakeholders",
           icon: "Users",
-          tab: "auditors",
-        },
-        {
-          route: "/(app)/(tabs)/lead-auditor?tab=auditees",
-          title: "Auditees",
-          icon: "UserCheck",
-          tab: "auditees",
+          tab: "stakeholders",
         },
         {
           route: "/(app)/(tabs)/calendar",
@@ -158,7 +168,6 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
           icon: "Calendar",
         },
       ];
-
     case UserRole.AUDITEE:
       return [
         { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
@@ -191,6 +200,12 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
 
     case UserRole.AUDIT_MANAGER:
       return [
+        {
+          route: "/(app)/(tabs)/today-work",
+          title: "Today's Work",
+          icon: "Sun",
+          badge: true,
+        },
         {
           route: "/(app)/(tabs)/audit-manager?tab=dashboard",
           title: "Dashboard",
@@ -240,6 +255,12 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
     case UserRole.TOP_MANAGEMENT:
       return [
         {
+          route: "/(app)/(tabs)/today-work",
+          title: "Today's Work",
+          icon: "Sun",
+        }, // ✅ NEW
+
+        {
           route: "/(app)/(tabs)/top-management?tab=overview",
           title: "Dashboard Overview",
           icon: "BarChart2",
@@ -279,6 +300,12 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
     case UserRole.HR_ADMIN:
       return [
         { route: "/(app)/(tabs)", title: "Dashboard", icon: "Home" },
+        {
+          route: "/(app)/(tabs)/today-work",
+          title: "Today's Work",
+          icon: "Sun",
+        }, // ✅ NEW
+
         {
           route: "/(app)/(tabs)/hr-admin",
           title: "HR Panel",

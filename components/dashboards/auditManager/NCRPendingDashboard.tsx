@@ -20,8 +20,6 @@ import { useAuth } from "../../context/AuthContext";
 
 import Form8DetailView from "../auditee/Form8DetailView";
 
-// Note: If testing on a physical mobile device, replace 'localhost' with your computer's local IP address
-
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
   bg: "#F8FAFC",
@@ -117,7 +115,7 @@ const Card = ({
   className?: string;
 }) => (
   <View
-    className={`bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl shadow-sm ${className}`}
+    className={`rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] shadow-sm ${className}`}
   >
     {children}
   </View>
@@ -205,7 +203,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <View
-      className="px-2.5 py-1.5 border rounded-full"
+      className="rounded-full border px-2.5 py-1.5"
       style={{
         backgroundColor: bg,
         borderColor: border,
@@ -234,10 +232,10 @@ const StatCard = ({
   bg?: string;
   border?: string;
 }) => (
-  <Card className="p-5 m-2">
+  <Card className="m-2 p-5">
     <View className="flex-row items-start justify-between">
       <View>
-        <Text className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
+        <Text className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
           {title}
         </Text>
         <Text className="mt-2 text-3xl font-bold" style={{ color }}>
@@ -246,7 +244,7 @@ const StatCard = ({
       </View>
       {iconName && (
         <View
-          className="items-center justify-center w-10 h-10 border rounded-lg"
+          className="h-10 w-10 items-center justify-center rounded-lg border"
           style={{ backgroundColor: bg, borderColor: border }}
         >
           <Feather name={iconName as any} size={20} color={color} />
@@ -276,7 +274,7 @@ const ActionButton = ({
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      className={`h-9 px-4 rounded-lg border flex-row items-center justify-center ${isPrimary ? "border-transparent" : "border-[#E2E8F0]"}`}
+      className={`h-9 flex-row items-center justify-center rounded-lg border px-4 ${isPrimary ? "border-transparent" : "border-[#E2E8F0]"}`}
       style={{
         backgroundColor: disabled ? "#F1F5F9" : isPrimary ? T.accent : T.card,
         opacity: disabled ? 0.7 : 1,
@@ -314,11 +312,11 @@ const SectionCard = ({
   children: React.ReactNode;
 }) => (
   <Card className="mb-6 overflow-hidden">
-    <View className="px-6 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex-row justify-between items-center">
+    <View className="flex-row items-center justify-between border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-4">
       <View>
         <Text className="text-base font-bold text-[#000000]">{title}</Text>
         {subtitle && (
-          <Text className="text-sm text-[#6B7280] mt-1">{subtitle}</Text>
+          <Text className="mt-1 text-sm text-[#6B7280]">{subtitle}</Text>
         )}
       </View>
       {action}
@@ -337,13 +335,13 @@ const EmptyState = ({
   description?: string;
 }) => (
   <View className="items-center p-10">
-    <View className="w-12 h-12 rounded-full bg-[#F1F5F9] border border-[#E2E8F0] items-center justify-center mb-4">
+    <View className="mb-4 h-12 w-12 items-center justify-center rounded-full border border-[#E2E8F0] bg-[#F1F5F9]">
       {iconName && <Feather name={iconName as any} size={24} color="#94A3B8" />}
     </View>
-    <Text className="text-base font-semibold text-[#000000] mb-2">{title}</Text>
+    <Text className="mb-2 text-base font-semibold text-[#000000]">{title}</Text>
     {description && (
       <Text
-        className="text-sm text-[#6B7280] text-center"
+        className="text-center text-sm text-[#6B7280]"
         style={{ maxWidth: 300 }}
       >
         {description}
@@ -389,7 +387,7 @@ const VerificationRow = ({
               {ncr.ncrNumber || `NCR #${ncr.id}`}
             </Text>
             {isNCR2 && (
-              <Text className="text-[11px] font-semibold text-[#8B5CF6] mt-1">
+              <Text className="mt-1 text-[11px] font-semibold text-[#8B5CF6]">
                 (NCR2 Mode)
               </Text>
             )}
@@ -437,36 +435,36 @@ const VerificationRow = ({
               </ActionButton>
             )}
             <Pressable
-  onPress={() => onOpenForum(ncr)}
-  className="h-8 px-3 ml-4 rounded-md border border-[#DDD6FE] bg-[#F5F3FF] flex-row items-center gap-1.5"
->
-                                        {({ pressed }) => (
-                                          <>
-                                            <Feather
-                                              name="message-square"
-                                              size={12}
-                                              color={pressed ? "#FFF" : "#5B21B6"}
-                                            />
-                                            <Text
-                                              className="text-xs font-semibold"
-                                              style={{
-                                                color: pressed ? "#FFF" : "#5B21B6",
-                                              }}
-                                            >
-                                              Forum
-                                            </Text>
-                                          </>
-                                        )}
-                                      </Pressable>
+              onPress={() => onOpenForum(ncr)}
+              className="ml-4 h-8 flex-row items-center gap-1.5 rounded-md border border-[#DDD6FE] bg-[#F5F3FF] px-3"
+            >
+              {({ pressed }) => (
+                <>
+                  <Feather
+                    name="message-square"
+                    size={12}
+                    color={pressed ? "#FFF" : "#5B21B6"}
+                  />
+                  <Text
+                    className="text-xs font-semibold"
+                    style={{
+                      color: pressed ? "#FFF" : "#5B21B6",
+                    }}
+                  >
+                    Forum
+                  </Text>
+                </>
+              )}
+            </Pressable>
           </View>
         </>
       ) : (
         /* Mobile Layout - 2 columns per row */
         <>
           {/* Row 1: NCR Number + Submitted On */}
-          <View className="flex-row mb-3">
+          <View className="mb-3 flex-row">
             <View style={{ width: "50%", paddingRight: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 NCR Number
               </Text>
               <Text
@@ -476,13 +474,13 @@ const VerificationRow = ({
                 {ncr.ncrNumber || `NCR #${ncr.id}`}
               </Text>
               {isNCR2 && (
-                <Text className="text-[10px] font-semibold text-[#8B5CF6] mt-0.5">
+                <Text className="mt-0.5 text-[10px] font-semibold text-[#8B5CF6]">
                   (NCR2 Mode)
                 </Text>
               )}
             </View>
             <View style={{ width: "50%", paddingLeft: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 Submitted On
               </Text>
               <View className="flex-row items-center">
@@ -500,12 +498,12 @@ const VerificationRow = ({
           </View>
 
           {/* Divider */}
-          <View className="h-px bg-[#E2E8F0] mb-3" />
+          <View className="mb-3 h-px bg-[#E2E8F0]" />
 
           {/* Row 2: Status + Action */}
           <View className="flex-row items-center">
             <View style={{ width: "50%", paddingRight: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 Status
               </Text>
               <StatusBadge status={ncr.status} />
@@ -539,7 +537,7 @@ const VerificationRow = ({
               )}
               <TouchableOpacity
                 onPress={() => onOpenForum(ncr)}
-                className="w-8 h-8 rounded-lg border border-[#DDD6FE] bg-[#F5F3FF] items-center justify-center ml-2"
+                className="ml-2 h-8 w-8 items-center justify-center rounded-lg border border-[#DDD6FE] bg-[#F5F3FF]"
               >
                 <Feather name="message-square" size={16} color="#8B5CF6" />
               </TouchableOpacity>
@@ -586,7 +584,7 @@ const ClosedRow = ({
               {ncr.ncrNumber || `NCR #${ncr.id}`}
             </Text>
             {isNCR2 && (
-              <Text className="text-[11px] font-semibold text-[#8B5CF6] mt-1">
+              <Text className="mt-1 text-[11px] font-semibold text-[#8B5CF6]">
                 (NCR2)
               </Text>
             )}
@@ -630,7 +628,7 @@ const ClosedRow = ({
             </ActionButton>
             <TouchableOpacity
               onPress={() => onOpenForum(ncr)}
-              className="w-8 h-8 rounded-lg border border-[#DDD6FE] bg-[#F5F3FF] items-center justify-center ml-2"
+              className="ml-2 h-8 w-8 items-center justify-center rounded-lg border border-[#DDD6FE] bg-[#F5F3FF]"
             >
               <Feather name="message-square" size={16} color="#8B5CF6" />
             </TouchableOpacity>
@@ -639,9 +637,9 @@ const ClosedRow = ({
       ) : (
         /* Mobile Layout - 2 columns per row */
         <>
-          <View className="flex-row mb-3">
+          <View className="mb-3 flex-row">
             <View style={{ width: "50%", paddingRight: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 NCR Number
               </Text>
               <Text
@@ -651,13 +649,13 @@ const ClosedRow = ({
                 {ncr.ncrNumber || `NCR #${ncr.id}`}
               </Text>
               {isNCR2 && (
-                <Text className="text-[10px] font-semibold text-[#8B5CF6] mt-0.5">
+                <Text className="mt-0.5 text-[10px] font-semibold text-[#8B5CF6]">
                   (NCR2)
                 </Text>
               )}
             </View>
             <View style={{ width: "50%", paddingLeft: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 Department
               </Text>
               <View className="flex-row items-center">
@@ -674,11 +672,11 @@ const ClosedRow = ({
             </View>
           </View>
 
-          <View className="h-px bg-[#E2E8F0] mb-3" />
+          <View className="mb-3 h-px bg-[#E2E8F0]" />
 
           <View className="flex-row items-center">
             <View style={{ width: "50%", paddingRight: 4 }}>
-              <Text className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+              <Text className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">
                 Closed On
               </Text>
               <View className="flex-row items-center">
@@ -711,7 +709,7 @@ const ClosedRow = ({
               </ActionButton>
               <TouchableOpacity
                 onPress={() => onOpenForum(ncr)}
-                className="w-8 h-8 rounded-lg border border-[#DDD6FE] bg-[#F5F3FF] items-center justify-center ml-2"
+                className="ml-2 h-8 w-8 items-center justify-center rounded-lg border border-[#DDD6FE] bg-[#F5F3FF]"
               >
                 <Feather name="message-square" size={16} color="#8B5CF6" />
               </TouchableOpacity>
@@ -761,11 +759,11 @@ const VerifyModal = ({
   return (
     <Modal visible={true} transparent animationType="fade">
       <View
-        className="items-center justify-center flex-1 bg-black/40"
+        className="flex-1 items-center justify-center bg-black/40"
         style={{ padding: isMobile ? 0 : 16 }}
       >
         <View
-          className="bg-white w-full shadow-lg border border-[#DBEAFE]"
+          className="w-full border border-[#DBEAFE] bg-white shadow-lg"
           style={{
             maxWidth: 700,
             // ✅ Strictly 80% height for mobile as requested
@@ -778,14 +776,14 @@ const VerifyModal = ({
         >
           {/* Header */}
           <View
-            className={`bg-[#EFF6FF] border-b border-[#E2E8F0] flex-row justify-between items-center ${isMobile ? "px-4 py-3" : "px-8 py-6"}`}
+            className={`flex-row items-center justify-between border-b border-[#E2E8F0] bg-[#EFF6FF] ${isMobile ? "px-4 py-3" : "px-8 py-6"}`}
           >
             <View
               className="flex-row items-center"
               style={{ gap: isMobile ? 8 : 16 }}
             >
               <View
-                className={`rounded-xl bg-[#F5F3FF] border border-[#DDD6FE] items-center justify-center ${isMobile ? "w-9 h-9" : "w-11 h-11"}`}
+                className={`items-center justify-center rounded-xl border border-[#DDD6FE] bg-[#F5F3FF] ${isMobile ? "h-9 w-9" : "h-11 w-11"}`}
               >
                 <Feather name="eye" size={isMobile ? 18 : 22} color="#8B5CF6" />
               </View>
@@ -800,7 +798,7 @@ const VerifyModal = ({
                       : `Verify ${isNCR2 ? "NCR2" : "Action"}`}
                 </Text>
                 <Text
-                  className={`text-[#6B7280] ${isMobile ? "text-xs mt-0.5" : "text-sm mt-1"}`}
+                  className={`text-[#6B7280] ${isMobile ? "mt-0.5 text-xs" : "mt-1 text-sm"}`}
                 >
                   NCR #{ncr?.ncrNumber}
                 </Text>
@@ -808,7 +806,7 @@ const VerifyModal = ({
             </View>
             <TouchableOpacity
               onPress={onClose}
-              className="w-8 h-8 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
+              className="h-8 w-8 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white"
             >
               <Feather name="x" size={18} color="#6B7280" />
             </TouchableOpacity>
@@ -831,9 +829,9 @@ const VerifyModal = ({
           >
             {/* NCR Summary */}
             <View
-              className={`bg-[#EFF6FF] border border-[#E2E8F0] rounded-xl ${isMobile ? "p-3" : "p-5"}`}
+              className={`rounded-xl border border-[#E2E8F0] bg-[#EFF6FF] ${isMobile ? "p-3" : "p-5"}`}
             >
-              <View className="flex-row items-center mb-2">
+              <View className="mb-2 flex-row items-center">
                 <Feather
                   name="file-text"
                   size={16}
@@ -846,9 +844,9 @@ const VerifyModal = ({
               </View>
               <View className="flex-row flex-wrap">
                 <View
-                  className={`${isMobile ? "w-full mb-2" : "w-1/2 pr-2 mb-3"}`}
+                  className={`${isMobile ? "mb-2 w-full" : "mb-3 w-1/2 pr-2"}`}
                 >
-                  <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                  <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                     Status
                   </Text>
                   <Text className="text-sm text-[#1F2937]">
@@ -856,9 +854,9 @@ const VerifyModal = ({
                   </Text>
                 </View>
                 <View
-                  className={`${isMobile ? "w-full mb-2" : "w-1/2 pl-2 mb-3"}`}
+                  className={`${isMobile ? "mb-2 w-full" : "mb-3 w-1/2 pl-2"}`}
                 >
-                  <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                  <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                     Department
                   </Text>
                   <Text className="text-sm text-[#1F2937]">
@@ -866,9 +864,9 @@ const VerifyModal = ({
                   </Text>
                 </View>
                 <View
-                  className={`${isMobile ? "w-full mb-2" : "w-1/2 pr-2 mb-3"}`}
+                  className={`${isMobile ? "mb-2 w-full" : "mb-3 w-1/2 pr-2"}`}
                 >
-                  <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                  <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                     Auditee
                   </Text>
                   <Text className="text-sm text-[#1F2937]">
@@ -876,9 +874,9 @@ const VerifyModal = ({
                   </Text>
                 </View>
                 <View
-                  className={`${isMobile ? "w-full mb-2" : "w-1/2 pl-2 mb-3"}`}
+                  className={`${isMobile ? "mb-2 w-full" : "mb-3 w-1/2 pl-2"}`}
                 >
-                  <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                  <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                     Auditor
                   </Text>
                   <Text className="text-sm text-[#1F2937]">
@@ -887,7 +885,7 @@ const VerifyModal = ({
                 </View>
               </View>
               <View className="mt-2">
-                <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                   Statement
                 </Text>
                 <Text
@@ -908,9 +906,9 @@ const VerifyModal = ({
 
             {/* Corrective Action Details */}
             <View
-              className={`p-4 border rounded-xl ${isNCR2 ? "bg-[#EFF6FF] border-[#DDD6FE]" : "bg-[#EFF6FF] border-[#DDD6FE]"}`}
+              className={`rounded-xl border p-4 ${isNCR2 ? "border-[#DDD6FE] bg-[#EFF6FF]" : "border-[#DDD6FE] bg-[#EFF6FF]"}`}
             >
-              <View className="flex-row items-center mb-3">
+              <View className="mb-3 flex-row items-center">
                 <Feather
                   name="check-circle"
                   size={16}
@@ -949,18 +947,18 @@ const VerifyModal = ({
                 ].map(({ label, value }, index) => (
                   <View
                     key={label}
-                    className={`${isMobile ? "w-full mb-3" : `w-1/2 ${index % 2 === 0 ? "pr-2" : "pl-2"} mb-4`}`}
+                    className={`${isMobile ? "mb-3 w-full" : `w-1/2 ${index % 2 === 0 ? "pr-2" : "pl-2"} mb-4`}`}
                   >
-                    <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1.5">
+                    <Text className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                       {label}
                     </Text>
                     <View
-                      className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg justify-center"
+                      className="justify-center rounded-lg border border-[#E2E8F0] bg-white p-2.5"
                       style={{ minHeight: 40 }}
                     >
                       <Text className="text-sm text-[#1F2937]">
                         {value || (
-                          <Text className="text-[#CBD5E1] italic">
+                          <Text className="italic text-[#CBD5E1]">
                             Not provided
                           </Text>
                         )}
@@ -973,8 +971,8 @@ const VerifyModal = ({
 
             {/* Previous Comments */}
             {(ncr?.auditeeReviewComment || ncr?.managerReviewComment) && (
-              <View className="p-4 bg-[#EFF6FF] border border-[#DBEAFE] rounded-xl">
-                <View className="flex-row items-center mb-2">
+              <View className="rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+                <View className="mb-2 flex-row items-center">
                   <Feather
                     name="message-square"
                     size={16}
@@ -987,10 +985,10 @@ const VerifyModal = ({
                 </View>
                 {ncr?.auditeeReviewComment && (
                   <View className="mb-3">
-                    <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                    <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                       Auditee Review
                     </Text>
-                    <View className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg">
+                    <View className="rounded-lg border border-[#E2E8F0] bg-white p-2.5">
                       <Text className="text-sm text-[#1F2937]">
                         {ncr.auditeeReviewComment}
                       </Text>
@@ -999,10 +997,10 @@ const VerifyModal = ({
                 )}
                 {ncr?.managerReviewComment && (
                   <View>
-                    <Text className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">
+                    <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                       Manager Review
                     </Text>
-                    <View className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg">
+                    <View className="rounded-lg border border-[#E2E8F0] bg-white p-2.5">
                       <Text className="text-sm text-[#1F2937]">
                         {ncr.managerReviewComment}
                       </Text>
@@ -1014,14 +1012,14 @@ const VerifyModal = ({
 
             {/* Verification Comments */}
             <View>
-              <Text className="text-sm font-semibold text-[#000000] mb-2">
+              <Text className="mb-2 text-sm font-semibold text-[#000000]">
                 Verification Comments{" "}
                 {!decision && <Text className="text-[#EF4444]">*</Text>}
               </Text>
               <TextInput
                 multiline
                 numberOfLines={isMobile ? 3 : 4} // 👈 Slightly fewer lines on mobile to save space
-                className="w-full p-3 text-base rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-[#1F2937]"
+                className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-base text-[#1F2937]"
                 style={{ textAlignVertical: "top" }}
                 value={comment}
                 onChangeText={setComment}
@@ -1046,8 +1044,8 @@ const VerifyModal = ({
               <View
                 className={
                   isMobile
-                    ? "w-full p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg mb-2"
-                    : "flex-1 mr-4 p-4 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg"
+                    ? "mb-2 w-full rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3"
+                    : "mr-4 flex-1 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-4"
                 }
               >
                 <Text className="text-sm text-[#92400E]">
@@ -1064,7 +1062,7 @@ const VerifyModal = ({
               {/* Buttons Container */}
               <View
                 className={
-                  isMobile ? "flex-row w-full" : "flex-row items-center"
+                  isMobile ? "w-full flex-row" : "flex-row items-center"
                 }
                 style={{ gap: 12 }}
               >
@@ -1072,7 +1070,7 @@ const VerifyModal = ({
                 <TouchableOpacity
                   onPress={() => handleVerify(false)}
                   disabled={loading}
-                  className={`flex-row items-center justify-center rounded-lg h-11 ${isMobile ? "flex-1 px-2" : "px-6"}`}
+                  className={`h-11 flex-row items-center justify-center rounded-lg ${isMobile ? "flex-1 px-2" : "px-6"}`}
                   style={{
                     backgroundColor: loading ? "#FECACA" : "#EF4444",
                     opacity: loading ? 0.8 : 1,
@@ -1101,7 +1099,7 @@ const VerifyModal = ({
                 <TouchableOpacity
                   onPress={() => handleVerify(true)}
                   disabled={loading}
-                  className={`flex-row items-center justify-center rounded-lg h-11 ${isMobile ? "flex-1 px-2" : "px-6"}`}
+                  className={`h-11 flex-row items-center justify-center rounded-lg ${isMobile ? "flex-1 px-2" : "px-6"}`}
                   style={{
                     backgroundColor: loading ? "#93C5FD" : "#00529B",
                     opacity: loading ? 0.8 : 1,
@@ -1134,11 +1132,25 @@ const VerifyModal = ({
   );
 };
 
+const getNcrYear = (ncr: any): number | null => {
+  const raw = ncr?.createdAt || ncr?.raisedDate || ncr?.dueDate;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return d.getFullYear();
+};
+
 // ─────────────────────────────────────────────────────────────
 // Main Dashboard Component
 // ─────────────────────────────────────────────────────────────
 
-const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
+const NCRPendingDashboard = ({
+  onBack,
+  selectedYear, // 👈 ADD
+}: {
+  onBack?: () => void;
+  selectedYear?: number; // 👈 ADD
+}) => {
   const navigation = useNavigation<any>();
   const { width } = useWindowDimensions(); // ✅ ADD THIS
   const isDesktop = width >= 1024;
@@ -1162,7 +1174,6 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/users`, {
         method: "GET",
-        credentials: "include",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
@@ -1182,14 +1193,24 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
   };
 
   const loadData = async () => {
+    if (!user?.id) return; // ✅ guard against user not loaded yet
+
     setLoading(true);
     setError(null);
 
     try {
       const [pendingResult, allResult] = await Promise.all([
+        // ✅ Pass user.id so backend can plant-scope both endpoints
         ncrService.getPendingVerification(),
-        ncrService.getAllNCRs(),
+        ncrService.getAllNCRs(user.id),
       ]);
+
+      // ✅ Helper: only keep NCRs from the selected year (safe: keeps NCRs with unknown year)
+      const inSelectedYear = (ncr: any) => {
+        if (!selectedYear) return true;
+        const y = getNcrYear(ncr);
+        return y === null || y === selectedYear;
+      };
 
       if (!pendingResult.success) {
         setError(pendingResult.error);
@@ -1212,6 +1233,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                 (ncr.status === "IN_PROGRESS" ||
                   ncr.status === "NCR2_IN_PROGRESS"),
             )
+            .filter(inSelectedYear) // 👈 ADD
             .sort(
               (a, b) =>
                 new Date(b.updatedAt || b.createdAt || 0).getTime() -
@@ -1222,16 +1244,18 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
 
       if (allResult.success) {
         setClosedItems(
-          (allResult.data as NcrType[]).filter(
-            (ncr) =>
-              (ncr.status === "CLOSED" || ncr.status === "NCR2_COMPLETED") &&
-              (ncr.rootCause ||
-                ncr.correction ||
-                ncr.correctiveAction ||
-                ncr.ncr2RootCause ||
-                ncr.ncr2Correction ||
-                ncr.ncr2CorrectiveAction),
-          ),
+          (allResult.data as NcrType[])
+            .filter(
+              (ncr) =>
+                (ncr.status === "CLOSED" || ncr.status === "NCR2_COMPLETED") &&
+                (ncr.rootCause ||
+                  ncr.correction ||
+                  ncr.correctiveAction ||
+                  ncr.ncr2RootCause ||
+                  ncr.ncr2Correction ||
+                  ncr.ncr2CorrectiveAction),
+            )
+            .filter(inSelectedYear), // 👈 ADD
         );
       }
     } catch (err) {
@@ -1242,9 +1266,10 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
   };
 
   useEffect(() => {
+    if (!user?.id) return;
     loadData();
     fetchAllUsers();
-  }, []);
+  }, [user?.id, selectedYear]);
 
   const handleVerify = async (accepted: boolean, comment: string) => {
     setVerifyLoading(true);
@@ -1285,8 +1310,32 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
   const openNCRForum = (ncr: any) => {
     const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
     const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
+
+    const ncrPlantId =
+      ncr.plantId ?? ncr.plant?.id ?? (user as any)?.plantId ?? null;
+    const ncrPlantName =
+      ncr.plantName ?? ncr.plant?.name ?? (user as any)?.plantName ?? null;
+
     const auditManager = allUsersList.find(
-      (u: any) => u.role === "AUDIT_MANAGER",
+      (u: any) =>
+        u.role === "AUDIT_MANAGER" &&
+        (!ncrPlantId || String(u.plantId) === String(ncrPlantId)),
+    );
+
+    const memberEmails = [
+      auditor?.email,
+      auditee?.email,
+      auditManager?.email,
+      user?.email,
+    ].filter(
+      (e) =>
+        !!e &&
+        (!ncrPlantId ||
+          allUsersList.some(
+            (u: any) =>
+              u.email === e && String(u.plantId) === String(ncrPlantId),
+          ) ||
+          e === user?.email),
     );
 
     setSelectedNCRForForum({
@@ -1299,12 +1348,9 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
       auditorName: ncr.auditorName || auditor?.name,
       auditeeId: ncr.auditeeId,
       auditeeName: ncr.auditeeName || auditee?.name,
-      memberEmails: [
-        auditor?.email,
-        auditee?.email,
-        user?.email,
-        auditManager?.email,
-      ].filter(Boolean),
+      memberEmails,
+      plantId: ncrPlantId,
+      plantName: ncrPlantName,
     });
     setShowForumModal(true);
   };
@@ -1325,7 +1371,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#F8FAFC] justify-center items-center">
+      <View className="flex-1 items-center justify-center bg-[#F8FAFC]">
         <ActivityIndicator
           size="large"
           color="#8B5CF6"
@@ -1334,7 +1380,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
         <Text className="text-base font-semibold text-[#000000]">
           Loading verification queue...
         </Text>
-        <Text className="text-sm text-[#6B7280] mt-1.5">
+        <Text className="mt-1.5 text-sm text-[#6B7280]">
           Fetching submitted corrective actions
         </Text>
       </View>
@@ -1346,7 +1392,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
   ) : (
     <View className="flex-1 bg-[#F8FAFC]">
       {/* ✅ FULL-WIDTH HEADER (Moved outside ScrollView to span edge-to-edge) */}
-      <View className="w-full px-4 py-5 bg-white border-b border-[#E2E8F0] shadow-sm">
+      <View className="w-full border-b border-[#E2E8F0] bg-white px-4 py-5 shadow-sm">
         {/* Inner wrapper to keep the text aligned with the 1400px content below */}
         <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
           <View
@@ -1364,7 +1410,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                       navigation.goBack();
                     }
                   }}
-                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
+                  className="h-10 w-10 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white"
                 >
                   <Feather name="arrow-left" size={18} color="#6B7280" />
                 </TouchableOpacity>
@@ -1393,7 +1439,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
               <TouchableOpacity
                 onPress={loadData}
                 disabled={loading}
-                className="flex-row items-center px-4 py-2.5 bg-white border border-[#E2E8F0] shadow-sm rounded-xl"
+                className="flex-row items-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 shadow-sm"
                 style={{ opacity: loading ? 0.6 : 1 }}
               >
                 {loading ? (
@@ -1421,21 +1467,21 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
 
       {/* ✅ SCROLLABLE CONTENT (Aligned to maxWidth 1400) */}
       <ScrollView className="flex-1">
-        <View className="w-full p-4 mx-auto" style={{ maxWidth: 1400 }}>
+        <View className="mx-auto w-full p-4" style={{ maxWidth: 1400 }}>
           {/* Error Alert */}
           {error && (
             <View
-              className="p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-xl mb-6 flex-row"
+              className="mb-6 flex-row rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4"
               style={{ gap: 12 }}
             >
-              <View className="w-9 h-9 rounded-lg bg-white border border-[#FECACA] items-center justify-center">
+              <View className="h-9 w-9 items-center justify-center rounded-lg border border-[#FECACA] bg-white">
                 <Feather name="alert-circle" size={18} color="#EF4444" />
               </View>
-              <View className="justify-center flex-1">
+              <View className="flex-1 justify-center">
                 <Text className="text-sm font-semibold text-[#991B1B]">
                   Error
                 </Text>
-                <Text className="text-sm text-[#991B1B] opacity-90 mt-1">
+                <Text className="mt-1 text-sm text-[#991B1B] opacity-90">
                   {error}
                 </Text>
               </View>
@@ -1444,7 +1490,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
 
           {/* Stat Cards */}
           <View
-            className={`flex-row flex-wrap mb-6 ${isDesktop ? "" : "-mx-2"}`}
+            className={`mb-6 flex-row flex-wrap ${isDesktop ? "" : "-mx-2"}`}
           >
             <View className={`${isDesktop ? "flex-1" : "w-1/2 px-2"} mb-4`}>
               <StatCard
@@ -1504,7 +1550,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
             subtitle="Review corrective actions with current status and preview history"
             action={
               verificationQueue.length > 0 ? (
-                <View className="px-3 py-1 bg-[#F1F5F9] border border-[#E2E8F0] rounded-full">
+                <View className="rounded-full border border-[#E2E8F0] bg-[#F1F5F9] px-3 py-1">
                   <Text className="text-xs font-semibold text-[#6B7280]">
                     {
                       verificationQueue.filter(
@@ -1520,7 +1566,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
             }
           >
             <View
-              className={`flex-row px-6 py-3 bg-[#F8FAFC] border-b border-[#E2E8F0] ${isDesktop ? "" : "flex-wrap"}`}
+              className={`flex-row border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3 ${isDesktop ? "" : "flex-wrap"}`}
             >
               <View
                 style={
@@ -1529,7 +1575,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                     : { width: "50%", paddingRight: 8, marginBottom: 8 }
                 }
               >
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   NCR Number
                 </Text>
               </View>
@@ -1538,7 +1584,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                   isDesktop ? { flex: 1 } : { width: "50%", marginBottom: 8 }
                 }
               >
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Submitted On
                 </Text>
               </View>
@@ -1557,7 +1603,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                   isDesktop ? { flex: 1 } : { width: "50%", marginBottom: 8 }
                 }
               >
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Status
                 </Text>
               </View>
@@ -1568,7 +1614,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
                     : { width: "50%" }
                 }
               >
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Action
                 </Text>
               </View>
@@ -1607,7 +1653,7 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
             subtitle="Approved corrective actions that have been closed"
             action={
               closedItems.length > 0 ? (
-                <View className="px-3 py-1 bg-[#F1F5F9] border border-[#E2E8F0] rounded-full">
+                <View className="rounded-full border border-[#E2E8F0] bg-[#F1F5F9] px-3 py-1">
                   <Text className="text-xs font-semibold text-[#6B7280]">
                     {closedItems.length} closed
                   </Text>
@@ -1615,24 +1661,24 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
               ) : null
             }
           >
-            <View className="flex-row px-6 py-3 bg-[#F8FAFC] border-b border-[#E2E8F0]">
+            <View className="flex-row border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3">
               <View style={{ flex: 2, paddingRight: 8 }}>
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   NCR Number
                 </Text>
               </View>
               <View style={{ flex: 2 }}>
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Department
                 </Text>
               </View>
               <View style={{ flex: 2 }}>
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Closed On
                 </Text>
               </View>
               <View style={{ flex: 1, alignItems: "flex-end" }}>
-                <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                   Action
                 </Text>
               </View>
@@ -1679,33 +1725,33 @@ const NCRPendingDashboard = ({ onBack }: { onBack?: () => void }) => {
       )}
 
       {showForumModal && selectedNCRForForum && (
-  <AuditCheckSheetNCRForumModal
-    auditId={selectedNCRForForum.id}
-    auditNumber={selectedNCRForForum.ncrNumber}
-    auditTitle={`NCR #${selectedNCRForForum.ncrNumber}`}
-    auditStatus={selectedNCRForForum.status}
-    auditType={`NCR - ${selectedNCRForForum.department}`}
-    department={selectedNCRForForum.department}
-    auditorId={selectedNCRForForum.auditorId}
-    auditorName={selectedNCRForForum.auditorName}
-    auditeeId={selectedNCRForForum.auditeeId}
-    auditeeName={selectedNCRForForum.auditeeName}
-    hodEmail={selectedNCRForForum.hodEmail}
-    hodName={selectedNCRForForum.hodName}
-    memberEmails={selectedNCRForForum.memberEmails || []}
-    isOpen={showForumModal}
-    onClose={() => {
-      setShowForumModal(false);
-      setSelectedNCRForForum(null);
-    }}
-    currentUser={user}
-    allUsers={allUsersList}
-  />
-)}
-      
+        <AuditCheckSheetNCRForumModal
+          auditId={selectedNCRForForum.id}
+          auditNumber={selectedNCRForForum.ncrNumber}
+          auditTitle={`NCR #${selectedNCRForForum.ncrNumber}`}
+          auditStatus={selectedNCRForForum.status}
+          auditType={`NCR - ${selectedNCRForForum.department}`}
+          department={selectedNCRForForum.department}
+          auditorId={selectedNCRForForum.auditorId}
+          auditorName={selectedNCRForForum.auditorName}
+          auditeeId={selectedNCRForForum.auditeeId}
+          auditeeName={selectedNCRForForum.auditeeName}
+          hodEmail={selectedNCRForForum.hodEmail}
+          hodName={selectedNCRForForum.hodName}
+          memberEmails={selectedNCRForForum.memberEmails || []}
+          plantId={selectedNCRForForum.plantId ?? null} // 👈 ADD
+          plantName={selectedNCRForForum.plantName ?? null} // 👈 ADD
+          isOpen={showForumModal}
+          onClose={() => {
+            setShowForumModal(false);
+            setSelectedNCRForForum(null);
+          }}
+          currentUser={user}
+          allUsers={allUsersList}
+        />
+      )}
     </View>
   );
-  
 };
 
 export default NCRPendingDashboard;

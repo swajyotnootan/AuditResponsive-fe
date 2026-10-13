@@ -1,7 +1,7 @@
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import {
-  AlertCircle,
   Briefcase,
+  Building,
   Calendar,
   Check,
   ChevronDown,
@@ -12,7 +12,6 @@ import {
   Shield,
   Sparkles,
   User,
-  UserCheck,
   Users,
   X,
 } from "lucide-react-native";
@@ -31,29 +30,17 @@ import {
   View,
 } from "react-native";
 
-const departmentDisplayToEnum: Record<string, string> = {
-  HR: "HR",
-  "R&D": "ENGG",
-  Purchase: "PURCHASE",
-  RMS: "STORES_DESPATCH",
-  SQA: "QA",
-  PPC: "PPC",
-  Production: "PRODUCTION",
-  "QA/QC": "QA",
-  FGS: "STORES_DESPATCH",
-  Marketing: "MARKETING",
-  "IMS (BE)": "MR",
-  Maintenance: "PLANT_MAINTENANCE",
-  Management: "UNIT_HEAD",
-  "Plant Maintenance": "PLANT_MAINTENANCE",
-  "Tool Maintenance": "TOOL_MAINTENANCE",
-  "Stores & Despatch": "STORES_DESPATCH",
-};
 const weeksList = ["W-1", "W-2", "W-3", "W-4", "W-5", "W-6"];
 const ENABLE_DEMO_AUTO_FILL = true;
 
+// ✅ Helper to unwrap API responses
+const extractData = (response: any) => {
+  if (Array.isArray(response)) return response;
+  return response?.data !== undefined ? response.data : response;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SINGLE USER SELECT MODAL (Optimized for Mobile)
+// SINGLE USER SELECT MODAL
 // ═══════════════════════════════════════════════════════════════════════════════
 const SingleUserSelectModal = ({
   isOpen,
@@ -86,27 +73,26 @@ const SingleUserSelectModal = ({
         className="flex-1"
       >
         <TouchableOpacity
-          className="items-center justify-center flex-1 p-4 bg-black/40"
+          className="flex-1 items-center justify-center bg-black/40 p-4"
           activeOpacity={1}
           onPress={onClose}
         >
-          {/* ✅ CRITICAL FIX: Added 'flex-1' so the inner ScrollView doesn't collapse to 0 height */}
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            className="w-[95%] max-w-md bg-white shadow-2xl rounded-2xl overflow-hidden"
+            className="w-[95%] max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             style={{ maxHeight: "85%" }}
           >
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
               <Text className="text-base font-bold text-gray-900">{title}</Text>
               <TouchableOpacity onPress={onClose} className="p-1">
                 <X size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <View className="flex-row items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
+            <View className="flex-row items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">
               <Search size={16} color="#9CA3AF" />
               <TextInput
-                className="flex-1 h-10 text-[13px] text-gray-900"
+                className="h-10 flex-1 text-[13px] text-gray-900"
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search..."
@@ -132,13 +118,13 @@ const SingleUserSelectModal = ({
                         onSelect(item);
                         onClose();
                       }}
-                      className={`flex-row items-center gap-3 p-3 rounded-lg mb-1 ${isSelected ? "bg-blue-50" : ""}`}
+                      className={`mb-1 flex-row items-center gap-3 rounded-lg p-3 ${isSelected ? "bg-blue-50" : ""}`}
                     >
                       <View
-                        className={`w-5 h-5 rounded-full border-[1.5px] justify-center items-center ${isSelected ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"}`}
+                        className={`h-5 w-5 items-center justify-center rounded-full border-[1.5px] ${isSelected ? "border-blue-500 bg-blue-500" : "border-gray-300 bg-white"}`}
                       >
                         {isSelected && (
-                          <View className="w-2.5 h-2.5 bg-white rounded-full" />
+                          <View className="h-2.5 w-2.5 rounded-full bg-white" />
                         )}
                       </View>
                       <Text
@@ -160,7 +146,7 @@ const SingleUserSelectModal = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MULTI-SELECT MODAL (Optimized for Mobile)
+// MULTI-SELECT MODAL
 // ═══════════════════════════════════════════════════════════════════════════════
 const MultiSelectModal = ({
   isOpen,
@@ -195,18 +181,17 @@ const MultiSelectModal = ({
         className="flex-1"
       >
         <TouchableOpacity
-          className="items-center justify-center flex-1 p-4 bg-black/40"
+          className="flex-1 items-center justify-center bg-black/40 p-4"
           activeOpacity={1}
           onPress={onClose}
         >
-          {/* ✅ CRITICAL FIX: Added 'flex-1' so the inner ScrollView doesn't collapse to 0 height */}
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            className="w-[95%] max-w-md bg-white shadow-2xl rounded-2xl overflow-hidden"
+            className="w-[95%] max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             style={{ maxHeight: "85%" }}
           >
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
               <View className="flex-1">
                 <Text className="text-base font-bold text-gray-900">
                   {title}
@@ -219,10 +204,10 @@ const MultiSelectModal = ({
                 <X size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <View className="flex-row items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
+            <View className="flex-row items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">
               <Search size={16} color="#9CA3AF" />
               <TextInput
-                className="flex-1 h-10 text-[13px] text-gray-900"
+                className="h-10 flex-1 text-[13px] text-gray-900"
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search..."
@@ -230,10 +215,10 @@ const MultiSelectModal = ({
                 autoFocus
               />
             </View>
-            <View className="flex-row gap-2 p-2 border-b border-gray-200">
+            <View className="flex-row gap-2 border-b border-gray-200 p-2">
               <TouchableOpacity
                 onPress={onSelectAll}
-                className="items-center flex-1 py-2 rounded-md bg-blue-50"
+                className="flex-1 items-center rounded-md bg-blue-50 py-2"
               >
                 <Text className="text-xs font-semibold text-blue-600">
                   Select All
@@ -241,7 +226,7 @@ const MultiSelectModal = ({
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onClearAll}
-                className="items-center flex-1 py-2 rounded-md bg-blue-50"
+                className="flex-1 items-center rounded-md bg-blue-50 py-2"
               >
                 <Text className="text-xs font-semibold text-blue-600">
                   Clear All
@@ -261,10 +246,10 @@ const MultiSelectModal = ({
                     <TouchableOpacity
                       key={id}
                       onPress={() => onToggle(item)}
-                      className={`flex-row items-center gap-3 p-3 rounded-lg mb-1 ${checked ? "bg-blue-50" : ""}`}
+                      className={`mb-1 flex-row items-center gap-3 rounded-lg p-3 ${checked ? "bg-blue-50" : ""}`}
                     >
                       <View
-                        className={`w-5 h-5 rounded border-[1.5px] justify-center items-center ${checked ? "bg-blue-500 border-blue-500" : "bg-white border-gray-300"}`}
+                        className={`h-5 w-5 items-center justify-center rounded border-[1.5px] ${checked ? "border-blue-500 bg-blue-500" : "border-gray-300 bg-white"}`}
                       >
                         {checked && <Check size={14} color="#FFF" />}
                       </View>
@@ -279,10 +264,10 @@ const MultiSelectModal = ({
                 })
               )}
             </ScrollView>
-            <View className="flex-row justify-end p-4 border-t border-gray-200 bg-gray-50">
+            <View className="flex-row justify-end border-t border-gray-200 bg-gray-50 p-4">
               <TouchableOpacity
                 onPress={onClose}
-                className="px-6 py-2.5 bg-white border border-gray-200 rounded-lg"
+                className="rounded-lg border border-gray-200 bg-white px-6 py-2.5"
               >
                 <Text className="text-sm font-semibold text-gray-900">
                   Close
@@ -297,7 +282,7 @@ const MultiSelectModal = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AUDIT ELEMENTS DROPDOWN (Optimized for Mobile)
+// AUDIT ELEMENTS DROPDOWN
 // ═══════════════════════════════════════════════════════════════════════════════
 const AuditElementsDropdown = ({
   isOpen,
@@ -327,18 +312,17 @@ const AuditElementsDropdown = ({
         className="flex-1"
       >
         <TouchableOpacity
-          className="items-center justify-center flex-1 p-4 bg-black/40"
+          className="flex-1 items-center justify-center bg-black/40 p-4"
           activeOpacity={1}
           onPress={onClose}
         >
-          {/* ✅ CRITICAL FIX: Added 'flex-1' so the inner ScrollView doesn't collapse to 0 height */}
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            className="w-[95%] max-w-md bg-white shadow-2xl rounded-2xl overflow-hidden"
+            className="w-[95%] max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             style={{ maxHeight: "85%" }}
           >
-            <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
               <View className="flex-1">
                 <Text className="text-base font-bold text-gray-900">
                   {title}
@@ -351,10 +335,10 @@ const AuditElementsDropdown = ({
                 <X size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <View className="flex-row items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
+            <View className="flex-row items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">
               <Search size={16} color="#9CA3AF" />
               <TextInput
-                className="flex-1 h-10 text-[13px] text-gray-900"
+                className="h-10 flex-1 text-[13px] text-gray-900"
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search..."
@@ -379,7 +363,7 @@ const AuditElementsDropdown = ({
                         onChange(item);
                         onClose();
                       }}
-                      className={`flex-row items-center justify-between p-3 rounded-lg mb-1 ${isSelected ? "bg-blue-50" : ""}`}
+                      className={`mb-1 flex-row items-center justify-between rounded-lg p-3 ${isSelected ? "bg-blue-50" : ""}`}
                     >
                       <Text
                         className={`flex-1 text-[13px] ${isSelected ? "font-semibold text-blue-600" : "text-gray-900"}`}
@@ -401,7 +385,7 @@ const AuditElementsDropdown = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN SCHEDULE MODAL (Balanced 2-Column Layout)
+// MAIN SCHEDULE MODAL
 // ═══════════════════════════════════════════════════════════════════════════════
 const ScheduleModal = ({
   isOpen,
@@ -416,34 +400,25 @@ const ScheduleModal = ({
   saving,
   selectedYear,
   allSchedules = [],
+  currentUserPlantId,
+  currentUserPlantName,
 }: any) => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const colClass = isDesktop ? "w-1/2" : "w-full"; // Full width on mobile, half on desktop
-  const inputHeight = isDesktop ? "h-[40px]" : "h-[48px]"; // Taller inputs for mobile touch
-  const textSize = isDesktop ? "text-[12px]" : "text-[14px]"; // Slightly larger text on mobile
+  const colClass = isDesktop ? "w-1/2" : "w-full";
+  const inputHeight = isDesktop ? "h-[40px]" : "h-[48px]";
+  const textSize = isDesktop ? "text-[12px]" : "text-[14px]";
   const iconSize = isDesktop ? 14 : 18;
-  const [departmentLeadAuditors, setDepartmentLeadAuditors] = useState<any[]>(
-    [],
-  );
-  const [departmentTeamAuditors, setDepartmentTeamAuditors] = useState<any[]>(
-    [],
-  );
+
   const [departmentAuditees, setDepartmentAuditees] = useState<any[]>([]);
   const [loadingDepartmentUsers, setLoadingDepartmentUsers] = useState(false);
   const [departmentInfo, setDepartmentInfo] = useState<any>(null);
 
-  const [fullyCompetentLeadAuditors, setFullyCompetentLeadAuditors] = useState<
-    any[]
-  >([]);
   const [fullyCompetentTeamAuditors, setFullyCompetentTeamAuditors] = useState<
     any[]
   >([]);
   const [loadingCompetent, setLoadingCompetent] = useState(false);
-  const [competencyStatus, setCompetencyStatus] = useState<any>(null);
-
-  const [selectedLeadAuditor, setSelectedLeadAuditor] = useState("");
   const [selectedTeamAuditors, setSelectedTeamAuditors] = useState<string[]>(
     [],
   );
@@ -463,13 +438,54 @@ const ScheduleModal = ({
   const [showElementsModal, setShowElementsModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
-  const [showLeadAuditorModal, setShowLeadAuditorModal] = useState(false);
 
-  const extractData = (response: any) => {
-    if (Array.isArray(response)) return response;
-    return response?.data !== undefined ? response.data : response;
-  };
+  // ✅ Auto-fill plant — runs whenever modal opens OR plant prop changes
+  useEffect(() => {
+    console.log("🟠 [Plant Auto-Fill Effect]");
+    console.log("   isOpen:", isOpen);
+    console.log("   currentUserPlantId:", currentUserPlantId);
+    console.log("   currentUserPlantName:", currentUserPlantName);
+    console.log("   editingSchedule?.plantId:", editingSchedule?.plantId);
+    console.log("   current formData.plantId:", formData.plantId);
 
+    if (!isOpen) return;
+
+    // Priority 1: editing schedule's plant
+    if (editingSchedule?.plantId) {
+      if (formData.plantId !== editingSchedule.plantId) {
+        console.log("   ✅ Setting plant from editingSchedule");
+        setFormData((prev: any) => ({
+          ...prev,
+          plantId: editingSchedule.plantId,
+          plantName:
+            editingSchedule.plantName || `Plant ${editingSchedule.plantId}`,
+        }));
+      }
+      return;
+    }
+
+    // Priority 2: current user's plant
+    if (currentUserPlantId) {
+      if (formData.plantId !== currentUserPlantId) {
+        console.log("   ✅ Setting plant from currentUserPlantId");
+        setFormData((prev: any) => ({
+          ...prev,
+          plantId: currentUserPlantId,
+          plantName: currentUserPlantName || `Plant ${currentUserPlantId}`,
+        }));
+      }
+      return;
+    }
+
+    console.warn("   ❌ NO PLANT available from any source!");
+  }, [
+    isOpen,
+    currentUserPlantId,
+    currentUserPlantName,
+    editingSchedule,
+    formData.plantId,
+    setFormData,
+  ]);
   const availableAuditElements = useMemo(() => {
     if (!formData.department) return [];
     const departmentData = deptPlanData[formData.department];
@@ -506,142 +522,148 @@ const ScheduleModal = ({
     editingSchedule,
   ]);
 
-  const fetchFullyCompetentAuditors = useCallback(async () => {
-    if (
-      !formData.department ||
-      !formData.auditElements ||
-      formData.auditElements.length === 0
-    ) {
-      setFullyCompetentLeadAuditors([]);
-      setFullyCompetentTeamAuditors([]);
-      return;
-    }
-    try {
-      setLoadingCompetent(true);
-      const enumValue = String(
-        departmentDisplayToEnum[formData.department] ||
-          formData.department.toUpperCase().replace(/[&\s/]+/g, "_"),
-      );
-      const response = await auditScheduleApi.getFullyCompetentAuditors(
-        enumValue,
-        formData.auditElements,
-        selectedYear,
-        selectedMonth,
-      );
-      const fullyCompetentAuditors = extractData(response);
+  const fetchFullyCompetentAuditors = useCallback(
+    async (auditElements: string[], plantId: string | number) => {
+      console.log("\n🟡 [fetchFullyCompetentAuditors] ENTER");
+      console.log("   auditElements:", auditElements);
+      console.log("   plantId:", plantId);
+      console.log("   selectedYear:", selectedYear);
+      console.log("   selectedMonth:", selectedMonth);
 
-      const leads = fullyCompetentAuditors.filter(
-        (a: any) => a.role === "LEAD_AUDITOR",
-      );
-      const teams = fullyCompetentAuditors.filter(
-        (a: any) => a.role === "AUDITOR",
-      );
-
-      setFullyCompetentLeadAuditors(leads);
-      setFullyCompetentTeamAuditors(teams);
-
-      if (
-        selectedLeadAuditor &&
-        !fullyCompetentAuditors.some(
-          (a: any) => String(a.id) === String(selectedLeadAuditor),
-        )
-      ) {
-        setSelectedLeadAuditor("");
-        setCompetencyStatus(null);
-      }
-    } catch (error: any) {
-      console.error(
-        "❌ ERROR fetching fully competent auditors:",
-        error.message || error,
-      );
-      setFullyCompetentLeadAuditors([]);
-      setFullyCompetentTeamAuditors([]);
-    } finally {
-      setLoadingCompetent(false);
-    }
-  }, [
-    formData.department,
-    formData.auditElements,
-    selectedYear,
-    selectedMonth,
-    selectedLeadAuditor,
-  ]);
-
-  const checkAuditorCompetency = useCallback(
-    async (auditorId: string) => {
-      if (
-        !auditorId ||
-        !formData.department ||
-        !formData.auditElements ||
-        formData.auditElements.length === 0
-      ) {
-        setCompetencyStatus(null);
+      if (!plantId || !auditElements || auditElements.length === 0) {
+        console.log("   ❌ Missing plantId or auditElements — clearing");
+        setFullyCompetentTeamAuditors([]);
         return;
       }
+
       try {
-        const enumValue =
-          departmentDisplayToEnum[formData.department] ||
-          formData.department.toUpperCase().replace(/[&\s/]+/g, "_");
-        const response = await auditScheduleApi.getAuditorCompetencyStatus(
-          auditorId,
-          enumValue,
-          formData.auditElements,
+        setLoadingCompetent(true);
+
+        console.log("   📡 Calling getFullyCompetentAuditors API...");
+        const response = await auditScheduleApi.getFullyCompetentAuditors(
+          auditElements,
+          selectedYear,
+          selectedMonth,
+          plantId,
+          formData.auditType, // ✅ pass audit type for competency filter
         );
-        setCompetencyStatus(extractData(response));
+
+        const fullyCompetentAuditors = extractData(response);
+
+        if (!Array.isArray(fullyCompetentAuditors)) {
+          console.log(
+            "   ⚠️ Extracted is NOT an array — check backend response shape!",
+          );
+          setFullyCompetentTeamAuditors([]);
+          return;
+        }
+
+        // ✅ Trust the backend — it returns ONLY competent auditors.
+        // Do NOT filter by role here (may remove valid competent HODs etc.)
+        console.log(
+          "   ✅ Competent auditors count:",
+          fullyCompetentAuditors.length,
+        );
+        console.log(
+          "   📋 Final auditors:",
+          JSON.stringify(fullyCompetentAuditors, null, 2),
+        );
+
+        setFullyCompetentTeamAuditors(fullyCompetentAuditors);
       } catch (error: any) {
-        console.error("❌ Error checking competency:", error.message || error);
-        setCompetencyStatus(null);
+        console.error("   ❌ API ERROR:", error);
+        console.error("   ❌ Error message:", error.message);
+        console.error("   ❌ Error response:", error.response?.data);
+        console.error("   ❌ Error status:", error.response?.status);
+        setFullyCompetentTeamAuditors([]);
+      } finally {
+        setLoadingCompetent(false);
+        console.log("🟡 [fetchFullyCompetentAuditors] EXIT\n");
       }
     },
-    [formData.department, formData.auditElements],
+    [selectedYear, selectedMonth, formData.auditType],
   );
 
   useEffect(() => {
-    if (
-      formData.department &&
-      formData.auditElements &&
-      formData.auditElements.length > 0
-    ) {
-      fetchFullyCompetentAuditors();
+    if (formData.plantId && formData.auditElements?.length > 0) {
+      fetchFullyCompetentAuditors(formData.auditElements, formData.plantId);
     } else {
-      setFullyCompetentLeadAuditors([]);
       setFullyCompetentTeamAuditors([]);
     }
-  }, [
-    formData.department,
-    formData.auditElements,
-    fetchFullyCompetentAuditors,
-  ]);
+  }, [formData.plantId, formData.auditElements, fetchFullyCompetentAuditors]);
 
-  const fetchDepartmentUsers = useCallback(async (department: string) => {
-    if (!department) {
-      setDepartmentLeadAuditors([]);
-      setDepartmentTeamAuditors([]);
-      setDepartmentAuditees([]);
-      return;
-    }
-    const enumValue = String(
-      departmentDisplayToEnum[department] ||
-        department.toUpperCase().replace(/[&\s/]+/g, "_"),
-    );
-    setLoadingDepartmentUsers(true);
-    try {
-      const [leadRes, regularRes, auditeesRes] = await Promise.all([
-        auditScheduleApi.getLeadAuditorsByDepartment(enumValue),
-        auditScheduleApi.getRegularAuditorsByDepartment(enumValue),
-        auditScheduleApi.getAuditeesByDepartment(enumValue),
-      ]);
-      setDepartmentLeadAuditors(extractData(leadRes));
-      setDepartmentTeamAuditors(extractData(regularRes));
-      setDepartmentAuditees(
-        extractData(auditeesRes).filter((u: any) => u.role !== "HOD"),
-      );
-    } catch (err: any) {
-      console.error("❌ Error fetching department users:", err.message || err);
-    } finally {
-      setLoadingDepartmentUsers(false);
-    }
-  }, []);
+  const fetchDepartmentUsers = useCallback(
+    async (
+      department: string,
+      plantId: string | number,
+      auditElements: string[] = [],
+    ) => {
+      console.log("\n🟢 [fetchDepartmentUsers] ENTER");
+      console.log("   department:", department);
+      console.log("   plantId:", plantId);
+      console.log("   auditElements:", auditElements);
+
+      if (!department || !plantId) {
+        console.log("   ❌ Missing department or plantId — clearing");
+        setDepartmentAuditees([]);
+        return;
+      }
+
+      const enumValue = department;
+
+      console.log("   📤 Sending department to backend:", enumValue);
+
+      setLoadingDepartmentUsers(true);
+
+      // ✅ If no element selected → blank dropdown (no competency check possible)
+      if (!auditElements || auditElements.length === 0) {
+        console.log("   ⚠️ No auditElements selected — blank dropdown");
+        setDepartmentAuditees([]);
+        setLoadingDepartmentUsers(false);
+        console.log("🟢 [fetchDepartmentUsers] EXIT (no elements)\n");
+        return;
+      }
+
+      try {
+        console.log("   🎯 Calling getCompetentAuditeesByDepartment");
+
+        const auditeesRes =
+          await auditScheduleApi.getCompetentAuditeesByDepartment(
+            enumValue,
+            plantId,
+            auditElements,
+            formData.auditType, // ✅ pass audit type
+          );
+
+        const extracted = extractData(auditeesRes);
+
+        if (!Array.isArray(extracted)) {
+          console.log("   ⚠️ Not an array — clearing");
+          setDepartmentAuditees([]);
+          return;
+        }
+
+        // ✅ API already returns ONLY competent auditees — no extra filter needed
+        console.log("   ✅ Competent auditees count:", extracted.length);
+        console.log(
+          "   📋 Names:",
+          extracted
+            .map((u: any) => `${u.firstName} ${u.lastName} (${u.role})`)
+            .join(", "),
+        );
+
+        setDepartmentAuditees(extracted);
+      } catch (err: any) {
+        console.error("   ❌ API ERROR:", err);
+        console.error("   ❌ Response:", err.response?.data);
+        setDepartmentAuditees([]);
+      } finally {
+        setLoadingDepartmentUsers(false);
+        console.log("🟢 [fetchDepartmentUsers] EXIT\n");
+      }
+    },
+    [formData.auditType],
+  );
 
   const fetchDepartmentMapping = useCallback(async (department: string) => {
     if (!department) return;
@@ -651,7 +673,7 @@ const ScheduleModal = ({
     } catch {
       const localMapping: Record<string, string[]> = {
         HR: ["HR"],
-        "R&D": ["R&D"],
+        "R&D": ["RND"],
         Purchase: ["Purchase"],
         RMS: ["RMS"],
         SQA: ["Quality", "Purchase"],
@@ -676,21 +698,33 @@ const ScheduleModal = ({
   }, []);
 
   const resetSelections = useCallback(() => {
-    setSelectedLeadAuditor("");
     setSelectedTeamAuditors([]);
     setTeamAuditorNames([]);
     setSelectedCoAuditors([]);
     setSelectedCoAuditorNames([]);
     setSelectedAuditees([]);
     setSelectedAuditeeNames([]);
-    setCompetencyStatus(null);
-    setFullyCompetentLeadAuditors([]);
     setFullyCompetentTeamAuditors([]);
     setErrors({});
   }, []);
 
   const handleDepartmentChange = async (dept: string) => {
-    if (!dept) return;
+    console.log("\n🔵 [handleDepartmentChange] ENTER");
+    console.log("   Raw department value:", JSON.stringify(dept));
+    console.log("   formData.plantId:", formData.plantId);
+    console.log("   selectedMonth:", selectedMonth);
+
+    if (!dept) {
+      console.log("   ❌ Empty dept — returning");
+      return;
+    }
+    if (!formData.plantId) {
+      console.log("   ❌ No plantId — alerting");
+      Alert.alert("Please select a plant first");
+      return;
+    }
+
+    console.log("   ✅ Validation passed — resetting selections");
     resetSelections();
     setFormData({
       ...formData,
@@ -699,11 +733,16 @@ const ScheduleModal = ({
       auditElements: [],
       week: "",
       status: "SCHEDULED",
+      auditType: "", // ✅ reset audit type if you have it
     });
-    await Promise.all([
-      fetchDepartmentUsers(dept),
-      fetchDepartmentMapping(dept),
-    ]);
+
+    // ✅ No element yet → will result in blank auditee dropdown
+    await fetchDepartmentUsers(dept, formData.plantId, []);
+
+    console.log("   📞 Calling fetchDepartmentMapping...");
+    await fetchDepartmentMapping(dept);
+
+    console.log("🔵 [handleDepartmentChange] EXIT\n");
   };
 
   const getDemoWeekForDepartment = (department: string) => {
@@ -775,10 +814,7 @@ const ScheduleModal = ({
           status: "SCHEDULED",
         }));
       } else {
-        await Promise.all([
-          fetchDepartmentUsers(department),
-          fetchDepartmentMapping(department),
-        ]);
+        await Promise.all([fetchDepartmentMapping(department)]);
 
         if (!formData.week) {
           const week = getDemoWeekForDepartment(department);
@@ -795,6 +831,7 @@ const ScheduleModal = ({
       setDemoPending(false);
     }
   };
+
   const handleTeamAuditorToggle = (auditor: any) => {
     const id = auditor.id.toString();
     const name = `${auditor.firstName} ${auditor.lastName}`;
@@ -851,9 +888,10 @@ const ScheduleModal = ({
 
   const handleSubmit = () => {
     const newErrors: any = {};
+
+    if (!formData.plantId) newErrors.plant = "Select a plant";
     if (!formData.department) newErrors.department = "Select a department";
     if (!formData.week) newErrors.week = "Choose an audit week";
-    if (!selectedLeadAuditor) newErrors.lead = "Assign a lead auditor";
     if (selectedAuditees.length === 0)
       newErrors.auditees = "Add at least one auditee";
     if (selectedTeamAuditors.length === 0)
@@ -864,61 +902,54 @@ const ScheduleModal = ({
       return;
     }
 
-    const isFullyCompetent = fullyCompetentLeadAuditors.some(
-      (a) => String(a.id) === String(selectedLeadAuditor),
-    );
-    if (
-      !isFullyCompetent &&
-      formData.auditElements &&
-      formData.auditElements.length > 0
-    ) {
-      Alert.alert(
-        "Warning",
-        "Selected lead auditor is NOT fully competent for all audit elements. Do you want to proceed anyway?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Proceed", onPress: performSave },
-        ],
-      );
-      return;
-    }
     performSave();
   };
 
   const performSave = () => {
-    const lead =
-      departmentLeadAuditors.find(
-        (a) => String(a.id) === String(selectedLeadAuditor),
-      ) ||
-      fullyCompetentLeadAuditors.find(
-        (a) => String(a.id) === String(selectedLeadAuditor),
-      );
+    const firstTeamMemberId = selectedTeamAuditors[0] || null;
+    const firstTeamMemberName = teamAuditorNames[0] || "";
 
     onSave({
       ...formData,
-      auditorId: selectedLeadAuditor,
-      leadAuditorId: selectedLeadAuditor,
-      leadAuditorName: lead ? `${lead.firstName} ${lead.lastName}` : "",
+      auditorId: firstTeamMemberId,
+      leadAuditorId: firstTeamMemberId,
+      leadAuditorName: firstTeamMemberName,
+
+      plantId: formData.plantId,
+      plantName: formData.plantName,
+
       teamAuditorIds: selectedTeamAuditors.map(Number),
       teamAuditorNames,
       coAuditorIdList: selectedCoAuditors.map(Number),
       coAuditorNames: selectedCoAuditorNames,
+
       auditeeId:
         selectedAuditees.length === 1 ? Number(selectedAuditees[0]) : null,
       auditeeIdList: selectedAuditees.map(Number),
       auditeeNames: selectedAuditeeNames,
+
       status: formData.status || "SCHEDULED",
     });
   };
 
+  // ✅ Restore editing schedule state
   useEffect(() => {
-    if (!editingSchedule || !isOpen || !formData.department) return;
-    setSelectedLeadAuditor(
-      editingSchedule.leadAuditorId?.toString() ||
-        editingSchedule.auditorId?.toString() ||
-        "",
-    );
+    if (!editingSchedule || !isOpen) return;
 
+    // ✅ Plant info - use editing schedule's plant info, or fallback to current user's plant
+    const resolvedPlantId = editingSchedule.plantId || currentUserPlantId || "";
+    const resolvedPlantName =
+      editingSchedule.plantName ||
+      currentUserPlantName ||
+      (resolvedPlantId ? `Plant ${resolvedPlantId}` : "");
+
+    setFormData((prev: any) => ({
+      ...prev,
+      plantId: resolvedPlantId,
+      plantName: resolvedPlantName,
+    }));
+
+    // Team
     let teamIds =
       editingSchedule.coAuditorIdList || editingSchedule.teamAuditorIds || [];
     let teamNames =
@@ -961,10 +992,54 @@ const ScheduleModal = ({
       Array.isArray(auditeeNamesList) ? auditeeNamesList : [],
     );
 
-    fetchDepartmentUsers(formData.department);
-    fetchDepartmentMapping(formData.department);
-  }, [editingSchedule, isOpen, formData.department]);
+    if (editingSchedule.department && resolvedPlantId) {
+      fetchDepartmentUsers(
+        editingSchedule.department,
+        resolvedPlantId,
+        editingSchedule.auditElements || [],
+      );
+      fetchDepartmentMapping(editingSchedule.department);
+    }
+  }, [
+    editingSchedule,
+    isOpen,
+    currentUserPlantId,
+    currentUserPlantName,
+    fetchDepartmentUsers,
+    fetchDepartmentMapping,
+    setFormData,
+  ]);
 
+  // ✅ NEW: Re-fetch auditees when audit elements change (competency filtering)
+  useEffect(() => {
+    console.log("\n🟣 [useEffect: auditElements changed]");
+    console.log("   isOpen:", isOpen);
+    console.log("   formData.department:", formData.department);
+    console.log("   formData.plantId:", formData.plantId);
+    console.log("   formData.auditElements:", formData.auditElements);
+
+    if (
+      isOpen &&
+      formData.department &&
+      formData.plantId &&
+      formData.auditElements?.length > 0
+    ) {
+      console.log("   ✅ Re-fetching auditees with competency filter...");
+      fetchDepartmentUsers(
+        formData.department,
+        formData.plantId,
+        formData.auditElements,
+      );
+    }
+  }, [
+    isOpen,
+    formData.department,
+    formData.plantId,
+    formData.auditElements,
+    fetchDepartmentUsers,
+  ]);
+
+  // ✅ Demo auto-fill effect
   useEffect(() => {
     if (!ENABLE_DEMO_AUTO_FILL) return;
     if (!demoPending) return;
@@ -976,7 +1051,6 @@ const ScheduleModal = ({
 
     const currentElements = formData.auditElements || [];
 
-    // Step 1: select first audit element
     if (currentElements.length === 0) {
       const element =
         availableAuditElements[0] ||
@@ -1001,22 +1075,9 @@ const ScheduleModal = ({
       return;
     }
 
-    // Step 2: select lead auditor
-    const lead = fullyCompetentLeadAuditors[0] || departmentLeadAuditors[0];
+    const team = fullyCompetentTeamAuditors[0];
 
-    // Step 3: select team auditor
-    const team = fullyCompetentTeamAuditors[0] || departmentTeamAuditors[0];
-
-    // Step 4: select auditee
     const auditee = departmentAuditees[0];
-
-    if (lead) {
-      setSelectedLeadAuditor(String(lead.id));
-      setErrors((prev: any) => ({
-        ...prev,
-        lead: "",
-      }));
-    }
 
     if (team) {
       const teamId = String(team.id);
@@ -1049,10 +1110,10 @@ const ScheduleModal = ({
 
     setDemoPending(false);
 
-    if (!lead || !team || !auditee) {
+    if (!team || !auditee) {
       Alert.alert(
         "Demo Auto Fill",
-        "Filled available fields, but some lead/team/auditee data is missing.",
+        "Filled available fields, but some team/auditee data is missing.",
       );
     }
   }, [
@@ -1066,20 +1127,19 @@ const ScheduleModal = ({
     availableAuditElements,
     deptPlanData,
     selectedMonth,
-    fullyCompetentLeadAuditors,
-    departmentLeadAuditors,
     fullyCompetentTeamAuditors,
-    departmentTeamAuditors,
     departmentAuditees,
+    setFormData,
   ]);
 
+  // ✅ Fetch department mapping when department changes
   useEffect(() => {
     if (isOpen && formData.department && !editingSchedule) {
-      fetchDepartmentUsers(formData.department);
       fetchDepartmentMapping(formData.department);
     }
-  }, [isOpen, formData.department, editingSchedule]);
+  }, [isOpen, formData.department, editingSchedule, fetchDepartmentMapping]);
 
+  // ✅ Reset on close
   useEffect(() => {
     if (!isOpen) {
       resetSelections();
@@ -1087,29 +1147,23 @@ const ScheduleModal = ({
     }
   }, [isOpen, resetSelections]);
 
+  // ✅ Clear audit elements when opening a fresh schedule
   useEffect(() => {
     if (isOpen && !editingSchedule) {
       if (formData.auditElements && formData.auditElements.length > 0) {
         setFormData((prev: any) => ({ ...prev, auditElements: [] }));
       }
     }
-  }, [isOpen, editingSchedule]);
-
-  useEffect(() => {
-    if (selectedLeadAuditor) checkAuditorCompetency(selectedLeadAuditor);
-    else setCompetencyStatus(null);
-  }, [selectedLeadAuditor, checkAuditorCompetency]);
+  }, [isOpen, editingSchedule, setFormData]);
 
   const canAutoFill = useMemo(() => {
     if (!ENABLE_DEMO_AUTO_FILL) return false;
     if (editingSchedule || saving || demoPending) return false;
 
-    // 1. If a department is already selected, check if there are available elements for it
     if (formData.department) {
       return availableAuditElements.length > 0;
     }
 
-    // 2. If no department is selected yet, check if AT LEAST ONE department has planned elements for the month
     if (!departments || departments.length === 0) return false;
 
     return departments.some((dept: string) => {
@@ -1119,7 +1173,6 @@ const ScheduleModal = ({
       return elements.length > 0;
     });
   }, [
-    ENABLE_DEMO_AUTO_FILL,
     editingSchedule,
     saving,
     demoPending,
@@ -1132,22 +1185,26 @@ const ScheduleModal = ({
 
   if (!isOpen) return null;
 
+  const step0Done = !!formData.plantId;
   const step1Done = !!formData.department;
-  const step2Done = !!selectedLeadAuditor;
-  const step3Done = selectedAuditees.length > 0;
-  const step4Done = !!formData.week;
-  const step5Done = selectedTeamAuditors.length > 0;
-  const isReady = step1Done && step2Done && step3Done && step4Done && step5Done;
+  const step2Done = !!formData.auditElements?.[0];
+  const step3Done = !!formData.week;
+  const step4Done = selectedTeamAuditors.length > 0;
+  const step5Done = selectedAuditees.length > 0;
+
+  const isReady =
+    step0Done && step1Done && step2Done && step3Done && step4Done && step5Done;
   const completedSteps = [
+    step0Done,
     step1Done,
     step2Done,
     step3Done,
     step4Done,
     step5Done,
   ].filter(Boolean).length;
+
   const hasAuditElements =
     formData.auditElements && formData.auditElements.length > 0;
-  const hasFullyCompetentLeads = fullyCompetentLeadAuditors.length > 0;
   const hasFullyCompetentTeams = fullyCompetentTeamAuditors.length > 0;
 
   return (
@@ -1157,15 +1214,15 @@ const ScheduleModal = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View className="items-center justify-center flex-1 p-4 bg-black/30">
+      <View className="flex-1 items-center justify-center bg-black/30 p-4">
         <View
-          className={`bg-white rounded-2xl shadow-xl overflow-hidden flex-1 ${isDesktop ? "max-w-[840px] w-[95%]" : "w-[95%]"}`}
+          className={`flex-1 overflow-hidden rounded-2xl bg-white shadow-xl ${isDesktop ? "w-[95%] max-w-[840px]" : "w-[95%]"}`}
           style={{ maxHeight: "82%" }}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
-            <View className="flex-row items-center flex-1 gap-3">
-              <View className="items-center justify-center w-10 h-10 border border-blue-100 rounded-xl bg-blue-50">
+          <View className="flex-row items-center justify-between border-b border-gray-200 bg-white p-4">
+            <View className="flex-1 flex-row items-center gap-3">
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
                 <Calendar size={20} color="#3B82F6" />
               </View>
               <View className="flex-1">
@@ -1174,7 +1231,7 @@ const ScheduleModal = ({
                     ? "Edit Audit Schedule"
                     : "New Audit Schedule"}
                 </Text>
-                <Text className="text-[12px] text-gray-500 mt-0.5">
+                <Text className="mt-0.5 text-[12px] text-gray-500">
                   {editingSchedule
                     ? "Update details."
                     : "Fill in the required fields."}
@@ -1186,10 +1243,10 @@ const ScheduleModal = ({
                 <TouchableOpacity
                   onPress={startDemoAutoFill}
                   disabled={!canAutoFill}
-                  className={`flex-row items-center gap-2 px-3 py-2 border rounded-lg ${
+                  className={`flex-row items-center gap-2 rounded-lg border px-3 py-2 ${
                     !canAutoFill
-                      ? "bg-gray-100 border-gray-200 opacity-60"
-                      : "bg-blue-50 border-blue-100"
+                      ? "border-gray-200 bg-gray-100 opacity-60"
+                      : "border-blue-100 bg-blue-50"
                   }`}
                 >
                   {demoPending ? (
@@ -1213,7 +1270,7 @@ const ScheduleModal = ({
 
               <TouchableOpacity
                 onPress={onClose}
-                className="p-2 border border-gray-200 rounded-lg bg-gray-50"
+                className="rounded-lg border border-gray-200 bg-gray-50 p-2"
               >
                 <X size={20} color="#6B7280" />
               </TouchableOpacity>
@@ -1221,14 +1278,13 @@ const ScheduleModal = ({
           </View>
 
           {/* Progress Bar */}
-          <View className="h-[3px] bg-gray-100 w-full">
+          <View className="h-[3px] w-full bg-gray-100">
             <View
               className="h-full bg-blue-500"
-              style={{ width: `${(completedSteps / 5) * 100}%` }}
+              style={{ width: `${(completedSteps / 6) * 100}%` }}
             />
           </View>
 
-          {/* ✅ CRITICAL FIX: flex-1 ScrollView with proper contentContainerStyle */}
           <ScrollView
             className="flex-1 bg-gray-50"
             showsVerticalScrollIndicator={true}
@@ -1237,44 +1293,44 @@ const ScheduleModal = ({
           >
             {hasAuditElements && (
               <View
-                className={`mb-4 p-3 border rounded-lg flex-row items-start gap-3 ${hasFullyCompetentLeads || hasFullyCompetentTeams ? "bg-blue-50 border-blue-100" : "bg-yellow-50 border-yellow-200"}`}
+                className={`mb-4 flex-row items-start gap-3 rounded-lg border p-3 ${
+                  hasFullyCompetentTeams
+                    ? "border-blue-100 bg-blue-50"
+                    : "border-yellow-200 bg-yellow-50"
+                }`}
               >
                 <Shield
                   size={16}
-                  color={
-                    hasFullyCompetentLeads || hasFullyCompetentTeams
-                      ? "#3B82F6"
-                      : "#92400E"
-                  }
+                  color={hasFullyCompetentTeams ? "#3B82F6" : "#92400E"}
                 />
                 <View className="flex-1">
                   <Text
-                    className={`font-semibold mb-1 text-[12px] ${hasFullyCompetentLeads || hasFullyCompetentTeams ? "text-blue-600" : "text-yellow-800"}`}
+                    className={`mb-1 text-[12px] font-semibold ${
+                      hasFullyCompetentTeams
+                        ? "text-blue-600"
+                        : "text-yellow-800"
+                    }`}
                   >
-                    {hasFullyCompetentLeads || hasFullyCompetentTeams
+                    {hasFullyCompetentTeams
                       ? "✅ Fully Competent Auditors Available"
                       : "⚠️ No Fully Competent Auditors"}
                   </Text>
                   <Text
-                    className={`text-[11px] opacity-90 ${hasFullyCompetentLeads || hasFullyCompetentTeams ? "text-blue-600" : "text-yellow-800"}`}
+                    className={`text-[11px] opacity-90 ${
+                      hasFullyCompetentTeams
+                        ? "text-blue-600"
+                        : "text-yellow-800"
+                    }`}
                   >
-                    {hasFullyCompetentLeads && (
-                      <Text>
-                        Lead:{" "}
-                        <Text className="font-bold">
-                          {fullyCompetentLeadAuditors.length}
-                        </Text>{" "}
-                      </Text>
-                    )}
-                    {hasFullyCompetentTeams && (
+                    {hasFullyCompetentTeams ? (
                       <Text>
                         Team:{" "}
                         <Text className="font-bold">
                           {fullyCompetentTeamAuditors.length}
                         </Text>{" "}
+                        auditor(s) can perform this audit
                       </Text>
-                    )}
-                    {!hasFullyCompetentLeads && !hasFullyCompetentTeams && (
+                    ) : (
                       <Text>
                         No auditors are competent for all{" "}
                         {formData.auditElements.length} element(s).
@@ -1286,10 +1342,29 @@ const ScheduleModal = ({
             )}
 
             {/* ✅ 2-COLUMN GRID LAYOUT */}
-            <View className="flex-row flex-wrap -mx-2">
+            <View className="-mx-2 flex-row flex-wrap">
+              {/* 0. Plant - READ ONLY */}
+              <View className={`${colClass} mb-4 px-2`}>
+                <View className="mb-1.5 flex-row items-center gap-1">
+                  <Building size={14} color="#475569" />
+                  <Text className="text-[12px] font-bold text-black">
+                    Plant
+                  </Text>
+                </View>
+                <View className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 px-2">
+                  <Building size={14} color="#475569" />
+                  <Text
+                    className="flex-1 text-[12px] text-gray-900"
+                    numberOfLines={1}
+                  >
+                    {formData.plantName || currentUserPlantName || "Loading..."}
+                  </Text>
+                </View>
+              </View>
+
               {/* 1. Department */}
-              <View className={`${colClass} px-2 mb-4`}>
-                <View className="flex-row items-center gap-1 mb-1.5">
+              <View className={`${colClass} mb-4 px-2`}>
+                <View className="mb-1.5 flex-row items-center gap-1">
                   <Briefcase size={14} color="#475569" />
                   <Text className="text-[12px] font-bold text-black">
                     Department
@@ -1297,7 +1372,7 @@ const ScheduleModal = ({
                   <Text className="text-[13px] font-bold text-red-600">*</Text>
                 </View>
                 <TouchableOpacity
-                  className={`w-full h-[40px] px-2 flex-row items-center gap-1.5 border rounded-lg bg-white ${errors.department ? "border-red-200" : "border-gray-200"} ${editingSchedule ? "opacity-70" : ""}`}
+                  className={`h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border bg-white px-2 ${errors.department ? "border-red-200" : "border-gray-200"} ${editingSchedule ? "opacity-70" : ""}`}
                   disabled={!!editingSchedule}
                   onPress={() => setShowDepartmentModal(true)}
                 >
@@ -1307,7 +1382,7 @@ const ScheduleModal = ({
                   />
                   <Text
                     className={`flex-1 ${textSize} leading-5 ${!formData.department ? "text-gray-500" : "text-gray-900"}`}
-                    numberOfLines={2} // ✅ CRITICAL FIX: Allows text to wrap to a second line instead of hiding
+                    numberOfLines={2}
                   >
                     {formData.department || "Select dept..."}
                   </Text>
@@ -1316,29 +1391,29 @@ const ScheduleModal = ({
               </View>
 
               {/* 2. Audit Element */}
-              <View className="w-1/2 px-2 mb-4">
-                <View className="flex-row items-center gap-1 mb-1.5">
+              <View className="mb-4 w-1/2 px-2">
+                <View className="mb-1.5 flex-row items-center gap-1">
                   <List size={14} color="#475569" />
                   <Text className="text-[12px] font-bold text-black">
                     Element
                   </Text>
                 </View>
                 {!formData.department ? (
-                  <View className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-gray-50">
+                  <View className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2">
                     <List size={14} color="#6B7280" />
                     <Text className="flex-1 text-[11px] text-gray-500">
                       Select dept first
                     </Text>
                   </View>
                 ) : availableAuditElements.length === 0 ? (
-                  <View className="w-full h-[40px] items-center justify-center bg-white border border-gray-200 rounded-lg px-2">
-                    <Text className="text-[10px] text-gray-500 text-center">
+                  <View className="h-[40px] w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-2">
+                    <Text className="text-center text-[10px] text-gray-500">
                       No elements
                     </Text>
                   </View>
                 ) : (
                   <TouchableOpacity
-                    className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-white"
+                    className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2"
                     onPress={() => setShowElementsModal(true)}
                   >
                     <List size={14} color="#475569" />
@@ -1353,60 +1428,9 @@ const ScheduleModal = ({
                 )}
               </View>
 
-              {/* 3. Lead Auditor */}
-              <View className="w-1/2 px-2 mb-4">
-                <View className="flex-row items-center gap-1 mb-1.5">
-                  <UserCheck size={14} color="#475569" />
-                  <Text className="text-[12px] font-bold text-black">Lead</Text>
-                  <Text className="text-[13px] font-bold text-red-600">*</Text>
-                </View>
-                {!formData.department || !hasAuditElements ? (
-                  <View className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-gray-50">
-                    <UserCheck size={14} color="#6B7280" />
-                    <Text className="flex-1 text-[11px] text-gray-500">
-                      Select dept/element
-                    </Text>
-                  </View>
-                ) : loadingDepartmentUsers || loadingCompetent ? (
-                  <View className="w-full h-[40px] flex-row items-center justify-center gap-1.5 bg-white border border-gray-200 rounded-lg">
-                    <ActivityIndicator size="small" color="#6B7280" />
-                    <Text className="text-[11px] text-gray-500">
-                      Checking...
-                    </Text>
-                  </View>
-                ) : !hasFullyCompetentLeads && hasAuditElements ? (
-                  <View className="w-full h-[40px] flex-row items-center gap-1.5 px-2 border border-red-100 rounded-lg bg-red-50">
-                    <AlertCircle size={14} color="#DC2626" />
-                    <Text className="flex-1 text-[11px] text-red-600">
-                      No competent lead
-                    </Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    className={`w-full h-[40px] px-2 flex-row items-center gap-1.5 border rounded-lg bg-white ${errors.lead ? "border-red-200" : "border-gray-200"}`}
-                    onPress={() => setShowLeadAuditorModal(true)}
-                  >
-                    <UserCheck
-                      size={14}
-                      color={errors.lead ? "#DC2626" : "#475569"}
-                    />
-                    <Text
-                      className={`flex-1 text-[12px] ${!selectedLeadAuditor ? "text-gray-500" : "text-gray-900"}`}
-                      numberOfLines={1}
-                    >
-                      {selectedLeadAuditor
-                        ? `✅ ${fullyCompetentLeadAuditors.find((a) => String(a.id) === String(selectedLeadAuditor))?.firstName}`
-                        : "Select lead..."}
-                    </Text>
-                    <ChevronDown size={14} color="#6B7280" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
               {/* 4. Audit Week */}
-              {/* 4. Audit Week */}
-              <View className={`${colClass} px-1 mb-4`}>
-                <View className="flex-row items-center gap-1.5 mb-1.5">
+              <View className={`${colClass} mb-4 px-1`}>
+                <View className="mb-1.5 flex-row items-center gap-1.5">
                   <Calendar size={iconSize} color="#475569" />
                   <Text className={`${textSize} font-bold text-black`}>
                     Week
@@ -1425,7 +1449,7 @@ const ScheduleModal = ({
                           setFormData({ ...formData, week: w });
                           setErrors((e: any) => ({ ...e, week: "" }));
                         }}
-                        className={`flex-1 min-w-[40px] ${inputHeight} rounded-xl border flex-row items-center justify-center ${active ? "bg-blue-50 border-blue-500" : "bg-white border-gray-200"}`}
+                        className={`min-w-[40px] flex-1 ${inputHeight} flex-row items-center justify-center rounded-xl border ${active ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
                       >
                         <Text
                           className={`text-[13px] font-semibold ${active ? "text-blue-600" : "text-gray-900"}`}
@@ -1439,13 +1463,13 @@ const ScheduleModal = ({
               </View>
 
               {/* 5. Team Auditors */}
-              <View className="w-1/2 px-2 mb-4">
-                <View className="flex-row items-center gap-1 mb-1.5">
+              <View className="mb-4 w-1/2 px-2">
+                <View className="mb-1.5 flex-row items-center gap-1">
                   <Users size={14} color="#475569" />
                   <Text className="text-[12px] font-bold text-black">Team</Text>
                 </View>
                 {!formData.department || !hasAuditElements ? (
-                  <View className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-gray-50">
+                  <View className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2">
                     <Users size={14} color="#6B7280" />
                     <Text className="flex-1 text-[11px] text-gray-500">
                       Select dept/element
@@ -1453,7 +1477,11 @@ const ScheduleModal = ({
                   </View>
                 ) : (
                   <TouchableOpacity
-                    className={`w-full h-[40px] px-2 flex-row items-center gap-1.5 border rounded-lg bg-white ${errors.team ? "border-red-200" : "border-gray-200"}`}
+                    className={`h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border px-2 ${
+                      !hasFullyCompetentTeams
+                        ? "bg-gray-50 opacity-60"
+                        : "bg-white"
+                    } ${errors.team ? "border-red-200" : "border-gray-200"}`}
                     onPress={() => setShowTeamModal(true)}
                     disabled={!hasFullyCompetentTeams}
                   >
@@ -1475,8 +1503,8 @@ const ScheduleModal = ({
               </View>
 
               {/* 6. Auditees */}
-              <View className="w-1/2 px-2 mb-4">
-                <View className="flex-row items-center gap-1 mb-1.5">
+              <View className="mb-4 w-1/2 px-2">
+                <View className="mb-1.5 flex-row items-center gap-1">
                   <User size={14} color="#475569" />
                   <Text className="text-[12px] font-bold text-black">
                     Auditees
@@ -1484,7 +1512,7 @@ const ScheduleModal = ({
                   <Text className="text-[13px] font-bold text-red-600">*</Text>
                 </View>
                 {!formData.department ? (
-                  <View className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-gray-50">
+                  <View className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2">
                     <User size={14} color="#6B7280" />
                     <Text className="flex-1 text-[11px] text-gray-500">
                       Select dept first
@@ -1492,8 +1520,19 @@ const ScheduleModal = ({
                   </View>
                 ) : (
                   <TouchableOpacity
-                    className={`w-full h-[40px] px-2 flex-row items-center gap-1.5 border rounded-lg bg-white ${errors.auditees ? "border-red-200" : "border-gray-200"}`}
+                    className={`h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border px-2 ${
+                      !formData.department ||
+                      !hasAuditElements ||
+                      departmentAuditees.length === 0
+                        ? "bg-gray-50 opacity-60"
+                        : "bg-white"
+                    } ${errors.auditees ? "border-red-200" : "border-gray-200"}`}
                     onPress={() => setShowAuditeeModal(true)}
+                    disabled={
+                      !formData.department ||
+                      !hasAuditElements ||
+                      departmentAuditees.length === 0
+                    }
                   >
                     <User
                       size={14}
@@ -1512,16 +1551,16 @@ const ScheduleModal = ({
                 )}
               </View>
 
-              {/* 7. Status - ✅ Changed to w-full to fill the row and avoid empty space */}
-              <View className="w-full px-2 mb-4">
-                <View className="flex-row items-center gap-1 mb-1.5">
+              {/* 7. Status */}
+              <View className="mb-4 w-full px-2">
+                <View className="mb-1.5 flex-row items-center gap-1">
                   <Clock size={14} color="#475569" />
                   <Text className="text-[12px] font-bold text-black">
                     Status
                   </Text>
                 </View>
                 <TouchableOpacity
-                  className="w-full h-[40px] px-2 flex-row items-center gap-1.5 border border-gray-200 rounded-lg bg-white"
+                  className="h-[40px] w-full flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2"
                   onPress={() => setShowStatusModal(true)}
                 >
                   <Clock size={14} color="#475569" />
@@ -1534,15 +1573,15 @@ const ScheduleModal = ({
             </View>
           </ScrollView>
 
-          {/* Footer - Fixed at bottom */}
+          {/* Footer */}
           <View
-            className="flex-row items-center justify-between p-4 bg-white border-t border-gray-200"
+            className="flex-row items-center justify-between border-t border-gray-200 bg-white p-4"
             style={{ flexShrink: 0 }}
           >
             <View className="flex-row gap-3">
               <TouchableOpacity
                 onPress={onClose}
-                className="items-center justify-center h-10 px-5 bg-white border border-gray-200 rounded-lg"
+                className="h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-5"
               >
                 <Text className="text-sm font-semibold text-gray-900">
                   Cancel
@@ -1551,12 +1590,15 @@ const ScheduleModal = ({
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={!isReady || saving}
-                className={`h-10 px-2 rounded-lg flex-row items-center gap-2 justify-center ${!isReady || saving ? "bg-gray-100" : "bg-blue-500"}`}
+                className={`h-10 flex-row items-center justify-center gap-2 rounded-lg px-4 ${!isReady || saving ? "bg-gray-100" : "bg-blue-500"}`}
               >
                 {saving ? (
                   <ActivityIndicator size="small" color="#000000" />
                 ) : (
-                  <Save size={16} color="#000000" />
+                  <Save
+                    size={16}
+                    color={!isReady || saving ? "#9CA3AF" : "#FFF"}
+                  />
                 )}
                 <Text
                   className={`text-sm font-semibold ${!isReady || saving ? "text-gray-400" : "text-white"}`}
@@ -1572,19 +1614,6 @@ const ScheduleModal = ({
           </View>
         </View>
 
-        {/* Sub-Modals (Keep your existing sub-modals exactly as they were here) */}
-        <SingleUserSelectModal
-          isOpen={showLeadAuditorModal}
-          onClose={() => setShowLeadAuditorModal(false)}
-          options={fullyCompetentLeadAuditors}
-          selectedId={selectedLeadAuditor}
-          onSelect={(user: any) => {
-            setSelectedLeadAuditor(String(user.id));
-            setErrors((v: any) => ({ ...v, lead: "" }));
-          }}
-          title="Select Lead Auditor"
-          emptyMsg="No fully competent lead auditors available"
-        />
         <MultiSelectModal
           isOpen={showTeamModal}
           onClose={() => setShowTeamModal(false)}
@@ -1598,9 +1627,14 @@ const ScheduleModal = ({
             setSelectedCoAuditors([]);
             setSelectedCoAuditorNames([]);
           }}
-          emptyMsg="No matching auditors"
+          emptyMsg={
+            !hasAuditElements
+              ? "Select an audit element first"
+              : "No competent auditors for the selected element(s)"
+          }
           title="Select Team Auditors"
         />
+
         <MultiSelectModal
           isOpen={showAuditeeModal}
           onClose={() => setShowAuditeeModal(false)}
@@ -1612,7 +1646,11 @@ const ScheduleModal = ({
             setSelectedAuditees([]);
             setSelectedAuditeeNames([]);
           }}
-          emptyMsg="No matching auditees"
+          emptyMsg={
+            !hasAuditElements
+              ? "Select an audit element first"
+              : "No competent auditees for the selected element(s)"
+          }
           title="Select Auditees"
         />
         <AuditElementsDropdown
@@ -1632,10 +1670,21 @@ const ScheduleModal = ({
           options={availableAuditElements}
           selected={formData.auditElements?.[0] || ""}
           onChange={(element: string) => {
+            // ✅ 1. Clear previous selections — they may no longer be competent
+            setSelectedTeamAuditors([]);
+            setTeamAuditorNames([]);
+            setSelectedCoAuditors([]);
+            setSelectedCoAuditorNames([]);
+            setSelectedAuditees([]);
+            setSelectedAuditeeNames([]);
+            setFullyCompetentTeamAuditors([]);
+
+            // ✅ 2. Save the new element
             setFormData({
               ...formData,
               auditElements: element ? [element] : [],
             });
+
             setShowElementsModal(false);
           }}
           title="Select Audit Element"
@@ -1648,15 +1697,15 @@ const ScheduleModal = ({
           onRequestClose={() => setShowStatusModal(false)}
         >
           <TouchableOpacity
-            className="items-center justify-center flex-1 p-5 bg-black/30"
+            className="flex-1 items-center justify-center bg-black/30 p-5"
             activeOpacity={1}
             onPress={() => setShowStatusModal(false)}
           >
             <TouchableOpacity
               activeOpacity={1}
-              className="bg-white rounded-2xl w-full max-w-sm max-h-[60%] shadow-xl overflow-hidden"
+              className="max-h-[60%] w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-xl"
             >
-              <View className="flex-row items-center justify-between p-5 border-b border-gray-200">
+              <View className="flex-row items-center justify-between border-b border-gray-200 p-5">
                 <Text className="text-base font-bold text-gray-900">
                   Select Status
                 </Text>
@@ -1673,7 +1722,7 @@ const ScheduleModal = ({
                         setFormData({ ...formData, status });
                         setShowStatusModal(false);
                       }}
-                      className={`flex-row items-center justify-between p-3 rounded-lg mb-1 ${formData.status === status ? "bg-blue-50" : ""}`}
+                      className={`mb-1 flex-row items-center justify-between rounded-lg p-3 ${formData.status === status ? "bg-blue-50" : ""}`}
                     >
                       <Text
                         className={`text-[13px] ${formData.status === status ? "font-semibold text-blue-600" : "text-gray-900"}`}

@@ -1,2 +1,2 @@
 // hooks/index.ts
-export { useAuth } from './useAuth';
+export { useAuth } from "./useAuth";

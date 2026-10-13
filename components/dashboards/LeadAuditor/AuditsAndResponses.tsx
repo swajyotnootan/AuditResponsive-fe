@@ -17,54 +17,7 @@ import FiveSView from "../auditor/view/FiveSView";
 import IATFInternalView from "../auditor/view/IATFInternalView";
 import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
 import NCRViewManager from "../auditor/view/NCRViewManager";
-
-// Types
-interface Schedule {
-  id: string | number;
-  department?: string;
-  auditeeName?: string;
-  auditorId?: string | number;
-  auditorName?: string;
-  leadAuditorName?: string;
-  coAuditorIds?: string[] | string;
-  scheduledDate?: string;
-  startTime?: string;
-  endTime?: string;
-  status?: string;
-  approvalStatus?: string;
-}
-
-interface NCR {
-  id: string | number;
-  ncrNumber?: string;
-  title?: string;
-  department?: string;
-  severity?: string;
-  status?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-  createdAt?: string;
-}
-
-interface Response {
-  id: string | number;
-  department?: string;
-  auditeeName?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-  status?: string;
-  answers?: any;
-  percentageScore?: number;
-  totalScore?: number;
-  maxPossibleScore?: number;
-}
-
-interface User {
-  id: string | number;
-  firstName: string;
-  lastName: string;
-  username?: string;
-}
+import type { NCR, Response, Schedule, User } from "./types";
 
 interface AuditsAndResponsesProps {
   activeTab: string;
@@ -122,7 +75,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
-  // ✅ PREVIEW STATE (Same pattern as StakeholderManagement)
+  // ✅ SUB-TAB STATE for CheckSheets / NCRs
+  const [subTab, setSubTab] = useState<"checksheets" | "ncrs">("checksheets");
+
+  // ✅ PREVIEW STATE
   const [selectedNcrId, setSelectedNcrId] = useState<string | number | null>(
     null,
   );
@@ -143,7 +99,6 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     }
   };
 
-  // ✅ Decides which check sheet report view to open
   const detectReportType = (r: Response): AuditReportType => {
     const a = safeParseAnswers(r.answers);
     const raw = String(
@@ -207,29 +162,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     return "N/A";
   };
 
-  const getFilteredSchedules = () => {
-    let schedules = allSchedules;
-    if (searchTerm) {
-      schedules = schedules.filter(
-        (s) =>
-          s.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          s.auditeeName?.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
-    }
-    return schedules.filter((s) => {
-      if (!s.scheduledDate) return false;
-      const scheduledStatuses = [
-        "SCHEDULED",
-        "IN_PROGRESS",
-        "COMPLETED",
-        "APPROVED",
-        "REJECTED",
-      ];
-      return scheduledStatuses.includes(s.status || "");
-    });
-  };
-
-  // ✅ VERTICAL LIST ROW COMPONENT - Responses (One Per Row)
+  // ✅ VERTICAL LIST ROW COMPONENT - Responses
   const renderResponseVerticalItem = (item: Response) => {
     const answers =
       typeof item.answers === "string"
@@ -278,27 +211,13 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
               <Icon name="eye" size={16} color="#6B7280" />
               <Text style={styles.verticalActionText}>View</Text>
             </TouchableOpacity>
-            {/* {item.status === "SUBMITTED" && (
-              <TouchableOpacity
-                style={[
-                  styles.verticalActionButton,
-                  styles.verticalReviewButton,
-                ]}
-                onPress={() => onReviewResponse(item)}
-              >
-                <Icon name="check" size={16} color="#FFFFFF" />
-                <Text style={[styles.verticalActionText, { color: "#FFFFFF" }]}>
-                  Review
-                </Text>
-              </TouchableOpacity>
-            )} */}
           </View>
         </View>
       </View>
     );
   };
 
-  // ✅ VERTICAL LIST ROW COMPONENT - NCRs (One Per Row)
+  // ✅ VERTICAL LIST ROW COMPONENT - NCRs
   const renderNCRVerticalItem = (item: NCR) => {
     const severityColors = getSeverityBadge(item.severity);
     const statusColors = getStatusBadge(item.status);
@@ -351,7 +270,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
               style={styles.verticalActionButton}
               onPress={() => {
                 onViewNCR(item);
-                setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
+                setSelectedNcrId(item.id);
               }}
             >
               <Icon name="eye" size={16} color="#1D4ED8" />
@@ -412,19 +331,6 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             <Icon name="eye" size={14} color="#6B7280" />
             <Text style={styles.responseActionText}>View</Text>
           </TouchableOpacity>
-          {/* {item.status === "SUBMITTED" && (
-            <TouchableOpacity
-              style={[styles.responseActionButton, styles.reviewButton]}
-              onPress={() => onReviewResponse(item)}
-            >
-              <Icon name="check" size={14} color="#FFFFFF" />
-              <Text
-                style={[styles.responseActionText, styles.reviewButtonText]}
-              >
-                Review
-              </Text>
-            </TouchableOpacity>
-          )} */}
         </View>
       </View>
     );
@@ -480,7 +386,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             style={styles.ncrActionButton}
             onPress={() => {
               onViewNCR(item);
-              setSelectedNcrId(item.id); // ✅ Triggers the NCRViewManager
+              setSelectedNcrId(item.id);
             }}
           >
             <Icon name="eye" size={14} color="#1D4ED8" />
@@ -491,7 +397,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   };
 
-  // ✅ NCR PREVIEW (Form7 / Form8 / NCR2 via the common manager)
+  // ✅ NCR PREVIEW
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -504,7 +410,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
     );
   }
 
-  // ✅ CHECK SHEET REPORT PREVIEW (5S / IATF / Manufacturing)
+  // ✅ CHECK SHEET REPORT PREVIEW
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -531,425 +437,10 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
   }
 
   // ============================================================
-  // AUDITS TAB
+  // ✅ MERGED TAB: CheckSheets + NCRs
   // ============================================================
-  if (activeTab === "audits") {
-    const scheduledAudits = getFilteredSchedules();
-
-    return (
-      <View style={styles.tabContainer}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Icon
-              name="search"
-              size={20}
-              color="#9CA3AF"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search audits by department or auditee..."
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-        </View>
-
-        {scheduledAudits.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="calendar" size={40} color="#CBD5E1" />
-            <Text style={styles.emptyStateTitle}>No Scheduled Audits</Text>
-            <Text style={styles.emptyStateText}>
-              {searchTerm
-                ? `No scheduled audits match "${searchTerm}"`
-                : "No audits have been scheduled"}
-            </Text>
-          </View>
-        ) : (
-          <Card>
-            {isMobile ? (
-              <View style={styles.mobileTableContainer}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={true}
-                  contentContainerStyle={styles.mobileTableContent}
-                >
-                  <View style={styles.mobileTableWrapper}>
-                    {/* Header */}
-                    <View style={styles.mobileTableHeader}>
-                      <Text
-                        style={[styles.mobileHeaderCell, styles.mobileDeptCell]}
-                      >
-                        DEPARTMENT
-                      </Text>
-                      <Text
-                        style={[
-                          styles.mobileHeaderCell,
-                          styles.mobileAuditorCell,
-                        ]}
-                      >
-                        AUDITOR(S)
-                      </Text>
-                      <Text
-                        style={[
-                          styles.mobileHeaderCell,
-                          styles.mobileAuditeeCell,
-                        ]}
-                      >
-                        AUDITEE
-                      </Text>
-                      <Text
-                        style={[styles.mobileHeaderCell, styles.mobileDateCell]}
-                      >
-                        DATE & TIME
-                      </Text>
-                      <Text
-                        style={[
-                          styles.mobileHeaderCell,
-                          styles.mobileStatusCell,
-                        ]}
-                      >
-                        STATUS
-                      </Text>
-                      <Text
-                        style={[
-                          styles.mobileHeaderCell,
-                          styles.mobileOverdueCell,
-                        ]}
-                      >
-                        OVERDUE
-                      </Text>
-                    </View>
-
-                    {/* Rows */}
-                    {scheduledAudits.map((s) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      let isOverdue = false;
-                      if (
-                        s.scheduledDate &&
-                        s.status !== "COMPLETED" &&
-                        s.status !== "APPROVED" &&
-                        s.status !== "REJECTED"
-                      ) {
-                        const scheduledDate = new Date(s.scheduledDate);
-                        scheduledDate.setHours(0, 0, 0, 0);
-                        isOverdue = scheduledDate < today;
-                      }
-                      const statusColors = getStatusBadge(s.status);
-                      const primaryAuditorName = getAuditorName(s.auditorId);
-                      const leadAuditorName = s.leadAuditorName;
-                      let auditorDisplay = primaryAuditorName;
-                      if (
-                        leadAuditorName &&
-                        leadAuditorName !== primaryAuditorName
-                      ) {
-                        auditorDisplay += ` (Lead: ${leadAuditorName})`;
-                      }
-                      const formatDateTime = () => {
-                        if (!s.scheduledDate) return "Not Scheduled";
-                        const date = format(
-                          new Date(s.scheduledDate),
-                          "dd MMM yyyy",
-                        );
-                        if (s.startTime && s.endTime)
-                          return `${date}\n${s.startTime} - ${s.endTime}`;
-                        return date;
-                      };
-
-                      return (
-                        <View key={String(s.id)} style={styles.mobileTableRow}>
-                          <View
-                            style={[styles.mobileCell, styles.mobileDeptCell]}
-                          >
-                            <Text
-                              style={styles.mobileCellText}
-                              numberOfLines={2}
-                            >
-                              {s.department || "N/A"}
-                            </Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.mobileCell,
-                              styles.mobileAuditorCell,
-                            ]}
-                          >
-                            <Text
-                              style={styles.mobileCellText}
-                              numberOfLines={2}
-                            >
-                              {auditorDisplay}
-                            </Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.mobileCell,
-                              styles.mobileAuditeeCell,
-                            ]}
-                          >
-                            <Text
-                              style={styles.mobileCellText}
-                              numberOfLines={2}
-                            >
-                              {s.auditeeName || "N/A"}
-                            </Text>
-                          </View>
-                          <View
-                            style={[styles.mobileCell, styles.mobileDateCell]}
-                          >
-                            <Text
-                              style={styles.mobileCellText}
-                              numberOfLines={3}
-                            >
-                              {formatDateTime()}
-                            </Text>
-                          </View>
-                          <View
-                            style={[styles.mobileCell, styles.mobileStatusCell]}
-                          >
-                            <View
-                              style={[
-                                styles.mobileBadge,
-                                { backgroundColor: statusColors.bg },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.mobileBadgeText,
-                                  { color: statusColors.text },
-                                ]}
-                              >
-                                {s.status || "DRAFT"}
-                              </Text>
-                            </View>
-                          </View>
-                          <View
-                            style={[
-                              styles.mobileCell,
-                              styles.mobileOverdueCell,
-                            ]}
-                          >
-                            {isOverdue ? (
-                              <View
-                                style={[
-                                  styles.mobileBadge,
-                                  styles.mobileOverdueBadge,
-                                ]}
-                              >
-                                <Icon
-                                  name="alert-circle"
-                                  size={12}
-                                  color="#FFFFFF"
-                                />
-                                <Text style={styles.mobileOverdueText}>
-                                  Overdue
-                                </Text>
-                              </View>
-                            ) : (
-                              <Text style={styles.mobileDashText}>—</Text>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-            ) : (
-              <View>
-                <View style={styles.tableHeaderDesktop}>
-                  <Text
-                    style={[styles.headerCellDesktop, styles.deptCellDesktop]}
-                  >
-                    Department
-                  </Text>
-                  <Text
-                    style={[
-                      styles.headerCellDesktop,
-                      styles.auditorCellDesktop,
-                    ]}
-                  >
-                    Auditor(s)
-                  </Text>
-                  <Text
-                    style={[
-                      styles.headerCellDesktop,
-                      styles.auditeeCellDesktop,
-                    ]}
-                  >
-                    Auditee
-                  </Text>
-                  <Text
-                    style={[styles.headerCellDesktop, styles.dateCellDesktop]}
-                  >
-                    Date & Time
-                  </Text>
-                  <Text
-                    style={[styles.headerCellDesktop, styles.statusCellDesktop]}
-                  >
-                    Status
-                  </Text>
-                  <Text
-                    style={[
-                      styles.headerCellDesktop,
-                      styles.overdueCellDesktop,
-                    ]}
-                  >
-                    Overdue
-                  </Text>
-                </View>
-
-                {scheduledAudits.map((s) => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  let isOverdue = false;
-                  if (
-                    s.scheduledDate &&
-                    s.status !== "COMPLETED" &&
-                    s.status !== "APPROVED" &&
-                    s.status !== "REJECTED"
-                  ) {
-                    const scheduledDate = new Date(s.scheduledDate);
-                    scheduledDate.setHours(0, 0, 0, 0);
-                    isOverdue = scheduledDate < today;
-                  }
-                  const statusColors = getStatusBadge(s.status);
-                  const primaryAuditorName = getAuditorName(s.auditorId);
-                  const leadAuditorName = s.leadAuditorName;
-                  let auditorDisplay = primaryAuditorName;
-                  if (
-                    leadAuditorName &&
-                    leadAuditorName !== primaryAuditorName
-                  ) {
-                    auditorDisplay += ` (Lead: ${leadAuditorName})`;
-                  }
-                  const formatDateTime = () => {
-                    if (!s.scheduledDate) return "Not Scheduled";
-                    const date = format(
-                      new Date(s.scheduledDate),
-                      "dd MMM yyyy",
-                    );
-                    if (s.startTime && s.endTime)
-                      return `${date}  •  ${s.startTime} - ${s.endTime}`;
-                    return date;
-                  };
-
-                  return (
-                    <View key={String(s.id)} style={styles.tableRowDesktop}>
-                      <Text
-                        style={[
-                          styles.tableCellDesktop,
-                          styles.deptCellDesktop,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {s.department || "N/A"}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tableCellDesktop,
-                          styles.auditorCellDesktop,
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {auditorDisplay}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tableCellDesktop,
-                          styles.auditeeCellDesktop,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {s.auditeeName || "N/A"}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.tableCellDesktop,
-                          styles.dateCellDesktop,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {formatDateTime()}
-                      </Text>
-                      <View style={[styles.statusCellDesktop]}>
-                        <View
-                          style={[
-                            styles.badge,
-                            {
-                              backgroundColor: statusColors.bg,
-                              paddingHorizontal: 10,
-                              paddingVertical: 4,
-                              borderRadius: 6,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.badgeText,
-                              {
-                                color: statusColors.text,
-                                fontSize: 11,
-                                fontWeight: "600",
-                              },
-                            ]}
-                          >
-                            {s.status || "DRAFT"}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={[styles.overdueCellDesktop]}>
-                        {isOverdue ? (
-                          <View
-                            style={[
-                              styles.badge,
-                              styles.overdueBadge,
-                              {
-                                paddingHorizontal: 10,
-                                paddingVertical: 4,
-                                borderRadius: 6,
-                              },
-                            ]}
-                          >
-                            <Icon
-                              name="alert-circle"
-                              size={12}
-                              color="#FFFFFF"
-                            />
-                            <Text
-                              style={[styles.overdueText, { fontSize: 11 }]}
-                            >
-                              Overdue
-                            </Text>
-                          </View>
-                        ) : (
-                          <Text
-                            style={[
-                              styles.dashText,
-                              { fontSize: 16, color: "#CBD5E1" },
-                            ]}
-                          >
-                            —
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </Card>
-        )}
-      </View>
-    );
-  }
-
-  // ============================================================
-  // RESPONSES TAB
-  // ============================================================
-  if (activeTab === "responses") {
+  if (activeTab === "checksheets-ncrs") {
+    // Filter responses
     const filteredResponses = allResponses.filter((r) => {
       if (!searchTerm) return true;
       const answers =
@@ -963,130 +454,7 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       );
     });
 
-    return (
-      <View style={styles.tabContainer}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Icon
-              name="search"
-              size={20}
-              color="#9CA3AF"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search responses..."
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-          <View style={styles.viewToggle}>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                responseViewMode === "grid" && styles.toggleActive,
-              ]}
-              onPress={() => setResponseViewMode("grid")}
-            >
-              <Icon
-                name="grid"
-                size={16}
-                color={responseViewMode === "grid" ? "#FFFFFF" : "#6B7280"}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                responseViewMode === "list" && styles.toggleActive,
-              ]}
-              onPress={() => setResponseViewMode("list")}
-            >
-              <Icon
-                name="list"
-                size={16}
-                color={responseViewMode === "list" ? "#FFFFFF" : "#6B7280"}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statCardSmall}>
-            <Text style={styles.statCardValue}>{allResponses.length}</Text>
-            <Text style={styles.statCardLabel}>Total</Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#D1FAE5" }]}>
-            <Text style={[styles.statCardValue, { color: "#059669" }]}>
-              {stats.responsesApproved}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#059669" }]}>
-              APPROVED
-            </Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}>
-            <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
-              {stats.responsesRejected}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
-              REJECTED
-            </Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[styles.statCardValue, { color: "#D97706" }]}>
-              {stats.responsesSubmitted}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
-              SUBMITTED
-            </Text>
-          </View>
-        </View>
-
-        {filteredResponses.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="file-text" size={40} color="#CBD5E1" />
-            <Text style={styles.emptyStateTitle}>No responses found</Text>
-            <Text style={styles.emptyStateText}>
-              No check sheet responses match your search
-            </Text>
-          </View>
-        ) : responseViewMode === "grid" ? (
-          <View style={styles.gridContainer}>
-            {filteredResponses.map((item) => (
-              <View
-                key={String(item.id)}
-                style={
-                  isMobile
-                    ? { width: "100%" }
-                    : { flexBasis: "31%", maxWidth: "32%", flexGrow: 0 }
-                }
-              >
-                {renderResponseCard(item)}
-              </View>
-            ))}
-          </View>
-        ) : (
-          /* ✅ LIST VIEW - VERTICAL SCROLL (One Item Per Row) */
-          <ScrollView
-            style={styles.verticalListContainer}
-            showsVerticalScrollIndicator={true}
-            contentContainerStyle={styles.verticalListContent}
-          >
-            {filteredResponses.map((item) => (
-              <View key={String(item.id)} style={styles.verticalItemWrapper}>
-                {renderResponseVerticalItem(item)}
-              </View>
-            ))}
-          </ScrollView>
-        )}
-      </View>
-    );
-  }
-
-  // ============================================================
-  // NCRS TAB
-  // ============================================================
-  if (activeTab === "ncrs") {
+    // Filter NCRs
     const filteredNCRs = allNCRs.filter((n) => {
       if (!searchTerm) return true;
       return (
@@ -1096,18 +464,55 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
       );
     });
 
-    const criticalCount = allNCRs.filter(
-      (n) => n.severity === "CRITICAL",
-    ).length;
-    const majorCount = allNCRs.filter((n) => n.severity === "MAJOR").length;
-    const minorCount = allNCRs.filter((n) => n.severity === "MINOR").length;
-    const openCount = allNCRs.filter(
-      (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
-    ).length;
-    const closedCount = allNCRs.filter((n) => n.status === "CLOSED").length;
-
     return (
       <View style={styles.tabContainer}>
+        {/* ✅ SUB-TAB SWITCHER */}
+        <View style={styles.subTabContainer}>
+          <TouchableOpacity
+            style={[
+              styles.subTabButton,
+              subTab === "checksheets" && styles.subTabActive,
+            ]}
+            onPress={() => setSubTab("checksheets")}
+          >
+            <Icon
+              name="file-text"
+              size={16}
+              color={subTab === "checksheets" ? "#FFFFFF" : "#6B7280"}
+            />
+            <Text
+              style={[
+                styles.subTabText,
+                subTab === "checksheets" && styles.subTabTextActive,
+              ]}
+            >
+              Check Sheets ({allResponses.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.subTabButton,
+              subTab === "ncrs" && styles.subTabActive,
+            ]}
+            onPress={() => setSubTab("ncrs")}
+          >
+            <Icon
+              name="alert-triangle"
+              size={16}
+              color={subTab === "ncrs" ? "#FFFFFF" : "#6B7280"}
+            />
+            <Text
+              style={[
+                styles.subTabText,
+                subTab === "ncrs" && styles.subTabTextActive,
+              ]}
+            >
+              NCRs ({allNCRs.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search & View Toggle */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
             <Icon
@@ -1118,7 +523,11 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search NCRs..."
+              placeholder={
+                subTab === "checksheets"
+                  ? "Search check sheets..."
+                  : "Search NCRs..."
+              }
               value={searchTerm}
               onChangeText={setSearchTerm}
               placeholderTextColor="#9CA3AF"
@@ -1128,97 +537,188 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             <TouchableOpacity
               style={[
                 styles.toggleButton,
-                ncrViewMode === "grid" && styles.toggleActive,
+                (subTab === "checksheets" ? responseViewMode : ncrViewMode) ===
+                  "grid" && styles.toggleActive,
               ]}
-              onPress={() => setNcrViewMode("grid")}
+              onPress={() =>
+                subTab === "checksheets"
+                  ? setResponseViewMode("grid")
+                  : setNcrViewMode("grid")
+              }
             >
               <Icon
                 name="grid"
                 size={16}
-                color={ncrViewMode === "grid" ? "#FFFFFF" : "#6B7280"}
+                color={
+                  (subTab === "checksheets"
+                    ? responseViewMode
+                    : ncrViewMode) === "grid"
+                    ? "#FFFFFF"
+                    : "#6B7280"
+                }
               />
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.toggleButton,
-                ncrViewMode === "list" && styles.toggleActive,
+                (subTab === "checksheets" ? responseViewMode : ncrViewMode) ===
+                  "list" && styles.toggleActive,
               ]}
-              onPress={() => setNcrViewMode("list")}
+              onPress={() =>
+                subTab === "checksheets"
+                  ? setResponseViewMode("list")
+                  : setNcrViewMode("list")
+              }
             >
               <Icon
                 name="list"
                 size={16}
-                color={ncrViewMode === "list" ? "#FFFFFF" : "#6B7280"}
+                color={
+                  (subTab === "checksheets"
+                    ? responseViewMode
+                    : ncrViewMode) === "list"
+                    ? "#FFFFFF"
+                    : "#6B7280"
+                }
               />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FFFFFF" }]}>
-            <Text style={styles.statCardValue}>{allNCRs.length}</Text>
-            <Text style={styles.statCardLabel}>Total NCRs</Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}>
-            <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
-              {criticalCount}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
-              Critical
-            </Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FFEDD5" }]}>
-            <Text style={[styles.statCardValue, { color: "#EA580C" }]}>
-              {majorCount}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#EA580C" }]}>
-              Major
-            </Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[styles.statCardValue, { color: "#D97706" }]}>
-              {minorCount}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
-              Minor
-            </Text>
-          </View>
-          <View style={[styles.statCardSmall, { backgroundColor: "#EDE9FE" }]}>
-            <Text style={[styles.statCardValue, { color: "#7C3AED" }]}>
-              {openCount}
-            </Text>
-            <Text style={[styles.statCardLabel, { color: "#7C3AED" }]}>
-              Open / In Progress
-            </Text>
-          </View>
-        </View>
-
-        {allNCRs.length > 0 && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressLabel}>Closure Progress</Text>
-              <Text style={styles.progressPercent}>
-                {Math.round((closedCount / allNCRs.length) * 100)}% Closed
+        {/* Stats Grid */}
+        {subTab === "checksheets" ? (
+          <View style={styles.statsGrid}>
+            <View style={styles.statCardSmall}>
+              <Text style={styles.statCardValue}>{allResponses.length}</Text>
+              <Text style={styles.statCardLabel}>Total</Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#D1FAE5" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#059669" }]}>
+                {stats.responsesApproved}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#059669" }]}>
+                APPROVED
               </Text>
             </View>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${(closedCount / allNCRs.length) * 100}%` },
-                ]}
-              />
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
+                {stats.responsesRejected}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
+                REJECTED
+              </Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#D97706" }]}>
+                {stats.responsesSubmitted}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
+                SUBMITTED
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.statsGrid}>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FFFFFF" }]}
+            >
+              <Text style={styles.statCardValue}>{allNCRs.length}</Text>
+              <Text style={styles.statCardLabel}>Total NCRs</Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FEE2E2" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#DC2626" }]}>
+                {stats.criticalNCRs}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#DC2626" }]}>
+                Critical
+              </Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FFEDD5" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#EA580C" }]}>
+                {stats.majorNCRs}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#EA580C" }]}>
+                Major
+              </Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#FEF3C7" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#D97706" }]}>
+                {stats.minorNCRs}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#D97706" }]}>
+                Minor
+              </Text>
+            </View>
+            <View
+              style={[styles.statCardSmall, { backgroundColor: "#EDE9FE" }]}
+            >
+              <Text style={[styles.statCardValue, { color: "#7C3AED" }]}>
+                {stats.openNCRs}
+              </Text>
+              <Text style={[styles.statCardLabel, { color: "#7C3AED" }]}>
+                Open
+              </Text>
             </View>
           </View>
         )}
 
-        {filteredNCRs.length === 0 ? (
+        {/* Content */}
+        {subTab === "checksheets" ? (
+          filteredResponses.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Icon name="file-text" size={40} color="#CBD5E1" />
+              <Text style={styles.emptyStateTitle}>No check sheets found</Text>
+              <Text style={styles.emptyStateText}>
+                No check sheet responses match your search
+              </Text>
+            </View>
+          ) : responseViewMode === "grid" ? (
+            <View style={styles.gridContainer}>
+              {filteredResponses.map((item) => (
+                <View
+                  key={String(item.id)}
+                  style={
+                    isMobile
+                      ? { width: "100%" }
+                      : { flexBasis: "31%", maxWidth: "32%", flexGrow: 0 }
+                  }
+                >
+                  {renderResponseCard(item)}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.verticalListContainer}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={styles.verticalListContent}
+            >
+              {filteredResponses.map((item) => (
+                <View key={String(item.id)} style={styles.verticalItemWrapper}>
+                  {renderResponseVerticalItem(item)}
+                </View>
+              ))}
+            </ScrollView>
+          )
+        ) : filteredNCRs.length === 0 ? (
           <View style={styles.emptyState}>
             <Icon name="alert-triangle" size={40} color="#CBD5E1" />
             <Text style={styles.emptyStateTitle}>No NCRs found</Text>
             <Text style={styles.emptyStateText}>
               {leadAuditorDepartment
-                ? `No non-conformity reports found for ${leadAuditorDepartment} department`
+                ? `No non-conformity reports found for ${leadAuditorDepartment} plant`
                 : "No non-conformity reports match your search"}
             </Text>
           </View>
@@ -1238,7 +738,6 @@ const AuditsAndResponses: React.FC<AuditsAndResponsesProps> = ({
             ))}
           </View>
         ) : (
-          /* ✅ LIST VIEW - VERTICAL SCROLL (One Item Per Row) */
           <ScrollView
             style={styles.verticalListContainer}
             showsVerticalScrollIndicator={true}
@@ -1271,6 +770,39 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     borderRadius: 16,
     overflow: "hidden",
+  },
+
+  // ============================================================================
+  // SUB-TAB STYLES
+  // ============================================================================
+  subTabContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  subTabButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  subTabActive: {
+    backgroundColor: NAVBAR_COLORS.primary,
+  },
+  subTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  subTabTextActive: {
+    color: "#FFFFFF",
   },
 
   // ============================================================================
@@ -1345,81 +877,6 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // TABLE STYLES (Mobile)
-  // ============================================================================
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#F9FAFB",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    paddingVertical: 8,
-  },
-  headerCell: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#6B7280",
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  tableCell: {
-    fontSize: 11,
-    color: "#1F2937",
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-  },
-  deptCell: { width: isMobile ? 60 : 80 },
-  auditorCell: { width: isMobile ? 80 : 100 },
-  auditeeCell: { width: isMobile ? 60 : 80 },
-  dateCell: { width: isMobile ? 80 : 120 },
-  statusCell: { width: isMobile ? 60 : 80 },
-  overdueCell: { width: isMobile ? 50 : 60 },
-
-  // ============================================================================
-  // TABLE STYLES (Desktop)
-  // ============================================================================
-  tableHeaderDesktop: {
-    flexDirection: "row",
-    backgroundColor: "#F8FAFC",
-    borderBottomWidth: 2,
-    borderBottomColor: "#E2E8F0",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-  },
-  headerCellDesktop: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  tableRowDesktop: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: "center",
-  },
-  tableCellDesktop: {
-    fontSize: 14,
-    color: "#334155",
-    fontWeight: "500",
-  },
-  deptCellDesktop: { flex: 2 },
-  auditorCellDesktop: { flex: 2.5 },
-  auditeeCellDesktop: { flex: 2 },
-  dateCellDesktop: { flex: 2.5 },
-  statusCellDesktop: { flex: 1.5, alignItems: "flex-start" },
-  overdueCellDesktop: { flex: 1.2, alignItems: "center" },
-
-  // ============================================================================
   // BADGE STYLES
   // ============================================================================
   badge: {
@@ -1434,17 +891,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 9,
     fontWeight: "500",
-  },
-  overdueBadge: {
-    backgroundColor: "#EF4444",
-  },
-  overdueText: {
-    fontSize: 9,
-    fontWeight: "500",
-    color: "#FFFFFF",
-  },
-  dashText: {
-    color: "#9CA3AF",
   },
 
   // ============================================================================
@@ -1548,13 +994,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
   },
-  reviewButton: {
-    backgroundColor: NAVBAR_COLORS.primary,
-    borderColor: NAVBAR_COLORS.primary,
-  },
-  reviewButtonText: {
-    color: "#FFFFFF",
-  },
 
   // ============================================================================
   // NCR CARD STYLES
@@ -1628,44 +1067,6 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // PROGRESS STYLES
-  // ============================================================================
-  progressContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  progressLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  progressPercent: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#10B981",
-    borderRadius: 4,
-  },
-
-  // ============================================================================
   // GRID STYLES
   // ============================================================================
   gridContainer: {
@@ -1675,7 +1076,7 @@ const styles = StyleSheet.create({
   },
 
   // ============================================================================
-  // VERTICAL LIST STYLES (One Item Per Row)
+  // VERTICAL LIST STYLES
   // ============================================================================
   verticalListContainer: {
     flex: 1,
@@ -1768,89 +1169,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#FFFFFF",
   },
-  verticalReviewButton: {
-    backgroundColor: NAVBAR_COLORS.primary,
-    borderColor: NAVBAR_COLORS.primary,
-  },
   verticalActionText: {
     fontSize: 11,
     color: "#6B7280",
-  },
-  
- mobileTableContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  mobileTableContent: {
-    minWidth: "100%",
-  },
-  mobileTableWrapper: {
-    minWidth: 700, // Ensures horizontal scroll on small screens
-  },
-  mobileTableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#F8FAFC",
-    borderBottomWidth: 2,
-    borderBottomColor: "#E2E8F0",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  mobileHeaderCell: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#64748B",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    paddingHorizontal: 6,
-  },
-  mobileTableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    backgroundColor: "#FFFFFF",
-  },
-  mobileCell: {
-    paddingHorizontal: 6,
-    justifyContent: "center",
-  },
-  mobileCellText: {
-    fontSize: 11,
-    color: "#334155",
-    lineHeight: 16,
-  },
-  mobileDeptCell: { width: 90 },
-  mobileAuditorCell: { width: 120 },
-  mobileAuditeeCell: { width: 100 },
-  mobileDateCell: { width: 130 },
-  mobileStatusCell: { width: 90, alignItems: "center" },
-  mobileOverdueCell: { width: 80, alignItems: "center" },
-  mobileBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
-  },
-  mobileBadgeText: {
-    fontSize: 9,
-    fontWeight: "600",
-  },
-  mobileOverdueBadge: {
-    backgroundColor: "#EF4444",
-  },
-  mobileOverdueText: {
-    fontSize: 9,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  mobileDashText: {
-    color: "#CBD5E1",
-    fontSize: 16,
   },
 });
 

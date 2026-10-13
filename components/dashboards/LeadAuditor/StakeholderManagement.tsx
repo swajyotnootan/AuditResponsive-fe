@@ -1,7 +1,7 @@
 // app/components/dashboards/LeadAuditor/StakeholderManagement.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -16,43 +16,9 @@ import Icon from "react-native-vector-icons/Feather";
 import FiveSView from "../auditor/view/FiveSView";
 import IATFInternalView from "../auditor/view/IATFInternalView";
 import ManufacturingProcessView from "../auditor/view/ManufacturingProcessView";
-import NCRViewManager from "../auditor/view/NCRViewManager"; // Adjust path if needed
+import NCRViewManager from "../auditor/view/NCRViewManager";
 
-interface User {
-  id: string | number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: string;
-  username?: string;
-}
-
-interface Schedule {
-  id: string | number;
-  department?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-}
-
-interface Response {
-  id: string | number;
-  department?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-  status?: string;
-  percentageScore?: number;
-  answers?: any;
-}
-
-interface NCR {
-  id: string | number;
-  ncrNumber?: string;
-  department?: string;
-  severity?: string;
-  status?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-}
+import type { NCR, Response, Schedule, User } from "./types";
 
 interface StakeholderManagementProps {
   activeTab: string;
@@ -84,6 +50,16 @@ const Card: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <View style={styles.card}>{children}</View>
 );
 
+// ✅ Helper: get department string from User (handles both string and object)
+const getDepartmentString = (dept: any): string => {
+  if (!dept) return "";
+  if (typeof dept === "string") return dept;
+  if (typeof dept === "object") {
+    return dept.displayName || dept.name || "";
+  }
+  return "";
+};
+
 const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   activeTab,
   allAuditors,
@@ -96,6 +72,13 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
+  // ✅ SUB-TAB STATE for Auditors / Auditees
+  const [subTab, setSubTab] = useState<"auditors" | "auditees">("auditors");
+
+  // ✅ Department filter for Auditees
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("ALL");
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+
   const [showResponsesModal, setShowResponsesModal] = useState(false);
   const [showNCRsModal, setShowNCRsModal] = useState(false);
   const [selectedStakeholder, setSelectedStakeholder] = useState<User | null>(
@@ -124,11 +107,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     }
   };
 
-  // ✅ Decides which report view to open for a given audit/response no.
   const detectReportType = (r: Response): AuditReportType => {
     const a = safeParseAnswers(r.answers);
 
-    // 1) If backend sends a type field, use it
     const raw = String(
       (r as any).auditType ||
         (r as any).templateType ||
@@ -145,14 +126,14 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
       return "MANUFACTURING";
     if (raw.includes("IATF")) return "IATF";
 
-    // 2) Fallback: detect from the answers payload shape
-    if (a.scores) return "5S"; // 5S stores numeric scores per question
+    if (a.scores) return "5S";
     if (a.partNumber || a.machine || a.wefDate || a.revNo || a.issueDate)
-      return "MANUFACTURING"; // manufacturing doc-control fields
+      return "MANUFACTURING";
     if (a.processName || a.responses || a.observations) return "IATF";
 
-    return "5S"; // default – change to your most common audit type
+    return "5S";
   };
+
   const getAuditorResponses = (auditorId: string | number) =>
     allResponses.filter((r) => r.auditorId === auditorId);
 
@@ -200,14 +181,14 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   };
 
   const getResponses = (id: string | number) => {
-    if (activeTab === "auditors") {
+    if (subTab === "auditors") {
       return getAuditorResponses(id);
     }
     return getAuditeeResponses(id);
   };
 
   const getNCRs = (id: string | number) => {
-    if (activeTab === "auditors") {
+    if (subTab === "auditors") {
       return getAuditorNCRs(id);
     }
     return getAuditeeNCRs(id);
@@ -238,9 +219,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     const responses = getResponses(item.id);
     const ncrs = getNCRs(item.id);
     const assignedAudits = allSchedules.filter((s) =>
-      activeTab === "auditors"
-        ? s.auditorId === item.id
-        : s.auditeeId === item.id,
+      subTab === "auditors" ? s.auditorId === item.id : s.auditeeId === item.id,
     ).length;
 
     const approvedResponses = responses.filter(
@@ -253,6 +232,8 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
       (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
     ).length;
     const closedNCRs = ncrs.filter((n) => n.status === "CLOSED").length;
+
+    const deptDisplay = getDepartmentString(item.department);
 
     return (
       <View key={String(item.id)} style={styles.stakeholderCard}>
@@ -271,6 +252,16 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
             <Text style={styles.stakeholderRole}>
               {item.role || "User"} • {item.email || "No email"}
             </Text>
+            {subTab === "auditees" && deptDisplay ? (
+              <View style={styles.deptBadge}>
+                <Icon
+                  name="briefcase"
+                  size={10}
+                  color={NAVBAR_COLORS.primary}
+                />
+                <Text style={styles.deptBadgeText}>{deptDisplay}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -377,7 +368,6 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               style={styles.modalItemViewButton}
               onPress={() => {
                 setShowResponsesModal(false);
-                // ✅ Open the correct report for this audit no.
                 setReportView({ type: detectReportType(r), id: r.id });
               }}
             >
@@ -435,8 +425,8 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
             <TouchableOpacity
               style={styles.modalItemViewButton}
               onPress={() => {
-                setShowNCRsModal(false); // 1. Close the NCR list modal
-                setSelectedNcrId(n.id); // 2. Open the detail view for this specific NCR ID
+                setShowNCRsModal(false);
+                setSelectedNcrId(n.id);
               }}
             >
               <Icon name="eye" size={12} color="#6B7280" />
@@ -448,14 +438,43 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     }
   };
 
-  const stakeholders =
-    activeTab === "auditors"
-      ? allAuditors.filter(
-          (a) =>
-            a.role !== "LEAD_AUDITOR" &&
-            !a.role?.toLowerCase().includes("lead"),
-        )
-      : allAuditees;
+  // ✅ Compute available departments + counts
+  const departmentOptions = useMemo(() => {
+    const map = new Map<string, number>();
+    allAuditees.forEach((a) => {
+      const dept = getDepartmentString(a.department);
+      if (dept) map.set(dept, (map.get(dept) || 0) + 1);
+    });
+    const sorted = Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }));
+    return [
+      { name: "ALL", label: "All Departments", count: allAuditees.length },
+      ...sorted.map((d) => ({
+        name: d.name,
+        label: d.name,
+        count: d.count,
+      })),
+    ];
+  }, [allAuditees]);
+
+  // ✅ Filter stakeholders based on subTab + department
+  const stakeholders = useMemo(() => {
+    if (subTab === "auditors") {
+      return allAuditors.filter(
+        (a) =>
+          a.role !== "LEAD_AUDITOR" && !a.role?.toLowerCase().includes("lead"),
+      );
+    }
+
+    if (selectedDepartment === "ALL") {
+      return allAuditees;
+    }
+
+    return allAuditees.filter(
+      (a) => getDepartmentString(a.department) === selectedDepartment,
+    );
+  }, [subTab, allAuditors, allAuditees, selectedDepartment]);
 
   const selectedResponses = selectedStakeholder
     ? getResponses(selectedStakeholder.id)
@@ -464,7 +483,12 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     ? getNCRs(selectedStakeholder.id)
     : [];
 
-  // ✅ FIX 1: NCR PREVIEW — rendered inline (NOT in a Modal) so the navbar stays visible
+  // Current label for the dropdown trigger
+  const currentDeptLabel =
+    departmentOptions.find((d) => d.name === selectedDepartment)?.label ||
+    "All Departments";
+
+  // ✅ NCR PREVIEW
   if (selectedNcrId) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -477,7 +501,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     );
   }
 
-  // ✅ FIX 2: CHECK SHEET REPORT PREVIEW — rendered inline (NOT in a Modal)
+  // ✅ CHECK SHEET REPORT PREVIEW
   if (reportView) {
     return (
       <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
@@ -505,27 +529,189 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* ✅ SUB-TAB SWITCHER */}
+      <View style={styles.subTabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.subTabButton,
+            subTab === "auditors" && styles.subTabActive,
+          ]}
+          onPress={() => {
+            setSubTab("auditors");
+            setSelectedDepartment("ALL");
+          }}
+        >
+          <Icon
+            name="users"
+            size={16}
+            color={subTab === "auditors" ? "#FFFFFF" : "#6B7280"}
+          />
+          <Text
+            style={[
+              styles.subTabText,
+              subTab === "auditors" && styles.subTabTextActive,
+            ]}
+          >
+            Auditors ({allAuditors.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.subTabButton,
+            subTab === "auditees" && styles.subTabActive,
+          ]}
+          onPress={() => setSubTab("auditees")}
+        >
+          <Icon
+            name="user-check"
+            size={16}
+            color={subTab === "auditees" ? "#FFFFFF" : "#6B7280"}
+          />
+          <Text
+            style={[
+              styles.subTabText,
+              subTab === "auditees" && styles.subTabTextActive,
+            ]}
+          >
+            Auditees ({allAuditees.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ✅ DEPARTMENT DROPDOWN — only visible on Auditees sub-tab */}
+      {subTab === "auditees" && (
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeader}>
+            <Icon name="filter" size={14} color={NAVBAR_COLORS.primary} />
+            <Text style={styles.filterLabel}>Filter by Department</Text>
+            <Text style={styles.filterCount}>{stakeholders.length} shown</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            onPress={() => setShowDeptDropdown(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.dropdownTriggerLeft}>
+              <Icon name="briefcase" size={14} color={NAVBAR_COLORS.primary} />
+              <Text style={styles.dropdownTriggerText}>{currentDeptLabel}</Text>
+            </View>
+            <Icon name="chevron-down" size={18} color={NAVBAR_COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.grid}>
         {stakeholders.length === 0 ? (
           <View style={styles.emptyState}>
             <Icon
-              name={activeTab === "auditors" ? "users" : "user-check"}
+              name={subTab === "auditors" ? "users" : "user-check"}
               size={40}
               color="#CBD5E1"
             />
             <Text style={styles.emptyStateTitle}>
-              No {activeTab === "auditors" ? "Auditors" : "Auditees"} Found
+              No {subTab === "auditors" ? "Auditors" : "Auditees"} Found
             </Text>
             <Text style={styles.emptyStateSubtext}>
-              {leadAuditorDepartment
-                ? `No ${activeTab === "auditors" ? "auditors" : "auditees"} found for ${leadAuditorDepartment} department`
-                : `No ${activeTab === "auditors" ? "auditors" : "auditees"} are currently registered`}
+              {subTab === "auditees" && selectedDepartment !== "ALL"
+                ? `No auditees found in ${selectedDepartment} department`
+                : leadAuditorDepartment
+                  ? `No ${subTab === "auditors" ? "auditors" : "auditees"} found for ${leadAuditorDepartment} plant`
+                  : `No ${subTab === "auditors" ? "auditors" : "auditees"} are currently registered`}
             </Text>
           </View>
         ) : (
           stakeholders.map((item) => renderStakeholderCard(item))
         )}
       </View>
+
+      {/* ✅ DEPARTMENT DROPDOWN MODAL */}
+      <Modal
+        visible={showDeptDropdown}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDeptDropdown(false)}
+      >
+        <TouchableOpacity
+          style={styles.dropdownOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDeptDropdown(false)}
+        >
+          <View
+            style={[styles.dropdownMenu, isMobile && styles.dropdownMenuMobile]}
+          >
+            {/* Header */}
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownHeaderTitle}>Select Department</Text>
+              <TouchableOpacity
+                onPress={() => setShowDeptDropdown(false)}
+                style={styles.dropdownCloseButton}
+              >
+                <Icon name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={{ maxHeight: height * 0.5 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {departmentOptions.map((option) => {
+                const isActive = selectedDepartment === option.name;
+                return (
+                  <TouchableOpacity
+                    key={option.name}
+                    style={[
+                      styles.dropdownItem,
+                      isActive && styles.dropdownItemActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedDepartment(option.name);
+                      setShowDeptDropdown(false);
+                    }}
+                  >
+                    <View style={styles.dropdownItemLeft}>
+                      {/* ✅ Checkbox-style indicator */}
+                      <View
+                        style={[
+                          styles.checkbox,
+                          isActive && styles.checkboxActive,
+                        ]}
+                      >
+                        {isActive && (
+                          <Icon name="check" size={12} color="#FFFFFF" />
+                        )}
+                      </View>
+                      <Text
+                        style={[
+                          styles.dropdownItemText,
+                          isActive && styles.dropdownItemTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.dropdownBadge,
+                        isActive && styles.dropdownBadgeActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownBadgeText,
+                          isActive && styles.dropdownBadgeTextActive,
+                        ]}
+                      >
+                        {option.count}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Responses Modal */}
       <Modal
@@ -586,18 +772,6 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                     {getSummary(selectedStakeholder.id).pending}
                   </Text>
                   <Text style={styles.modalStatLabel}>SUBMITTED</Text>
-                </View>
-                <View style={styles.modalStat}>
-                  <Text
-                    style={[
-                      styles.modalStatValue,
-                      { color: NAVBAR_COLORS.primary },
-                    ]}
-                  >
-                    {getSummary(selectedStakeholder.id).approvalRate.toFixed(1)}
-                    %
-                  </Text>
-                  <Text style={styles.modalStatLabel}>Approval Rate</Text>
                 </View>
               </View>
             )}
@@ -675,6 +849,207 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+
+  // ✅ SUB-TAB STYLES
+  subTabContainer: {
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  subTabButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  subTabActive: {
+    backgroundColor: NAVBAR_COLORS.primary,
+  },
+  subTabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+  },
+  subTabTextActive: {
+    color: "#FFFFFF",
+  },
+
+  // ✅ DEPARTMENT FILTER — dropdown styles
+  filterSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    marginBottom: 16,
+  },
+  filterHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
+  },
+  filterCount: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  dropdownTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dropdownTriggerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  dropdownTriggerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1E293B",
+  },
+
+  // ✅ DROPDOWN MODAL
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  dropdownMenu: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  dropdownMenuMobile: {
+    maxWidth: "100%",
+  },
+  dropdownHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  dropdownHeaderTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  dropdownCloseButton: {
+    padding: 4,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  dropdownItemActive: {
+    backgroundColor: NAVBAR_COLORS.bg,
+  },
+  dropdownItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  checkboxActive: {
+    backgroundColor: NAVBAR_COLORS.primary,
+    borderColor: NAVBAR_COLORS.primary,
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#334155",
+    flex: 1,
+  },
+  dropdownItemTextActive: {
+    color: NAVBAR_COLORS.primary,
+    fontWeight: "700",
+  },
+  dropdownBadge: {
+    minWidth: 32,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+  },
+  dropdownBadgeActive: {
+    backgroundColor: NAVBAR_COLORS.primary,
+  },
+  dropdownBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  dropdownBadgeTextActive: {
+    color: "#FFFFFF",
+  },
+
+  // ✅ DEPARTMENT BADGE (on card)
+  deptBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: NAVBAR_COLORS.bg,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  deptBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: NAVBAR_COLORS.primary,
+  },
+
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -688,7 +1063,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   stakeholderCard: {
-    // Changed from flex: 1 & minWidth to width to enforce strict 3 columns on desktop
     width: isMobile ? "100%" : "32%",
     backgroundColor: "#FFFFFF",
     borderWidth: 1,

@@ -1,37 +1,97 @@
 // app/(app)/_layout.tsx
-import { useAuth } from '@/components/context/AuthContext';
-import { useSidebar } from '@/components/context/SidebarContext';
-import Navbar from '@/components/Navbar';
-import SmartNavigator from '@/components/navigation/SmartNavigator';
-import { Redirect, Stack } from 'expo-router';
-import React, { useEffect } from 'react';
-import { ActivityIndicator, Dimensions, LogBox, Platform, TouchableOpacity, View } from 'react-native';
+import { useAuth } from "@/components/context/AuthContext";
+import { useSidebar } from "@/components/context/SidebarContext";
+import { TodayWorkPopup } from "@/components/context/TodayWorkPopup";
+import {
+  TodayWorkPopupProvider,
+  useTodayWorkPopup,
+} from "@/components/context/TodayWorkPopupContext";
+import Navbar from "@/components/Navbar";
+import SmartNavigator from "@/components/navigation/SmartNavigator";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Redirect, Stack } from "expo-router";
+import React, { useEffect, useRef } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  LogBox,
+  Platform,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-// ✅ Ignore specific warnings on Android
-if (Platform.OS === 'android') {
+if (Platform.OS === "android") {
   LogBox.ignoreLogs([
-    'ViewPropTypes will be removed',
-    'ColorPropType will be removed',
-    'Require cycle:',
+    "ViewPropTypes will be removed",
+    "ColorPropType will be removed",
+    "Require cycle:",
   ]);
 }
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function AppLayout() {
+  return (
+    <TodayWorkPopupProvider>
+      <AppLayoutInner />
+    </TodayWorkPopupProvider>
+  );
+}
+
+function AppLayoutInner() {
   const { user, loading } = useAuth();
   const { isOpen: drawerVisible, toggleSidebar, closeSidebar } = useSidebar();
+  const { openOncePerDay } = useTodayWorkPopup();
 
-  // ✅ Android crash prevention - only render if user exists
+  // ✅ Track which user we've already tried to auto-open for
+  const lastUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      console.log('📱 AppLayout mounted on Android');
+    if (Platform.OS === "android") {
+      console.log("📱 AppLayout mounted on Android");
     }
   }, []);
 
+  useEffect(() => {
+    if (!user || !user.id) return;
+
+    const currentUserId = String(user.id);
+
+    // ✅ Only run once per user session (not per app session)
+    if (lastUserIdRef.current === currentUserId) return;
+
+    const checkAutoOpen = async () => {
+      try {
+        // Small delay ensures login page has finished writing the flag
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        const flag = await AsyncStorage.getItem("@today_popup_auto_open");
+        if (flag === "true") {
+          await AsyncStorage.removeItem("@today_popup_auto_open");
+          // 5-second auto-close
+          await openOncePerDay(currentUserId, 10000);
+        }
+      } catch (e) {
+        console.warn("Failed to check auto-open flag:", e);
+      } finally {
+        // ✅ Remember we checked for this user
+        lastUserIdRef.current = currentUserId;
+      }
+    };
+
+    checkAutoOpen();
+  }, [user, openOncePerDay]);
+
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#fff",
+        }}
+      >
         <ActivityIndicator size="large" color="#5B4E97" />
       </View>
     );
@@ -43,14 +103,11 @@ export default function AppLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* ✅ Navbar has higher zIndex, stays on top */}
       <View style={{ zIndex: 10, elevation: 10 }}>
         <Navbar onMenuPress={toggleSidebar} />
       </View>
 
-      {/* Content area with drawer */}
       <View style={{ flex: 1 }}>
-        {/* ✅ Drawer inside content - starts below Navbar */}
         {drawerVisible && (
           <View
             style={{
@@ -63,7 +120,6 @@ export default function AppLayout() {
               flexDirection: "row",
             }}
           >
-            {/* ✅ FIXED: Exact width match with SmartNavigator (256) */}
             <View
               style={{
                 width: 256,
@@ -79,7 +135,6 @@ export default function AppLayout() {
               <SmartNavigator type="drawer" onClose={closeSidebar} />
             </View>
 
-            {/* Overlay */}
             <TouchableOpacity
               style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
               activeOpacity={1}
@@ -92,6 +147,8 @@ export default function AppLayout() {
           <Stack.Screen name="(tabs)" />
         </Stack>
       </View>
+
+      <TodayWorkPopup />
     </View>
   );
 }

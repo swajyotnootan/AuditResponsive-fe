@@ -1,45 +1,45 @@
 // services/api.ts
 
-import { API_BASE_URL } from '@/config/apiConfig';
-import { LoginResponse, User } from '@/types/user';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { API_BASE_URL } from "@/config/apiConfig";
+import { LoginResponse, User } from "@/types/user";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 // ============================================
 // ✅ ROLE DEFINITIONS
 // ============================================
 
 export const ROLES = {
-  MASTER: 'MASTER',
-  AUDIT_MANAGER: 'AUDIT_MANAGER',
-  LEAD_AUDITOR: 'LEAD_AUDITOR',
-  AUDITOR: 'AUDITOR',
-  HOD: 'HOD',
-  AUDITEE: 'AUDITEE',
-  INITIATOR: 'INITIATOR',
-  HR_ADMIN: 'HR_ADMIN',
-  TOP_MANAGEMENT: 'TOP_MANAGEMENT',
-  QMS_ADMIN: 'QMS_ADMIN',
+  MASTER: "MASTER",
+  AUDIT_MANAGER: "AUDIT_MANAGER",
+  LEAD_AUDITOR: "LEAD_AUDITOR",
+  AUDITOR: "AUDITOR",
+  HOD: "HOD",
+  AUDITEE: "AUDITEE",
+  INITIATOR: "INITIATOR",
+  HR_ADMIN: "HR_ADMIN",
+  TOP_MANAGEMENT: "TOP_MANAGEMENT",
+  QMS_ADMIN: "QMS_ADMIN",
 } as const;
 
-export type RoleType = typeof ROLES[keyof typeof ROLES];
+export type RoleType = (typeof ROLES)[keyof typeof ROLES];
 
 // ============================================
 // ✅ ROLE-TO-NAVIGATION MAPPING
 // ============================================
 
 export const roleNavigationMap: Record<RoleType, string> = {
-  MASTER: '/master-dashboard',
-  AUDIT_MANAGER: '/audit-manager',
-  LEAD_AUDITOR: '/lead-auditor',
-  AUDITOR: '/auditor',
-  HOD: '/hod',
-  AUDITEE: '/auditee',
-  INITIATOR: '/initiator',
-  HR_ADMIN: '/hr-admin',
-  TOP_MANAGEMENT: '/top-management',
-  QMS_ADMIN: '/qms-admin',
+  MASTER: "/master-dashboard",
+  AUDIT_MANAGER: "/audit-manager",
+  LEAD_AUDITOR: "/lead-auditor",
+  AUDITOR: "/auditor",
+  HOD: "/hod",
+  AUDITEE: "/auditee",
+  INITIATOR: "/initiator",
+  HR_ADMIN: "/hr-admin",
+  TOP_MANAGEMENT: "/top-management",
+  QMS_ADMIN: "/qms-admin",
 };
 
 // ============================================
@@ -47,16 +47,16 @@ export const roleNavigationMap: Record<RoleType, string> = {
 // ============================================
 
 export const roleLocationMap: Record<RoleType, string> = {
-  MASTER: 'Master Dashboard',
-  AUDIT_MANAGER: 'Audit Manager Dashboard',
-  LEAD_AUDITOR: 'Lead Auditor Dashboard',
-  AUDITOR: 'Auditor Dashboard',
-  HOD: 'HOD Dashboard',
-  AUDITEE: 'Auditee Dashboard',
-  INITIATOR: 'Initiator Dashboard',
-  HR_ADMIN: 'HR Admin Dashboard',
-  TOP_MANAGEMENT: 'Top Management Dashboard',
-  QMS_ADMIN: 'QMS Admin Dashboard',
+  MASTER: "Master Dashboard",
+  AUDIT_MANAGER: "Audit Manager Dashboard",
+  LEAD_AUDITOR: "Lead Auditor Dashboard",
+  AUDITOR: "Auditor Dashboard",
+  HOD: "HOD Dashboard",
+  AUDITEE: "Auditee Dashboard",
+  INITIATOR: "Initiator Dashboard",
+  HR_ADMIN: "HR Admin Dashboard",
+  TOP_MANAGEMENT: "Top Management Dashboard",
+  QMS_ADMIN: "QMS Admin Dashboard",
 };
 
 // ============================================
@@ -64,16 +64,16 @@ export const roleLocationMap: Record<RoleType, string> = {
 // ============================================
 
 export const roleKeywords: Record<RoleType, string[]> = {
-  MASTER: ['master', 'admin', 'system'],
-  AUDIT_MANAGER: ['manager', 'approval', 'audit manager'],
-  LEAD_AUDITOR: ['lead auditor', 'lead', 'auditor'],
-  AUDITOR: ['auditor', 'audit'],
-  HOD: ['hod', 'head of department', 'department head'],
-  AUDITEE: ['auditee', 'audit schedule'],
-  INITIATOR: ['initiator', 'form submission'],
-  HR_ADMIN: ['hr', 'human resources', 'admin'],
-  TOP_MANAGEMENT: ['top management', 'director', 'vp'],
-  QMS_ADMIN: ['qms', 'quality'],
+  MASTER: ["master", "admin", "system"],
+  AUDIT_MANAGER: ["manager", "approval", "audit manager"],
+  LEAD_AUDITOR: ["lead auditor", "lead", "auditor"],
+  AUDITOR: ["auditor", "audit"],
+  HOD: ["hod", "head of department", "department head"],
+  AUDITEE: ["auditee", "audit schedule"],
+  INITIATOR: ["initiator", "form submission"],
+  HR_ADMIN: ["hr", "human resources", "admin"],
+  TOP_MANAGEMENT: ["top management", "director", "vp"],
+  QMS_ADMIN: ["qms", "quality"],
 };
 
 // ============================================
@@ -100,12 +100,12 @@ export const detectTargetRole = (notification: any): RoleType | null => {
   }
 
   // 3. Detect from title
-  const title = notification.title?.toLowerCase() || '';
-  const message = notification.message?.toLowerCase() || '';
+  const title = notification.title?.toLowerCase() || "";
+  const message = notification.message?.toLowerCase() || "";
   const combined = `${title} ${message}`;
 
   for (const [role, keywords] of Object.entries(roleKeywords)) {
-    if (keywords.some(keyword => combined.includes(keyword))) {
+    if (keywords.some((keyword) => combined.includes(keyword))) {
       return role as RoleType;
     }
   }
@@ -146,7 +146,7 @@ export const notificationFilter = {
     // ✅ If notification has multiple target roles
     if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
       return notification.targetRoles.some(
-        (r: string) => r.toUpperCase().trim() === normalizedUserRole
+        (r: string) => r.toUpperCase().trim() === normalizedUserRole,
       );
     }
 
@@ -166,8 +166,8 @@ export const notificationFilter = {
   filterByRole: (notifications: any[], userRole: string | null): any[] => {
     if (!userRole || !notifications.length) return [];
 
-    return notifications.filter(notification => 
-      notificationFilter.isForRole(notification, userRole)
+    return notifications.filter((notification) =>
+      notificationFilter.isForRole(notification, userRole),
     );
   },
 
@@ -177,8 +177,8 @@ export const notificationFilter = {
   getUnreadCount: (notifications: any[], userRole: string | null): number => {
     if (!userRole || !notifications.length) return 0;
 
-    return notifications.filter(n => 
-      !n.read && notificationFilter.isForRole(n, userRole)
+    return notifications.filter(
+      (n) => !n.read && notificationFilter.isForRole(n, userRole),
     ).length;
   },
 
@@ -188,8 +188,9 @@ export const notificationFilter = {
   groupByRole: (notifications: any[]): Map<string, any[]> => {
     const grouped = new Map<string, any[]>();
 
-    notifications.forEach(notification => {
-      const role = notification.role || detectTargetRole(notification) || 'PUBLIC';
+    notifications.forEach((notification) => {
+      const role =
+        notification.role || detectTargetRole(notification) || "PUBLIC";
       if (!grouped.has(role)) {
         grouped.set(role, []);
       }
@@ -202,17 +203,22 @@ export const notificationFilter = {
   /**
    * Get notifications that are specifically for this role (not public)
    */
-  getSpecificForRole: (notifications: any[], userRole: string | null): any[] => {
+  getSpecificForRole: (
+    notifications: any[],
+    userRole: string | null,
+  ): any[] => {
     if (!userRole || !notifications.length) return [];
 
     const normalizedRole = userRole.toUpperCase().trim();
 
-    return notifications.filter(n => {
+    return notifications.filter((n) => {
       if (n.role) {
         return n.role.toUpperCase().trim() === normalizedRole;
       }
       if (n.targetRoles) {
-        return n.targetRoles.some((r: string) => r.toUpperCase().trim() === normalizedRole);
+        return n.targetRoles.some(
+          (r: string) => r.toUpperCase().trim() === normalizedRole,
+        );
       }
       return false;
     });
@@ -222,43 +228,73 @@ export const notificationFilter = {
    * Get public notifications (no role targeting)
    */
   getPublicNotifications: (notifications: any[]): any[] => {
-    return notifications.filter(n => !n.role && !n.targetRoles);
+    return notifications.filter((n) => !n.role && !n.targetRoles);
   },
 };
 
 // ─── API CLIENT ──────────────────────────────────────────────────────────────
 
+// ✅ Helper — read current user ID from storage
+const getCurrentUserId = async (): Promise<string | null> => {
+  try {
+    const raw = await AsyncStorage.getItem("user");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.id != null ? String(parsed.id) : null;
+  } catch {
+    return null;
+  }
+};
+
+const buildHeaders = async (
+  extra: Record<string, string> = {},
+): Promise<Record<string, string>> => {
+  const token = await AsyncStorage.getItem("authToken");
+  const userId = await getCurrentUserId();
+  return {
+    "Content-Type": "application/json",
+    "X-Timezone":
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+    ...(userId ? { "X-User-Id": userId } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+};
+
 export const apiClient = {
-  get: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
-    const token = await AsyncStorage.getItem('authToken');
+  get: async <T = any>(
+    endpoint: string,
+    params?: Record<string, any>,
+  ): Promise<T> => {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     if (params) {
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, params[key]),
+      );
     }
     const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
+      method: "GET",
+      headers: await buildHeaders(),
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
     return text ? JSON.parse(text) : ({} as T);
   },
 
-  post: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
-    const token = await AsyncStorage.getItem('authToken');
+  post: async <T = any>(
+    endpoint: string,
+    data?: any,
+    params?: Record<string, any>,
+  ): Promise<T> => {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     if (params) {
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, params[key]),
+      );
     }
     const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
+      method: "POST",
+      headers: await buildHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -266,12 +302,19 @@ export const apiClient = {
     return text ? JSON.parse(text) : ({} as T);
   },
 
-  postFormData: async <T = any>(endpoint: string, formData: any): Promise<T> => {
-    const token = await AsyncStorage.getItem('authToken');
+  postFormData: async <T = any>(
+    endpoint: string,
+    formData: any,
+  ): Promise<T> => {
+    const token = await AsyncStorage.getItem("authToken");
+    const userId = await getCurrentUserId();
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(userId ? { "X-User-Id": userId } : {}),
+        "X-Timezone":
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: formData,
     });
@@ -280,18 +323,20 @@ export const apiClient = {
     return text ? JSON.parse(text) : ({} as T);
   },
 
-  put: async <T = any>(endpoint: string, data?: any, params?: Record<string, any>): Promise<T> => {
-    const token = await AsyncStorage.getItem('authToken');
+  put: async <T = any>(
+    endpoint: string,
+    data?: any,
+    params?: Record<string, any>,
+  ): Promise<T> => {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     if (params) {
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, params[key]),
+      );
     }
     const response = await fetch(url.toString(), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
+      method: "PUT",
+      headers: await buildHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -299,34 +344,42 @@ export const apiClient = {
     return text ? JSON.parse(text) : ({} as T);
   },
 
-  delete: async <T = any>(endpoint: string, params?: Record<string, any>): Promise<T> => {
-    const token = await AsyncStorage.getItem('authToken');
+  delete: async <T = any>(
+    endpoint: string,
+    params?: Record<string, any>,
+  ): Promise<T> => {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     if (params) {
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, params[key]),
+      );
     }
     const response = await fetch(url.toString(), {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
+      method: "DELETE",
+      headers: await buildHeaders(),
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     const text = await response.text();
     return text ? JSON.parse(text) : ({} as T);
   },
 
-  downloadBlob: async (endpoint: string, params?: Record<string, any>): Promise<Blob> => {
-    const token = await AsyncStorage.getItem('authToken');
+  downloadBlob: async (
+    endpoint: string,
+    params?: Record<string, any>,
+  ): Promise<Blob> => {
+    const token = await AsyncStorage.getItem("authToken");
+    const userId = await getCurrentUserId();
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     if (params) {
-      Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+      Object.keys(params).forEach((key) =>
+        url.searchParams.append(key, params[key]),
+      );
     }
     const response = await fetch(url.toString(), {
-      method: 'GET',
+      method: "GET",
       headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(userId ? { "X-User-Id": userId } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -339,8 +392,8 @@ export const apiClient = {
 const getFileUri = (fileName: string): string => {
   // @ts-ignore
   const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-  if (!dir) throw new Error('No storage directory available');
-  const safeDir = dir.endsWith('/') ? dir : `${dir}/`;
+  if (!dir) throw new Error("No storage directory available");
+  const safeDir = dir.endsWith("/") ? dir : `${dir}/`;
   return `${safeDir}${fileName}`;
 };
 
@@ -349,7 +402,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      const base64 = result.split(',')[1];
+      const base64 = result.split(",")[1];
       resolve(base64);
     };
     reader.onerror = reject;
@@ -368,14 +421,14 @@ const downloadAndSharePDF = async (blob: Blob, fileName: string) => {
     });
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Share PDF',
-        UTI: 'com.adobe.pdf',
+        mimeType: "application/pdf",
+        dialogTitle: "Share PDF",
+        UTI: "com.adobe.pdf",
       });
     }
     return { success: true };
   } catch (error) {
-    console.error('Error downloading PDF:', error);
+    console.error("Error downloading PDF:", error);
     return { success: false, error: String(error) };
   }
 };
@@ -384,19 +437,23 @@ const downloadAndSharePDF = async (blob: Blob, fileName: string) => {
 
 const normalizeUser = (data: any): User => {
   return {
-    id: data.id || data.userId || '',
-    email: data.email || '',
-    firstName: data.firstName || data.first_name || data.name?.split(' ')[0] || 'User',
-    lastName: data.lastName || data.last_name || data.name?.split(' ')[1] || '',
-    name: data.name || `${data.firstName || 'User'} ${data.lastName || ''}`.trim(),
-    role: data.role || data.userRole || 'USER',
-    username: data.username || data.userName || data.email?.split('@')[0] || '',
-    phone: data.phone || data.mobile || '',
-    department: data.department || data.dept || '',
+    id: data.id || data.userId || "",
+    email: data.email || "",
+    firstName:
+      data.firstName || data.first_name || data.name?.split(" ")[0] || "User",
+    lastName: data.lastName || data.last_name || data.name?.split(" ")[1] || "",
+    name:
+      data.name || `${data.firstName || "User"} ${data.lastName || ""}`.trim(),
+    role: data.role || data.userRole || "USER",
+    username: data.username || data.userName || data.email?.split("@")[0] || "",
+    phone: data.phone || data.mobile || "",
+    department: data.department || data.dept || "",
     active: data.active ?? data.isActive ?? true,
     createdAt: data.createdAt || data.created_at || data.createdDate,
     updatedAt: data.updatedAt || data.updated_at || data.updatedDate,
     token: data.token || data.accessToken,
+    plantId: data.plantId || data.plant_id || null, // ✅ ADD
+    plantName: data.plantName || data.plant_name || null,
     ...data,
   };
 };
@@ -407,19 +464,19 @@ export const authAPI = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
     try {
       const form = new URLSearchParams();
-      form.append('username', username);
-      form.append('password', password);
+      form.append("username", username);
+      form.append("password", password);
 
       let response = await fetch(`${API_BASE_URL}/api/users/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: form.toString(),
       });
 
       if (!response.ok) {
         response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
         });
       }
@@ -429,9 +486,9 @@ export const authAPI = {
       }
 
       const data = await response.json();
-      
+
       const user = data.user ? normalizeUser(data.user) : normalizeUser(data);
-      
+
       return {
         success: true,
         token: data.token || data.accessToken,
@@ -439,27 +496,27 @@ export const authAPI = {
         ...data,
       };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       throw error;
     }
   },
 
   getCurrentUser: async (): Promise<User | null> => {
     try {
-      const data = await apiClient.get('/api/users/me');
+      const data = await apiClient.get("/api/users/me");
       if (!data) return null;
       return normalizeUser(data);
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error("Get current user error:", error);
       return null;
     }
   },
 
   logout: async (): Promise<void> => {
     try {
-      await apiClient.post('/api/auth/logout');
+      await apiClient.post("/api/auth/logout");
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   },
 };
@@ -468,7 +525,7 @@ export const authAPI = {
 
 export const userAPI = {
   create: async (userData: any): Promise<User> => {
-    const data = await apiClient.post('/api/users', userData);
+    const data = await apiClient.post("/api/users", userData);
     return normalizeUser(data);
   },
 
@@ -478,7 +535,7 @@ export const userAPI = {
   },
 
   getAll: async (): Promise<User[]> => {
-    const response = await apiClient.get('/api/users');
+    const response = await apiClient.get("/api/users");
     const users = Array.isArray(response) ? response : response?.data || [];
     return users.map((user: any) => normalizeUser(user));
   },
@@ -488,13 +545,13 @@ export const userAPI = {
   },
 
   getHODs: async (): Promise<User[]> => {
-    const response = await apiClient.get('/api/users/hods');
+    const response = await apiClient.get("/api/users/hods");
     const users = Array.isArray(response) ? response : response?.data || [];
     return users.map((user: any) => normalizeUser(user));
   },
 
   getAllAuditors: async (): Promise<User[]> => {
-    const response = await apiClient.get('/api/users/all-auditors');
+    const response = await apiClient.get("/api/users/all-auditors");
     const users = Array.isArray(response) ? response : response?.data || [];
     return users.map((user: any) => normalizeUser(user));
   },
@@ -543,13 +600,35 @@ export const userAPI = {
     const data = await apiClient.put(`/api/users/${id}/toggle-active`, {});
     return normalizeUser(data);
   },
+
+  getUsersByPlant: async (plantId: number | string): Promise<User[]> => {
+    const response = await apiClient.get(`/api/users/plant/${plantId}`);
+    const users = Array.isArray(response)
+      ? response
+      : (response as any)?.data || [];
+    return users.map((user: any) => normalizeUser(user));
+  },
+
+  /** ✅ Get users of a specific plant and role */
+  getUsersByPlantAndRole: async (
+    plantId: number | string,
+    role: string,
+  ): Promise<User[]> => {
+    const response = await apiClient.get(
+      `/api/users/plant/${plantId}/role/${role}`,
+    );
+    const users = Array.isArray(response)
+      ? response
+      : (response as any)?.data || [];
+    return users.map((user: any) => normalizeUser(user));
+  },
 };
 
 // ─── INSPECTION FORMS API ──────────────────────────────────────────────────
 
 export const inspectionFormAPI = {
   getAllForms: async () => {
-    return await apiClient.get('/api/inspection-forms');
+    return await apiClient.get("/api/inspection-forms");
   },
 
   getFormById: async (id: string) => {
@@ -565,7 +644,7 @@ export const inspectionFormAPI = {
   },
 
   createForm: async (formData: any) => {
-    return await apiClient.post('/api/inspection-forms', formData);
+    return await apiClient.post("/api/inspection-forms", formData);
   },
 
   updateForm: async (id: string, formData: any) => {
@@ -573,29 +652,46 @@ export const inspectionFormAPI = {
   },
 
   submitForm: async (id: string, submittedBy: string) => {
-    return await apiClient.post(`/api/inspection-forms/${id}/submit`, null, { submittedBy });
+    return await apiClient.post(`/api/inspection-forms/${id}/submit`, null, {
+      submittedBy,
+    });
   },
 
-  approveForm: async (id: string, reviewedBy: string, comments: string = '') => {
-    return await apiClient.post(`/api/inspection-forms/${id}/approve`, null, { reviewedBy, comments });
+  approveForm: async (
+    id: string,
+    reviewedBy: string,
+    comments: string = "",
+  ) => {
+    return await apiClient.post(`/api/inspection-forms/${id}/approve`, null, {
+      reviewedBy,
+      comments,
+    });
   },
 
   rejectForm: async (id: string, reviewedBy: string, comments: string) => {
-    return await apiClient.post(`/api/inspection-forms/${id}/reject`, null, { reviewedBy, comments });
+    return await apiClient.post(`/api/inspection-forms/${id}/reject`, null, {
+      reviewedBy,
+      comments,
+    });
   },
 
   downloadPdf: async (id: string, username: string) => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/inspection-forms/${id}/pdf/${username}`);
+      const blob = await apiClient.downloadBlob(
+        `/api/inspection-forms/${id}/pdf/${username}`,
+      );
       return await downloadAndSharePDF(blob, `inspection_form_${id}.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error("Error downloading PDF:", error);
       throw error;
     }
   },
 
   sendEmailWithPdf: async (id: string, emailData: any) => {
-    return await apiClient.post(`/api/inspection-forms/${id}/email-pdf`, emailData);
+    return await apiClient.post(
+      `/api/inspection-forms/${id}/email-pdf`,
+      emailData,
+    );
   },
 };
 
@@ -603,7 +699,7 @@ export const inspectionFormAPI = {
 
 export const printingInspectionAPI = {
   getAllReports: async () => {
-    return await apiClient.get('/api/printing-inspection');
+    return await apiClient.get("/api/printing-inspection");
   },
 
   getReportById: async (id: string) => {
@@ -611,11 +707,11 @@ export const printingInspectionAPI = {
   },
 
   getReportsByStatus: async (status: string) => {
-    return await apiClient.get('/api/printing-inspection/status', { status });
+    return await apiClient.get("/api/printing-inspection/status", { status });
   },
 
   createReport: async (reportData: any) => {
-    return await apiClient.post('/api/printing-inspection', reportData);
+    return await apiClient.post("/api/printing-inspection", reportData);
   },
 
   updateReport: async (id: string, reportData: any) => {
@@ -626,12 +722,16 @@ export const printingInspectionAPI = {
     return await apiClient.put(`/api/printing-inspection/submit/${id}`);
   },
 
-  approveReport: async (id: string, comments: string = '') => {
-    return await apiClient.put(`/api/printing-inspection/approve/${id}`, null, { comments });
+  approveReport: async (id: string, comments: string = "") => {
+    return await apiClient.put(`/api/printing-inspection/approve/${id}`, null, {
+      comments,
+    });
   },
 
   rejectReport: async (id: string, comments: string) => {
-    return await apiClient.put(`/api/printing-inspection/reject/${id}`, null, { comments });
+    return await apiClient.put(`/api/printing-inspection/reject/${id}`, null, {
+      comments,
+    });
   },
 
   deleteReport: async (id: string) => {
@@ -641,16 +741,18 @@ export const printingInspectionAPI = {
 
   downloadPdf: async (id: string) => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/printing-inspection/pdf/${id}`);
+      const blob = await apiClient.downloadBlob(
+        `/api/printing-inspection/pdf/${id}`,
+      );
       return await downloadAndSharePDF(blob, `inspection-report-${id}.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error("Error downloading PDF:", error);
       throw error;
     }
   },
 
   getReportSummary: async () => {
-    return await apiClient.get('/api/printing-inspection/summary');
+    return await apiClient.get("/api/printing-inspection/summary");
   },
 };
 
@@ -658,7 +760,7 @@ export const printingInspectionAPI = {
 
 export const lineClearanceAPI = {
   getAllForms: async () => {
-    return await apiClient.get('/api/line-clearance');
+    return await apiClient.get("/api/line-clearance");
   },
 
   getFormById: async (id: string) => {
@@ -674,7 +776,7 @@ export const lineClearanceAPI = {
   },
 
   createForm: async (formData: any) => {
-    return await apiClient.post('/api/line-clearance', formData);
+    return await apiClient.post("/api/line-clearance", formData);
   },
 
   updateForm: async (id: string, formData: any) => {
@@ -682,29 +784,46 @@ export const lineClearanceAPI = {
   },
 
   submitForm: async (id: string, submittedBy: string) => {
-    return await apiClient.post(`/api/line-clearance/${id}/submit`, null, { submittedBy });
+    return await apiClient.post(`/api/line-clearance/${id}/submit`, null, {
+      submittedBy,
+    });
   },
 
-  approveForm: async (id: string, reviewedBy: string, comments: string = '') => {
-    return await apiClient.post(`/api/line-clearance/${id}/approve`, null, { reviewedBy, comments });
+  approveForm: async (
+    id: string,
+    reviewedBy: string,
+    comments: string = "",
+  ) => {
+    return await apiClient.post(`/api/line-clearance/${id}/approve`, null, {
+      reviewedBy,
+      comments,
+    });
   },
 
   rejectForm: async (id: string, reviewedBy: string, comments: string) => {
-    return await apiClient.post(`/api/line-clearance/${id}/reject`, null, { reviewedBy, comments });
+    return await apiClient.post(`/api/line-clearance/${id}/reject`, null, {
+      reviewedBy,
+      comments,
+    });
   },
 
   downloadPdf: async (id: string, username: string) => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/line-clearance/${id}/pdf/${username}`);
+      const blob = await apiClient.downloadBlob(
+        `/api/line-clearance/${id}/pdf/${username}`,
+      );
       return await downloadAndSharePDF(blob, `line_clearance_${id}.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error("Error downloading PDF:", error);
       throw error;
     }
   },
 
   sendEmailWithPdf: async (id: string, emailData: any) => {
-    return await apiClient.post(`/api/line-clearance/${id}/email-pdf`, emailData);
+    return await apiClient.post(
+      `/api/line-clearance/${id}/email-pdf`,
+      emailData,
+    );
   },
 };
 
@@ -712,7 +831,7 @@ export const lineClearanceAPI = {
 
 export const scheduleAPI = {
   getAll: async () => {
-    return await apiClient.get('/api/schedules/all');
+    return await apiClient.get("/api/schedules/all");
   },
 
   getById: async (id: string) => {
@@ -720,29 +839,38 @@ export const scheduleAPI = {
   },
 
   createSimple: async (scheduleData: any) => {
-    return await apiClient.post('/api/schedules', scheduleData);
+    return await apiClient.post("/api/schedules", scheduleData);
   },
 
-  create: async (schedule: any, hodIds: string[], cftIds: string[], shifts: any, forms: any, locations: any) => {
+  create: async (
+    schedule: any,
+    hodIds: string[],
+    cftIds: string[],
+    shifts: any,
+    forms: any,
+    locations: any,
+  ) => {
     try {
       const params = new URLSearchParams();
       if (hodIds && hodIds.length > 0) {
-        hodIds.forEach(id => params.append('hodIds', id.toString()));
+        hodIds.forEach((id) => params.append("hodIds", id.toString()));
       }
       if (cftIds && cftIds.length > 0) {
-        cftIds.forEach(id => params.append('cftIds', id.toString()));
+        cftIds.forEach((id) => params.append("cftIds", id.toString()));
       }
-      if (shifts && typeof shifts === 'object') {
+      if (shifts && typeof shifts === "object") {
         Object.entries(shifts).forEach(([hodId, shift]) => {
-          const shiftValue = typeof shift === 'string' ? shift : String(shift || '');
+          const shiftValue =
+            typeof shift === "string" ? shift : String(shift || "");
           if (shiftValue && shiftValue.trim()) {
             params.append(`shifts[${hodId}]`, shiftValue);
           }
         });
       }
-      if (forms && typeof forms === 'object') {
+      if (forms && typeof forms === "object") {
         Object.entries(forms).forEach(([hodId, formId]) => {
-          const formValue = typeof formId === 'string' ? formId : String(formId || '');
+          const formValue =
+            typeof formId === "string" ? formId : String(formId || "");
           if (formValue && formValue.trim()) {
             params.append(`forms[${hodId}]`, formValue);
           }
@@ -750,37 +878,46 @@ export const scheduleAPI = {
       }
 
       const scheduleData = {
-        scheduleName: schedule.scheduleName || `Schedule ${new Date().toLocaleDateString()}`,
-        location: schedule.location || 'Not specified',
+        scheduleName:
+          schedule.scheduleName ||
+          `Schedule ${new Date().toLocaleDateString()}`,
+        location: schedule.location || "Not specified",
         startDate: schedule.startDate,
         endDate: schedule.endDate,
       };
 
-      return await apiClient.post('/api/schedules', scheduleData, params);
+      return await apiClient.post("/api/schedules", scheduleData, params);
     } catch (error) {
-      console.error('Schedule creation error:', error);
+      console.error("Schedule creation error:", error);
       throw error;
     }
   },
 
   submitToDgm: async (id: string, deputyEmail: string) => {
-    return await apiClient.post(`/api/schedules/${id}/submit-to-dgm`, null, { deputyEmail });
+    return await apiClient.post(`/api/schedules/${id}/submit-to-dgm`, null, {
+      deputyEmail,
+    });
   },
 
   approve: async (id: string, dgmEmail: string) => {
-    return await apiClient.post(`/api/schedules/${id}/approve`, null, { dgmEmail });
+    return await apiClient.post(`/api/schedules/${id}/approve`, null, {
+      dgmEmail,
+    });
   },
 
   release: async (id: string, dgmEmail: string, externalEmails: string) => {
-    return await apiClient.post(`/api/schedules/${id}/release`, null, { dgmEmail, externalEmails });
+    return await apiClient.post(`/api/schedules/${id}/release`, null, {
+      dgmEmail,
+      externalEmails,
+    });
   },
 
   getPendingForDgm: async () => {
-    return await apiClient.get('/api/schedules/pending-dgm');
+    return await apiClient.get("/api/schedules/pending-dgm");
   },
 
   getApproved: async () => {
-    return await apiClient.get('/api/schedules/approved');
+    return await apiClient.get("/api/schedules/approved");
   },
 };
 
@@ -796,13 +933,13 @@ export const auditAPI = {
   },
 
   save: async (auditorId: any, auditData?: any) => {
-    if (typeof auditorId === 'object' && !auditData) {
-      return await apiClient.post('/api/audits/save', auditorId);
+    if (typeof auditorId === "object" && !auditData) {
+      return await apiClient.post("/api/audits/save", auditorId);
     }
-    if (typeof auditorId === 'string' || typeof auditorId === 'number') {
+    if (typeof auditorId === "string" || typeof auditorId === "number") {
       return await apiClient.put(`/api/audits/${auditorId}/save`, auditData);
     }
-    throw new Error('Invalid parameters for auditAPI.save');
+    throw new Error("Invalid parameters for auditAPI.save");
   },
 
   start: async (id: string) => {
@@ -814,8 +951,10 @@ export const auditAPI = {
     return await apiClient.post(`/api/audits/${id}/submit`, payload);
   },
 
-  approve: async (id: string, comments: string = '') => {
-    return await apiClient.post(`/api/audits/${id}/approve`, null, { comments });
+  approve: async (id: string, comments: string = "") => {
+    return await apiClient.post(`/api/audits/${id}/approve`, null, {
+      comments,
+    });
   },
 
   reject: async (id: string, comments: string) => {
@@ -823,22 +962,22 @@ export const auditAPI = {
   },
 
   getAll: async () => {
-    const response = await apiClient.get('/api/audits/all');
-    return Array.isArray(response) ? response : (response?.data || []);
+    const response = await apiClient.get("/api/audits/all");
+    return Array.isArray(response) ? response : response?.data || [];
   },
 
   getForDeputy: async (deputyEmail: string) => {
     const response = await apiClient.get(`/api/audits/deputy/${deputyEmail}`);
-    return Array.isArray(response) ? response : (response?.data || []);
+    return Array.isArray(response) ? response : response?.data || [];
   },
 
   getForHod: async (hodEmail: string) => {
     const response = await apiClient.get(`/api/audits/hod/${hodEmail}`);
-    return Array.isArray(response) ? response : (response?.data || []);
+    return Array.isArray(response) ? response : response?.data || [];
   },
 
   getCompleted: async () => {
-    return await apiClient.get('/api/audits/completed');
+    return await apiClient.get("/api/audits/completed");
   },
 
   close: async (id: string) => {
@@ -850,58 +989,70 @@ export const auditAPI = {
   },
 
   reassignAudit: async (auditId: string, data: any, hodEmail: string) => {
-    return await apiClient.post(`/api/audits/${auditId}/reassign`, data, { hodEmail });
+    return await apiClient.post(`/api/audits/${auditId}/reassign`, data, {
+      hodEmail,
+    });
   },
 
   signOff: async (id: string, data: any) => {
     return await apiClient.post(`/api/audits/${id}/sign-off`, data);
   },
 
-  downloadPdf: async (id: string, userName: string = '') => {
+  downloadPdf: async (id: string, userName: string = "") => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/audits/${id}/pdf`, userName ? { userName } : {});
+      const blob = await apiClient.downloadBlob(
+        `/api/audits/${id}/pdf`,
+        userName ? { userName } : {},
+      );
       return await downloadAndSharePDF(blob, `audit_report_${id}.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error("Error downloading PDF:", error);
       throw error;
     }
   },
 
   downloadPdfWithSignatures: async (id: string, signatureData: any) => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/audits/${id}/pdf-with-signatures`);
+      const blob = await apiClient.downloadBlob(
+        `/api/audits/${id}/pdf-with-signatures`,
+      );
       return await downloadAndSharePDF(blob, `audit_report_${id}_signed.pdf`);
     } catch (error) {
-      console.error('Error downloading PDF with signatures:', error);
+      console.error("Error downloading PDF with signatures:", error);
       throw error;
     }
   },
 
   fetchSignatureByName: async (firstName: string, lastName: string) => {
     try {
-      const blob = await apiClient.downloadBlob('/api/users/signature', { firstName, lastName });
+      const blob = await apiClient.downloadBlob("/api/users/signature", {
+        firstName,
+        lastName,
+      });
       return await blobToBase64(blob);
     } catch (error) {
-      console.error('Error fetching signature:', error);
+      console.error("Error fetching signature:", error);
       return null;
     }
   },
 
   fetchUserByName: async (firstName: string, lastName: string) => {
     try {
-      return await apiClient.get('/api/users/by-name', { firstName, lastName });
+      return await apiClient.get("/api/users/by-name", { firstName, lastName });
     } catch (error) {
-      console.error('Error fetching user:', error);
+      console.error("Error fetching user:", error);
       return null;
     }
   },
 
   fetchSignatureById: async (userId: string) => {
     try {
-      const blob = await apiClient.downloadBlob(`/api/users/${userId}/signature`);
+      const blob = await apiClient.downloadBlob(
+        `/api/users/${userId}/signature`,
+      );
       return await blobToBase64(blob);
     } catch (error) {
-      console.error('Error fetching signature by ID:', error);
+      console.error("Error fetching signature by ID:", error);
       return null;
     }
   },
@@ -917,7 +1068,7 @@ export const signatureAPI = {
 
 export const ncrAPI = {
   getAll: async () => {
-    return await apiClient.get('/api/ncr/all');
+    return await apiClient.get("/api/ncr/all");
   },
 
   getByAuditId: async (auditId: string) => {
@@ -933,15 +1084,15 @@ export const ncrAPI = {
   },
 
   getPendingReview: async () => {
-    return await apiClient.get('/api/ncr/pending-review');
+    return await apiClient.get("/api/ncr/pending-review");
   },
 
   getPendingVerification: async () => {
-    return await apiClient.get('/api/ncr/pending-verification');
+    return await apiClient.get("/api/ncr/pending-verification");
   },
 
   create: async (ncrData: any) => {
-    return await apiClient.post('/api/ncr/create', ncrData);
+    return await apiClient.post("/api/ncr/create", ncrData);
   },
 
   submitCorrectiveAction: async (id: string, actionData: any) => {
@@ -954,9 +1105,12 @@ export const ncrAPI = {
 
   sendTo8D: async (ncrId: string, comment: string, auditManagerId: string) => {
     try {
-      return await apiClient.post(`/api/ncr/${ncrId}/send-to-8d`, { comment, auditManagerId });
+      return await apiClient.post(`/api/ncr/${ncrId}/send-to-8d`, {
+        comment,
+        auditManagerId,
+      });
     } catch (error: any) {
-      return { success: false, error: error.message || 'Failed to send to 8D' };
+      return { success: false, error: error.message || "Failed to send to 8D" };
     }
   },
 };
@@ -972,7 +1126,7 @@ export const notificationAPI = {
       // Fetch ALL notifications from backend (no role filtering on backend)
       const data = await apiClient.get(`/api/notifications/user/${userId}`);
       const notifications = Array.isArray(data) ? data : [];
-      
+
       // If no role provided, return all notifications
       if (!userRole) {
         return notifications;
@@ -980,13 +1134,17 @@ export const notificationAPI = {
 
       // Filter client-side by role
       const filtered = notificationFilter.filterByRole(notifications, userRole);
-      
-      console.log(`📬 Found ${filtered.length} notifications for role: ${userRole}`);
-      console.log(`   (${notifications.length} total, ${notifications.length - filtered.length} filtered out)`);
-      
+
+      console.log(
+        `📬 Found ${filtered.length} notifications for role: ${userRole}`,
+      );
+      console.log(
+        `   (${notifications.length} total, ${notifications.length - filtered.length} filtered out)`,
+      );
+
       return filtered;
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error("Error fetching notifications:", error);
       return [];
     }
   },
@@ -994,14 +1152,17 @@ export const notificationAPI = {
   /**
    * Get unread count with role-based filtering (client-side)
    */
-  getUnreadCount: async (userId: string, userRole?: string): Promise<number> => {
+  getUnreadCount: async (
+    userId: string,
+    userRole?: string,
+  ): Promise<number> => {
     try {
       // First get all notifications
       const notifications = await notificationAPI.getForUser(userId, userRole);
       // Count unread among filtered notifications
-      return notifications.filter(n => !n.read).length;
+      return notifications.filter((n) => !n.read).length;
     } catch (error) {
-      console.error('Error fetching unread count:', error);
+      console.error("Error fetching unread count:", error);
       return 0;
     }
   },
@@ -1010,7 +1171,11 @@ export const notificationAPI = {
    * Mark a single notification as read
    */
   markAsRead: async (notificationId: string, userId: string) => {
-    return await apiClient.put(`/api/notifications/${notificationId}/read`, null, { userId });
+    return await apiClient.put(
+      `/api/notifications/${notificationId}/read`,
+      null,
+      { userId },
+    );
   },
 
   /**
@@ -1030,8 +1195,15 @@ export const notificationAPI = {
   /**
    * Send notification to a specific user
    */
-  sendToUser: async (userId: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
-    return await apiClient.post('/api/notifications/send-to-user', {
+  sendToUser: async (
+    userId: string,
+    title: string,
+    message: string,
+    type: string,
+    navigateTo: string,
+    location: string,
+  ) => {
+    return await apiClient.post("/api/notifications/send-to-user", {
       userId,
       title,
       message,
@@ -1041,31 +1213,43 @@ export const notificationAPI = {
     });
   },
 
-  /**
-   * Send notification to all users with a specific role
-   */
-  sendToRole: async (role: string, title: string, message: string, type: string, navigateTo: string, location: string) => {
-    return await apiClient.post('/api/notifications/send-to-role', {
+  sendToRole: async (
+    role: string,
+    title: string,
+    message: string,
+    type: string,
+    navigateTo: string,
+    location: string,
+    plantId?: number | string | null,
+  ) => {
+    return await apiClient.post("/api/notifications/send-to-role", {
       role,
       title,
       message,
       type,
       navigateTo,
       location,
+      ...(plantId ? { plantId } : {}),
     });
   },
 
-  /**
-   * Send notification to multiple roles
-   */
-  sendToRoles: async (roles: string[], title: string, message: string, type: string, navigateTo: string, location: string) => {
-    return await apiClient.post('/api/notifications/send-to-roles', {
+  sendToRoles: async (
+    roles: string[],
+    title: string,
+    message: string,
+    type: string,
+    navigateTo: string,
+    location: string,
+    plantId?: number | string | null, // ✅ NEW
+  ) => {
+    return await apiClient.post("/api/notifications/send-to-roles", {
       roles,
       title,
       message,
       type,
       navigateTo,
       location,
+      ...(plantId ? { plantId } : {}),
     });
   },
 
@@ -1083,7 +1267,7 @@ export const notificationAPI = {
     location?: string;
     metadata?: any;
   }) => {
-    return await apiClient.post('/api/notifications/workflow', data);
+    return await apiClient.post("/api/notifications/workflow", data);
   },
 };
 
@@ -1091,15 +1275,15 @@ export const notificationAPI = {
 
 export const departmentAPI = {
   getActive: async () => {
-    return await apiClient.get('/api/superadmin/departments/active');
+    return await apiClient.get("/api/superadmin/departments/active");
   },
 
   getAll: async () => {
-    return await apiClient.get('/api/superadmin/departments/active');
+    return await apiClient.get("/api/superadmin/departments/active");
   },
 
   create: async (payload: any) => {
-    return await apiClient.post('/api/superadmin/departments', payload);
+    return await apiClient.post("/api/superadmin/departments", payload);
   },
 
   update: async (id: string, payload: any) => {
@@ -1115,15 +1299,15 @@ export const departmentAPI = {
 
 export const roleAPI = {
   getActive: async () => {
-    return await apiClient.get('/api/superadmin/roles/active');
+    return await apiClient.get("/api/superadmin/roles/active");
   },
 
   getAll: async () => {
-    return await apiClient.get('/api/superadmin/roles/active');
+    return await apiClient.get("/api/superadmin/roles/active");
   },
 
   create: async (payload: any) => {
-    return await apiClient.post('/api/superadmin/roles', payload);
+    return await apiClient.post("/api/superadmin/roles", payload);
   },
 
   update: async (id: string, payload: any) => {
@@ -1139,11 +1323,14 @@ export const roleAPI = {
 
 export const dashboardAPI = {
   getStats: async (year?: number) => {
-    return await apiClient.get('/api/dashboard/stats', year ? { year } : {});
+    return await apiClient.get("/api/dashboard/stats", year ? { year } : {});
   },
 
   getMonthlyTrend: async (year?: number) => {
-    return await apiClient.get('/api/dashboard/monthly-trend', year ? { year } : {});
+    return await apiClient.get(
+      "/api/dashboard/monthly-trend",
+      year ? { year } : {},
+    );
   },
 };
 
@@ -1158,51 +1345,90 @@ export const logoAPI = {
 export const masterDataAPI = {
   getRoles: async (): Promise<string[]> => {
     try {
-      const response = await apiClient.get('/api/roles');
+      const response = await apiClient.get("/api/roles");
       return response?.data || response || [];
     } catch (error) {
-      console.error('Error fetching roles:', error);
-      return ['MASTER', 'AUDIT_MANAGER', 'LEAD_AUDITOR', 'AUDITOR', 'HOD', 'AUDITEE', 'HR_ADMIN', 'TOP_MANAGEMENT', 'INITIATOR'];
+      console.error("Error fetching roles:", error);
+      return [
+        "MASTER",
+        "AUDIT_MANAGER",
+        "LEAD_AUDITOR",
+        "AUDITOR",
+        "HOD",
+        "AUDITEE",
+        "HR_ADMIN",
+        "TOP_MANAGEMENT",
+        "INITIATOR",
+      ];
     }
   },
 
   getDepartments: async (): Promise<string[]> => {
     try {
-      const response = await apiClient.get('/api/departments');
+      const response = await apiClient.get("/api/departments");
       return response?.data || response || [];
     } catch (error) {
-      console.error('Error fetching departments:', error);
-      return ['MR', 'ENGG', 'PLANT_MAINTENANCE', 'STORES_DESPATCH', 'PURCHASE', 'PPC', 'PRODUCTION', 'HR', 'UNIT_HEAD', 'TOOL_MAINTENANCE', 'QA', 'MARKETING'];
+      console.error("Error fetching departments:", error);
+      return [
+        "MR",
+        "ENGG",
+        "PLANT_MAINTENANCE",
+        "STORES_DESPATCH",
+        "PURCHASE",
+        "PPC",
+        "PRODUCTION",
+        "HR",
+        "UNIT_HEAD",
+        "TOOL_MAINTENANCE",
+        "QA",
+        "MARKETING",
+      ];
     }
   },
 
   getCoreTools: async (): Promise<string[]> => {
     try {
-      const response = await apiClient.get('/api/core-tools');
+      const response = await apiClient.get("/api/core-tools");
       return response?.data || response || [];
     } catch (error) {
-      console.error('Error fetching core tools:', error);
-      return ['APQP', 'FMEA', 'PPAP', 'SPC', 'MSA'];
+      console.error("Error fetching core tools:", error);
+      return ["APQP", "FMEA", "PPAP", "SPC", "MSA"];
     }
   },
 
   getProblemSolvingTools: async (): Promise<string[]> => {
     try {
-      const response = await apiClient.get('/api/problem-solving-tools');
+      const response = await apiClient.get("/api/problem-solving-tools");
       return response?.data || response || [];
     } catch (error) {
-      console.error('Error fetching problem solving tools:', error);
-      return ['8D', 'Why-Why', 'Fishbone', 'Pareto', '5W1H'];
+      console.error("Error fetching problem solving tools:", error);
+      return ["8D", "Why-Why", "Fishbone", "Pareto", "5W1H"];
     }
   },
 
   getProcesses: async (): Promise<string[]> => {
     try {
-      const response = await apiClient.get('/api/processes');
+      const response = await apiClient.get("/api/processes");
       return response?.data || response || [];
     } catch (error) {
-      console.error('Error fetching processes:', error);
-      return ['Machining', 'Assembly', 'Welding', 'Painting', 'Heat Treatment', 'Surface Finishing', 'Quality Control', 'Warehouse', 'Maintenance', 'Procurement', 'Sales', 'Engineering', 'HR', 'IT', 'Logistics'];
+      console.error("Error fetching processes:", error);
+      return [
+        "Machining",
+        "Assembly",
+        "Welding",
+        "Painting",
+        "Heat Treatment",
+        "Surface Finishing",
+        "Quality Control",
+        "Warehouse",
+        "Maintenance",
+        "Procurement",
+        "Sales",
+        "Engineering",
+        "HR",
+        "IT",
+        "Logistics",
+      ];
     }
   },
 };
@@ -1214,7 +1440,10 @@ export const eightDAPI = {
     const queryParams: Record<string, any> = {};
     if (params?.year) queryParams.year = params.year;
     if (params?.type) queryParams.type = params.type;
-    return await apiClient.get('/api/eightd/data', Object.keys(queryParams).length ? queryParams : undefined);
+    return await apiClient.get(
+      "/api/eightd/data",
+      Object.keys(queryParams).length ? queryParams : undefined,
+    );
   },
 
   getById: async (id: string): Promise<any> => {
@@ -1222,16 +1451,16 @@ export const eightDAPI = {
   },
 
   create: async (formData: FormData): Promise<any> => {
-    return await apiClient.postFormData('/api/eightd/data', formData);
+    return await apiClient.postFormData("/api/eightd/data", formData);
   },
 
   update: async (id: string, formData: FormData): Promise<any> => {
-    const token = await AsyncStorage.getItem('authToken');
+    const token = await AsyncStorage.getItem("authToken");
     const url = new URL(`${API_BASE_URL}/api/eightd/data/${id}`);
     const response = await fetch(url.toString(), {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: formData,
     });
@@ -1243,11 +1472,17 @@ export const eightDAPI = {
     return await apiClient.delete(`/api/eightd/data/${id}`);
   },
 
-  approve: async (id: string, data: { userEmail: string; comment?: string }): Promise<any> => {
+  approve: async (
+    id: string,
+    data: { userEmail: string; comment?: string },
+  ): Promise<any> => {
     return await apiClient.post(`/api/eightd/approve/${id}`, data);
   },
 
-  reject: async (id: string, data: { userEmail: string; comment?: string }): Promise<any> => {
+  reject: async (
+    id: string,
+    data: { userEmail: string; comment?: string },
+  ): Promise<any> => {
     return await apiClient.post(`/api/eightd/reject/${id}`, data);
   },
 
@@ -1260,22 +1495,25 @@ export const eightDAPI = {
   },
 
   getByYear: async (year: number): Promise<any> => {
-    return await apiClient.get('/api/eightd/data', { year });
+    return await apiClient.get("/api/eightd/data", { year });
   },
 
   getByStatus: async (status: string): Promise<any> => {
-    return await apiClient.get('/api/eightd/data', { status });
+    return await apiClient.get("/api/eightd/data", { status });
   },
 
   getNcrBased: async (): Promise<any> => {
-    return await apiClient.get('/api/eightd/data', { type: 'ncr' });
+    return await apiClient.get("/api/eightd/data", { type: "ncr" });
   },
 
   getFresh: async (): Promise<any> => {
-    return await apiClient.get('/api/eightd/data', { type: 'fresh' });
+    return await apiClient.get("/api/eightd/data", { type: "fresh" });
   },
 
-  submitForApproval: async (id: string, data: { userEmail: string }): Promise<any> => {
+  submitForApproval: async (
+    id: string,
+    data: { userEmail: string },
+  ): Promise<any> => {
     return await apiClient.post(`/api/eightd/submit/${id}`, data);
   },
 
@@ -1296,7 +1534,7 @@ export const eightDAPI = {
   },
 
   getStats: async (year?: number): Promise<any> => {
-    return await apiClient.get('/api/eightd/stats', year ? { year } : {});
+    return await apiClient.get("/api/eightd/stats", year ? { year } : {});
   },
 };
 
@@ -1310,7 +1548,7 @@ export const forumAPI = {
     createdBy: string;
     members: string[];
   }): Promise<any> => {
-    return await apiClient.post('/api/forum/8d/groups', data);
+    return await apiClient.post("/api/forum/8d/groups", data);
   },
 
   getGroupByEventId: async (eventId: string): Promise<any> => {
@@ -1330,15 +1568,22 @@ export const forumAPI = {
   },
 
   postMessage: async (threadId: string, data: any): Promise<any> => {
-    return await apiClient.post(`/api/forum/threads/${threadId}/messages`, data);
+    return await apiClient.post(
+      `/api/forum/threads/${threadId}/messages`,
+      data,
+    );
   },
 
   addMembers: async (groupId: string, members: string[]): Promise<any> => {
-    return await apiClient.post(`/api/forum/groups/${groupId}/members`, { members });
+    return await apiClient.post(`/api/forum/groups/${groupId}/members`, {
+      members,
+    });
   },
 
   removeMember: async (groupId: string, memberId: string): Promise<any> => {
-    return await apiClient.delete(`/api/forum/groups/${groupId}/members/${memberId}`);
+    return await apiClient.delete(
+      `/api/forum/groups/${groupId}/members/${memberId}`,
+    );
   },
 
   getMembers: async (groupId: string): Promise<any> => {
@@ -1349,16 +1594,28 @@ export const forumAPI = {
 // ─── 8D PDF GENERATION ──────────────────────────────────────────────────────
 
 export const eightDPdfAPI = {
-  generatePdf: async (id: string, includeAttachments: boolean = true): Promise<Blob> => {
-    return await apiClient.downloadBlob(`/api/eightd/data/${id}/pdf`, { includeAttachments });
+  generatePdf: async (
+    id: string,
+    includeAttachments: boolean = true,
+  ): Promise<Blob> => {
+    return await apiClient.downloadBlob(`/api/eightd/data/${id}/pdf`, {
+      includeAttachments,
+    });
   },
 
-  generateWord: async (id: string, includeAttachments: boolean = true): Promise<Blob> => {
-    return await apiClient.downloadBlob(`/api/eightd/data/${id}/word`, { includeAttachments });
+  generateWord: async (
+    id: string,
+    includeAttachments: boolean = true,
+  ): Promise<Blob> => {
+    return await apiClient.downloadBlob(`/api/eightd/data/${id}/word`, {
+      includeAttachments,
+    });
   },
 
   generateExcel: async (ids: string[]): Promise<Blob> => {
-    return await apiClient.downloadBlob('/api/eightd/export/excel', { ids: ids.join(',') });
+    return await apiClient.downloadBlob("/api/eightd/export/excel", {
+      ids: ids.join(","),
+    });
   },
 
   downloadAndSharePDF: async (id: string, fileName?: string): Promise<any> => {
@@ -1367,7 +1624,7 @@ export const eightDPdfAPI = {
       const finalFileName = fileName || `8D_Report_${id}.pdf`;
       return await downloadAndSharePDF(blob, finalFileName);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error("Error downloading PDF:", error);
       throw error;
     }
   },
@@ -1378,7 +1635,7 @@ export const eightDPdfAPI = {
       const finalFileName = fileName || `8D_Report_${id}.docx`;
       return await downloadAndSharePDF(blob, finalFileName);
     } catch (error) {
-      console.error('Error downloading Word document:', error);
+      console.error("Error downloading Word document:", error);
       throw error;
     }
   },

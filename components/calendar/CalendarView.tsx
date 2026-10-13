@@ -326,7 +326,15 @@ export default function CalendarView() {
   const [selectedDateEvents, setSelectedDateEvents] = useState<CalendarEvent[]>(
     [],
   );
+
+  // Add this near your other useState declarations
+  const [selectedAuditTypes, setSelectedAuditTypes] = useState<string[]>([]);
+  const [showAuditTypeModal, setShowAuditTypeModal] = useState(false);
+
   const [showDateEventsModal, setShowDateEventsModal] = useState(false);
+  const [activeEventId, setActiveEventId] = useState<string | number | null>(
+    null,
+  );
   const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<
     string | null
   >(null);
@@ -424,13 +432,14 @@ export default function CalendarView() {
         "User-Email": user?.email || "", // ✅ missing in your RN code
       };
 
-      // ✅ Step 1: Fetch schedules based on role
       let url: string;
+      const currentYear = new Date().getFullYear();
 
       if (userRoleForAPI === "AUDITOR") {
         url = `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`;
       } else {
-        url = `${API_BASE_URL}/api/audit-schedule/year/${new Date().getFullYear()}`;
+        // ✅ FIX: Pass userId so backend can filter by plant
+        url = `${API_BASE_URL}/api/audit-schedule/year/${currentYear}?userId=${user.id}`;
       }
 
       console.log("📡 Fetching schedules from:", url);
@@ -444,8 +453,9 @@ export default function CalendarView() {
       }
 
       // ✅ Step 2: Fetch template responses
+      // ✅ Plant-scoping: pass userId so backend can filter responses by plant
       const responsesResponse = await fetch(
-        `${API_BASE_URL}/api/templates/responses/all`,
+        `${API_BASE_URL}/api/templates/responses/all?userId=${user.id}`,
         {
           headers: commonHeaders,
         },
@@ -458,7 +468,16 @@ export default function CalendarView() {
         );
       }
 
-      const allResponses = await responsesResponse.json();
+      let allResponses: any[] = [];
+      if (responsesResponse.ok) {
+        try {
+          const rawResp = await responsesResponse.json();
+          allResponses = Array.isArray(rawResp) ? rawResp : rawResp?.data || [];
+        } catch (e) {
+          console.warn("Failed to parse template responses:", e);
+          allResponses = [];
+        }
+      }
 
       // ✅ Step 3: Create completion map
       // Use string keys to avoid number/string mismatch
@@ -488,7 +507,12 @@ export default function CalendarView() {
       console.log("✅ Completion map size:", auditCompletionMap.size);
 
       // ✅ Step 4: Parse schedules
-      let allSchedules = await response.json();
+      const rawSchedules = await response.json();
+      let allSchedules = Array.isArray(rawSchedules)
+        ? rawSchedules
+        : rawSchedules?.data || [];
+
+      console.log("📊 Raw schedules from API:", allSchedules.length);
       if (userRoleForAPI === "LEAD_AUDITOR" && leadAuditorDepartment) {
         allSchedules = allSchedules.filter((schedule: any) => {
           const scheduleDept = normalizeDepartmentForFilter(
@@ -514,6 +538,16 @@ export default function CalendarView() {
         allSchedules = [];
       }
 
+      const myScheduleIds = new Set(allSchedules.map((s: any) => String(s.id)));
+      const beforeCount = allResponses.length;
+      allResponses = allResponses.filter((res: any) =>
+        myScheduleIds.has(String(res.auditScheduleId ?? "")),
+      );
+      console.log(
+        `🛡️ Filtered template responses: ${allResponses.length}/${beforeCount} ` +
+          `matched our ${myScheduleIds.size} schedules`,
+      );
+
       // ✅ Step 5: Filter by role
       let filteredSchedules: any[] = [];
 
@@ -532,6 +566,10 @@ export default function CalendarView() {
       // ✅ Step 6: Format events
       for (const audit of filteredSchedules) {
         if (!audit?.id) continue;
+
+        const hasAuditContent =
+          (audit.auditType && String(audit.auditType).trim() !== "") ||
+          (audit.title && String(audit.title).trim() !== "");
 
         // ✅ Important: use string key
         const completionInfo = auditCompletionMap.get(String(audit.id));
@@ -576,7 +614,10 @@ export default function CalendarView() {
               }
             }
 
-            coAuditorIdList = parsedCoIds;
+            // ✅ FIX 1: Remove the main auditor from the co-auditor ID list
+            coAuditorIdList = parsedCoIds.filter(
+              (id) => String(id) !== String(audit.auditorId),
+            );
 
             isCoAuditor = coAuditorIdList.map(String).includes(String(user.id));
           } catch (error) {
@@ -587,6 +628,13 @@ export default function CalendarView() {
             );
           }
         }
+
+        // ✅ FIX 2: Remove the main auditor's name from the co-auditor names list
+        const cleanCoAuditorNames = Array.isArray(audit.coAuditorNames)
+          ? audit.coAuditorNames.filter(
+              (name: string) => name !== audit.auditorName,
+            )
+          : [];
 
         const isOwner = String(audit?.auditorId ?? "") === String(user.id);
         const isAttendee = String(audit?.auditeeId ?? "") === String(user.id);
@@ -604,7 +652,7 @@ export default function CalendarView() {
             audit.title ||
             `${audit.department || "Audit"} - ${audit.auditType || "General"}`,
 
-          auditType: audit.auditType || "Audit",
+          auditType: audit.auditType || "",
           department: audit.department || "",
 
           startTime: audit.startTime || "",
@@ -626,9 +674,7 @@ export default function CalendarView() {
           auditeeName: audit.auditeeName || "Unassigned",
           auditeeId: audit.auditeeId ?? null,
 
-          coAuditorNames: Array.isArray(audit.coAuditorNames)
-            ? audit.coAuditorNames
-            : [],
+          coAuditorNames: cleanCoAuditorNames,
 
           coAuditorIdList,
 
@@ -685,13 +731,10 @@ export default function CalendarView() {
 
           formattedEvents.push({
             ...baseEvent,
-
             id: audit.id,
             originalAuditId: audit.id,
-
             start: dateStr,
             end: dateStr,
-
             isDateRange: false,
             fromDate: null,
             toDate: null,
@@ -728,13 +771,44 @@ export default function CalendarView() {
     await loadEvents();
   }, [loadEvents]);
 
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      // 1. Search filter
+      if (searchText.trim()) {
+        const search = searchText.toLowerCase();
+        const matchTitle = event.auditType?.toLowerCase().includes(search);
+        const matchDept = event.department?.toLowerCase().includes(search);
+        if (!matchTitle && !matchDept) return false;
+      }
+
+      // 2. ✅ Audit Type filter (Robust exact match)
+      if (selectedAuditTypes.length > 0) {
+        const eventType = (event.auditType || "").trim();
+        const isMatch = selectedAuditTypes.some(
+          (type) => type.trim() === eventType,
+        );
+        if (!isMatch) return false;
+      }
+
+      // 3. Ownership filter
+      if (eventFilter === "owned" && !event.isOwner && !event.isCoAuditor) {
+        return false;
+      }
+      if (eventFilter === "attending" && !event.isAttendee) return false;
+
+      return true;
+    });
+  }, [events, searchText, eventFilter, selectedAuditTypes]);
+
+  // ✅ MOVE handleDayPress HERE, AFTER filteredEvents is declared
   const handleDayPress = useCallback(
     (day: any) => {
       const dateStr = day.dateString;
 
       setCurrentDate(dateStr);
 
-      const dayEvents = events.filter((event) => {
+      // Now this works perfectly because filteredEvents is already declared above
+      const dayEvents = filteredEvents.filter((event) => {
         return event.start === dateStr;
       });
 
@@ -754,31 +828,28 @@ export default function CalendarView() {
       if (uniqueEvents.length > 0) {
         setSelectedDateEvents(uniqueEvents);
         setShowDateEventsModal(true);
+      } else {
+        setSelectedDateEvents([]);
+        setShowDateEventsModal(true);
       }
     },
-    [events],
+    [filteredEvents], // ✅ Now this dependency is valid
   );
 
-  // Filtered events
-  const filteredEvents = useMemo(() => {
-    return events.filter((event) => {
-      // Search filter
-      if (searchText.trim()) {
-        const search = searchText.toLowerCase();
-        const matchTitle = event.auditType?.toLowerCase().includes(search);
-        const matchDept = event.department?.toLowerCase().includes(search);
-        if (!matchTitle && !matchDept) return false;
+  // Add this helper function inside CalendarView
+  const toggleAuditType = (type: string) => {
+    setSelectedAuditTypes((prev) => {
+      if (prev.includes(type)) {
+        return prev.filter((t) => t !== type); // Remove if already selected
+      } else {
+        return [...prev, type]; // Add if not selected
       }
-
-      // Filter by ownership
-      if (eventFilter === "owned" && !event.isOwner && !event.isCoAuditor) {
-        return false;
-      }
-      if (eventFilter === "attending" && !event.isAttendee) return false;
-
-      return true;
     });
-  }, [events, searchText, eventFilter]);
+  };
+
+  const clearAllAuditTypes = () => {
+    setSelectedAuditTypes([]);
+  };
 
   const weekDays = useMemo(() => {
     const start = moment(currentDate).startOf("week");
@@ -789,6 +860,18 @@ export default function CalendarView() {
     if (view === "day") return [moment(currentDate)];
     return weekDays;
   }, [view, weekDays]);
+
+  const uniqueAuditTypes = useMemo(() => {
+    const types = new Set<string>();
+    events.forEach((event) => {
+      const type = (event.auditType || "").trim();
+      if (type) {
+        // ✅ skip empty/hardcoded fallbacks
+        types.add(type);
+      }
+    });
+    return Array.from(types).sort();
+  }, [events]);
 
   const getWeekDayEvents = useCallback(
     (day: moment.Moment) => {
@@ -954,36 +1037,54 @@ export default function CalendarView() {
               {getDateLabel}
             </Text>
           </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.viewSelector}
-            style={styles.viewSelectorScroll}
-          >
-            {(["month", "week", "day", "year", "list"] as ViewType[]).map(
-              (item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={[
-                    styles.viewButton,
-                    view === item && styles.viewButtonActive,
-                  ]}
-                  onPress={() => setView(item)}
-                >
-                  <Text
+          {/* ✅ NEW: Row to hold View Selector (left) and Filter Button (right) */}
+          <View style={styles.toolbarRow2}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.viewSelector}
+              style={styles.viewSelectorScroll}
+            >
+              {(["month", "week", "day", "year", "list"] as ViewType[]).map(
+                (item) => (
+                  <TouchableOpacity
+                    key={item}
                     style={[
-                      styles.viewButtonText,
-                      view === item && styles.viewButtonTextActive,
-                      { fontSize: fontSmall },
+                      styles.viewButton,
+                      view === item && styles.viewButtonActive,
                     ]}
+                    onPress={() => setView(item)}
                   >
-                    {item.charAt(0).toUpperCase() + item.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ),
-            )}
-          </ScrollView>
+                    <Text
+                      style={[
+                        styles.viewButtonText,
+                        view === item && styles.viewButtonTextActive,
+                        { fontSize: fontSmall },
+                      ]}
+                    >
+                      {item.charAt(0).toUpperCase() + item.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </ScrollView>
+
+            {/* ✅ Filter Button - Always visible on mobile */}
+            <TouchableOpacity
+              style={[
+                styles.auditTypeFilterButton,
+                isMobile && styles.auditTypeFilterButtonMobile,
+              ]}
+              onPress={() => setShowAuditTypeModal(true)}
+            >
+              <Text style={styles.auditTypeFilterText} numberOfLines={1}>
+                {selectedAuditTypes.length > 0
+                  ? `Audit (${selectedAuditTypes.length})`
+                  : "Audit Type"}
+              </Text>
+              <ChevronDown size={16} color="#374151" />
+            </TouchableOpacity>
+          </View>
         </View>
         {/* ✅ RESTORED: Wrapper for all calendar views */}
         <View style={styles.calendarContainer}>
@@ -1265,9 +1366,15 @@ export default function CalendarView() {
                 return (
                   <TouchableOpacity
                     key={`${event.originalAuditId || event.id}_${event.start}`}
-                    style={styles.dateEventCard}
+                    style={[
+                      styles.dateEventCard,
+                      // ✅ HIGHLIGHT LOGIC: If this event is the active one, apply highlight style
+                      activeEventId === (event.originalAuditId || event.id) &&
+                        styles.dateEventCardHighlighted,
+                    ]}
                     onPress={() => {
-                      setShowDateEventsModal(false);
+                      // ✅ SET the active ID so it highlights
+                      setActiveEventId(event.originalAuditId || event.id);
                       setSelectedEvent(event);
                       setShowModal(true);
                     }}
@@ -1362,9 +1469,77 @@ export default function CalendarView() {
         onClose={() => {
           setShowModal(false);
           setSelectedEvent(null);
+          setActiveEventId(null);
         }}
         onRefresh={loadEvents}
       />
+
+      {/* Audit Type Filter Modal */}
+      <Modal
+        visible={showAuditTypeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAuditTypeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={[styles.filterModalTitle, { fontSize: fontMedium }]}>
+                Filter by Audit Type
+              </Text>
+              <TouchableOpacity onPress={() => setShowAuditTypeModal(false)}>
+                <Text style={{ color: "#6B7280", fontSize: 20 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterModalList}>
+              {uniqueAuditTypes.map((type) => {
+                const isSelected = selectedAuditTypes.includes(type);
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={styles.filterModalItem}
+                    onPress={() => toggleAuditType(type)}
+                  >
+                    {/* Custom Checkbox UI */}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        isSelected && styles.checkboxChecked,
+                      ]}
+                    >
+                      {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text
+                      style={[
+                        styles.filterModalItemText,
+                        { fontSize: fontSmall },
+                      ]}
+                    >
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.filterModalFooter}>
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={clearAllAuditTypes}
+              >
+                <Text style={styles.clearButtonText}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={() => setShowAuditTypeModal(false)}
+              >
+                <Text style={styles.applyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1540,7 +1715,12 @@ function LegendItem({
 
 // Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, flexDirection: "row", backgroundColor: "#F3F4F6" },
+  container: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#F3F4F6",
+    padding: 3,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -1551,9 +1731,9 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-start",
+    justifyContent: "center", // ✅ Changed from "flex-start" to center vertically
+    alignItems: "center", // ✅ Added to center horizontally
   },
-
   sidebar: {
     backgroundColor: "#FFFFFF",
     borderRightWidth: 1,
@@ -1655,13 +1835,7 @@ const styles = StyleSheet.create({
   navButtonBorder: { borderLeftWidth: 1, borderColor: "#D1D5DB" },
   currentDateText: { fontWeight: "700", color: "#111827", flexShrink: 1 },
   viewSelectorScroll: { maxHeight: 40 },
-  viewSelector: { flexDirection: "row", paddingRight: 16, gap: 8 },
-  viewButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#F3F4F6",
-  },
+
   viewButtonActive: { backgroundColor: "#00529B" },
   viewButtonText: { color: "#374151" },
   viewButtonTextActive: { color: "#FFFFFF", fontWeight: "700" },
@@ -1778,7 +1952,8 @@ const styles = StyleSheet.create({
   dateEventsModal: {
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
-    width: "90%",
+    width: "75%",
+    maxWidth: 700,
     maxHeight: "80%",
     overflow: "hidden",
   },
@@ -1811,6 +1986,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     marginBottom: 8,
+  },
+  dateEventCardHighlighted: {
+    backgroundColor: "#EFF6FF", // Light blue background
+    borderColor: "#00529B", // Blue border
+    borderWidth: 2, // Thicker border to stand out
   },
   dateEventDot: {
     width: 12,
@@ -2009,5 +2189,135 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: "#b45309", // amber-800 text
+  },
+
+  filterModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    width: "75%", // ✅ Reduced from 85%
+    maxWidth: 320, // ✅ Added strict max width
+    maxHeight: "70%",
+    alignSelf: "center",
+    overflow: "hidden",
+  },
+  filterModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  filterModalTitle: {
+    fontWeight: "700",
+    color: "#111827",
+  },
+  filterModalList: {
+    padding: 16,
+    maxHeight: 300,
+  },
+  filterModalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  checkboxChecked: {
+    backgroundColor: "#00529B",
+    borderColor: "#00529B",
+  },
+  checkmark: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  filterModalItemText: {
+    color: "#374151",
+    flex: 1,
+  },
+  filterModalFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    gap: 12,
+  },
+  clearButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  clearButtonText: {
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  applyButton: {
+    backgroundColor: "#00529B",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  applyButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+
+  toolbarRow2: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+    gap: 8, // ✅ Add gap for spacing
+  },
+
+  auditTypeFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+    marginTop: 8,
+    flexShrink: 0, // ✅ Prevent button from shrinking
+  },
+
+  // ✅ NEW: Mobile-specific styles for audit filter button
+  auditTypeFilterButtonMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minWidth: 100, // ✅ Ensure minimum width
+  },
+
+  auditTypeFilterText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+
+  // ✅ Update viewSelector to prevent crowding
+  viewSelector: {
+    flexDirection: "row",
+    paddingRight: 8, // ✅ Reduced from 16
+    gap: 6, // ✅ Reduced gap for mobile
+  },
+
+  viewButton: {
+    paddingHorizontal: 12, // ✅ Reduced from 14
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    flexShrink: 0, // ✅ Prevent buttons from shrinking
   },
 });

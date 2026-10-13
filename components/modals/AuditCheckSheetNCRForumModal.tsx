@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { forumApi } from "../../services/auditScheduleApi";
@@ -118,6 +118,9 @@ const RoleBadge = ({ role }: { role: string }) => {
 interface AuditCheckSheetNCRForumModalProps {
   auditId: string | number;
   auditNumber: string;
+  documentNumber?: string; // ✅ NEW
+  plantId?: string | number | null; // 👈 NEW
+  plantName?: string | null; // 👈 NEW
   auditTitle: string;
   auditStatus: string;
   auditType: string;
@@ -142,6 +145,9 @@ const AuditCheckSheetNCRForumModal: React.FC<
 > = ({
   auditId,
   auditNumber,
+  documentNumber,
+  plantId, // 👈 NEW
+  plantName, // 👈 NEW
   auditTitle,
   auditStatus,
   auditType,
@@ -355,12 +361,33 @@ const AuditCheckSheetNCRForumModal: React.FC<
       const participantEmails = getParticipantEmails();
 
       try {
+        // ✅ FIXED: prefer documentNumber (real per-audit ID) over auditNumber (plan number)
+        const realNumber = documentNumber || auditNumber;
+
+        // ✅ Detect special forum types
+        const isSchedulePlan = String(auditId).startsWith("schedule-plan");
+        const isGeneralForum = String(auditId).startsWith("general-forum");
+
+        const displayName = isSchedulePlan
+          ? "Schedule Plan"
+          : isGeneralForum
+            ? "General Discussion"
+            : `${realNumber} Discussion`;
+
+        const descriptionText = isSchedulePlan
+          ? "Schedule Plan discussion — Lead Auditor, Audit Manager, Top Management"
+          : isGeneralForum
+            ? "General audit discussion"
+            : `Discussion forum for Audit ${realNumber}`;
+
         await forumApi.create8DGroup({
           groupId: groupId,
-          groupName: `Audit #${auditNumber} Discussion`,
-          description: `Discussion forum for Audit ${auditNumber}`,
+          groupName: displayName,
+          description: descriptionText,
           createdBy: user?.email || "system",
           members: participantEmails,
+          plantId: plantId != null ? String(plantId) : null,
+          plantName: plantName || null,
         });
         console.log("✅ 8D group created");
       } catch (groupError) {
@@ -466,8 +493,10 @@ const AuditCheckSheetNCRForumModal: React.FC<
               <View style={styles.forumWrapper}>
                 <ForumThreadView
                   groupId={forumGroupId}
-                  groupName={`${auditNumber}`}
+                  groupName={auditNumber} // ✅ Just the number: "AUD-IATF-202609-001"
                   isInDrawer={true} // ✅ This flag is the key!
+                  plantId={plantId != null ? String(plantId) : null} // 👈 NEW
+                  plantName={plantName || null} // 👈 NEW
                   setForumDrawerOpen={onClose}
                   username={user?.email || ""}
                   currentUser={user}
@@ -498,49 +527,49 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
- drawerContainer: {
-  flex: 1,
-  position: "absolute",
-  top: 0,
-  bottom: 0,
-  left: Platform.OS === "web" ? undefined : 0,
-  right: 0,
-  width: Platform.OS === "web" ? "90%" : "100%",
-  maxWidth: Platform.OS === "web" ? 600 : undefined,
-  // ✅ FIX: Add this to prevent bottom shift on Android
-  ...Platform.select({
-    android: {
-      paddingBottom: 0,
-      marginBottom: 0,
-    },
-  }),
-},
+  drawerContainer: {
+    flex: 1,
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: Platform.OS === "web" ? undefined : 0,
+    right: 0,
+    width: Platform.OS === "web" ? "90%" : "100%",
+    maxWidth: Platform.OS === "web" ? 600 : undefined,
+    // ✅ FIX: Add this to prevent bottom shift on Android
+    ...Platform.select({
+      android: {
+        paddingBottom: 0,
+        marginBottom: 0,
+      },
+    }),
+  },
   drawer: {
-  flex: 1,
-  width: "100%",
-  backgroundColor: "#FFFFFF",
-  // ✅ FIX: Ensure no extra bottom padding
-  paddingBottom: 0,
+    flex: 1,
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    // ✅ FIX: Ensure no extra bottom padding
+    paddingBottom: 0,
 
-  ...Platform.select({
-    ios: {
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-    },
-    android: {
-      elevation: 8,
-      // ✅ FIX: Ensure no extra bottom padding on Android
-      paddingBottom: 0,
-    },
-    web: {
-      boxShadow: "0 0 20px rgba(0,0,0,0.12)",
-    },
-  }),
-},
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 8,
+        // ✅ FIX: Ensure no extra bottom padding on Android
+        paddingBottom: 0,
+      },
+      web: {
+        boxShadow: "0 0 20px rgba(0,0,0,0.12)",
+      },
+    }),
+  },
 
- forumWrapper: { flex: 1, minHeight: 0 },
+  forumWrapper: { flex: 1, minHeight: 0 },
 
   // Header Styles
   header: {

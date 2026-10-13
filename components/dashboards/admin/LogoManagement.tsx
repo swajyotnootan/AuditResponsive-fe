@@ -22,7 +22,8 @@ import {
   View,
 } from "react-native";
 
-import { API_BASE_URL } from '@/config/apiConfig';
+import { API_BASE_URL } from "@/config/apiConfig";
+const LOGO_API = `${API_BASE_URL}/api/logo`;
 // DELETE the hardcoded line above
 
 // ✅ Safe cross-platform event dispatcher
@@ -75,12 +76,12 @@ export default function LogoManagement() {
   const loadCurrentLogo = async () => {
     setLoading(true);
     try {
-      const infoResponse = await fetch(`${API_BASE_URL}/info?t=${Date.now()}`);
+      const infoResponse = await fetch(`${LOGO_API}/info?t=${Date.now()}`);
       const info = await infoResponse.json();
 
       if (info.exists) {
         // ✅ ADD ?t=Date.now() to force fresh image download
-        const logoResponse = await fetch(`${API_BASE_URL}?t=${Date.now()}`);
+        const logoResponse = await fetch(`${LOGO_API}?t=${Date.now()}`);
         if (logoResponse.ok) {
           const blob = await logoResponse.blob();
 
@@ -177,7 +178,7 @@ export default function LogoManagement() {
 
       console.log("📤 Uploading:", { filename, mimeType, method });
 
-      const response = await fetch(API_BASE_URL, {
+      const response = await fetch(LOGO_API, {
         method: method,
         body: formData,
       });
@@ -225,7 +226,7 @@ export default function LogoManagement() {
     setSuccess("");
 
     try {
-      const response = await fetch(API_BASE_URL, { method: "DELETE" });
+      const response = await fetch(LOGO_API, { method: "DELETE" });
       const result = await response.json();
 
       if (response.ok) {
@@ -261,14 +262,14 @@ export default function LogoManagement() {
 
   if (loading)
     return (
-      <View className="items-center justify-center flex-1 bg-gray-50">
+      <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color="#00529B" />
       </View>
     );
 
   return (
     <View className="flex-1 bg-gray-50">
-      <View className="px-4 pt-4 pb-3 bg-white border-b border-gray-200">
+      <View className="border-b border-gray-200 bg-white px-4 pb-3 pt-4">
         <View
           style={
             isDesktop
@@ -277,11 +278,11 @@ export default function LogoManagement() {
           }
         >
           {/* 👇 FIXED: Added w-full to ensure justify-between works perfectly */}
-          <View className="flex-row items-center justify-between w-full">
+          <View className="w-full flex-row items-center justify-between">
             {/* Left Side: Title and Icon */}
             {/* 👇 FIXED: Removed flex-1 and added flex-shrink so it doesn't steal space from the button */}
-            <View className="flex-row items-center flex-shrink">
-              <View className="items-center justify-center w-10 h-10 bg-purple-100 rounded-xl">
+            <View className="flex-shrink flex-row items-center">
+              <View className="h-10 w-10 items-center justify-center rounded-xl bg-purple-100">
                 <ImageIcon size={22} color="#7c3aed" />
               </View>
               <View className="ml-3">
@@ -299,7 +300,7 @@ export default function LogoManagement() {
             <TouchableOpacity
               onPress={loadCurrentLogo}
               disabled={loading}
-              className="flex-row items-center px-2 py-2 ml-4 border border-blue-200 rounded-lg bg-blue-50"
+              className="ml-4 flex-row items-center rounded-lg border border-blue-200 bg-blue-50 px-2 py-2"
               style={{ flexShrink: 0 }} // ✅ Prevents the button from ever being squished or hidden
             >
               {loading ? (
@@ -316,7 +317,7 @@ export default function LogoManagement() {
 
       {success ? (
         <View
-          className="flex-row items-center px-4 py-3 mx-4 mt-3 border border-green-200 bg-green-50 rounded-xl"
+          className="mx-4 mt-3 flex-row items-center rounded-xl border border-green-200 bg-green-50 px-4 py-3"
           style={
             isDesktop
               ? { maxWidth: 800, alignSelf: "center", width: "100%" }
@@ -324,7 +325,7 @@ export default function LogoManagement() {
           }
         >
           <CheckCircle size={16} color="#16a34a" />
-          <Text className="flex-1 ml-2 text-sm text-green-700">{success}</Text>
+          <Text className="ml-2 flex-1 text-sm text-green-700">{success}</Text>
           <TouchableOpacity onPress={() => setSuccess("")}>
             <Text className="text-lg font-bold text-green-500">×</Text>
           </TouchableOpacity>
@@ -332,7 +333,7 @@ export default function LogoManagement() {
       ) : null}
       {error ? (
         <View
-          className="flex-row items-center px-4 py-3 mx-4 mt-3 border border-red-200 bg-red-50 rounded-xl"
+          className="mx-4 mt-3 flex-row items-center rounded-xl border border-red-200 bg-red-50 px-4 py-3"
           style={
             isDesktop
               ? { maxWidth: 800, alignSelf: "center", width: "100%" }
@@ -340,7 +341,7 @@ export default function LogoManagement() {
           }
         >
           <AlertCircle size={16} color="#dc2626" />
-          <Text className="flex-1 ml-2 text-sm text-red-700">{error}</Text>
+          <Text className="ml-2 flex-1 text-sm text-red-700">{error}</Text>
           <TouchableOpacity onPress={() => setError("")}>
             <Text className="text-lg font-bold text-red-500">×</Text>
           </TouchableOpacity>
@@ -360,7 +361,7 @@ export default function LogoManagement() {
             : { paddingBottom: 40 }
         }
       >
-        <View className="p-6 mb-4 bg-white border border-gray-200 rounded-xl">
+        <View className="mb-4 rounded-xl border border-gray-200 bg-white p-6">
           <Text className="mb-4 text-base font-semibold text-gray-800">
             Current Logo
           </Text>
@@ -372,7 +373,7 @@ export default function LogoManagement() {
             </View>
           ) : currentLogo || preview ? (
             <View className="items-center">
-              <View className="items-center justify-center w-40 h-24 mb-4 overflow-hidden border bg-gray-50 rounded-xl">
+              <View className="mb-4 h-24 w-40 items-center justify-center overflow-hidden rounded-xl border bg-gray-50">
                 <Image
                   source={{ uri: preview || currentLogo || "" }}
                   style={{ width: "100%", height: "100%" }}
@@ -386,7 +387,7 @@ export default function LogoManagement() {
               </Text>
 
               {logoInfo && preview && (
-                <View className="w-full p-3 mb-4 rounded-lg bg-gray-50">
+                <View className="mb-4 w-full rounded-lg bg-gray-50 p-3">
                   <Text className="mb-1 text-xs font-medium text-gray-700">
                     File Information
                   </Text>
@@ -406,7 +407,7 @@ export default function LogoManagement() {
                   <TouchableOpacity
                     onPress={() => setDeleteConfirm(true)}
                     disabled={uploading}
-                    className="flex-row items-center bg-red-50 px-4 py-2.5 rounded-lg"
+                    className="flex-row items-center rounded-lg bg-red-50 px-4 py-2.5"
                   >
                     <Trash2 size={16} color="#dc2626" />
                     <Text className="ml-2 text-sm font-medium text-red-600">
@@ -418,7 +419,7 @@ export default function LogoManagement() {
                   <>
                     <TouchableOpacity
                       onPress={handleRemove}
-                      className="px-4 py-2.5 border border-gray-300 rounded-lg"
+                      className="rounded-lg border border-gray-300 px-4 py-2.5"
                     >
                       <Text className="text-sm font-medium text-gray-700">
                         Cancel
@@ -427,7 +428,7 @@ export default function LogoManagement() {
                     <TouchableOpacity
                       onPress={handleUpload}
                       disabled={uploading}
-                      className="bg-blue-900 px-6 py-2.5 rounded-lg flex-row items-center"
+                      className="flex-row items-center rounded-lg bg-blue-900 px-6 py-2.5"
                     >
                       {uploading ? (
                         <ActivityIndicator size="small" color="white" />
@@ -448,7 +449,7 @@ export default function LogoManagement() {
             <View className="items-center">
               <TouchableOpacity
                 onPress={pickImage}
-                className="items-center w-full p-10 mb-4 border-2 border-gray-300 border-dashed rounded-xl"
+                className="mb-4 w-full items-center rounded-xl border-2 border-dashed border-gray-300 p-10"
               >
                 <Upload size={36} color="#9ca3af" />
                 <Text className="mt-3 text-sm font-medium text-gray-500">
@@ -460,7 +461,7 @@ export default function LogoManagement() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={pickImage}
-                className="bg-blue-900 px-8 py-2.5 rounded-lg"
+                className="rounded-lg bg-blue-900 px-8 py-2.5"
               >
                 <Text className="text-sm font-medium text-white">
                   Choose File
@@ -472,8 +473,8 @@ export default function LogoManagement() {
       </ScrollView>
 
       <Modal visible={deleteConfirm} transparent animationType="fade">
-        <View className="items-center justify-center flex-1 p-4 bg-black/50">
-          <View className="p-6 bg-white shadow-lg rounded-xl w-80">
+        <View className="flex-1 items-center justify-center bg-black/50 p-4">
+          <View className="w-80 rounded-xl bg-white p-6 shadow-lg">
             <Text className="mb-2 text-lg font-bold text-gray-900">
               Remove Logo
             </Text>
@@ -483,7 +484,7 @@ export default function LogoManagement() {
             <View className="flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={() => setDeleteConfirm(false)}
-                className="px-4 py-2.5 rounded-lg border border-gray-300"
+                className="rounded-lg border border-gray-300 px-4 py-2.5"
               >
                 <Text className="text-sm font-medium text-gray-700">
                   Cancel
@@ -492,7 +493,7 @@ export default function LogoManagement() {
               <TouchableOpacity
                 onPress={executeDelete}
                 disabled={uploading}
-                className="px-4 py-2.5 rounded-lg bg-red-600"
+                className="rounded-lg bg-red-600 px-4 py-2.5"
               >
                 {uploading ? (
                   <ActivityIndicator size="small" color="white" />

@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/config/apiConfig";
-import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { auditAPI } from "@/services/api";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -88,16 +88,6 @@ const getStatusStyle = (status: string) => {
   }
 };
 
-const generateDocumentNumber = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const random = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, "0");
-  return `AUD/QMS/MP/${year}${month}/${random}`;
-};
-
 const getWEFDate = () => new Date().toISOString().split("T")[0];
 const getRevisionDate = () => new Date().toISOString().split("T")[0];
 const getIssueDate = () => new Date().toISOString().split("T")[0];
@@ -138,14 +128,14 @@ export default function ManufacturingProcessAuditForm(props: any) {
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
   // ✅ Add unsaved changes hook
-const {
-  markDirty,
-  resetDirty,
-  confirmDiscard,
-  showDiscardModal,
-  cancelDiscard,
-  discardChanges,
-} = useUnsavedChanges();
+  const {
+    markDirty,
+    resetDirty,
+    confirmDiscard,
+    showDiscardModal,
+    cancelDiscard,
+    discardChanges,
+  } = useUnsavedChanges();
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
 
@@ -178,7 +168,6 @@ const {
   const scrollViewRef = useRef<ScrollView>(null);
   const auditLoaded = useRef(false);
   const isManualSubmitRef = useRef(false);
-  
 
   const [formData, setFormData] = useState({
     documentNumber: "",
@@ -209,50 +198,54 @@ const {
   });
 
   // ✅ Store initial form data for comparison
-const [initialFormData] = useState(() => ({
-  documentNumber: generateDocumentNumber(),
-  auditNumber: `AUD-${Date.now()}`,
-  wefDate: getWEFDate(),
-  revNo: getRevisionNumber(),
-  revDate: getRevisionDate(),
-  issueDate: getIssueDate(),
-  department: urlDepartment || "",
-  partNumber: "",
-  machine: "",
-  date: new Date().toISOString().split("T")[0],
-  shift: "Morning",
-  time: new Date().toLocaleTimeString(),
-  location: "",
-  auditorName: user?.name || "",
-  auditorId: user?.id ? (typeof user.id === 'string' ? parseInt(user.id) : user.id) : null,
-  auditeeName: "",
-  auditeeId: null,
-  hodEmail: "",
-  status: "IN_PROGRESS",
-  responses: {} as Record<number, string>,
-  observations: {} as Record<number, string>,
-  documentsVerified: {} as Record<number, string>,
-  score: null as number | null,
-  auditorSignature: "",
-  createdAt: "",
-}));
+  const [initialFormData] = useState(() => ({
+    documentNumber: "",
+    auditNumber: `AUD-${Date.now()}`,
+    wefDate: getWEFDate(),
+    revNo: getRevisionNumber(),
+    revDate: getRevisionDate(),
+    issueDate: getIssueDate(),
+    department: urlDepartment || "",
+    partNumber: "",
+    machine: "",
+    date: new Date().toISOString().split("T")[0],
+    shift: "Morning",
+    time: new Date().toLocaleTimeString(),
+    location: "",
+    auditorName: user?.name || "",
+    auditorId: user?.id
+      ? typeof user.id === "string"
+        ? parseInt(user.id)
+        : user.id
+      : null,
+    auditeeName: "",
+    auditeeId: null,
+    hodEmail: "",
+    status: "IN_PROGRESS",
+    responses: {} as Record<number, string>,
+    observations: {} as Record<number, string>,
+    documentsVerified: {} as Record<number, string>,
+    score: null as number | null,
+    auditorSignature: "",
+    createdAt: "",
+  }));
 
-const hasFormChanged = useCallback(() => {
-  // Check if any data has changed from initial
-  const currentData = {
-    ...formData,
-    responses: JSON.stringify(formData.responses),
-    observations: JSON.stringify(formData.observations),
-    documentsVerified: JSON.stringify(formData.documentsVerified),
-  };
-  const initialData = {
-    ...initialFormData,
-    responses: JSON.stringify(initialFormData.responses),
-    observations: JSON.stringify(initialFormData.observations),
-    documentsVerified: JSON.stringify(initialFormData.documentsVerified),
-  };
-  return JSON.stringify(currentData) !== JSON.stringify(initialData);
-}, [formData, initialFormData]);
+  const hasFormChanged = useCallback(() => {
+    // Check if any data has changed from initial
+    const currentData = {
+      ...formData,
+      responses: JSON.stringify(formData.responses),
+      observations: JSON.stringify(formData.observations),
+      documentsVerified: JSON.stringify(formData.documentsVerified),
+    };
+    const initialData = {
+      ...initialFormData,
+      responses: JSON.stringify(initialFormData.responses),
+      observations: JSON.stringify(initialFormData.observations),
+      documentsVerified: JSON.stringify(initialFormData.documentsVerified),
+    };
+    return JSON.stringify(currentData) !== JSON.stringify(initialData);
+  }, [formData, initialFormData]);
 
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
@@ -269,7 +262,6 @@ const hasFormChanged = useCallback(() => {
     if (!locationHierarchy) {
       try {
         const response = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
-          credentials: "include",
         });
         if (!response.ok) throw new Error("Failed to fetch user");
         const userData = await response.json();
@@ -277,7 +269,6 @@ const hasFormChanged = useCallback(() => {
       } catch (error) {
         try {
           const allUsersRes = await fetch(`${API_BASE_URL}/api/users`, {
-            credentials: "include",
           });
           if (!allUsersRes.ok) throw new Error("Fallback fetch failed");
           const allUsers = (await allUsersRes.json()) || [];
@@ -292,6 +283,67 @@ const hasFormChanged = useCallback(() => {
       }
     }
     return locationHierarchy;
+  };
+
+  const fetchScheduleDetails = async () => {
+    if (!scheduleId || !user?.id) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`,
+        {},
+      );
+
+      if (!response.ok) {
+        console.warn("⚠️ schedules-with-status failed:", response.status);
+        return;
+      }
+
+      const raw = await response.json();
+      const list: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+
+      const match = list.find((item: any) => {
+        const sch = item?.schedule ?? item;
+        return String(sch?.id) === String(scheduleId);
+      });
+
+      if (!match) {
+        console.warn("⚠️ Schedule not found in list:", scheduleId);
+        return;
+      }
+
+      const schedule = match.schedule ?? match;
+
+      const resolvedAuditNumber =
+        schedule?.auditNumber ??
+        schedule?.audit_number ??
+        schedule?.documentNumber ??
+        schedule?.reportNumber ??
+        "";
+
+      console.log("🔍 [ProcessAudit] resolved:", {
+        scheduleId,
+        resolvedAuditNumber,
+        schedule,
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        documentNumber: resolvedAuditNumber || prev.documentNumber,
+        department: schedule?.department || prev.department,
+        location: schedule?.location || prev.location,
+        shift: schedule?.shift || prev.shift,
+        date: schedule?.scheduledDate
+          ? String(schedule.scheduledDate).split("T")[0]
+          : prev.date,
+        auditorName: schedule?.auditorName || prev.auditorName,
+        auditorId: schedule?.auditorId || prev.auditorId,
+        auditeeName: schedule?.auditeeName || prev.auditeeName,
+        auditeeId: schedule?.auditeeId || prev.auditeeId,
+      }));
+    } catch (error) {
+      console.warn("⚠️ Could not fetch schedule details:", error);
+    }
   };
 
   const fetchAuditorSignature = async () => {
@@ -328,7 +380,7 @@ const hasFormChanged = useCallback(() => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/templates/${MANUFACTURING_CHECK_SHEET_ID}`,
-        { credentials: "include" },
+        {},
       );
       if (!response.ok) throw new Error("Failed to fetch template");
       const checkSheet = await response.json();
@@ -416,6 +468,7 @@ const hasFormChanged = useCallback(() => {
       }
       const auditorLocation = await fetchAuditorLocation();
       const finalLocation = decodedLocation || auditorLocation || "";
+      await fetchScheduleDetails();
       const auditorIdValue = user?.id
         ? typeof user.id === "string"
           ? parseInt(user.id)
@@ -423,8 +476,7 @@ const hasFormChanged = useCallback(() => {
         : null;
       setFormData((prev) => ({
         ...prev,
-        documentNumber: generateDocumentNumber(),
-        auditNumber: `AUD-${Date.now()}`,
+        auditNumber: prev.auditNumber || `AUD-${Date.now()}`,
         wefDate: getWEFDate(),
         revNo: getRevisionNumber(),
         revDate: getRevisionDate(),
@@ -450,7 +502,7 @@ const hasFormChanged = useCallback(() => {
     }
   }, [editId, questions]);
 
-   useEffect(() => {
+  useEffect(() => {
     // Only enable on web and only on Step 2
     if (Platform.OS !== "web" || currentStep !== 2) return;
 
@@ -492,7 +544,6 @@ const hasFormChanged = useCallback(() => {
     };
   }, [currentStep, currentCheckpointIndex, questions.length]);
 
-
   useEffect(() => {
     if (user?.id && !editId) {
       setFormData((prev) => ({ ...prev, auditorName: user.name || "" }));
@@ -517,25 +568,33 @@ const hasFormChanged = useCallback(() => {
         } catch (e) {
           answers = {};
         }
-        setFormData({
-          documentNumber: answers.documentNumber || generateDocumentNumber(),
-          auditNumber: answers.auditNumber || `AUD-${Date.now()}`,
-          wefDate: answers.wefDate || getWEFDate(),
-          revNo: answers.revNo || getRevisionNumber(),
-          revDate: answers.revDate || getRevisionDate(),
-          issueDate: answers.issueDate || getIssueDate(),
-          department: answers.department || audit.department || "",
+        setFormData((prev) => ({
+          ...prev,
+          documentNumber: answers.documentNumber || prev.documentNumber || "",
+          auditNumber:
+            answers.auditNumber || prev.auditNumber || `AUD-${Date.now()}`,
+          wefDate: answers.wefDate || prev.wefDate || getWEFDate(),
+          revNo: answers.revNo || prev.revNo || getRevisionNumber(),
+          revDate: answers.revDate || prev.revDate || getRevisionDate(),
+          issueDate: answers.issueDate || prev.issueDate || getIssueDate(),
+          department: answers.department || audit.department || prev.department,
           partNumber: answers.partNumber || "",
           machine: answers.machine || "",
-          date: answers.date || new Date().toISOString().split("T")[0],
-          shift: audit.shift || "Morning",
-          time: answers.time || new Date().toLocaleTimeString(),
-          location: answers.location || "",
-          auditorName: audit.auditorName || user?.name || "",
+          date:
+            answers.date || prev.date || new Date().toISOString().split("T")[0],
+          shift: audit.shift || prev.shift || "Morning",
+          time: answers.time || prev.time || new Date().toLocaleTimeString(),
+          location: answers.location || prev.location || "",
+          auditorName:
+            audit.auditorName || prev.auditorName || user?.name || "",
           auditorId:
-            audit.auditorId || (user?.id ? parseInt(String(user.id)) : null),
-          auditeeName: audit.auditeeName || answers.auditeeName || "",
-          auditeeId: audit.auditeeId || answers.auditeeId || null,
+            audit.auditorId ||
+            prev.auditorId ||
+            (user?.id ? parseInt(String(user.id)) : null),
+          auditeeName:
+            audit.auditeeName || answers.auditeeName || prev.auditeeName || "",
+          auditeeId:
+            audit.auditeeId || answers.auditeeId || prev.auditeeId || null,
           hodEmail: answers.hodEmail || "",
           status: audit.status || "IN_PROGRESS",
           responses: answers.responses || {},
@@ -544,7 +603,7 @@ const hasFormChanged = useCallback(() => {
           score: answers.score || null,
           auditorSignature: answers.auditorSignature || "",
           createdAt: audit.createdAt || new Date().toISOString(),
-        });
+        }));
         auditLoaded.current = true;
       }
     } catch (error) {
@@ -556,35 +615,35 @@ const hasFormChanged = useCallback(() => {
   };
 
   const handleInputChange = (field: string, value: any) => {
-  setFormData((prev) => ({ ...prev, [field]: value }));
-  // ✅ Mark as dirty only if the value actually changed
-  const initialValue = initialFormData[field as keyof typeof initialFormData];
-  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
-    markDirty();
-  }
-};
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // ✅ Mark as dirty only if the value actually changed
+    const initialValue = initialFormData[field as keyof typeof initialFormData];
+    if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
+      markDirty();
+    }
+  };
   const handleObservationChange = (questionId: number, observation: string) => {
-  setFormData((prev) => ({
-    ...prev,
-    observations: { ...prev.observations, [questionId]: observation },
-  }));
-  // ✅ Mark as dirty
-  const initialObs = initialFormData.observations[questionId] || "";
-  if (observation !== initialObs) {
-    markDirty();
-  }
-};
+    setFormData((prev) => ({
+      ...prev,
+      observations: { ...prev.observations, [questionId]: observation },
+    }));
+    // ✅ Mark as dirty
+    const initialObs = initialFormData.observations[questionId] || "";
+    if (observation !== initialObs) {
+      markDirty();
+    }
+  };
   const handleStatusChange = (questionId: number, status: string) => {
-  setFormData((prev) => ({
-    ...prev,
-    responses: { ...prev.responses, [questionId]: status },
-  }));
-  // ✅ Mark as dirty
-  const initialStatus = initialFormData.responses[questionId] || "";
-  if (status !== initialStatus) {
-    markDirty();
-  }
-};
+    setFormData((prev) => ({
+      ...prev,
+      responses: { ...prev.responses, [questionId]: status },
+    }));
+    // ✅ Mark as dirty
+    const initialStatus = initialFormData.responses[questionId] || "";
+    if (status !== initialStatus) {
+      markDirty();
+    }
+  };
 
   const calculateScore = () => {
     if (questions.length === 0) return 0;
@@ -850,17 +909,21 @@ const hasFormChanged = useCallback(() => {
   };
 
   const handleGoBack = useCallback(() => {
-  // ✅ Check if there are unsaved changes
-  if (hasFormChanged() && !formData.status?.includes("SUBMITTED") && !formData.status?.includes("DRAFT")) {
-    confirmDiscard(() => {
+    // ✅ Check if there are unsaved changes
+    if (
+      hasFormChanged() &&
+      !formData.status?.includes("SUBMITTED") &&
+      !formData.status?.includes("DRAFT")
+    ) {
+      confirmDiscard(() => {
+        if (props.onClose) props.onClose();
+        else router.back();
+      });
+    } else {
       if (props.onClose) props.onClose();
       else router.back();
-    });
-  } else {
-    if (props.onClose) props.onClose();
-    else router.back();
-  }
-}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
+    }
+  }, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
 
   const steps = [
     { number: 1, title: "General Information", icon: User },
@@ -884,7 +947,7 @@ const hasFormChanged = useCallback(() => {
     }
   };
 
- // ✅ Reusable Date Input
+  // ✅ Reusable Date Input
   const DateInput = ({
     value,
     onChange,
@@ -1444,7 +1507,6 @@ const hasFormChanged = useCallback(() => {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            
                           }}
                         >
                           <Text
@@ -1483,7 +1545,6 @@ const hasFormChanged = useCallback(() => {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                           
                           }}
                         >
                           <Text
@@ -1511,7 +1572,6 @@ const hasFormChanged = useCallback(() => {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                            
                           }}
                         >
                           <Text
@@ -1551,7 +1611,6 @@ const hasFormChanged = useCallback(() => {
                                 ? "31%"
                                 : "100%",
                             minWidth: 140,
-                          
                           }}
                         >
                           <Text
@@ -3616,117 +3675,124 @@ const hasFormChanged = useCallback(() => {
         )}
       </KeyboardAvoidingView>
       {/* ✅ Discard Changes Modal */}
-<Modal
-  visible={showDiscardModal}
-  transparent
-  animationType="fade"
-  onRequestClose={cancelDiscard}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 24,
-    }}
-  >
-    <View
-      style={{
-        width: '100%',
-        maxWidth: 420,
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 24,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-      }}
-    >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: '#fef2f2',
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'center',
-          marginBottom: 16,
-        }}
+      <Modal
+        visible={showDiscardModal}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDiscard}
       >
-        <AlertTriangle size={26} color="#dc2626" />
-      </View>
-
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: '700',
-          color: '#111827',
-          textAlign: 'center',
-          marginBottom: 8,
-        }}
-      >
-        Discard changes?
-      </Text>
-
-      <Text
-        style={{
-          fontSize: 14,
-          color: '#6b7280',
-          textAlign: 'center',
-          lineHeight: 21,
-          marginBottom: 24,
-        }}
-      >
-        You have unsaved changes. Are you sure you want to leave without saving?
-      </Text>
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <TouchableOpacity
-          onPress={cancelDiscard}
-          activeOpacity={0.8}
+        <View
           style={{
             flex: 1,
-            height: 46,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: '#d1d5db',
-            backgroundColor: 'white',
-            alignItems: 'center',
-            justifyContent: 'center',
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 24,
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
-            Stay
-          </Text>
-        </TouchableOpacity>
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 24,
+              elevation: 10,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 10,
+            }}
+          >
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: "#fef2f2",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "center",
+                marginBottom: 16,
+              }}
+            >
+              <AlertTriangle size={26} color="#dc2626" />
+            </View>
 
-        <TouchableOpacity
-          onPress={() => discardChanges(() => {
-            if (props.onClose) props.onClose();
-            else router.back();
-          })}
-          activeOpacity={0.8}
-          style={{
-            flex: 1,
-            height: 46,
-            borderRadius: 10,
-            backgroundColor: '#dc2626',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
-            Discard
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "700",
+                color: "#111827",
+                textAlign: "center",
+                marginBottom: 8,
+              }}
+            >
+              Discard changes?
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#6b7280",
+                textAlign: "center",
+                lineHeight: 21,
+                marginBottom: 24,
+              }}
+            >
+              You have unsaved changes. Are you sure you want to leave without
+              saving?
+            </Text>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TouchableOpacity
+                onPress={cancelDiscard}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#d1d5db",
+                  backgroundColor: "white",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "#374151" }}
+                >
+                  Stay
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  discardChanges(() => {
+                    if (props.onClose) props.onClose();
+                    else router.back();
+                  })
+                }
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: 10,
+                  backgroundColor: "#dc2626",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "white" }}
+                >
+                  Discard
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

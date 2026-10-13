@@ -1,16 +1,16 @@
 // components/ui/tabs/index.tsx - Updated Trigger
-import { Feather } from '@expo/vector-icons';
-import React, { createContext, ReactNode, useContext, useState } from 'react';
+import { Feather } from "@expo/vector-icons";
+import React, { createContext, ReactNode, useContext, useState } from "react";
 import {
-    GestureResponderEvent,
-    StyleSheet,
-    Text,
-    TextStyle,
-    TouchableOpacity,
-    TouchableOpacityProps,
-    View,
-    ViewStyle,
-} from 'react-native';
+  GestureResponderEvent,
+  StyleSheet,
+  Text,
+  TextStyle,
+  TouchableOpacity,
+  TouchableOpacityProps,
+  View,
+  ViewStyle,
+} from "react-native";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface TabsContextType {
@@ -25,7 +25,7 @@ interface NativeTabsProps {
   onValueChange?: (value: string) => void;
 }
 
-interface TriggerProps extends Omit<TouchableOpacityProps, 'onPress'> {
+interface TriggerProps extends Omit<TouchableOpacityProps, "onPress"> {
   name: string;
   children: ReactNode;
   isActive?: boolean;
@@ -51,7 +51,7 @@ const TabsContext = createContext<TabsContextType | undefined>(undefined);
 const useTabsContext = () => {
   const context = useContext(TabsContext);
   if (!context) {
-    throw new Error('Tabs components must be used within a Tabs provider');
+    throw new Error("Tabs components must be used within a Tabs provider");
   }
   return context;
 };
@@ -60,7 +60,7 @@ const useTabsContext = () => {
 export function NativeTabs({
   children,
   style,
-  defaultValue = '',
+  defaultValue = "",
   onValueChange,
 }: NativeTabsProps) {
   const [activeTab, setActiveTab] = useState(defaultValue);
@@ -80,7 +80,13 @@ export function NativeTabs({
 }
 
 // ─── Trigger Component ─────────────────────────────────────────────────────
-function Trigger({ name, children, isActive, onPress, ...props }: TriggerProps) {
+function Trigger({
+  name,
+  children,
+  isActive,
+  onPress,
+  ...props
+}: TriggerProps) {
   const context = useTabsContext();
   const active = isActive ?? context.activeTab === name;
 
@@ -106,11 +112,18 @@ function Trigger({ name, children, isActive, onPress, ...props }: TriggerProps) 
 }
 
 // ─── Trigger Icon ──────────────────────────────────────────────────────────
-function Icon({ name, size = 24, color = '#9CA3AF', md, sf }: IconProps) {
-  const iconName = md || sf || name || 'circle';
-  
+function Icon({ name, size = 24, color = "#9CA3AF", md, sf }: IconProps) {
+  const iconName = md || sf || name || "circle";
+
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Feather name={iconName as any} size={size} color={color} />
     </View>
   );
@@ -131,26 +144,26 @@ NativeTabs.Trigger = Trigger;
 // ─── Styles ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: "#E5E7EB",
     paddingVertical: 8,
     paddingHorizontal: 16,
     height: 70,
   },
   trigger: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 4,
     borderRadius: 8,
   },
   triggerActive: {},
   label: {
     fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '400',
+    color: "#9CA3AF",
+    fontWeight: "400",
     marginTop: 2,
   },
 });

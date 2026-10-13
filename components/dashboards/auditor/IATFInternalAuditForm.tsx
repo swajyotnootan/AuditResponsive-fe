@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/config/apiConfig";
-import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { auditAPI } from "@/services/api"; // ✅ Add this import
 import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ ADD THIS IMPORT
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -25,7 +25,7 @@ import {
   Send,
   Sparkles,
   User,
-  X
+  X,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -86,16 +86,6 @@ const STATUS_OPTIONS = [
     icon: Flag,
   },
 ];
-
-const generateDocumentNumber = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const random = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, "0");
-  return `AUD-IATF-${year}${month}-${random}`;
-};
 
 const calculateScore = (
   responses: Record<number, string>,
@@ -176,14 +166,14 @@ export default function IATFInternalAuditForm(props: any) {
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
   // ✅ Add unsaved changes hook
-const {
-  markDirty,
-  resetDirty,
-  confirmDiscard,
-  showDiscardModal,
-  cancelDiscard,
-  discardChanges,
-} = useUnsavedChanges();
+  const {
+    markDirty,
+    resetDirty,
+    confirmDiscard,
+    showDiscardModal,
+    cancelDiscard,
+    discardChanges,
+  } = useUnsavedChanges();
   const isDesktop = width >= 768;
 
   const editId = props.editId || params.edit;
@@ -220,8 +210,37 @@ const {
   const isManualSubmitRef = useRef(false);
   const initialized = useRef(false);
 
+  // ✅ RESET everything whenever we switch to a different form/schedule
+  useEffect(() => {
+    initialized.current = false;
+    setCurrentCheckSheet(null);
+    setAvailableSheets([]);
+    setShowSheetSelector(false);
+    setQuestions([]);
+    setCurrentCheckpointIndex(0);
+    setCurrentStep(1);
+    setResponseId(null);
+    setIsAlreadyCompleted(false);
+    setShowSuccessModal(false);
+    setSubmissionResult(null);
+    setFormData((prev) => ({
+      ...prev,
+      documentNumber: "",
+      department: departmentParam || "",
+      location: "",
+      shift: "Morning",
+      date: new Date().toISOString().split("T")[0],
+      auditeeName: "",
+      auditeeId: "",
+      status: "IN_PROGRESS",
+      responses: {},
+      observations: {},
+      score: null,
+    }));
+  }, [scheduleId, editId, formIdParam, processNameParam, departmentParam]);
+
   const [formData, setFormData] = useState({
-    documentNumber: generateDocumentNumber(),
+    documentNumber: "",
     department: departmentParam || "",
     location: "",
     shift: "Morning",
@@ -238,42 +257,40 @@ const {
     score: null as number | null,
   });
   // ✅ Store initial form data for comparison
-const [initialFormData] = useState(() => {
-  return {
-    documentNumber: generateDocumentNumber(),
-    department: departmentParam || "",
-    location: "",
-    shift: "Morning",
-    date: new Date().toISOString().split("T")[0],
-    time: new Date().toLocaleTimeString(),
-    auditorName: user?.name || "",
-    auditorId: user?.id,
-    auditorSignature: "",
-    auditeeName: "",
-    auditeeId: "",
-    status: "IN_PROGRESS",
-    responses: {} as Record<number, string>,
-    observations: {} as Record<number, string>,
-    score: null as number | null,
-  };
-});
+  const [initialFormData] = useState(() => {
+    return {
+      documentNumber: "",
+      department: departmentParam || "",
+      location: "",
+      shift: "Morning",
+      date: new Date().toISOString().split("T")[0],
+      time: new Date().toLocaleTimeString(),
+      auditorName: user?.name || "",
+      auditorId: user?.id,
+      auditorSignature: "",
+      auditeeName: "",
+      auditeeId: "",
+      status: "IN_PROGRESS",
+      responses: {} as Record<number, string>,
+      observations: {} as Record<number, string>,
+      score: null as number | null,
+    };
+  });
 
-const hasFormChanged = useCallback(() => {
-  // Check if any data has changed from initial
-  const currentData = {
-    ...formData,
-    responses: JSON.stringify(formData.responses),
-    observations: JSON.stringify(formData.observations),
-  };
-  const initialData = {
-    ...initialFormData,
-    responses: JSON.stringify(initialFormData.responses),
-    observations: JSON.stringify(initialFormData.observations),
-  };
-  return JSON.stringify(currentData) !== JSON.stringify(initialData);
-}, [formData, initialFormData]);
-
-
+  const hasFormChanged = useCallback(() => {
+    // Check if any data has changed from initial
+    const currentData = {
+      ...formData,
+      responses: JSON.stringify(formData.responses),
+      observations: JSON.stringify(formData.observations),
+    };
+    const initialData = {
+      ...initialFormData,
+      responses: JSON.stringify(initialFormData.responses),
+      observations: JSON.stringify(initialFormData.observations),
+    };
+    return JSON.stringify(currentData) !== JSON.stringify(initialData);
+  }, [formData, initialFormData]);
 
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
@@ -289,9 +306,10 @@ const hasFormChanged = useCallback(() => {
     let locationHierarchy = getLocationHierarchy(user);
     if (!locationHierarchy) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
-          credentials: "include",
-        });
+        const response = await fetch(
+          `${API_BASE_URL}/api/users/${user.id}`,
+          {},
+        );
         if (response.ok) {
           const userData = await response.json();
           locationHierarchy = getLocationHierarchy(userData);
@@ -354,29 +372,68 @@ const hasFormChanged = useCallback(() => {
   const fetchScheduleDetails = async () => {
     if (!scheduleId) return;
     try {
+      // ✅ Use the working endpoint from AuditorDashboard
+      // We already have user?.id from useAuth()
+      if (!user?.id) return;
+
       const response = await fetch(
-        `${API_BASE_URL}/api/audit-schedule/${scheduleId}`,
-        {
-          credentials: "include",
-        },
+        `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`,
+        {},
       );
-      if (response.ok) {
-        const schedule = await response.json();
-        if (schedule.auditeeName && !editId) {
-          setFormData((prev) => ({
-            ...prev,
-            auditeeName: schedule.auditeeName,
-            auditeeId: schedule.auditeeId || prev.auditeeId,
-            department: schedule.department || prev.department,
-            location: schedule.location || prev.location,
-            shift: schedule.shift || prev.shift,
-            date: schedule.scheduledDate
-              ? schedule.scheduledDate.split("T")[0]
-              : prev.date,
-            auditorName: schedule.auditorName || prev.auditorName,
-            auditorId: schedule.auditorId || prev.auditorId,
-          }));
-        }
+
+      if (!response.ok) {
+        console.warn("⚠️ schedules-with-status failed:", response.status);
+        return;
+      }
+
+      const raw = await response.json();
+      const list: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+
+      // Find the one schedule we care about
+      const match = list.find((item: any) => {
+        const sch = item?.schedule ?? item;
+        return String(sch?.id) === String(scheduleId);
+      });
+
+      if (!match) {
+        console.warn("⚠️ Schedule not found in list:", scheduleId);
+        return;
+      }
+
+      const schedule = match.schedule ?? match;
+
+      const resolvedAuditNumber =
+        schedule?.auditNumber ??
+        schedule?.audit_number ??
+        schedule?.documentNumber ??
+        "";
+
+      console.log("🔍 [fetchScheduleDetails] resolved:", {
+        scheduleId,
+        resolvedAuditNumber,
+        schedule,
+      });
+
+      if (!editId) {
+        setFormData((prev) => ({
+          ...prev,
+          documentNumber: resolvedAuditNumber || prev.documentNumber,
+          auditeeName: schedule?.auditeeName || prev.auditeeName,
+          auditeeId: schedule?.auditeeId || prev.auditeeId,
+          department: schedule?.department || prev.department,
+          location: schedule?.location || prev.location,
+          shift: schedule?.shift || prev.shift,
+          date: schedule?.scheduledDate
+            ? String(schedule.scheduledDate).split("T")[0]
+            : prev.date,
+          auditorName: schedule?.auditorName || prev.auditorName,
+          auditorId: schedule?.auditorId || prev.auditorId,
+        }));
+      } else if (resolvedAuditNumber) {
+        setFormData((prev) => ({
+          ...prev,
+          documentNumber: prev.documentNumber || resolvedAuditNumber,
+        }));
       }
     } catch (error) {
       console.warn("⚠️ Could not fetch schedule details:", error);
@@ -390,9 +447,7 @@ const hasFormChanged = useCallback(() => {
       try {
         const res = await fetch(
           `${API_BASE_URL}/api/templates/type/IATF_16949`,
-          {
-            credentials: "include",
-          },
+          {},
         );
         if (res.ok) {
           const allForms = await res.json();
@@ -405,7 +460,7 @@ const hasFormChanged = useCallback(() => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/templates/iatf/by-department/${encodeURIComponent(department)}`,
-        { credentials: "include" },
+        {},
       );
       if (response.ok) return await response.json();
     } catch (error) {
@@ -495,9 +550,7 @@ const hasFormChanged = useCallback(() => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/templates/${sheet.id}`,
-        {
-          credentials: "include",
-        },
+        {},
       );
       if (!response.ok) throw new Error("Failed to fetch template");
       const fullSheet = await response.json();
@@ -551,70 +604,75 @@ const hasFormChanged = useCallback(() => {
   };
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
     const initialize = async () => {
-      await fetchAuditorSignature();
-      await fetchAuditorLocation();
-      await fetchScheduleDetails();
+      setLoading(true); // ✅ always reset
+      try {
+        await fetchAuditorSignature();
+        await fetchAuditorLocation();
+        await fetchScheduleDetails();
 
-      let decodedAuditeeName = "";
-      if (
-        urlAuditeeName &&
-        urlAuditeeName !== "undefined" &&
-        urlAuditeeName !== "null"
-      ) {
-        try {
-          decodedAuditeeName = decodeURIComponent(String(urlAuditeeName));
-        } catch (e) {
-          decodedAuditeeName = String(urlAuditeeName);
+        let decodedAuditeeName = "";
+        if (
+          urlAuditeeName &&
+          urlAuditeeName !== "undefined" &&
+          urlAuditeeName !== "null"
+        ) {
+          try {
+            decodedAuditeeName = decodeURIComponent(String(urlAuditeeName));
+          } catch (e) {
+            decodedAuditeeName = String(urlAuditeeName);
+          }
+          setFormData((prev) => ({
+            ...prev,
+            auditeeName: decodedAuditeeName,
+            auditeeId: urlAuditeeId || "",
+          }));
         }
-        setFormData((prev) => ({
-          ...prev,
-          auditeeName: decodedAuditeeName,
-          auditeeId: urlAuditeeId || "",
-        }));
-      }
 
-      let deptToFetch = departmentParam;
-      if (deptToFetch) {
-        setFormData((prev) => ({ ...prev, department: deptToFetch }));
-        const forms = await fetchSheetsForDepartment(deptToFetch);
-        if (forms.length > 0 && (processNameParam || formIdParam)) {
-          let targetSheet = null;
-          if (formIdParam)
-            targetSheet = forms.find(
-              (f: any) => f.id === parseInt(String(formIdParam)),
-            );
-          if (!targetSheet && processNameParam)
-            targetSheet = forms.find(
-              (f: any) =>
-                f.processName === processNameParam ||
-                f.name.includes(processNameParam),
-            );
-          if (!targetSheet && forms.length === 1) targetSheet = forms[0];
+        let deptToFetch = departmentParam;
+        if (deptToFetch) {
+          setFormData((prev) => ({ ...prev, department: deptToFetch }));
+          const forms = await fetchSheetsForDepartment(deptToFetch);
+          if (forms.length > 0 && (processNameParam || formIdParam)) {
+            let targetSheet = null;
+            if (formIdParam)
+              targetSheet = forms.find(
+                (f: any) => f.id === parseInt(String(formIdParam)),
+              );
+            if (!targetSheet && processNameParam)
+              targetSheet = forms.find(
+                (f: any) =>
+                  f.processName === processNameParam ||
+                  f.name.includes(processNameParam),
+              );
+            if (!targetSheet && forms.length === 1) targetSheet = forms[0];
 
-          if (targetSheet) await loadSheetQuestions(targetSheet);
-          else if (forms.length > 0) {
+            if (targetSheet) await loadSheetQuestions(targetSheet);
+            else if (forms.length > 0) {
+              setAvailableSheets(forms);
+              setShowSheetSelector(true);
+              setLoading(false);
+            }
+          } else if (forms.length === 1) await loadSheetQuestions(forms[0]);
+          else if (forms.length > 1) {
             setAvailableSheets(forms);
             setShowSheetSelector(true);
             setLoading(false);
+          } else {
+            addToast("No IATF forms found for this department", "error");
+            setLoading(false);
           }
-        } else if (forms.length === 1) await loadSheetQuestions(forms[0]);
-        else if (forms.length > 1) {
-          setAvailableSheets(forms);
-          setShowSheetSelector(true);
-          setLoading(false);
         } else {
-          addToast("No IATF forms found for this department", "error");
           setLoading(false);
         }
-      } else {
-        setLoading(false);
+      } catch (err) {
+        console.error("Init failed:", err);
+      } finally {
+        setLoading(false); // ✅ ALWAYS turn off loading
       }
     };
     initialize();
-  }, []);
+  }, [scheduleId, editId, formIdParam, processNameParam, departmentParam]);
 
   const loadAuditData = async () => {
     setLoading(true);
@@ -638,7 +696,10 @@ const hasFormChanged = useCallback(() => {
         }
         setFormData((prev) => ({
           ...prev,
-          documentNumber: answers.documentNumber || prev.documentNumber,
+          documentNumber:
+            prev.documentNumber || // ← keep schedule-sourced number
+            answers.documentNumber ||
+            "",
           department: audit.department || prev.department,
           location: answers.location || "",
           shift: audit.shift || "Morning",
@@ -703,36 +764,46 @@ const hasFormChanged = useCallback(() => {
     };
   }, [currentStep, currentCheckpointIndex, questions.length]);
 
- const handleInputChange = useCallback((field: string, value: any) => {
-  setFormData((prev) => ({ ...prev, [field]: value }));
-  // ✅ Mark as dirty only if the value actually changed
-  const initialValue = initialFormData[field as keyof typeof initialFormData];
-  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
-  const handleObservationChange = useCallback((questionId: number, observation: string) => {
-  setFormData((prev) => ({
-    ...prev,
-    observations: { ...prev.observations, [questionId]: observation },
-  }));
-  // ✅ Mark as dirty
-  const initialObs = initialFormData.observations[questionId] || "";
-  if (observation !== initialObs) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
- const handleStatusChange = useCallback((questionId: number, status: string) => {
-  setFormData((prev) => ({
-    ...prev,
-    responses: { ...prev.responses, [questionId]: status },
-  }));
-  // ✅ Mark as dirty
-  const initialStatus = initialFormData.responses[questionId] || "";
-  if (status !== initialStatus) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
+  const handleInputChange = useCallback(
+    (field: string, value: any) => {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+      // ✅ Mark as dirty only if the value actually changed
+      const initialValue =
+        initialFormData[field as keyof typeof initialFormData];
+      if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
+        markDirty();
+      }
+    },
+    [markDirty, initialFormData],
+  );
+  const handleObservationChange = useCallback(
+    (questionId: number, observation: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        observations: { ...prev.observations, [questionId]: observation },
+      }));
+      // ✅ Mark as dirty
+      const initialObs = initialFormData.observations[questionId] || "";
+      if (observation !== initialObs) {
+        markDirty();
+      }
+    },
+    [markDirty, initialFormData],
+  );
+  const handleStatusChange = useCallback(
+    (questionId: number, status: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        responses: { ...prev.responses, [questionId]: status },
+      }));
+      // ✅ Mark as dirty
+      const initialStatus = initialFormData.responses[questionId] || "";
+      if (status !== initialStatus) {
+        markDirty();
+      }
+    },
+    [markDirty, initialFormData],
+  );
 
   useEffect(() => {
     const keywordStatusMap = {
@@ -887,58 +958,58 @@ const hasFormChanged = useCallback(() => {
   };
 
   // =====================================================
-// REPLACE this entire function in IATFInternalAuditForm
-// =====================================================
-const goToNcrForm = (savedResponseId: any) => {
-  if (!savedResponseId) {
-    addToast("First submit the audit to save the report number.", "warning");
-    return;
-  }
+  // REPLACE this entire function in IATFInternalAuditForm
+  // =====================================================
+  const goToNcrForm = (savedResponseId: any) => {
+    if (!savedResponseId) {
+      addToast("First submit the audit to save the report number.", "warning");
+      return;
+    }
 
-  const ncQuestions = getNcrFindings();
-  
-  // ✅ Build the params object (same as AuditorDashboard)
-  const routeParams = {
-    auditId: String(savedResponseId),
-    auditReportNumber: formData.documentNumber || "",
-    department: formData.department || "",
-    shift: formData.shift || "Day",
-    auditeeId: formData.auditeeId ? String(formData.auditeeId) : "",
-    auditeeName: formData.auditeeName || "",
-    clause: ncQuestions
-      .map((q) => (q.clause ? `Clause ${q.clause}` : `Question ${q.slNo}`))
-      .join("\n"),
-    evidence: ncQuestions
-      .map((q) => {
-        const status =
-          formData.responses[q.slNo] === "MAJOR_NC" ? "Major NC" : "Minor NC";
-        const observation =
-          formData.observations[q.slNo] || "Observation not entered";
-        return `Q${q.slNo}: ${q.checkpoint}\nStatus: ${status}\nEvidence: ${observation}`;
-      })
-      .join("\n"),
-    statement: ncQuestions
-      .map((q) => {
-        const status =
-          formData.responses[q.slNo] === "MAJOR_NC"
-            ? "Major nonconformity"
-            : "Minor nonconformity";
-        return `${status} identified for Q${q.slNo}: ${q.checkpoint}`;
-      })
-      .join("\n"),
+    const ncQuestions = getNcrFindings();
+
+    // ✅ Build the params object (same as AuditorDashboard)
+    const routeParams = {
+      auditId: String(savedResponseId),
+      auditReportNumber: formData.documentNumber || "",
+      department: formData.department || "",
+      shift: formData.shift || "Day",
+      auditeeId: formData.auditeeId ? String(formData.auditeeId) : "",
+      auditeeName: formData.auditeeName || "",
+      clause: ncQuestions
+        .map((q) => (q.clause ? `Clause ${q.clause}` : `Question ${q.slNo}`))
+        .join("\n"),
+      evidence: ncQuestions
+        .map((q) => {
+          const status =
+            formData.responses[q.slNo] === "MAJOR_NC" ? "Major NC" : "Minor NC";
+          const observation =
+            formData.observations[q.slNo] || "Observation not entered";
+          return `Q${q.slNo}: ${q.checkpoint}\nStatus: ${status}\nEvidence: ${observation}`;
+        })
+        .join("\n"),
+      statement: ncQuestions
+        .map((q) => {
+          const status =
+            formData.responses[q.slNo] === "MAJOR_NC"
+              ? "Major nonconformity"
+              : "Minor nonconformity";
+          return `${status} identified for Q${q.slNo}: ${q.checkpoint}`;
+        })
+        .join("\n"),
+    };
+
+    // ✅ Use the same pattern as AuditorDashboard - set state to render Form7 inline
+    // If you have a prop to handle this from parent, use it
+    if (props.onRaiseNcr) {
+      // If parent passed a callback
+      props.onRaiseNcr(routeParams);
+    } else {
+      // Fallback: Use router navigation (if you have the route configured)
+      const queryString = new URLSearchParams(routeParams).toString();
+      router.push(`/form7?${queryString}` as any);
+    }
   };
-
-  // ✅ Use the same pattern as AuditorDashboard - set state to render Form7 inline
-  // If you have a prop to handle this from parent, use it
-  if (props.onRaiseNcr) {
-    // If parent passed a callback
-    props.onRaiseNcr(routeParams);
-  } else {
-    // Fallback: Use router navigation (if you have the route configured)
-    const queryString = new URLSearchParams(routeParams).toString();
-    router.push(`/form7?${queryString}` as any);
-  }
-};
 
   const saveAuditData = async (status: string, isSubmit = false) => {
     if (!currentCheckSheet || !currentCheckSheet.id) {
@@ -1057,8 +1128,7 @@ const goToNcrForm = (savedResponseId: any) => {
       return;
     }
     await saveAuditData("DRAFT", false);
-      resetDirty(); // ✅ Reset after successful submission
-
+    resetDirty(); // ✅ Reset after successful submission
   };
 
   const submitAudit = async () => {
@@ -1091,8 +1161,24 @@ const goToNcrForm = (savedResponseId: any) => {
       return;
     }
     await saveAuditData("SUBMITTED", true);
-      resetDirty(); // ✅ Reset after successful submission
+    resetDirty(); // ✅ Reset after successful submission
 
+    // ✅ NEW: Immediately ask backend to recompute schedule status.
+    //    This ensures the DB flips to COMPLETED as soon as the last form is submitted,
+    //    without waiting for the modal to be closed.
+    if (scheduleId) {
+      try {
+        await fetch(
+          `${API_BASE_URL}/api/audit-schedule/schedule/${scheduleId}/check-completion`,
+          { method: "POST", credentials: "include" },
+        );
+        console.log(
+          `✅ Post-submit completion check fired for schedule ${scheduleId}`,
+        );
+      } catch (e) {
+        console.warn("⚠️ Post-submit completion check failed:", e);
+      }
+    }
   };
 
   const handleAutoFill = () => {
@@ -1246,27 +1332,41 @@ const goToNcrForm = (savedResponseId: any) => {
     }
   };
 
-  const handleGoBack = useCallback(() => {
-  // ✅ Check if there are unsaved changes
-  if (hasFormChanged() && !formData.status?.includes("SUBMITTED")) {
-    confirmDiscard(() => {
-      if (props.onClose) props.onClose();
-      else router.back();
-    });
-  } else {
-    if (props.onClose) props.onClose();
-    else router.back();
-  }
-}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
+  const goToDashboard = useCallback(() => {
+    try {
+      // dismiss any stacked modals/screens first
+      if ((router as any).canDismiss?.()) {
+        (router as any).dismissAll();
+      }
+    } catch {}
+    router.replace("/auditor");
+  }, [router]);
 
+  const handleGoBack = useCallback(() => {
+    if (hasFormChanged() && !formData.status?.includes("SUBMITTED")) {
+      confirmDiscard(() => {
+        if (props.onClose) props.onClose();
+        else goToDashboard();
+      });
+    } else {
+      if (props.onClose) props.onClose();
+      else goToDashboard();
+    }
+  }, [
+    hasFormChanged,
+    formData.status,
+    confirmDiscard,
+    props.onClose,
+    goToDashboard,
+  ]);
   // ✅ EMPTY STATES
   if (isAlreadyCompleted) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="max-w-md p-8 mx-auto text-center bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <CheckCircle size={48} color="#10b981" style={{ marginBottom: 16 }} />
           <Text className="text-xl font-bold text-slate-800">
             Form Already Completed
@@ -1276,8 +1376,18 @@ const goToNcrForm = (savedResponseId: any) => {
             audit schedule.
           </Text>
           <TouchableOpacity
-            onPress={() => router.replace("/auditor")}
-            className="px-5 py-2.5 mt-6 rounded-xl shadow-md"
+            onPress={() => {
+              if (props.onClose) {
+                props.onClose();
+              } else {
+                try {
+                  if ((router as any).canDismiss?.())
+                    (router as any).dismissAll();
+                } catch {}
+                router.replace("/auditor");
+              }
+            }}
+            className="mt-6 rounded-xl px-5 py-2.5 shadow-md"
             style={{ backgroundColor: NAVBAR_COLORS.primary }}
           >
             <Text className="text-sm font-medium text-white">
@@ -1292,10 +1402,10 @@ const goToNcrForm = (savedResponseId: any) => {
   if (loading && !currentCheckSheet) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm rounded-2xl border-slate-200">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <ActivityIndicator
             size="large"
             color={NAVBAR_COLORS.primary}
@@ -1325,18 +1435,18 @@ const goToNcrForm = (savedResponseId: any) => {
         >
           <TouchableOpacity
             onPress={handleGoBack}
-            className="flex-row items-center gap-2 px-4 py-2.5 mb-6 bg-white border border-slate-200 rounded-xl shadow-sm self-start"
+            className="mb-6 flex-row items-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
           >
             <ArrowLeft size={16} color="#334155" />
             <Text className="text-sm font-medium text-slate-700">Back</Text>
           </TouchableOpacity>
-          <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
+          <View className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <View
-              className="flex-row items-center gap-3 p-6 border-b border-slate-100"
+              className="flex-row items-center gap-3 border-b border-slate-100 p-6"
               style={{ backgroundColor: NAVBAR_COLORS.bg }}
             >
               <View
-                className="p-2 rounded-lg"
+                className="rounded-lg p-2"
                 style={{ backgroundColor: NAVBAR_COLORS.lighter }}
               >
                 <Layers size={28} color={NAVBAR_COLORS.primary} />
@@ -1345,7 +1455,7 @@ const goToNcrForm = (savedResponseId: any) => {
                 <Text className="text-xl font-bold text-slate-800">
                   Select IATF Audit Form
                 </Text>
-                <Text className="text-sm text-slate-500 mt-0.5">
+                <Text className="mt-0.5 text-sm text-slate-500">
                   Department:{" "}
                   <Text className="font-semibold text-slate-700">
                     {departmentParam || formData.department}
@@ -1361,7 +1471,7 @@ const goToNcrForm = (savedResponseId: any) => {
                 <TouchableOpacity
                   key={sheet.id}
                   onPress={() => loadSheetQuestions(sheet)}
-                  className="flex-row items-center justify-between p-4 bg-white border shadow-sm border-slate-200 rounded-xl"
+                  className="flex-row items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <View className="flex-1">
                     <Text className="font-bold text-slate-800">
@@ -1390,10 +1500,10 @@ const goToNcrForm = (savedResponseId: any) => {
   ) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="max-w-md p-8 mx-auto text-center bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <AlertCircle size={48} color="#f43f5e" style={{ marginBottom: 16 }} />
           <Text className="text-xl font-bold text-slate-800">
             No IATF Forms Found
@@ -1404,7 +1514,7 @@ const goToNcrForm = (savedResponseId: any) => {
           </Text>
           <TouchableOpacity
             onPress={() => router.replace("/auditor")}
-            className="px-5 py-2.5 mt-6 rounded-xl shadow-md"
+            className="mt-6 rounded-xl px-5 py-2.5 shadow-md"
             style={{ backgroundColor: NAVBAR_COLORS.primary }}
           >
             <Text className="text-sm font-medium text-white">
@@ -1421,13 +1531,13 @@ const goToNcrForm = (savedResponseId: any) => {
     if (!showSuccessModal || !submissionResult) return null;
     return (
       <Modal visible={showSuccessModal} transparent animationType="fade">
-        <View className="items-center justify-center flex-1 p-4 bg-slate-900/60">
-          <View className="w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-3xl">
+        <View className="flex-1 items-center justify-center bg-slate-900/60 p-4">
+          <View className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
             <View
-              className="items-center px-6 pt-8 pb-6"
+              className="items-center px-6 pb-6 pt-8"
               style={{ backgroundColor: NAVBAR_COLORS.primary }}
             >
-              <View className="items-center justify-center w-16 h-16 mb-4 bg-white rounded-full shadow-lg">
+              <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg">
                 <CheckCircle size={32} color="#10b981" />
               </View>
               <Text className="text-xl font-bold text-white">
@@ -1438,8 +1548,8 @@ const goToNcrForm = (savedResponseId: any) => {
               </Text>
             </View>
             <View className="px-6 py-5">
-              <View className="flex-row gap-3 mb-5">
-                <View className="items-center flex-1 p-3 border rounded-xl bg-emerald-50 border-emerald-100">
+              <View className="mb-5 flex-row gap-3">
+                <View className="flex-1 items-center rounded-xl border border-emerald-100 bg-emerald-50 p-3">
                   <Text className="text-2xl font-bold text-emerald-600">
                     {submissionResult.compliantCount}
                   </Text>
@@ -1447,7 +1557,7 @@ const goToNcrForm = (savedResponseId: any) => {
                     Compliant
                   </Text>
                 </View>
-                <View className="items-center flex-1 p-3 border border-blue-100 rounded-xl bg-blue-50">
+                <View className="flex-1 items-center rounded-xl border border-blue-100 bg-blue-50 p-3">
                   <Text
                     className="text-2xl font-bold"
                     style={{ color: NAVBAR_COLORS.primary }}
@@ -1458,7 +1568,7 @@ const goToNcrForm = (savedResponseId: any) => {
                     Score
                   </Text>
                 </View>
-                <View className="items-center flex-1 p-3 border rounded-xl bg-rose-50 border-rose-100">
+                <View className="flex-1 items-center rounded-xl border border-rose-100 bg-rose-50 p-3">
                   <Text className="text-2xl font-bold text-rose-600">
                     {submissionResult.ncrCount}
                   </Text>
@@ -1469,7 +1579,7 @@ const goToNcrForm = (savedResponseId: any) => {
               </View>
 
               {submissionResult.ncrCount > 0 ? (
-                <View className="flex-row items-start gap-2 p-3 mb-4 border rounded-xl bg-amber-50 border-amber-200">
+                <View className="mb-4 flex-row items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <AlertTriangle
                     size={16}
                     color="#d97706"
@@ -1485,7 +1595,7 @@ const goToNcrForm = (savedResponseId: any) => {
                   </Text>
                 </View>
               ) : (
-                <View className="flex-row items-start gap-2 p-3 mb-4 border rounded-xl bg-emerald-50 border-emerald-200">
+                <View className="mb-4 flex-row items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                   <CheckCircle
                     size={16}
                     color="#059669"
@@ -1502,28 +1612,44 @@ const goToNcrForm = (savedResponseId: any) => {
 
               <View className="flex-col gap-3">
                 {/* In the SubmissionSuccessModal component */}
-{submissionResult.ncrCount > 0 && (
-  <TouchableOpacity
-    onPress={() => {
-      // ✅ Close modal first, then raise NCR
-      setShowSuccessModal(false);
-      goToNcrForm(submissionResult.savedId);
-    }}
-    className="flex-row items-center justify-center gap-2 px-5 py-3 font-semibold text-white shadow-md bg-rose-600 rounded-xl"
-  >
-    <AlertCircle size={18} color="#ffffff" />
-    <Text className="text-white">
-      Raise NCR ({submissionResult.ncrCount} finding
-      {submissionResult.ncrCount > 1 ? "s" : ""})
-    </Text>
-  </TouchableOpacity>
-)}
+                {submissionResult.ncrCount > 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowSuccessModal(false);
+                      setTimeout(
+                        () => goToNcrForm(submissionResult.savedId),
+                        50,
+                      );
+                    }}
+                    className="flex-row items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-3 font-semibold text-white shadow-md"
+                  >
+                    <AlertCircle size={18} color="#ffffff" />
+                    <Text className="text-white">
+                      Raise NCR ({submissionResult.ncrCount} finding
+                      {submissionResult.ncrCount > 1 ? "s" : ""})
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   onPress={() => {
                     setShowSuccessModal(false);
-                    router.replace("/auditor");
+                    setTimeout(() => {
+                      if (props.onClose) {
+                        props.onClose();
+                      } else {
+                        try {
+                          if ((router as any).canDismiss?.())
+                            (router as any).dismissAll();
+                        } catch {}
+                        router.replace("/auditor");
+                      }
+                    }, 50);
                   }}
-                  className={`flex-row items-center justify-center gap-2 px-5 py-3 font-semibold rounded-xl shadow-sm ${submissionResult.ncrCount > 0 ? "text-slate-700 bg-white border border-slate-200" : "text-white"}`}
+                  className={`flex-row items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold shadow-sm ${
+                    submissionResult.ncrCount > 0
+                      ? "border border-slate-200 bg-white text-slate-700"
+                      : "text-white"
+                  }`}
                   style={
                     submissionResult.ncrCount === 0
                       ? { backgroundColor: NAVBAR_COLORS.primary }
@@ -1574,10 +1700,10 @@ const goToNcrForm = (savedResponseId: any) => {
           <View style={{ maxWidth: 900, width: "100%", alignSelf: "center" }}>
             {/* Header */}
             <FadeInView delay={0}>
-              <View className="flex-row items-center justify-between mb-8">
+              <View className="mb-8 flex-row items-center justify-between">
                 <TouchableOpacity
                   onPress={handleGoBack}
-                  className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                  className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                 >
                   <ArrowLeft size={16} color="#334155" />
                   <Text className="text-sm font-medium text-slate-700">
@@ -1588,7 +1714,7 @@ const goToNcrForm = (savedResponseId: any) => {
                   {currentStep === 2 && questions.length > 0 && (
                     <TouchableOpacity
                       onPress={handleAutoFill}
-                      className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.secondary }}
                     >
                       <Sparkles size={16} color="#ffffff" />
@@ -1600,7 +1726,7 @@ const goToNcrForm = (savedResponseId: any) => {
                   <TouchableOpacity
                     onPress={saveDraft}
                     disabled={saving}
-                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm disabled:opacity-50"
+                    className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm disabled:opacity-50"
                   >
                     <Save size={16} color="#334155" />
                     <Text className="text-sm font-medium text-slate-700">
@@ -1616,7 +1742,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       disabled={
                         !allCheckpointsRated || saving || !currentCheckSheet
                       }
-                      className={`flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-md ${allCheckpointsRated && !saving && currentCheckSheet ? "" : "opacity-50"}`}
+                      className={`flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-md ${allCheckpointsRated && !saving && currentCheckSheet ? "" : "opacity-50"}`}
                       style={{
                         backgroundColor:
                           allCheckpointsRated && !saving && currentCheckSheet
@@ -1637,7 +1763,7 @@ const goToNcrForm = (savedResponseId: any) => {
             {currentCheckSheet && (
               <FadeInView delay={100}>
                 <View
-                  className="px-4 py-3 mb-6 border rounded-xl"
+                  className="mb-6 rounded-xl border px-4 py-3"
                   style={{
                     backgroundColor: NAVBAR_COLORS.bg,
                     borderColor: NAVBAR_COLORS.lighter,
@@ -1660,7 +1786,7 @@ const goToNcrForm = (savedResponseId: any) => {
             {/* Step Progress Bar */}
             <FadeInView delay={150}>
               <View
-                className="flex-row items-start justify-between w-full px-4 mb-8"
+                className="mb-8 w-full flex-row items-start justify-between px-4"
                 style={{ maxWidth: 900, alignSelf: "center" }}
               >
                 {steps.map((step, idx) => {
@@ -1684,7 +1810,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       >
                         {/* Icon Container */}
                         <View
-                          className={`w-10 h-10 rounded-xl items-center justify-center shadow-sm ${
+                          className={`h-10 w-10 items-center justify-center rounded-xl shadow-sm ${
                             isActive || isCompleted
                               ? "bg-[#00529B]"
                               : "bg-slate-100"
@@ -1703,7 +1829,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         </View>
 
                         {/* Text Labels */}
-                        <View className="items-center mt-2">
+                        <View className="mt-2 items-center">
                           <Text
                             className="text-[10px] font-medium"
                             style={{
@@ -1715,7 +1841,7 @@ const goToNcrForm = (savedResponseId: any) => {
                             Step {step.number}
                           </Text>
                           <Text
-                            className={`text-xs font-semibold text-center ${
+                            className={`text-center text-xs font-semibold ${
                               isActive ? "text-slate-800" : "text-slate-600"
                             }`}
                             numberOfLines={1}
@@ -1727,7 +1853,7 @@ const goToNcrForm = (savedResponseId: any) => {
 
                       {/* Connecting Line (Centered with the icon) */}
                       {idx < steps.length - 1 && (
-                        <View className="justify-center flex-1 px-2 mt-5">
+                        <View className="mt-5 flex-1 justify-center px-2">
                           <View
                             className={`h-0.5 w-full ${
                               isCompleted ? "bg-blue-500" : "bg-slate-200"
@@ -1746,13 +1872,13 @@ const goToNcrForm = (savedResponseId: any) => {
             {/* ======================================================================== */}
             {currentStep === 1 && (
               <FadeInView delay={200}>
-                <View className="mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <View
-                    className="flex-row items-center gap-3 p-6 border-b border-slate-100"
+                    className="flex-row items-center gap-3 border-b border-slate-100 p-6"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <View
-                      className="p-2 rounded-lg"
+                      className="rounded-lg p-2"
                       style={{ backgroundColor: NAVBAR_COLORS.lighter }}
                     >
                       <Building size={20} color={NAVBAR_COLORS.primary} />
@@ -1761,7 +1887,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       <Text className="text-lg font-bold text-slate-800">
                         General Information
                       </Text>
-                      <Text className="text-xs text-slate-500 mt-0.5">
+                      <Text className="mt-0.5 text-xs text-slate-500">
                         Audit details for {formData.department} Department
                         {currentCheckSheet?.processName &&
                           ` - ${currentCheckSheet.processName} Process`}
@@ -1775,32 +1901,32 @@ const goToNcrForm = (savedResponseId: any) => {
                       {/* Audit Number */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Audit Number
                         </Text>
                         <TextInput
                           value={formData.documentNumber}
                           editable={false}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600"
                         />
                       </View>
 
                       {/* Department */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Department
                         </Text>
                         <TextInput
                           value={formData.department}
                           editable={false}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-semibold"
                           style={{ color: NAVBAR_COLORS.primary }}
                         />
                       </View>
@@ -1808,26 +1934,26 @@ const goToNcrForm = (savedResponseId: any) => {
                       {/* Process (IATF Form) */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Process (IATF Form)
                         </Text>
                         <TextInput
                           value={currentCheckSheet?.processName || "N/A"}
                           editable={false}
-                          className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-blue-50 text-blue-700 font-medium"
+                          className="w-full rounded-xl border border-slate-200 bg-blue-50 px-3 py-2.5 font-medium text-blue-700"
                         />
                       </View>
 
                       {/* Location */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Location
                         </Text>
                         <TextInput
@@ -1836,18 +1962,18 @@ const goToNcrForm = (savedResponseId: any) => {
                             handleInputChange("location", val)
                           }
                           placeholder="Audit location"
-                          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                         />
                       </View>
 
                       {/* Date */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                         style={{ flexShrink: 0 }}
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Date <Text className="text-rose-500">*</Text>
                         </Text>
                         {Platform.OS === "web" ? (
@@ -1880,7 +2006,7 @@ const goToNcrForm = (savedResponseId: any) => {
                           <>
                             <TouchableOpacity
                               onPress={() => setShowDatePicker(true)}
-                              className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl flex-row items-center justify-between"
+                              className="w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
                             >
                               <Text
                                 className={`flex-1 ${formData.date ? "text-slate-800" : "text-slate-400"}`}
@@ -1913,10 +2039,10 @@ const goToNcrForm = (savedResponseId: any) => {
                       {/* Shift */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <View className="flex-row items-center gap-1.5 mb-1.5">
+                        <View className="mb-1.5 flex-row items-center gap-1.5">
                           <Clock size={14} color="#334155" />
                           <Text className="text-sm font-medium text-slate-700">
                             Shift
@@ -1959,12 +2085,12 @@ const goToNcrForm = (savedResponseId: any) => {
                           onRequestClose={() => setIsShiftOpen(false)}
                         >
                           <TouchableOpacity
-                            className="items-center justify-center flex-1 bg-slate-900/50"
+                            className="flex-1 items-center justify-center bg-slate-900/50"
                             activeOpacity={1}
                             onPressOut={() => setIsShiftOpen(false)}
                           >
                             <View
-                              className="overflow-hidden bg-white rounded-2xl"
+                              className="overflow-hidden rounded-2xl bg-white"
                               style={{
                                 width: "90%",
                                 maxWidth: 400,
@@ -1975,8 +2101,8 @@ const goToNcrForm = (savedResponseId: any) => {
                                 elevation: 10,
                               }}
                             >
-                              <View className="p-4 border-b border-slate-100">
-                                <Text className="text-lg font-bold text-center text-slate-800">
+                              <View className="border-b border-slate-100 p-4">
+                                <Text className="text-center text-lg font-bold text-slate-800">
                                   Select Shift
                                 </Text>
                               </View>
@@ -2036,26 +2162,26 @@ const goToNcrForm = (savedResponseId: any) => {
                       {/* Auditor Name */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Auditor Name
                         </Text>
                         <TextInput
                           value={formData.auditorName}
                           editable={false}
-                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600"
                         />
                       </View>
 
                       {/* Auditee Name */}
                       <View
                         className={
-                          isDesktop ? "w-1/2 px-2 mb-5" : "w-full mb-5"
+                          isDesktop ? "mb-5 w-1/2 px-2" : "mb-5 w-full"
                         }
                       >
-                        <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                        <Text className="mb-1.5 text-sm font-medium text-slate-700">
                           Auditee Name <Text className="text-rose-500">*</Text>
                         </Text>
                         <TextInput
@@ -2064,7 +2190,7 @@ const goToNcrForm = (savedResponseId: any) => {
                             handleInputChange("auditeeName", val)
                           }
                           placeholder="Enter auditee name"
-                          className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                         />
                       </View>
                     </View>
@@ -2072,7 +2198,7 @@ const goToNcrForm = (savedResponseId: any) => {
                   <View className="flex-row justify-end p-6 pt-0">
                     <TouchableOpacity
                       onPress={nextStep}
-                      className="flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.primary }}
                     >
                       <Text className="text-sm font-medium text-white">
@@ -2089,8 +2215,8 @@ const goToNcrForm = (savedResponseId: any) => {
             {/* ======================================================================== */}
             {currentStep === 2 && questions.length > 0 && currentQ && (
               <FadeInView delay={200}>
-                <View className="p-5 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-                  <View className="flex-row items-center justify-between mb-4">
+                <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <View className="mb-4 flex-row items-center justify-between">
                     <Text className="text-sm font-medium text-slate-600">
                       Checkpoint {currentCheckpointIndex + 1} of{" "}
                       {questions.length}
@@ -2143,7 +2269,7 @@ const goToNcrForm = (savedResponseId: any) => {
                           <TouchableOpacity
                             key={q.slNo}
                             onPress={() => navigateToCheckpoint(idx)}
-                            className="items-center justify-center border rounded-lg w-9 h-9"
+                            className="h-9 w-9 items-center justify-center rounded-lg border"
                             style={{ backgroundColor: bgColor, borderColor }}
                           >
                             <Text
@@ -2160,7 +2286,7 @@ const goToNcrForm = (savedResponseId: any) => {
                 </View>
 
                 <View
-                  className="overflow-hidden bg-white border shadow-sm rounded-2xl"
+                  className="overflow-hidden rounded-2xl border bg-white shadow-sm"
                   style={{
                     borderLeftWidth: 4,
                     borderLeftColor: getStatusStyle(
@@ -2169,9 +2295,9 @@ const goToNcrForm = (savedResponseId: any) => {
                   }}
                 >
                   <View className="p-6">
-                    <View className="flex-row flex-wrap items-center gap-3 mb-5">
+                    <View className="mb-5 flex-row flex-wrap items-center gap-3">
                       <View
-                        className="items-center justify-center w-10 h-10 shadow-md rounded-xl"
+                        className="h-10 w-10 items-center justify-center rounded-xl shadow-md"
                         style={{ backgroundColor: NAVBAR_COLORS.primary }}
                       >
                         <Text className="font-bold text-white">
@@ -2180,7 +2306,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       </View>
                       {currentQ.clause && (
                         <View
-                          className="px-3 py-1 rounded-full"
+                          className="rounded-full px-3 py-1"
                           style={{ backgroundColor: NAVBAR_COLORS.bg }}
                         >
                           <Text
@@ -2193,7 +2319,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       )}
                       {formData.responses[currentQ.slNo] && (
                         <View
-                          className="px-3 py-1 border rounded-full"
+                          className="rounded-full border px-3 py-1"
                           style={{
                             backgroundColor: getStatusStyle(
                               formData.responses[currentQ.slNo],
@@ -2228,7 +2354,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       currentQ.documentsVerified !==
                         "No documents specified" && (
                         <View
-                          className="p-4 mb-5 border rounded-xl"
+                          className="mb-5 rounded-xl border p-4"
                           style={{
                             backgroundColor: NAVBAR_COLORS.bg,
                             borderColor: NAVBAR_COLORS.lighter,
@@ -2272,11 +2398,11 @@ const goToNcrForm = (savedResponseId: any) => {
                         placeholder="Enter your observations here... (Status will auto-detect)"
                         multiline
                         numberOfLines={3}
-                        className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl text-slate-800"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
                         style={{ textAlignVertical: "top" }}
                       />
                     </View>
-                    <View className="p-5 mb-6 border rounded-xl bg-slate-50 border-slate-200">
+                    <View className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
                       <Text className="mb-3 text-sm font-bold text-slate-700">
                         Status / Rating
                       </Text>
@@ -2294,7 +2420,7 @@ const goToNcrForm = (savedResponseId: any) => {
                               onPress={() =>
                                 handleStatusChange(currentQ.slNo, option.value)
                               }
-                              className="flex-1 min-w-[80px] p-4 items-center border-2 rounded-xl shadow-sm"
+                              className="min-w-[80px] flex-1 items-center rounded-xl border-2 p-4 shadow-sm"
                               style={{
                                 backgroundColor: isSelected
                                   ? style.bg
@@ -2309,7 +2435,7 @@ const goToNcrForm = (savedResponseId: any) => {
                                 color={isSelected ? style.icon : "#94a3b8"}
                               />
                               <Text
-                                className="text-sm font-bold mt-1.5"
+                                className="mt-1.5 text-sm font-bold"
                                 style={{
                                   color: isSelected ? style.text : "#64748b",
                                 }}
@@ -2317,7 +2443,7 @@ const goToNcrForm = (savedResponseId: any) => {
                                 {option.short}
                               </Text>
                               <Text
-                                className="text-[10px] font-medium text-center mt-0.5"
+                                className="mt-0.5 text-center text-[10px] font-medium"
                                 style={{
                                   color: isSelected ? style.text : "#64748b",
                                 }}
@@ -2329,11 +2455,11 @@ const goToNcrForm = (savedResponseId: any) => {
                         })}
                       </View>
                     </View>
-                    <View className="flex-row items-center justify-between pt-5 mt-5 border-t border-slate-100">
+                    <View className="mt-5 flex-row items-center justify-between border-t border-slate-100 pt-5">
                       <TouchableOpacity
                         onPress={prevCheckpoint}
                         disabled={currentCheckpointIndex === 0}
-                        className="flex-row items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl disabled:opacity-50 shadow-sm"
+                        className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 shadow-sm disabled:opacity-50"
                       >
                         <ChevronLeft size={16} color="#334155" />
                         <Text className="text-sm font-medium text-slate-700">
@@ -2362,7 +2488,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         disabled={
                           currentCheckpointIndex === questions.length - 1
                         }
-                        className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl disabled:opacity-50 shadow-md"
+                        className="flex-row items-center gap-2 rounded-xl px-5 py-2.5 shadow-md disabled:opacity-50"
                         style={{ backgroundColor: NAVBAR_COLORS.primary }}
                       >
                         <Text className="text-sm font-medium text-white">
@@ -2374,14 +2500,14 @@ const goToNcrForm = (savedResponseId: any) => {
                   </View>
                 </View>
 
-                <View className="p-5 mt-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <View className="flex-row items-center justify-between">
                     <View className="flex-row gap-6">
                       <View className="items-center">
                         <Text className="text-xl font-bold text-emerald-600">
                           {stats.compliant}
                         </Text>
-                        <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-500">
                           Compliant (O)
                         </Text>
                       </View>
@@ -2389,7 +2515,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         <Text className="text-xl font-bold text-amber-600">
                           {stats.minorNC}
                         </Text>
-                        <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-500">
                           Minor NC (Mi)
                         </Text>
                       </View>
@@ -2397,7 +2523,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         <Text className="text-xl font-bold text-rose-600">
                           {stats.majorNC}
                         </Text>
-                        <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-500">
                           Major NC (Ma)
                         </Text>
                       </View>
@@ -2405,15 +2531,15 @@ const goToNcrForm = (savedResponseId: any) => {
                         <Text className="text-xl font-bold text-slate-600">
                           {stats.total - stats.completed}
                         </Text>
-                        <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <Text className="text-[10px] font-bold uppercase text-slate-500">
                           Pending
                         </Text>
                       </View>
                     </View>
                   </View>
                   {!allCheckpointsRated && (
-                    <View className="p-3 mt-4 border rounded-xl bg-amber-50 border-amber-200">
-                      <Text className="text-xs font-medium text-center text-amber-700">
+                    <View className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <Text className="text-center text-xs font-medium text-amber-700">
                         ⚠️ Please select status for all{" "}
                         {stats.total - stats.completed} remaining checkpoints
                       </Text>
@@ -2421,10 +2547,10 @@ const goToNcrForm = (savedResponseId: any) => {
                   )}
                 </View>
                 {allCheckpointsRated && (
-                  <View className="flex-row justify-end mt-6">
+                  <View className="mt-6 flex-row justify-end">
                     <TouchableOpacity
                       onPress={nextStep}
-                      className="flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.primary }}
                     >
                       <Text className="text-sm font-medium text-white">
@@ -2442,14 +2568,14 @@ const goToNcrForm = (savedResponseId: any) => {
             {/* ======================================================================== */}
             {currentStep === 3 && (
               <FadeInView delay={200}>
-                <View className="mb-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <View
-                    className="p-6 border-b border-slate-100"
+                    className="border-b border-slate-100 p-6"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <View className="flex-row items-center gap-3">
                       <View
-                        className="p-2 rounded-lg"
+                        className="rounded-lg p-2"
                         style={{ backgroundColor: NAVBAR_COLORS.lighter }}
                       >
                         <FileCheck size={20} color={NAVBAR_COLORS.primary} />
@@ -2458,7 +2584,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         <Text className="text-lg font-bold text-slate-800">
                           Signature & Submit
                         </Text>
-                        <Text className="text-xs text-slate-500 mt-0.5">
+                        <Text className="mt-0.5 text-xs text-slate-500">
                           Review, sign and submit the audit report
                         </Text>
                       </View>
@@ -2466,7 +2592,7 @@ const goToNcrForm = (savedResponseId: any) => {
                   </View>
                   <View className="p-6">
                     <View
-                      className="p-5 mb-6 border rounded-xl"
+                      className="mb-6 rounded-xl border p-5"
                       style={{
                         backgroundColor: NAVBAR_COLORS.bg,
                         borderColor: NAVBAR_COLORS.lighter,
@@ -2479,40 +2605,40 @@ const goToNcrForm = (savedResponseId: any) => {
                         Audit Summary
                       </Text>
                       <View className="flex-row flex-wrap gap-3">
-                        <View className="flex-1 min-w-[60px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm">
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <View className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                          <Text className="text-[10px] font-bold uppercase text-slate-500">
                             Total
                           </Text>
                           <Text className="mt-1 text-xl font-bold text-slate-800">
                             {stats.total}
                           </Text>
                         </View>
-                        <View className="flex-1 min-w-[60px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm">
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <View className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                          <Text className="text-[10px] font-bold uppercase text-slate-500">
                             O (Comp)
                           </Text>
                           <Text className="mt-1 text-xl font-bold text-emerald-600">
                             {stats.compliant}
                           </Text>
                         </View>
-                        <View className="flex-1 min-w-[60px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm">
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <View className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                          <Text className="text-[10px] font-bold uppercase text-slate-500">
                             Mi (Minor)
                           </Text>
                           <Text className="mt-1 text-xl font-bold text-amber-600">
                             {stats.minorNC}
                           </Text>
                         </View>
-                        <View className="flex-1 min-w-[60px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm">
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <View className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                          <Text className="text-[10px] font-bold uppercase text-slate-500">
                             Ma (Major)
                           </Text>
                           <Text className="mt-1 text-xl font-bold text-rose-600">
                             {stats.majorNC}
                           </Text>
                         </View>
-                        <View className="flex-1 min-w-[60px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm">
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase">
+                        <View className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
+                          <Text className="text-[10px] font-bold uppercase text-slate-500">
                             Score
                           </Text>
                           <Text
@@ -2527,8 +2653,8 @@ const goToNcrForm = (savedResponseId: any) => {
 
                     {stats.minorNC + stats.majorNC > 0 &&
                       ncrFindings.length > 0 && (
-                        <View className="p-5 mb-6 border rounded-xl bg-rose-50 border-rose-200">
-                          <View className="flex-row items-start justify-between gap-3 mb-3">
+                        <View className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-5">
+                          <View className="mb-3 flex-row items-start justify-between gap-3">
                             <View style={{ flex: 1, flexShrink: 1 }}>
                               <Text className="text-sm font-bold text-rose-800">
                                 ⚠️ NCR Required for audit report{" "}
@@ -2537,7 +2663,7 @@ const goToNcrForm = (savedResponseId: any) => {
                             </View>
                             <TouchableOpacity
                               onPress={() => goToNcrForm(responseId)}
-                              className="flex-row items-center gap-2 px-3 py-1.5 bg-rose-600 rounded-lg shadow-sm"
+                              className="flex-row items-center gap-2 rounded-lg bg-rose-600 px-3 py-1.5 shadow-sm"
                               style={{ flexShrink: 0 }}
                             >
                               <AlertCircle size={14} color="#ffffff" />
@@ -2550,13 +2676,13 @@ const goToNcrForm = (savedResponseId: any) => {
                             {ncrFindings.slice(0, 3).map((finding) => (
                               <View
                                 key={finding.slNo}
-                                className="p-3 bg-white border rounded-lg border-rose-100"
+                                className="rounded-lg border border-rose-100 bg-white p-3"
                               >
                                 <Text className="text-xs font-bold text-slate-800">
                                   Q{finding.slNo}:{" "}
                                   {finding.checkpoint.substring(0, 60)}
                                 </Text>
-                                <Text className="mt-0.5 text-rose-700 font-medium text-xs">
+                                <Text className="mt-0.5 text-xs font-medium text-rose-700">
                                   {formData.responses[finding.slNo] ===
                                   "MAJOR_NC"
                                     ? "Major NC"
@@ -2566,7 +2692,7 @@ const goToNcrForm = (savedResponseId: any) => {
                               </View>
                             ))}
                             {ncrFindings.length > 3 && (
-                              <Text className="text-xs font-medium text-center text-rose-600">
+                              <Text className="text-center text-xs font-medium text-rose-600">
                                 +{ncrFindings.length - 3} more findings
                               </Text>
                             )}
@@ -2575,7 +2701,7 @@ const goToNcrForm = (savedResponseId: any) => {
                       )}
 
                     <View className="mb-6">
-                      <View className="flex-row items-center mb-2">
+                      <View className="mb-2 flex-row items-center">
                         <FileCheck size={14} color="#334155" />
                         <Text className="ml-1 text-sm font-bold text-slate-700">
                           Auditor Signature{" "}
@@ -2583,7 +2709,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         </Text>
                       </View>
                       {loadingSignature ? (
-                        <View className="flex-row items-center justify-center p-5 border border-slate-200 rounded-xl bg-slate-50">
+                        <View className="flex-row items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
                           <ActivityIndicator
                             size="small"
                             color={NAVBAR_COLORS.primary}
@@ -2594,7 +2720,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         </View>
                       ) : auditorSignatureImage ? (
                         <View
-                          className="items-center p-5 border rounded-xl"
+                          className="items-center rounded-xl border p-5"
                           style={{
                             backgroundColor: NAVBAR_COLORS.bg,
                             borderColor: NAVBAR_COLORS.lighter,
@@ -2619,8 +2745,8 @@ const goToNcrForm = (savedResponseId: any) => {
                           </Text>
                         </View>
                       ) : signatureError ? (
-                        <View className="p-5 border rounded-xl bg-amber-50 border-amber-200">
-                          <View className="flex-row items-center gap-2 mb-2">
+                        <View className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                          <View className="mb-2 flex-row items-center gap-2">
                             <AlertTriangle size={16} color="#b45309" />
                             <Text className="text-sm font-medium text-amber-700">
                               No signature found in profile
@@ -2636,11 +2762,11 @@ const goToNcrForm = (savedResponseId: any) => {
                               handleInputChange("auditorSignature", val)
                             }
                             placeholder="Type your full name as signature (fallback)"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                         </View>
                       ) : (
-                        <View className="p-5 border rounded-xl bg-slate-50 border-slate-200">
+                        <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                           <Text className="mb-3 text-sm font-medium text-slate-500">
                             No signature loaded. Please type your signature
                             below.
@@ -2651,17 +2777,17 @@ const goToNcrForm = (savedResponseId: any) => {
                               handleInputChange("auditorSignature", val)
                             }
                             placeholder="Type your full name as signature"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                         </View>
                       )}
                     </View>
 
                     <View
-                      className={isDesktop ? "w-auto  mb-5" : "w-full mb-5"}
+                      className={isDesktop ? "mb-5 w-auto" : "mb-5 w-full"}
                       style={{ flexShrink: 0 }}
                     >
-                      <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                      <Text className="mb-1.5 text-sm font-medium text-slate-700">
                         Date <Text className="text-rose-500">*</Text>
                       </Text>
                       {Platform.OS === "web" ? (
@@ -2694,7 +2820,7 @@ const goToNcrForm = (savedResponseId: any) => {
                         <>
                           <TouchableOpacity
                             onPress={() => setShowDatePicker(true)}
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl flex-row items-center justify-between"
+                            className="w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
                           >
                             <Text
                               className={`flex-1 ${formData.date ? "text-slate-800" : "text-slate-400"}`}
@@ -2725,7 +2851,7 @@ const goToNcrForm = (savedResponseId: any) => {
                     </View>
 
                     <View className="mb-6">
-                      <View className="flex-row items-center mb-2">
+                      <View className="mb-2 flex-row items-center">
                         <User size={14} color="#334155" />
                         <Text className="ml-1 text-sm font-bold text-slate-700">
                           Auditee Name
@@ -2734,17 +2860,17 @@ const goToNcrForm = (savedResponseId: any) => {
                       <TextInput
                         value={formData.auditeeName}
                         editable={false}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600"
                       />
                       <Text className="mt-1 text-xs text-slate-500">
                         Auditee will review and sign separately
                       </Text>
                     </View>
 
-                    <View className="flex-row items-center justify-between pt-6 mt-6 border-t border-slate-100">
+                    <View className="mt-6 flex-row items-center justify-between border-t border-slate-100 pt-6">
                       <TouchableOpacity
                         onPress={prevStep}
-                        className="flex-row items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                        className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 shadow-sm"
                       >
                         <ChevronLeft size={18} color="#334155" />
                         <Text className="text-sm font-medium text-slate-700">
@@ -2763,7 +2889,7 @@ const goToNcrForm = (savedResponseId: any) => {
                           saving ||
                           !allCheckpointsRated
                         }
-                        className={`flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md ${(!formData.auditorSignature && !auditorSignatureImage) || !formData.date.trim() || saving || !allCheckpointsRated ? "opacity-50" : ""}`}
+                        className={`flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md ${(!formData.auditorSignature && !auditorSignatureImage) || !formData.date.trim() || saving || !allCheckpointsRated ? "opacity-50" : ""}`}
                         style={{
                           backgroundColor:
                             (!formData.auditorSignature &&
@@ -2786,9 +2912,9 @@ const goToNcrForm = (savedResponseId: any) => {
               </FadeInView>
             )}
           </View>
-                </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
-      
+
       {/* ✅ Discard Changes Modal - ADD THIS HERE */}
       <Modal
         visible={showDiscardModal}
@@ -2799,21 +2925,21 @@ const goToNcrForm = (savedResponseId: any) => {
         <View
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            justifyContent: 'center',
-            alignItems: 'center',
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            alignItems: "center",
             paddingHorizontal: 24,
           }}
         >
           <View
             style={{
-              width: '100%',
+              width: "100%",
               maxWidth: 420,
-              backgroundColor: 'white',
+              backgroundColor: "white",
               borderRadius: 16,
               padding: 24,
               elevation: 10,
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.25,
               shadowRadius: 10,
@@ -2824,10 +2950,10 @@ const goToNcrForm = (savedResponseId: any) => {
                 width: 48,
                 height: 48,
                 borderRadius: 24,
-                backgroundColor: '#fef2f2',
-                alignItems: 'center',
-                justifyContent: 'center',
-                alignSelf: 'center',
+                backgroundColor: "#fef2f2",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "center",
                 marginBottom: 16,
               }}
             >
@@ -2837,9 +2963,9 @@ const goToNcrForm = (savedResponseId: any) => {
             <Text
               style={{
                 fontSize: 20,
-                fontWeight: '700',
-                color: '#111827',
-                textAlign: 'center',
+                fontWeight: "700",
+                color: "#111827",
+                textAlign: "center",
                 marginBottom: 8,
               }}
             >
@@ -2849,16 +2975,17 @@ const goToNcrForm = (savedResponseId: any) => {
             <Text
               style={{
                 fontSize: 14,
-                color: '#6b7280',
-                textAlign: 'center',
+                color: "#6b7280",
+                textAlign: "center",
                 lineHeight: 21,
                 marginBottom: 24,
               }}
             >
-              You have unsaved changes. Are you sure you want to leave without saving?
+              You have unsaved changes. Are you sure you want to leave without
+              saving?
             </Text>
 
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity
                 onPress={cancelDiscard}
                 activeOpacity={0.8}
@@ -2867,33 +2994,46 @@ const goToNcrForm = (savedResponseId: any) => {
                   height: 46,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: '#d1d5db',
-                  backgroundColor: 'white',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  borderColor: "#d1d5db",
+                  backgroundColor: "white",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "#374151" }}
+                >
                   Stay
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => discardChanges(() => {
-                  if (props.onClose) props.onClose();
-                  else router.back();
-                })}
+                onPress={() =>
+                  discardChanges(() => {
+                    if (props.onClose) {
+                      props.onClose();
+                    } else {
+                      try {
+                        if ((router as any).canDismiss?.())
+                          (router as any).dismissAll();
+                      } catch {}
+                      router.replace("/auditor");
+                    }
+                  })
+                }
                 activeOpacity={0.8}
                 style={{
                   flex: 1,
                   height: 46,
                   borderRadius: 10,
-                  backgroundColor: '#dc2626',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  backgroundColor: "#dc2626",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "white" }}
+                >
                   Discard
                 </Text>
               </TouchableOpacity>
@@ -2901,7 +3041,6 @@ const goToNcrForm = (savedResponseId: any) => {
           </View>
         </View>
       </Modal>
-      
     </SafeAreaView>
   );
 }

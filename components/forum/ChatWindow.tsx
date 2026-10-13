@@ -16,7 +16,7 @@ import {
 } from "react-native";
 
 // ⚠️ UPDATE THESE URLS TO MATCH YOUR ACTUAL BACKEND
-const API_BASE = "http://10.2.0.95:8080"; 
+const API_BASE = "http://10.2.0.95:8080";
 const SOCKET_URL = "ws://10.2.0.95:8080/ws"; // Must be ws:// or wss:// for native WebSocket
 
 interface Message {
@@ -36,7 +36,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState("");
-  
+
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -61,7 +61,10 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
     }
   }, [messages]);
 
@@ -72,27 +75,28 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
 
     socket.onopen = () => {
       // Send STOMP CONNECT frame manually
-      const connectFrame = "CONNECT\naccept-version:1.1,1.2\nheart-beat:10000,10000\n\n\0";
+      const connectFrame =
+        "CONNECT\naccept-version:1.1,1.2\nheart-beat:10000,10000\n\n\0";
       socket.send(connectFrame);
     };
 
     socket.onmessage = (event) => {
-      const rawData = typeof event.data === 'string' ? event.data : '';
-      if (rawData === '\n') return; // Ignore STOMP heartbeats
+      const rawData = typeof event.data === "string" ? event.data : "";
+      if (rawData === "\n") return; // Ignore STOMP heartbeats
 
       // Parse STOMP frames
-      const frames = rawData.split('\0').filter(f => f.trim());
+      const frames = rawData.split("\0").filter((f) => f.trim());
       for (const frame of frames) {
-        const [headerSection, ...bodyParts] = frame.split('\n\n');
-        const body = bodyParts.join('\n\n');
-        const command = headerSection.split('\n')[0];
+        const [headerSection, ...bodyParts] = frame.split("\n\n");
+        const body = bodyParts.join("\n\n");
+        const command = headerSection.split("\n")[0];
 
-        if (command === 'CONNECTED') {
+        if (command === "CONNECTED") {
           console.log("✅ STOMP Connected");
           // Subscribe to the group topic
           const subFrame = `SUBSCRIBE\nid:sub-0\ndestination:/topic/group.${group.id}\n\n\0`;
           socket.send(subFrame);
-        } else if (command === 'MESSAGE' && body) {
+        } else if (command === "MESSAGE" && body) {
           try {
             const newMessage = JSON.parse(body);
             setMessages((prev) => [...prev, newMessage]);
@@ -115,7 +119,12 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
 
   // 3. SEND MESSAGE (Replaces stompjs + MessageInput)
   const handleSend = () => {
-    if (!inputText.trim() || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    if (
+      !inputText.trim() ||
+      !socketRef.current ||
+      socketRef.current.readyState !== WebSocket.OPEN
+    )
+      return;
 
     const payload = {
       content: inputText.trim(),
@@ -126,7 +135,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
     // Send STOMP SEND frame manually
     const sendFrame = `SEND\ndestination:/app/group.${group.id}\ncontent-type:application/json\n\n${JSON.stringify(payload)}\0`;
     socketRef.current.send(sendFrame);
-    
+
     setInputText(""); // Clear input
   };
 
@@ -139,7 +148,9 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
         style: "destructive",
         onPress: async () => {
           try {
-            await fetch(`${API_BASE}/forum/messages/${msgId}`, { method: "DELETE" });
+            await fetch(`${API_BASE}/forum/messages/${msgId}`, {
+              method: "DELETE",
+            });
             setMessages((prev) => prev.filter((m) => m.id !== msgId));
           } catch (err) {
             console.error("Delete failed:", err);
@@ -151,33 +162,55 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
   };
 
   // RENDER MESSAGE BUBBLE
-  const renderMessage = useCallback(({ item }: { item: Message }) => {
-    const isSender = item.sender?.username === currentUsername;
+  const renderMessage = useCallback(
+    ({ item }: { item: Message }) => {
+      const isSender = item.sender?.username === currentUsername;
 
-    return (
-      <View style={[styles.messageRow, isSender ? styles.rowEnd : styles.rowStart]}>
-        <View style={[styles.bubble, isSender ? styles.senderBubble : styles.receiverBubble]}>
-          {isSender && (
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteMessage(item.id)}>
-              <Trash2 size={14} color="#ef4444" />
-            </TouchableOpacity>
-          )}
-          
-          <Text style={styles.messageText}>{item.content}</Text>
-          
-          {item.attachmentUrl && (
-            <TouchableOpacity onPress={() => Linking.openURL(item.attachmentUrl!)} style={styles.attachmentLink}>
-              <Text style={styles.attachmentText}>📎 View Attachment</Text>
-            </TouchableOpacity>
-          )}
-          
-          <Text style={styles.timestamp}>
-            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
+      return (
+        <View
+          style={[
+            styles.messageRow,
+            isSender ? styles.rowEnd : styles.rowStart,
+          ]}
+        >
+          <View
+            style={[
+              styles.bubble,
+              isSender ? styles.senderBubble : styles.receiverBubble,
+            ]}
+          >
+            {isSender && (
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteMessage(item.id)}
+              >
+                <Trash2 size={14} color="#ef4444" />
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.messageText}>{item.content}</Text>
+
+            {item.attachmentUrl && (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(item.attachmentUrl!)}
+                style={styles.attachmentLink}
+              >
+                <Text style={styles.attachmentText}>📎 View Attachment</Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.timestamp}>
+              {new Date(item.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
         </View>
-      </View>
-    );
-  }, [currentUsername]);
+      );
+    },
+    [currentUsername],
+  );
 
   if (loading) {
     return (
@@ -199,14 +232,16 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages yet. Start the conversation!</Text>
+            <Text style={styles.emptyText}>
+              No messages yet. Start the conversation!
+            </Text>
           </View>
         }
       />
-      
+
       {/* INLINE MESSAGE INPUT (Replaces MessageInput component) */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.inputContainer}
       >
         <TextInput
@@ -220,8 +255,8 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
           onSubmitEditing={handleSend}
           blurOnSubmit={false}
         />
-        <TouchableOpacity 
-          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]} 
+        <TouchableOpacity
+          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
           onPress={handleSend}
           disabled={!inputText.trim()}
         >
@@ -238,52 +273,81 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 8, color: "#6b7280", fontSize: 14 },
   listContent: { padding: 16, paddingBottom: 8 },
-  
+
   // Message Bubbles
   messageRow: { marginBottom: 12, maxWidth: "80%" },
   rowEnd: { alignSelf: "flex-end" },
   rowStart: { alignSelf: "flex-start" },
   bubble: { padding: 12, borderRadius: 12, position: "relative" },
   senderBubble: { backgroundColor: "#dbeafe", borderBottomRightRadius: 4 },
-  receiverBubble: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#e5e7eb" },
-  deleteBtn: { position: "absolute", top: -8, right: -8, backgroundColor: "#ffffff", borderRadius: 12, padding: 4, borderWidth: 1, borderColor: "#fecaca" },
+  receiverBubble: {
+    backgroundColor: "#ffffff",
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  deleteBtn: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
   messageText: { fontSize: 14, color: "#1f2937", lineHeight: 20 },
   attachmentLink: { marginTop: 8, paddingVertical: 4 },
-  attachmentText: { color: "#1d4ed8", fontSize: 13, fontWeight: "500", textDecorationLine: "underline" },
-  timestamp: { fontSize: 11, color: "#9ca3af", marginTop: 6, alignSelf: "flex-end" },
-  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: 40 },
+  attachmentText: {
+    color: "#1d4ed8",
+    fontSize: 13,
+    fontWeight: "500",
+    textDecorationLine: "underline",
+  },
+  timestamp: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginTop: 6,
+    alignSelf: "flex-end",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
   emptyText: { color: "#9ca3af", fontSize: 14 },
-  
+
   // Inline Input Area
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: 'white',
+    borderTopColor: "#e5e7eb",
+    backgroundColor: "white",
   },
   textInput: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: "#f3f4f6",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#111827',
+    color: "#111827",
     maxHeight: 100,
     marginRight: 8,
   },
   sendBtn: {
-    backgroundColor: '#00529B',
+    backgroundColor: "#00529B",
     borderRadius: 20,
     width: 38,
     height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendBtnDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: "#9ca3af",
   },
 });
 

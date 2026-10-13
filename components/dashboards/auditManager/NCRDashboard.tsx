@@ -101,7 +101,7 @@ const Card = ({
   className?: string;
 }) => (
   <View
-    className={`bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl shadow-sm ${className}`}
+    className={`rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] shadow-sm ${className}`}
   >
     {children}
   </View>
@@ -131,10 +131,10 @@ const StatCard = ({
   bg?: string;
   border?: string;
 }) => (
-  <View className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl p-5 shadow-sm min-w-[140px] flex-1">
+  <View className="min-w-[140px] flex-1 rounded-xl border border-[#E2E8F0] bg-[#FFFFFF] p-5 shadow-sm">
     <View className="flex-row items-start justify-between">
       <View className="flex-1">
-        <Text className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider mb-2">
+        <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
           {title}
         </Text>
         <Text className="text-2xl font-bold" style={{ color: color || T.text }}>
@@ -143,7 +143,7 @@ const StatCard = ({
       </View>
       {iconName && (
         <View
-          className="items-center justify-center w-10 h-10 rounded-lg"
+          className="h-10 w-10 items-center justify-center rounded-lg"
           style={{
             backgroundColor: bg || "#F1F5F9",
             borderWidth: 1,
@@ -238,7 +238,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   };
   return (
     <View
-      className="flex-row items-center px-3 py-1 border rounded-full"
+      className="flex-row items-center rounded-full border px-3 py-1"
       style={{ backgroundColor: bg, borderColor: border }}
     >
       <Text
@@ -255,12 +255,25 @@ const StatusBadge = ({ status }: { status: string }) => {
 // Main Dashboard Component
 // ─────────────────────────────────────────────────────────────
 
+const getNcrYear = (ncr: any): number | null => {
+  const raw = ncr?.createdAt || ncr?.raisedDate || ncr?.dueDate;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return d.getFullYear();
+};
+// ─────────────────────────────────────────────────────────────
+// Main Dashboard Component
+// ─────────────────────────────────────────────────────────────
+
 const NCRDashboard = ({
   onBack,
   onViewNcr,
+  selectedYear, // 👈 ADD
 }: {
   onBack?: () => void;
   onViewNcr?: (id: string) => void;
+  selectedYear?: number; // 👈 ADD
 }) => {
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null); // ... rest of your code
   // ... rest of your code
@@ -301,19 +314,33 @@ const NCRDashboard = ({
   };
 
   const loadData = async () => {
+    if (!user?.id) return; // ✅ guard against user not loaded yet
+
     setLoading(true);
     setError(null);
-    const allResult = await ncrService.getAllNCRs();
-    if (!allResult.success) setError(allResult.error);
-    setNcrList(allResult.success ? allResult.data : []);
+
+    // ✅ Pass the user id so the backend can plant-scope the result
+    const allResult = await ncrService.getAllNCRs(user.id);
+
+    if (!allResult.success) {
+      setError(allResult.error);
+      setNcrList([]);
+    } else {
+      // ✅ NEW: keep only NCRs from the selected year
+      const filtered = (allResult.data ?? []).filter((ncr: any) => {
+        if (!selectedYear) return true;
+        const y = getNcrYear(ncr);
+        return y === null || y === selectedYear;
+      });
+      setNcrList(filtered);
+    }
+
     setLoading(false);
   };
 
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`, {
-        credentials: "include",
-      });
+      const response = await fetch(`${API_BASE_URL}/api/users`, {});
       if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       setAllUsersList(data || []);
@@ -324,15 +351,43 @@ const NCRDashboard = ({
   };
 
   useEffect(() => {
+    if (!user?.id) return; // ✅ wait until user is loaded
     loadData();
     fetchAllUsers();
-  }, []);
+  }, [user?.id, selectedYear]); // ✅ re-run if user changes (login/logout)
 
   const openNCRForum = (ncr: any) => {
     const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
     const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
+
+    // ✅ Resolve plant from the NCR itself (if the backend sends it), else from the user
+    const ncrPlantId =
+      ncr.plantId ?? ncr.plant?.id ?? (user as any)?.plantId ?? null;
+    const ncrPlantName =
+      ncr.plantName ?? ncr.plant?.name ?? (user as any)?.plantName ?? null;
+
+    // ✅ Find an audit manager FOR THIS PLANT
     const auditManager = allUsersList.find(
-      (u: any) => u.role === "AUDIT_MANAGER",
+      (u: any) =>
+        u.role === "AUDIT_MANAGER" &&
+        (!ncrPlantId || String(u.plantId) === String(ncrPlantId)),
+    );
+
+    // ✅ Collect only members who belong to this plant
+    const memberEmails = [
+      auditor?.email,
+      auditee?.email,
+      auditManager?.email,
+      user?.email,
+    ].filter(
+      (e) =>
+        !!e &&
+        (!ncrPlantId ||
+          allUsersList.some(
+            (u: any) =>
+              u.email === e && String(u.plantId) === String(ncrPlantId),
+          ) ||
+          e === user?.email), // always include current user
     );
 
     setSelectedNCRForForum({
@@ -345,12 +400,9 @@ const NCRDashboard = ({
       auditorName: ncr.auditorName || auditor?.name,
       auditeeId: ncr.auditeeId,
       auditeeName: ncr.auditeeName || auditee?.name,
-      memberEmails: [
-        auditor?.email,
-        auditee?.email,
-        user?.email,
-        auditManager?.email,
-      ].filter(Boolean),
+      memberEmails,
+      plantId: ncrPlantId, // 👈 ADD
+      plantName: ncrPlantName, // 👈 ADD
     });
     setShowForumModal(true);
   };
@@ -479,7 +531,7 @@ const NCRDashboard = ({
     );
   }
 
-    // ✅ Render function for the NCR View Manager
+  // ✅ Render function for the NCR View Manager
   const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
     return (
@@ -499,16 +551,15 @@ const NCRDashboard = ({
     return renderActiveNcrView();
   }
 
-
-   return (
+  return (
     <SafeAreaView className="flex-1 bg-[#F8FAFC]" style={{ height: "100%" }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 h-full"
+        className="h-full flex-1"
         style={{ flex: 1 }}
       >
         {/* ✅ FULL-WIDTH HEADER - Outside ScrollView */}
-        <View className="w-full px-4 py-4 bg-white border-b border-[#E2E8F0] shadow-sm">
+        <View className="w-full border-b border-[#E2E8F0] bg-white px-4 py-4 shadow-sm">
           <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
             <View
               className="flex-row flex-wrap items-center justify-between"
@@ -519,7 +570,7 @@ const NCRDashboard = ({
                 <View className="flex-row items-center" style={{ gap: 12 }}>
                   <Pressable
                     onPress={() => onBack?.()}
-                    className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
+                    className="h-10 w-10 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white"
                   >
                     {({ pressed }) => (
                       <Feather
@@ -546,7 +597,7 @@ const NCRDashboard = ({
                 <Pressable
                   onPress={loadData}
                   disabled={loading}
-                  className="flex-row items-center px-4 py-2.5 bg-white border border-[#E2E8F0] shadow-sm rounded-xl"
+                  className="flex-row items-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 shadow-sm"
                   style={{ opacity: loading ? 0.6 : 1 }}
                 >
                   {({ pressed }) => (
@@ -583,11 +634,11 @@ const NCRDashboard = ({
           showsVerticalScrollIndicator={true}
           contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         >
-          <View className="p-6 max-w-[1400px] self-center w-full">
+          <View className="w-full max-w-[1400px] self-center p-6">
             {/* Error Alert */}
             {error && (
-              <View className="p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-xl mb-6 flex-row gap-3">
-                <View className="w-9 h-9 rounded-lg bg-[#FFFFFF] border border-[#FECACA] items-center justify-center">
+              <View className="mb-6 flex-row gap-3 rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
+                <View className="h-9 w-9 items-center justify-center rounded-lg border border-[#FECACA] bg-[#FFFFFF]">
                   <Feather name="alert-circle" size={18} color={T.error} />
                 </View>
                 <View className="flex-1">
@@ -725,7 +776,7 @@ const NCRDashboard = ({
             )}
 
             {/* Filter Section */}
-            <Card className="p-5 mb-6">
+            <Card className="mb-6 p-5">
               <View className="flex-row flex-wrap items-center justify-between gap-4">
                 <View className="flex-row items-center gap-2">
                   <Feather name="filter" size={18} color={T.textMuted} />
@@ -736,7 +787,7 @@ const NCRDashboard = ({
                 <View className="flex-row flex-wrap gap-2">
                   <Pressable
                     onPress={() => setActiveFilter(FILTER_TYPES.ALL)}
-                    className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
+                    className="h-10 flex-row items-center gap-2 rounded-lg border px-4"
                     style={{
                       borderColor:
                         activeFilter === FILTER_TYPES.ALL ? T.text : T.border,
@@ -769,7 +820,7 @@ const NCRDashboard = ({
                           All NCRs
                         </Text>
                         <View
-                          className="px-2 py-0.5 rounded-full"
+                          className="rounded-full px-2 py-0.5"
                           style={{
                             backgroundColor:
                               activeFilter === FILTER_TYPES.ALL
@@ -795,7 +846,7 @@ const NCRDashboard = ({
 
                   <Pressable
                     onPress={() => setActiveFilter(FILTER_TYPES.REGULAR)}
-                    className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
+                    className="h-10 flex-row items-center gap-2 rounded-lg border px-4"
                     style={{
                       borderColor:
                         activeFilter === FILTER_TYPES.REGULAR
@@ -832,7 +883,7 @@ const NCRDashboard = ({
                           Regular NCRs
                         </Text>
                         <View
-                          className="px-2 py-0.5 rounded-full"
+                          className="rounded-full px-2 py-0.5"
                           style={{
                             backgroundColor:
                               activeFilter === FILTER_TYPES.REGULAR
@@ -858,7 +909,7 @@ const NCRDashboard = ({
 
                   <Pressable
                     onPress={() => setActiveFilter(FILTER_TYPES.EIGHT_D)}
-                    className="flex-row items-center h-10 gap-2 px-4 border rounded-lg"
+                    className="h-10 flex-row items-center gap-2 rounded-lg border px-4"
                     style={{
                       borderColor:
                         activeFilter === FILTER_TYPES.EIGHT_D
@@ -895,7 +946,7 @@ const NCRDashboard = ({
                           8D Process
                         </Text>
                         <View
-                          className="px-2 py-0.5 rounded-full"
+                          className="rounded-full px-2 py-0.5"
                           style={{
                             backgroundColor:
                               activeFilter === FILTER_TYPES.EIGHT_D
@@ -921,7 +972,7 @@ const NCRDashboard = ({
                 </View>
               </View>
               {activeFilter !== FILTER_TYPES.ALL && (
-                <View className="mt-4 pt-4 border-t border-[#E2E8F0]">
+                <View className="mt-4 border-t border-[#E2E8F0] pt-4">
                   <Text
                     className="text-sm"
                     style={{
@@ -941,7 +992,7 @@ const NCRDashboard = ({
 
             {/* NCR Table Section */}
             <Card className="mb-6 overflow-hidden">
-              <View className="p-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex-row justify-between items-center flex-wrap gap-4">
+              <View className="flex-row flex-wrap items-center justify-between gap-4 border-b border-[#E2E8F0] bg-[#F8FAFC] p-4">
                 <View>
                   <Text className="text-base font-bold text-[#000000]">
                     {activeFilter === FILTER_TYPES.REGULAR && "Regular NCRs"}
@@ -954,7 +1005,7 @@ const NCRDashboard = ({
                   </Text>
                 </View>
                 <View className="relative w-full max-w-[320px]">
-                  <View className="absolute z-10 -translate-y-1/2 left-3 top-1/2">
+                  <View className="absolute left-3 top-1/2 z-10 -translate-y-1/2">
                     <Feather name="search" size={16} color="#94A3B8" />
                   </View>
                   <TextInput
@@ -962,7 +1013,7 @@ const NCRDashboard = ({
                     onChangeText={setSearchTerm}
                     placeholder="Search NCR, department, auditor..."
                     placeholderTextColor="#94A3B8"
-                    className="w-full h-10 pl-10 pr-4 text-sm rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] text-[#1F2937]"
+                    className="h-10 w-full rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] pl-10 pr-4 text-sm text-[#1F2937]"
                     style={{ fontFamily: FONT_FAMILY }}
                   />
                 </View>
@@ -970,7 +1021,7 @@ const NCRDashboard = ({
 
               <ScrollView horizontal showsHorizontalScrollIndicator={true}>
                 <View className="min-w-[1000px]">
-                  <View className="flex-row bg-[#F8FAFC] border-b border-[#E2E8F0] px-6 py-3">
+                  <View className="flex-row border-b border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3">
                     {[
                       { label: "NCR No.", width: "w-[150px]" },
                       { label: "Department", width: "w-[165px]" },
@@ -981,7 +1032,7 @@ const NCRDashboard = ({
                       { label: "Action", width: "w-[220px]" },
                     ].map((col) => (
                       <View key={col.label} className={`${col.width} px-2`}>
-                        <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                        <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                           {col.label}
                         </Text>
                       </View>
@@ -992,7 +1043,7 @@ const NCRDashboard = ({
                     filteredNCRs.map((ncr: any) => (
                       <View
                         key={ncr.id}
-                        className="flex-row border-b border-[#E2E8F0] px-6 py-4 items-center"
+                        className="flex-row items-center border-b border-[#E2E8F0] px-6 py-4"
                       >
                         {/* NCR No. */}
                         <View className="w-[150px] px-2">
@@ -1039,7 +1090,7 @@ const NCRDashboard = ({
                           <View className="flex-row flex-wrap items-center gap-1.5">
                             <StatusBadge status={ncr.status} />
                             {is8DRelated(ncr) && (
-                              <View className="flex-row items-center px-2 py-0.5 rounded-full border border-[#DDD6FE] bg-[#F5F3FF]">
+                              <View className="flex-row items-center rounded-full border border-[#DDD6FE] bg-[#F5F3FF] px-2 py-0.5">
                                 <Text className="text-[11px] font-semibold text-[#5B21B6]">
                                   🔄 8D
                                 </Text>
@@ -1048,7 +1099,7 @@ const NCRDashboard = ({
                             {ncr.auditScore < 70 &&
                               ncr.status === "APPROVED" &&
                               !ncr.requires8D && (
-                                <View className="flex-row items-center px-2 py-0.5 rounded-full border border-[#FECACA] bg-[#FEF2F2]">
+                                <View className="flex-row items-center rounded-full border border-[#FECACA] bg-[#FEF2F2] px-2 py-0.5">
                                   <Text className="text-[11px] font-semibold text-[#991B1B]">
                                     ⚠️ Needs 8D
                                   </Text>
@@ -1075,15 +1126,16 @@ const NCRDashboard = ({
                         </View>
 
                         {/* Action */}
-                        <View className="w-[220px] px-2 flex-row items-center gap-2">
+                        <View className="w-[220px] flex-row items-center gap-2 px-2">
                           <Pressable
                             // ✅ UPDATED: Set the state to trigger the detail view
-                             onPress={() =>
+                            onPress={() =>
                               setActiveNcrViewConfig({
                                 id: ncr.id,
                                 type: "form7",
                               })
-                            }                            className="w-8 h-8 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] items-center justify-center"
+                            }
+                            className="h-8 w-8 items-center justify-center rounded-md border border-[#DBEAFE] bg-[#EFF6FF]"
                           >
                             {({ pressed }) => (
                               <Feather
@@ -1095,7 +1147,7 @@ const NCRDashboard = ({
                           </Pressable>
                           <Pressable
                             onPress={() => openNCRForum(ncr)}
-                            className="h-8 px-3 rounded-md border border-[#DDD6FE] bg-[#F5F3FF] flex-row items-center gap-1.5"
+                            className="h-8 flex-row items-center gap-1.5 rounded-md border border-[#DDD6FE] bg-[#F5F3FF] px-3"
                           >
                             {({ pressed }) => (
                               <>
@@ -1118,7 +1170,7 @@ const NCRDashboard = ({
                           {is8DRelated(ncr) && (
                             <Pressable
                               onPress={() => open8DForum(ncr)}
-                              className="h-8 px-3 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] flex-row items-center gap-1.5"
+                              className="h-8 flex-row items-center gap-1.5 rounded-md border border-[#DBEAFE] bg-[#EFF6FF] px-3"
                             >
                               {({ pressed }) => (
                                 <>
@@ -1146,7 +1198,7 @@ const NCRDashboard = ({
                             !is8DRelated(ncr) && (
                               <Pressable
                                 onPress={() => handleSendTo8D(ncr)}
-                                className="h-8 px-3 rounded-md border border-[#FECACA] bg-[#FEF2F2] flex-row items-center gap-1.5"
+                                className="h-8 flex-row items-center gap-1.5 rounded-md border border-[#FECACA] bg-[#FEF2F2] px-3"
                               >
                                 {({ pressed }) => (
                                   <>
@@ -1190,18 +1242,18 @@ const NCRDashboard = ({
         {/* Send to 8D Confirmation Modal */}
         <Modal visible={showSendTo8DModal} transparent animationType="fade">
           <Pressable
-            className="items-center justify-center flex-1 p-5 bg-black/30"
+            className="flex-1 items-center justify-center bg-black/30 p-5"
             onPress={() => {
               setShowSendTo8DModal(false);
               setSelectedNCR(null);
             }}
           >
             <Pressable
-              className="bg-[#FFFFFF] rounded-2xl w-full max-w-[480px] shadow-lg border border-[#E2E8F0] overflow-hidden"
+              className="w-full max-w-[480px] overflow-hidden rounded-2xl border border-[#E2E8F0] bg-[#FFFFFF] shadow-lg"
               onPress={(e) => e.stopPropagation()}
             >
-              <View className="p-6 border-b border-[#E2E8F0] flex-row items-center gap-4">
-                <View className="w-11 h-11 rounded-xl bg-[#F5F3FF] border border-[#DDD6FE] items-center justify-center">
+              <View className="flex-row items-center gap-4 border-b border-[#E2E8F0] p-6">
+                <View className="h-11 w-11 items-center justify-center rounded-xl border border-[#DDD6FE] bg-[#F5F3FF]">
                   <Feather name="send" size={22} color={T.purple} />
                 </View>
                 <View>
@@ -1216,7 +1268,7 @@ const NCRDashboard = ({
 
               <View className="p-6">
                 {selectedNCR?.auditScore < 70 && (
-                  <View className="p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-lg mb-4">
+                  <View className="mb-4 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-4">
                     <Text className="text-sm font-semibold text-[#991B1B]">
                       ⚠️ Audit Score: {selectedNCR.auditScore}% (Below 70%
                       threshold)
@@ -1226,20 +1278,20 @@ const NCRDashboard = ({
                     </Text>
                   </View>
                 )}
-                <Text className="text-sm text-[#1F2937] mb-4">
+                <Text className="mb-4 text-sm text-[#1F2937]">
                   Are you sure you want to send{" "}
                   <Text className="font-bold">
                     NCR #{selectedNCR?.ncrNumber}
                   </Text>{" "}
                   to the 8D process?
                 </Text>
-                <Text className="text-sm font-semibold text-[#000000] mb-2">
+                <Text className="mb-2 text-sm font-semibold text-[#000000]">
                   Comments (Optional)
                 </Text>
                 <TextInput
                   multiline
                   numberOfLines={4}
-                  className="w-full p-3 text-sm rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] text-[#1F2937]"
+                  className="w-full rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-sm text-[#1F2937]"
                   style={{ fontFamily: FONT_FAMILY, textAlignVertical: "top" }}
                   placeholder="Add any comments about why this needs 8D investigation..."
                   placeholderTextColor="#94A3B8"
@@ -1248,13 +1300,13 @@ const NCRDashboard = ({
                 />
               </View>
 
-              <View className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex-row justify-end gap-3">
+              <View className="flex-row justify-end gap-3 border-t border-[#E2E8F0] bg-[#F8FAFC] p-4">
                 <Pressable
                   onPress={() => {
                     setShowSendTo8DModal(false);
                     setSelectedNCR(null);
                   }}
-                  className="h-10 px-5 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] justify-center"
+                  className="h-10 justify-center rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-5"
                 >
                   <Text className="text-sm font-semibold text-[#1F2937]">
                     Cancel
@@ -1263,7 +1315,7 @@ const NCRDashboard = ({
                 <Pressable
                   onPress={confirmSendTo8D}
                   disabled={processingAction}
-                  className="h-10 px-5 rounded-lg bg-[#8B5CF6] flex-row items-center gap-2 justify-center"
+                  className="h-10 flex-row items-center justify-center gap-2 rounded-lg bg-[#8B5CF6] px-5"
                   style={{ opacity: processingAction ? 0.7 : 1 }}
                 >
                   {processingAction && <Spinner size={16} color="#FFF" />}
@@ -1278,7 +1330,7 @@ const NCRDashboard = ({
         </Modal>
 
         {/* NCR Forum Modal */}
-       {/* NCR Forum Modal */}
+        {/* NCR Forum Modal */}
         {/* NCR Forum Modal */}
         {selectedNCRForForum && (
           <AuditCheckSheetNCRForumModal
@@ -1295,6 +1347,8 @@ const NCRDashboard = ({
             hodEmail={null}
             hodName={null}
             memberEmails={selectedNCRForForum.memberEmails || []}
+            plantId={selectedNCRForForum.plantId ?? null} // 👈 ADD
+            plantName={selectedNCRForForum.plantName ?? null} // 👈 ADD
             isOpen={showForumModal}
             onClose={() => {
               setShowForumModal(false);
@@ -1315,10 +1369,12 @@ const NCRDashboard = ({
                 setEightDTeamMembers([]);
               }}
             />
-            <View className="w-full sm:w-1/2 h-full bg-[#F8FAFC] border-l border-[#E2E8F0] shadow-2xl absolute right-0 top-0">              {selected8DNCR && (
+            <View className="absolute right-0 top-0 h-full w-full border-l border-[#E2E8F0] bg-[#F8FAFC] shadow-2xl sm:w-1/2">
+              {" "}
+              {selected8DNCR && (
                 <View className="flex-1">
                   {loadingTeamMembers ? (
-                    <View className="items-center justify-center flex-1">
+                    <View className="flex-1 items-center justify-center">
                       <Spinner size={24} color={T.accent} />
                       <Text className="ml-3 text-sm text-[#6B7280]">
                         Loading team members...

@@ -17,7 +17,7 @@ import {
 } from "lucide-react-native";
 
 import { API_BASE_URL } from "@/config/apiConfig";
-import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useEffect, useState } from "react";
 import {
@@ -118,9 +118,9 @@ const DatePickerField = ({ label, value, onChange }: DatePickerFieldProps) => {
               animationType="slide"
               visible={showPicker}
             >
-              <View className="justify-end flex-1 bg-black/30">
-                <View className="p-4 bg-white rounded-t-2xl">
-                  <View className="flex-row justify-between mb-3">
+              <View className="flex-1 justify-end bg-black/30">
+                <View className="rounded-t-2xl bg-white p-4">
+                  <View className="mb-3 flex-row justify-between">
                     <TouchableOpacity onPress={() => setShowPicker(false)}>
                       <Text className="text-base text-red-500">Cancel</Text>
                     </TouchableOpacity>
@@ -182,7 +182,10 @@ export default function CompetencyManagement() {
   } = useUnsavedChanges();
 
   const [loading, setLoading] = useState(false);
-  const [auditors, setAuditors] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [roleFilter, setRoleFilter] = useState<"ALL" | "AUDITOR" | "AUDITEE">(
+    "ALL",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [selectedAuditor, setSelectedAuditor] = useState<any>(null);
@@ -191,7 +194,9 @@ export default function CompetencyManagement() {
   const [expandedAuditor, setExpandedAuditor] = useState<number | null>(null);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-  const [usedCompetencies, setUsedCompetencies] = useState<Record<string, boolean>>({});
+  const [usedCompetencies, setUsedCompetencies] = useState<
+    Record<string, boolean>
+  >({});
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
     name: string;
@@ -214,7 +219,7 @@ export default function CompetencyManagement() {
 
   // ✅ Handle form field changes with dirty tracking
   const updateFormField = (field: keyof typeof formData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
     const newData = { ...formData, [field]: value };
     if (JSON.stringify(newData) !== JSON.stringify(initialFormData)) {
       markDirty();
@@ -232,7 +237,8 @@ export default function CompetencyManagement() {
     if (competency) {
       setEditingCompetency(competency);
       const data = {
-        auditTypeId: competency.auditTypeId || String(competency.auditType?.id || ""),
+        auditTypeId:
+          competency.auditTypeId || String(competency.auditType?.id || ""),
         elementIds: competency.certifiedElements?.map((e: any) => e.id) || [],
         certifiedProcesses: competency.certifiedProcesses || [],
         certifiedProducts: competency.certifiedProducts || [],
@@ -330,7 +336,7 @@ export default function CompetencyManagement() {
       const res = await fetch(`${API_BASE_URL}/api/competency/auditors`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
-      setAuditors(Array.isArray(data) ? data : []);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
       setError("Failed to load auditors");
     } finally {
@@ -427,7 +433,7 @@ export default function CompetencyManagement() {
   };
 
   const handleAutoFillAll = async () => {
-    if (auditors.length === 0) {
+    if (users.length === 0) {
       setError("No auditors available to fill");
       return;
     }
@@ -502,8 +508,8 @@ export default function CompetencyManagement() {
       let totalAssignments = 0;
       let skippedCount = 0;
 
-      for (let i = 0; i < auditors.length; i++) {
-        const auditor = auditors[i];
+      for (let i = 0; i < users.length; i++) {
+        const auditor = users[i];
 
         for (let j = 0; j < coreAuditTypes.length; j++) {
           const auditType = coreAuditTypes[j];
@@ -660,7 +666,7 @@ export default function CompetencyManagement() {
 
     const { id, name, auditorName, auditorId } = deleteConfirm;
 
-    const auditor = auditors.find((x) => String(x.id) === String(auditorId));
+    const auditor = users.find((x) => String(x.id) === String(auditorId));
     const comp = auditor?.auditCompetencies?.find(
       (c: any) => String(c.id) === String(id),
     );
@@ -686,12 +692,15 @@ export default function CompetencyManagement() {
         let errorMessage = "Delete failed";
         try {
           const errorData = await res.json();
-          errorMessage = errorData.message || errorData.error || `Delete failed (${res.status})`;
+          errorMessage =
+            errorData.message ||
+            errorData.error ||
+            `Delete failed (${res.status})`;
         } catch (e) {}
         throw new Error(errorMessage);
       }
 
-      setAuditors((prev) =>
+      setUsers((prev) =>
         prev.map((a) => ({
           ...a,
           auditCompetencies: (a.auditCompetencies || []).filter(
@@ -736,29 +745,36 @@ export default function CompetencyManagement() {
       : { label: "EXPIRED", color: "bg-red-100", text: "text-red-700" };
   };
 
-  const filteredAuditors = auditors.filter(
-    (a: any) =>
-      a.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.department?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredAuditors = users.filter((a: any) => {
+    // ✅ Role filter
+    if (roleFilter !== "ALL" && a.role !== roleFilter) return false;
 
-  const totalCompetencies = auditors.reduce(
+    // ✅ Search filter
+    const q = searchQuery.toLowerCase();
+    return (
+      a.name?.toLowerCase().includes(q) ||
+      a.department?.toLowerCase().includes(q) ||
+      a.plantName?.toLowerCase().includes(q)
+    );
+  });
+
+  const totalCompetencies = users.reduce(
     (sum, a) => sum + (a.auditCompetencies?.length || 0),
     0,
   );
 
-  const activeCount = auditors.filter(
+  const activeCount = users.filter(
     (a) => getOverallStatus(a).label === "ACTIVE",
   ).length;
 
-  const expiringCount = auditors.filter(
+  const expiringCount = users.filter(
     (a) => getOverallStatus(a).label === "EXPIRING",
   ).length;
 
   return (
     <View className="flex-1 bg-gray-50">
       {/* Header */}
-      <View className="px-4 pt-4 pb-3 bg-white border-b border-gray-200">
+      <View className="border-b border-gray-200 bg-white px-4 pb-3 pt-4">
         <View
           className="flex-row items-center justify-between"
           style={
@@ -774,7 +790,7 @@ export default function CompetencyManagement() {
                 Competency Management
               </Text>
               <Text className="text-xs text-gray-500">
-                {auditors.length} auditors • {totalCompetencies} competencies
+                {users.length} users • {totalCompetencies} competencies
               </Text>
             </View>
           </View>
@@ -782,7 +798,7 @@ export default function CompetencyManagement() {
             <TouchableOpacity
               onPress={handleAutoFillAll}
               disabled={loading}
-              className="flex-row items-center px-2 py-2 bg-purple-600 rounded-lg"
+              className="flex-row items-center rounded-lg bg-purple-600 px-2 py-2"
             >
               <Sparkles size={14} color="white" />
               <Text className="ml-1 text-xs font-semibold text-white">
@@ -791,7 +807,7 @@ export default function CompetencyManagement() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={fetchAuditors}
-              className="p-2 bg-gray-100 rounded-lg"
+              className="rounded-lg bg-gray-100 p-2"
             >
               <RefreshCw size={16} color="#6b7280" />
             </TouchableOpacity>
@@ -802,7 +818,7 @@ export default function CompetencyManagement() {
       {/* Messages */}
       {success ? (
         <View
-          className="px-4 py-3 mx-4 mt-3 border border-green-200 rounded-lg bg-green-50"
+          className="mx-4 mt-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3"
           style={
             isDesktop
               ? { maxWidth: 1200, alignSelf: "center", width: "100%" }
@@ -818,7 +834,7 @@ export default function CompetencyManagement() {
 
       {error ? (
         <View
-          className="px-4 py-3 mx-4 mt-3 border border-red-200 rounded-lg bg-red-50"
+          className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
           style={
             isDesktop
               ? { maxWidth: 1200, alignSelf: "center", width: "100%" }
@@ -842,10 +858,10 @@ export default function CompetencyManagement() {
         }
       >
         <View className="flex-row items-center gap-2">
-          <View className="flex-row items-center flex-1 px-3 py-2 bg-gray-100 rounded-lg">
+          <View className="flex-1 flex-row items-center rounded-lg bg-gray-100 px-3 py-2">
             <Search size={14} color="#9ca3af" />
             <TextInput
-              className="flex-1 py-1 ml-2 text-sm"
+              className="ml-2 flex-1 py-1 text-sm"
               placeholder="Search auditors..."
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -854,17 +870,43 @@ export default function CompetencyManagement() {
           </View>
           <TouchableOpacity
             onPress={() => openModal(null, null)}
-            className="flex-row items-center px-3 py-2 bg-blue-900 rounded-lg"
+            className="flex-row items-center rounded-lg bg-blue-900 px-3 py-2"
           >
             <Plus size={14} color="white" />
             <Text className="ml-1 text-sm font-medium text-white">Assign</Text>
           </TouchableOpacity>
         </View>
+        {/* ✅ NEW: Role filter chips */}
+        <View className="mt-2 flex-row gap-2">
+          {(["ALL", "AUDITOR", "AUDITEE"] as const).map((r) => (
+            <TouchableOpacity
+              key={r}
+              onPress={() => setRoleFilter(r)}
+              className={`rounded-full border px-3 py-1.5 ${
+                roleFilter === r
+                  ? "border-blue-900 bg-blue-900"
+                  : "border-gray-300 bg-white"
+              }`}
+            >
+              <Text
+                className={`text-xs font-medium ${
+                  roleFilter === r ? "text-white" : "text-gray-600"
+                }`}
+              >
+                {r === "ALL"
+                  ? "All"
+                  : r === "AUDITOR"
+                    ? "Auditors"
+                    : "Auditees"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Content */}
       {loading ? (
-        <View className="items-center justify-center flex-1">
+        <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#00529B" />
         </View>
       ) : (
@@ -901,11 +943,11 @@ export default function CompetencyManagement() {
                   return (
                     <View
                       key={a.id}
-                      className="mb-3 overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl"
+                      className="mb-3 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
                     >
                       <View className="px-4 py-3">
                         <View className="flex-row items-center">
-                          <View className="items-center justify-center w-10 h-10 mr-3 rounded-lg bg-blue-50">
+                          <View className="mr-3 h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
                             <Text className="text-sm font-bold text-blue-900">
                               {(a.name?.charAt(0) || "A").toUpperCase()}
                             </Text>
@@ -921,11 +963,15 @@ export default function CompetencyManagement() {
                             <Text className="text-sm font-semibold text-gray-900">
                               {a.name}
                             </Text>
-                            <View className="flex-row items-center mt-0.5 gap-2">
+                            <View className="mt-0.5 flex-row items-center gap-2">
                               <Text className="text-xs text-gray-500">
                                 {a.role === "LEAD_AUDITOR"
                                   ? "Lead Auditor"
-                                  : "Auditor"}
+                                  : a.role === "AUDITOR"
+                                    ? "Auditor"
+                                    : a.role === "AUDITEE"
+                                      ? "Auditee"
+                                      : a.role}
                               </Text>
                               {a.department && (
                                 <Text className="text-xs text-gray-400">
@@ -933,9 +979,9 @@ export default function CompetencyManagement() {
                                 </Text>
                               )}
                             </View>
-                            <View className="flex-row items-center gap-2 mt-1">
+                            <View className="mt-1 flex-row items-center gap-2">
                               <View
-                                className={`px-2 py-0.5 rounded-full ${status.color}`}
+                                className={`rounded-full px-2 py-0.5 ${status.color}`}
                               >
                                 <Text
                                   className={`text-xs font-medium ${status.text}`}
@@ -951,7 +997,7 @@ export default function CompetencyManagement() {
                           <View className="flex-row">
                             <TouchableOpacity
                               onPress={() => handleAddCompetency(a)}
-                              className="p-2 mr-1 rounded-lg bg-blue-50"
+                              className="mr-1 rounded-lg bg-blue-50 p-2"
                             >
                               <Plus size={15} color="#00529B" />
                             </TouchableOpacity>
@@ -980,7 +1026,7 @@ export default function CompetencyManagement() {
                             return (
                               <View
                                 key={idx}
-                                className="pt-3 mt-3 ml-10 border-t border-gray-100 bg-blue-50/30"
+                                className="ml-10 mt-3 border-t border-gray-100 bg-blue-50/30 pt-3"
                               >
                                 <View className="flex-row items-center">
                                   <View className="flex-1">
@@ -989,13 +1035,13 @@ export default function CompetencyManagement() {
                                         comp.auditType?.name ||
                                         `#${idx + 1}`}
                                     </Text>
-                                    <View className="flex-row flex-wrap gap-1 mt-1">
+                                    <View className="mt-1 flex-row flex-wrap gap-1">
                                       {comp.certifiedProcesses
                                         ?.slice(0, 3)
                                         .map((p: string, i: number) => (
                                           <View
                                             key={i}
-                                            className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
+                                            className="rounded border border-blue-200 bg-white px-1.5 py-0.5"
                                           >
                                             <Text className="text-xs text-blue-700">
                                               {p}
@@ -1016,7 +1062,7 @@ export default function CompetencyManagement() {
                                     onPress={() =>
                                       handleEditCompetency(a, comp)
                                     }
-                                    className="p-2 mr-1 rounded-lg bg-blue-50"
+                                    className="mr-1 rounded-lg bg-blue-50 p-2"
                                   >
                                     <Edit size={14} color="#00529B" />
                                   </TouchableOpacity>
@@ -1033,7 +1079,7 @@ export default function CompetencyManagement() {
                                         auditorId: String(a.id),
                                       })
                                     }
-                                    className={`p-2 rounded-lg ${
+                                    className={`rounded-lg p-2 ${
                                       deleteDisabled
                                         ? "bg-gray-100"
                                         : "bg-red-50"
@@ -1060,18 +1106,18 @@ export default function CompetencyManagement() {
 
               {/* Desktop: Table Layout */}
               {isDesktop && (
-                <View className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
-                  <View className="flex-row bg-gray-50 py-2.5 px-4 border-b border-gray-200">
-                    <Text className="flex-1 text-xs font-semibold text-gray-500 uppercase">
+                <View className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                  <View className="flex-row border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+                    <Text className="flex-1 text-xs font-semibold uppercase text-gray-500">
                       Auditor
                     </Text>
-                    <Text className="w-24 text-xs font-semibold text-center text-gray-500 uppercase">
+                    <Text className="w-24 text-center text-xs font-semibold uppercase text-gray-500">
                       Status
                     </Text>
-                    <Text className="w-24 text-xs font-semibold text-center text-gray-500 uppercase">
+                    <Text className="w-24 text-center text-xs font-semibold uppercase text-gray-500">
                       Competencies
                     </Text>
-                    <Text className="w-24 text-xs font-semibold text-center text-gray-500 uppercase">
+                    <Text className="w-24 text-center text-xs font-semibold uppercase text-gray-500">
                       Actions
                     </Text>
                   </View>
@@ -1083,15 +1129,15 @@ export default function CompetencyManagement() {
 
                     return (
                       <View key={a.id}>
-                        <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
+                        <View className="flex-row items-center border-b border-gray-100 px-4 py-3">
                           <TouchableOpacity
-                            className="flex-row items-center flex-1"
+                            className="flex-1 flex-row items-center"
                             onPress={() =>
                               compCount > 0 &&
                               setExpandedAuditor(isExpanded ? null : a.id)
                             }
                           >
-                            <View className="items-center justify-center w-8 h-8 mr-3 bg-blue-100 rounded-lg">
+                            <View className="mr-3 h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
                               <Text className="text-xs font-bold text-blue-900">
                                 {(a.name?.charAt(0) || "A").toUpperCase()}
                               </Text>
@@ -1103,14 +1149,18 @@ export default function CompetencyManagement() {
                               <Text className="text-xs text-gray-500">
                                 {a.role === "LEAD_AUDITOR"
                                   ? "Lead Auditor"
-                                  : "Auditor"}
+                                  : a.role === "AUDITOR"
+                                    ? "Auditor"
+                                    : a.role === "AUDITEE"
+                                      ? "Auditee"
+                                      : a.role}
                                 {a.department ? ` • ${a.department}` : ""}
                               </Text>
                             </View>
                           </TouchableOpacity>
-                          <View className="items-center w-24">
+                          <View className="w-24 items-center">
                             <View
-                              className={`px-2 py-0.5 rounded-full ${status.color}`}
+                              className={`rounded-full px-2 py-0.5 ${status.color}`}
                             >
                               <Text
                                 className={`text-xs font-medium ${status.text}`}
@@ -1119,13 +1169,13 @@ export default function CompetencyManagement() {
                               </Text>
                             </View>
                           </View>
-                          <Text className="w-24 text-sm font-bold text-center text-blue-600">
+                          <Text className="w-24 text-center text-sm font-bold text-blue-600">
                             {compCount}
                           </Text>
-                          <View className="flex-row justify-center w-24 gap-1">
+                          <View className="w-24 flex-row justify-center gap-1">
                             <TouchableOpacity
                               onPress={() => handleAddCompetency(a)}
-                              className="p-1.5 bg-blue-50 rounded-lg"
+                              className="rounded-lg bg-blue-50 p-1.5"
                             >
                               <Plus size={14} color="#00529B" />
                             </TouchableOpacity>
@@ -1134,7 +1184,7 @@ export default function CompetencyManagement() {
                                 onPress={() =>
                                   setExpandedAuditor(isExpanded ? null : a.id)
                                 }
-                                className="p-1.5 bg-gray-100 rounded-lg"
+                                className="rounded-lg bg-gray-100 p-1.5"
                               >
                                 {isExpanded ? (
                                   <ChevronUp size={14} color="#6b7280" />
@@ -1154,7 +1204,7 @@ export default function CompetencyManagement() {
                             return (
                               <View
                                 key={idx}
-                                className="flex-row items-center px-4 py-2 pl-16 border-b border-gray-100 bg-blue-50/30"
+                                className="flex-row items-center border-b border-gray-100 bg-blue-50/30 px-4 py-2 pl-16"
                               >
                                 <View className="flex-1">
                                   <Text className="text-xs font-semibold text-blue-900">
@@ -1162,13 +1212,13 @@ export default function CompetencyManagement() {
                                       comp.auditType?.name ||
                                       `#${idx + 1}`}
                                   </Text>
-                                  <View className="flex-row flex-wrap gap-1 mt-1">
+                                  <View className="mt-1 flex-row flex-wrap gap-1">
                                     {comp.certifiedProcesses
                                       ?.slice(0, 3)
                                       .map((p: string, i: number) => (
                                         <View
                                           key={i}
-                                          className="bg-white px-1.5 py-0.5 rounded border border-blue-200"
+                                          className="rounded border border-blue-200 bg-white px-1.5 py-0.5"
                                         >
                                           <Text className="text-xs text-blue-700">
                                             {p}
@@ -1176,7 +1226,7 @@ export default function CompetencyManagement() {
                                         </View>
                                       ))}
                                   </View>
-                                  <Text className="text-xs text-gray-400 mt-0.5">
+                                  <Text className="mt-0.5 text-xs text-gray-400">
                                     Expires: {comp.expiryDate || "N/A"}
                                   </Text>
                                 </View>
@@ -1185,7 +1235,7 @@ export default function CompetencyManagement() {
                                     onPress={() =>
                                       handleEditCompetency(a, comp)
                                     }
-                                    className="p-1.5 bg-blue-50 rounded-lg mr-1"
+                                    className="mr-1 rounded-lg bg-blue-50 p-1.5"
                                   >
                                     <Edit size={14} color="#00529B" />
                                   </TouchableOpacity>
@@ -1202,7 +1252,7 @@ export default function CompetencyManagement() {
                                         auditorId: String(a.id),
                                       })
                                     }
-                                    className={`p-1.5 rounded-lg ${
+                                    className={`rounded-lg p-1.5 ${
                                       deleteDisabled
                                         ? "bg-gray-100"
                                         : "bg-red-50"
@@ -1229,8 +1279,8 @@ export default function CompetencyManagement() {
               )}
             </>
           )}
-          <Text className="mt-3 mb-6 text-sm text-gray-500">
-            Showing {filteredAuditors.length} of {auditors.length} auditors
+          <Text className="mb-6 mt-3 text-sm text-gray-500">
+            Showing {filteredAuditors.length} of {users.length} users
           </Text>
         </ScrollView>
       )}
@@ -1262,7 +1312,7 @@ export default function CompetencyManagement() {
                   }
             }
           >
-            <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200">
+            <View className="flex-row items-center justify-between border-b border-gray-200 px-5 py-4">
               {/* ✅ Cancel with confirmation */}
               <TouchableOpacity onPress={closeModal}>
                 <X size={22} color="#6b7280" />
@@ -1281,7 +1331,7 @@ export default function CompetencyManagement() {
             </View>
 
             {selectedAuditor && (
-              <View className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+              <View className="border-b border-gray-100 bg-gray-50 px-5 py-3">
                 <Text className="text-sm font-medium text-gray-700">
                   {selectedAuditor.name}
                 </Text>
@@ -1298,14 +1348,12 @@ export default function CompetencyManagement() {
               <Text className="mb-2 text-sm font-medium text-gray-700">
                 Audit Type *
               </Text>
-              <View className="flex-row flex-wrap gap-2 mb-4">
+              <View className="mb-4 flex-row flex-wrap gap-2">
                 {auditTypes.map((t: any) => (
                   <TouchableOpacity
                     key={t.id}
-                    onPress={() =>
-                      updateFormField('auditTypeId', String(t.id))
-                    }
-                    className={`px-4 py-2 rounded-full border ${formData.auditTypeId === String(t.id) ? "bg-blue-900 border-blue-900" : "bg-white border-gray-300"}`}
+                    onPress={() => updateFormField("auditTypeId", String(t.id))}
+                    className={`rounded-full border px-4 py-2 ${formData.auditTypeId === String(t.id) ? "border-blue-900 bg-blue-900" : "border-gray-300 bg-white"}`}
                   >
                     <Text
                       className={`text-xs font-medium ${formData.auditTypeId === String(t.id) ? "text-white" : "text-gray-600"}`}
@@ -1316,20 +1364,20 @@ export default function CompetencyManagement() {
                 ))}
               </View>
               <View
-                className={`${isDesktop ? "flex-row" : "flex-col"} gap-3 mb-3`}
+                className={`${isDesktop ? "flex-row" : "flex-col"} mb-3 gap-3`}
               >
                 <DatePickerField
                   label="Certification Date"
                   value={formData.certificationDate}
                   onChange={(date: string) =>
-                    updateFormField('certificationDate', date)
+                    updateFormField("certificationDate", date)
                   }
                 />
                 <DatePickerField
                   label="Expiry Date"
                   value={formData.expiryDate}
                   onChange={(date: string) =>
-                    updateFormField('expiryDate', date)
+                    updateFormField("expiryDate", date)
                   }
                 />
               </View>
@@ -1337,13 +1385,16 @@ export default function CompetencyManagement() {
                 Certified Processes
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm mb-3"
+                className="mb-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
                 value={formData.certifiedProcesses.join(", ")}
                 onChangeText={(t) =>
-                  updateFormField('certifiedProcesses', t
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean))
+                  updateFormField(
+                    "certifiedProcesses",
+                    t
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  )
                 }
                 placeholder="Machining, Assembly..."
               />
@@ -1351,13 +1402,16 @@ export default function CompetencyManagement() {
                 Certified Products
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm mb-3"
+                className="mb-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
                 value={formData.certifiedProducts.join(", ")}
                 onChangeText={(t) =>
-                  updateFormField('certifiedProducts', t
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean))
+                  updateFormField(
+                    "certifiedProducts",
+                    t
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  )
                 }
                 placeholder="24611, 2452..."
               />
@@ -1365,22 +1419,18 @@ export default function CompetencyManagement() {
                 Certification Body
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm mb-3"
+                className="mb-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
                 value={formData.certificationBody}
-                onChangeText={(t) =>
-                  updateFormField('certificationBody', t)
-                }
+                onChangeText={(t) => updateFormField("certificationBody", t)}
                 placeholder="e.g., IRCA"
               />
               <Text className="mb-1 text-sm font-medium text-gray-700">
                 Certification Number
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm mb-3"
+                className="mb-3 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
                 value={formData.certificationNumber}
-                onChangeText={(t) =>
-                  updateFormField('certificationNumber', t)
-                }
+                onChangeText={(t) => updateFormField("certificationNumber", t)}
                 placeholder="e.g., IRCA-2024-001"
               />
             </ScrollView>
@@ -1398,21 +1448,21 @@ export default function CompetencyManagement() {
         <View
           style={{
             flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            justifyContent: 'center',
-            alignItems: 'center',
+            backgroundColor: "rgba(0,0,0,0.55)",
+            justifyContent: "center",
+            alignItems: "center",
             paddingHorizontal: 24,
           }}
         >
           <View
             style={{
-              width: '100%',
+              width: "100%",
               maxWidth: 420,
-              backgroundColor: 'white',
+              backgroundColor: "white",
               borderRadius: 16,
               padding: 24,
               elevation: 10,
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.25,
               shadowRadius: 10,
@@ -1423,10 +1473,10 @@ export default function CompetencyManagement() {
                 width: 48,
                 height: 48,
                 borderRadius: 24,
-                backgroundColor: '#fef2f2',
-                alignItems: 'center',
-                justifyContent: 'center',
-                alignSelf: 'center',
+                backgroundColor: "#fef2f2",
+                alignItems: "center",
+                justifyContent: "center",
+                alignSelf: "center",
                 marginBottom: 16,
               }}
             >
@@ -1436,9 +1486,9 @@ export default function CompetencyManagement() {
             <Text
               style={{
                 fontSize: 20,
-                fontWeight: '700',
-                color: '#111827',
-                textAlign: 'center',
+                fontWeight: "700",
+                color: "#111827",
+                textAlign: "center",
                 marginBottom: 8,
               }}
             >
@@ -1448,16 +1498,17 @@ export default function CompetencyManagement() {
             <Text
               style={{
                 fontSize: 14,
-                color: '#6b7280',
-                textAlign: 'center',
+                color: "#6b7280",
+                textAlign: "center",
                 lineHeight: 21,
                 marginBottom: 24,
               }}
             >
-              You have unsaved changes. Are you sure you want to leave without saving?
+              You have unsaved changes. Are you sure you want to leave without
+              saving?
             </Text>
 
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity
                 onPress={cancelDiscard}
                 activeOpacity={0.8}
@@ -1466,37 +1517,43 @@ export default function CompetencyManagement() {
                   height: 46,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: '#d1d5db',
-                  backgroundColor: 'white',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  borderColor: "#d1d5db",
+                  backgroundColor: "white",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "#374151" }}
+                >
                   Stay
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => discardChanges(() => {
-                  setShowModal(false);
-                  setSelectedAuditor(null);
-                  setEditingCompetency(null);
-                  setFormData(emptyFormData);
-                  setInitialFormData(emptyFormData);
-                  resetDirty();
-                })}
+                onPress={() =>
+                  discardChanges(() => {
+                    setShowModal(false);
+                    setSelectedAuditor(null);
+                    setEditingCompetency(null);
+                    setFormData(emptyFormData);
+                    setInitialFormData(emptyFormData);
+                    resetDirty();
+                  })
+                }
                 activeOpacity={0.8}
                 style={{
                   flex: 1,
                   height: 46,
                   borderRadius: 10,
-                  backgroundColor: '#dc2626',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  backgroundColor: "#dc2626",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
+                <Text
+                  style={{ fontSize: 14, fontWeight: "600", color: "white" }}
+                >
                   Discard
                 </Text>
               </TouchableOpacity>
@@ -1507,8 +1564,8 @@ export default function CompetencyManagement() {
 
       {/* Delete Confirmation Modal - Kept intact */}
       <Modal visible={!!deleteConfirm} transparent animationType="fade">
-        <View className="items-center justify-center flex-1 p-4 bg-black/50">
-          <View className="p-6 bg-white shadow-lg rounded-xl w-80">
+        <View className="flex-1 items-center justify-center bg-black/50 p-4">
+          <View className="w-80 rounded-xl bg-white p-6 shadow-lg">
             <Text className="mb-2 text-lg font-bold text-gray-900">
               Confirm
             </Text>
@@ -1518,7 +1575,7 @@ export default function CompetencyManagement() {
             <View className="flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={() => setDeleteConfirm(null)}
-                className="px-4 py-2.5 rounded-lg border border-gray-300"
+                className="rounded-lg border border-gray-300 px-4 py-2.5"
               >
                 <Text className="text-sm font-medium text-gray-700">
                   Cancel
@@ -1526,7 +1583,7 @@ export default function CompetencyManagement() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={executeDelete}
-                className="px-4 py-2.5 rounded-lg bg-red-600"
+                className="rounded-lg bg-red-600 px-4 py-2.5"
               >
                 <Text className="text-sm font-semibold text-white">Delete</Text>
               </TouchableOpacity>

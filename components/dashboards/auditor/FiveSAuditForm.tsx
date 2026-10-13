@@ -1,5 +1,4 @@
 import { API_BASE_URL } from "@/config/apiConfig";
-import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { auditAPI } from "@/services/api";
 import {
   auditScheduleApi,
@@ -10,6 +9,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Audio, Video as ExpoVideo, ResizeMode } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library"; // ✅ ADD THIS
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -37,7 +37,7 @@ import {
   User,
   X,
 } from "lucide-react-native";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -69,6 +69,21 @@ const NAVBAR_COLORS = {
   lighter: "#93c5fd",
   bg: "#eff6ff",
   white: "#ffffff",
+};
+
+const compressImage = async (uri: string): Promise<string> => {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1024 } }],
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    console.log(`🗜️ Compressed image: ${uri.substring(0, 30)}...`);
+    return result.uri;
+  } catch (err) {
+    console.warn("Compression failed, using original:", err);
+    return uri;
+  }
 };
 
 // 5S Score options (0-4 scale)
@@ -104,17 +119,6 @@ const SCORE_OPTIONS = [
     description: "Full compliance, best practice",
   },
 ];
-
-// Document number generator
-const generateDocumentNumber = (sheetKey: string) => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const random = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, "0");
-  return `AUD-${sheetKey.toUpperCase()}-${year}${month}-${random}`;
-};
 
 // 5S Sections with max scores
 const FIVE_S_SECTIONS = [
@@ -187,15 +191,6 @@ export default function FiveSAuditForm(props: any) {
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
-  const {
-  markDirty,
-  resetDirty,
-  confirmDiscard,
-  showDiscardModal,
-  cancelDiscard,
-  discardChanges,
-} = useUnsavedChanges();
-
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // ✅ Supports both Expo Router (params) and Conditional Rendering (props)
@@ -239,7 +234,7 @@ export default function FiveSAuditForm(props: any) {
   const [imageModal, setImageModal] = useState({ open: false, url: "" });
   const [videoModal, setVideoModal] = useState({ open: false, url: "" });
 
-  const [selectedQuality, setSelectedQuality] = useState<string>("720p");
+  const [selectedQuality, setSelectedQuality] = useState<string>("480p"); // ✅ Reduced from 720p
   const qualityOptions = ["1080p", "720p", "480p", "360p"];
   // ✅ Changed to 'string' and initialized to "" to satisfy React Native's Image component
   const [auditorSignatureImage, setAuditorSignatureImage] =
@@ -281,67 +276,6 @@ export default function FiveSAuditForm(props: any) {
     createdAt: new Date().toISOString(),
   });
 
-  // ✅ Store initial form data for comparison
-const [initialFormData] = useState(() => {
-  return {
-    documentNumber: generateDocumentNumber(sheetKey),
-    department: "",
-    supervisor: "",
-    area: "",
-    shift: "Morning",
-    date: new Date().toISOString().split("T")[0],
-    time: new Date().toLocaleTimeString(),
-    auditorName: user?.name || "",
-    auditorId: user?.id ? Number(user.id) : null,
-    hodEmail: "",
-    status: "IN_PROGRESS",
-    scores: {} as Record<number, number | null>,
-    comments: {} as Record<number, string>,
-    totalScore: null as number | null,
-    maxPossibleScore: 144,
-    percentage: null as number | null,
-    auditorSignature: "",
-    createdAt: new Date().toISOString(),
-  };
-});
-
-// ✅ Check if form has changed
-const hasFormChanged = useCallback(() => {
-  // Check if any data has changed from initial
-  const currentData = {
-    ...formData,
-    scores: JSON.stringify(formData.scores),
-    comments: JSON.stringify(formData.comments),
-    documentNumber: formData.documentNumber,
-    department: formData.department,
-    supervisor: formData.supervisor,
-    area: formData.area,
-    shift: formData.shift,
-    date: formData.date,
-    auditeeName: auditeeInfo.auditeeName,
-    auditorSignature: formData.auditorSignature,
-  };
-  
-  const initialData = {
-    ...initialFormData,
-    scores: JSON.stringify(initialFormData.scores),
-    comments: JSON.stringify(initialFormData.comments),
-    documentNumber: initialFormData.documentNumber,
-    department: initialFormData.department,
-    supervisor: initialFormData.supervisor,
-    area: initialFormData.area,
-    shift: initialFormData.shift,
-    date: initialFormData.date,
-    auditeeName: "",
-    auditorSignature: "",
-  };
-  
-  // Also check if any evidence exists
-  const hasEvidence = Object.keys(evidences).length > 0;
-  
-  return JSON.stringify(currentData) !== JSON.stringify(initialData) || hasEvidence;
-}, [formData, initialFormData, evidences, auditeeInfo.auditeeName]);
-
   const getQualityValue = (q: string) => {
     switch (q) {
       case "1080p":
@@ -364,157 +298,186 @@ const hasFormChanged = useCallback(() => {
       // ==========================================
 
       if (Platform.OS === "web") {
-  const isMobileWeb =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    );
+        const isMobileWeb =
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+          );
 
-  // ✅ For mobile web: Use file input with capture attribute (opens camera)
-  if (isMobileWeb) {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.capture = "environment";
-    input.style.display = "none";
-    document.body.appendChild(input);
+        // ✅ For mobile web: Use file input with capture attribute (opens camera)
+        if (isMobileWeb) {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.capture = "environment";
+          input.style.display = "none";
+          document.body.appendChild(input);
 
-    const timeoutId = setTimeout(() => {
-      addToast("Camera dialog timed out. Please try again.", "error");
-      if (document.body.contains(input)) document.body.removeChild(input);
-    }, 10000);
+          const timeoutId = setTimeout(() => {
+            addToast("Camera dialog timed out. Please try again.", "error");
+            if (document.body.contains(input)) document.body.removeChild(input);
+          }, 10000);
 
-    input.onchange = (e: any) => {
-      clearTimeout(timeoutId);
-      const file = e.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const uri = event.target?.result as string;
-          const captureTime = new Date().toLocaleString();
-          setEvidences((prev) => ({
-            ...prev,
-            [qSlNo]: {
-              ...(prev[qSlNo] || {}),
-              image: {
-                uri: uri,
-                type: "image",
-                name: file.name || `photo_${Date.now()}.jpg`,
-                quality: selectedQuality,
-                capturedAt: captureTime,
-              },
+          input.onchange = (e: any) => {
+            clearTimeout(timeoutId);
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = async (event) => {
+                let uri = event.target?.result as string;
+                uri = await compressImage(uri); // ✅ COMPRESS
+                const captureTime = new Date().toLocaleString();
+                setEvidences((prev) => ({
+                  ...prev,
+                  [qSlNo]: {
+                    ...(prev[qSlNo] || {}),
+                    image: {
+                      uri: uri,
+                      type: "image",
+                      name: file.name || `photo_${Date.now()}.jpg`,
+                      quality: selectedQuality,
+                      capturedAt: captureTime,
+                    },
+                  },
+                }));
+                addToast("📸 Photo captured successfully!", "success");
+              };
+              reader.onerror = () =>
+                addToast("Failed to read image file", "error");
+              reader.readAsDataURL(file);
+            }
+            if (document.body.contains(input)) document.body.removeChild(input);
+          };
+
+          input.oncancel = () => {
+            clearTimeout(timeoutId);
+            addToast("Camera capture cancelled", "info");
+            if (document.body.contains(input)) document.body.removeChild(input);
+          };
+
+          input.click();
+          return;
+        }
+
+        // ✅ For desktop web: Use getUserMedia API (opens actual camera)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
             },
-          }));
-          addToast("📸 Photo captured successfully!", "success");
-        };
-        reader.onerror = () => addToast("Failed to read image file", "error");
-        reader.readAsDataURL(file);
-      }
-      if (document.body.contains(input)) document.body.removeChild(input);
-    };
+            audio: false,
+          });
 
-    input.oncancel = () => {
-      clearTimeout(timeoutId);
-      addToast("Camera capture cancelled", "info");
-      if (document.body.contains(input)) document.body.removeChild(input);
-    };
+          const video = document.createElement("video");
+          video.srcObject = stream;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.style.cssText =
+            "width:100%;height:100%;object-fit:cover;border-radius:12px;";
 
-    input.click();
-    return;
-  }
-
-  // ✅ For desktop web: Use getUserMedia API (opens actual camera)
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
-
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:12px;";
-
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
+          const overlay = document.createElement("div");
+          overlay.style.cssText = `
       position:fixed;top:0;left:0;right:0;bottom:0;
       background:rgba(0,0,0,0.9);z-index:99999;
       display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;
     `;
 
-    const container = document.createElement("div");
-    container.style.cssText = "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
-    container.appendChild(video);
+          const container = document.createElement("div");
+          container.style.cssText =
+            "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
+          container.appendChild(video);
 
-    const btnRow = document.createElement("div");
-    btnRow.style.cssText = "display:flex;gap:16px;margin-top:20px;justify-content:center;";
+          const btnRow = document.createElement("div");
+          btnRow.style.cssText =
+            "display:flex;gap:16px;margin-top:20px;justify-content:center;";
 
-    const captureBtn = document.createElement("button");
-    captureBtn.textContent = "📸 Capture";
-    captureBtn.style.cssText = "padding:12px 32px;background:#00529B;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+          const captureBtn = document.createElement("button");
+          captureBtn.textContent = "📸 Capture";
+          captureBtn.style.cssText =
+            "padding:12px 32px;background:#00529B;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
 
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "✕ Cancel";
-    cancelBtn.style.cssText = "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = "✕ Cancel";
+          cancelBtn.style.cssText =
+            "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
 
-    btnRow.appendChild(cancelBtn);
-    btnRow.appendChild(captureBtn);
-    overlay.appendChild(container);
-    overlay.appendChild(btnRow);
-    document.body.appendChild(overlay);
+          btnRow.appendChild(cancelBtn);
+          btnRow.appendChild(captureBtn);
+          overlay.appendChild(container);
+          overlay.appendChild(btnRow);
+          document.body.appendChild(overlay);
 
-    await new Promise<void>((resolve) => {
-      video.onloadedmetadata = () => resolve();
-      video.play().catch(() => resolve());
-    });
+          await new Promise<void>((resolve) => {
+            video.onloadedmetadata = () => resolve();
+            video.play().catch(() => resolve());
+          });
 
-    captureBtn.onclick = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(video, 0, 0);
-      const dataUrl = canvas.toDataURL("image/jpeg", getQualityValue(selectedQuality));
+          captureBtn.onclick = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(video, 0, 0);
+            const dataUrl = canvas.toDataURL(
+              "image/jpeg",
+              getQualityValue(selectedQuality),
+            );
 
-      stream.getTracks().forEach((t) => t.stop());
-      document.body.removeChild(overlay);
+            stream.getTracks().forEach((t) => t.stop());
+            document.body.removeChild(overlay);
 
-      const captureTime = new Date().toLocaleString();
-      setEvidences((prev) => ({
-        ...prev,
-        [qSlNo]: {
-          ...(prev[qSlNo] || {}),
-          image: {
-            uri: dataUrl,
-            type: "image",
-            name: `photo_${Date.now()}.jpg`,
-            quality: selectedQuality,
-            capturedAt: captureTime,
-          },
-        },
-      }));
-      addToast("📸 Photo captured successfully!", "success");
-    };
+            const captureTime = new Date().toLocaleString();
+            setEvidences((prev) => ({
+              ...prev,
+              [qSlNo]: {
+                ...(prev[qSlNo] || {}),
+                image: {
+                  uri: dataUrl,
+                  type: "image",
+                  name: `photo_${Date.now()}.jpg`,
+                  quality: selectedQuality,
+                  capturedAt: captureTime,
+                },
+              },
+            }));
+            addToast("📸 Photo captured successfully!", "success");
+          };
 
-    cancelBtn.onclick = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      document.body.removeChild(overlay);
-      addToast("Camera capture cancelled", "info");
-    };
+          cancelBtn.onclick = () => {
+            stream.getTracks().forEach((t) => t.stop());
+            document.body.removeChild(overlay);
+            addToast("Camera capture cancelled", "info");
+          };
 
-    return;
-  } catch (error: any) {
-    console.error("❌ Camera Error:", error);
-    if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-      addToast("Camera permission denied. Please allow camera access.", "error");
-    } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      addToast("No camera found on this device. Please use Upload option.", "error");
-    } else {
-      addToast(`Camera error: ${error.message || "Please try Upload instead"}`, "error");
-    }
-    return;
-  }
-}
+          return;
+        } catch (error: any) {
+          console.error("❌ Camera Error:", error);
+          if (
+            error.name === "NotAllowedError" ||
+            error.name === "PermissionDeniedError"
+          ) {
+            addToast(
+              "Camera permission denied. Please allow camera access.",
+              "error",
+            );
+          } else if (
+            error.name === "NotFoundError" ||
+            error.name === "DevicesNotFoundError"
+          ) {
+            addToast(
+              "No camera found on this device. Please use Upload option.",
+              "error",
+            );
+          } else {
+            addToast(
+              `Camera error: ${error.message || "Please try Upload instead"}`,
+              "error",
+            );
+          }
+          return;
+        }
+      }
 
       // ==========================================
       // ✅ NATIVE (iOS/Android) IMPLEMENTATION
@@ -532,6 +495,7 @@ const hasFormChanged = useCallback(() => {
         allowsEditing: false, // Set to false for faster capture
         quality: getQualityValue(selectedQuality),
         includeBase64: false,
+        videoMaxDuration: 30,
         presentationStyle: "fullScreen", // Better UX on iOS
       };
 
@@ -539,7 +503,7 @@ const hasFormChanged = useCallback(() => {
       let result = await ImagePicker.launchCameraAsync(options);
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        const uri = asset.uri;
+        const uri = await compressImage(asset.uri); // ✅ COMPRESS
         const captureTime = new Date().toLocaleString();
 
         // Step 4: Save to gallery (optional)
@@ -592,180 +556,221 @@ const hasFormChanged = useCallback(() => {
       // ✅ WEB IMPLEMENTATION (VIDEO)
       // ==========================================
       if (Platform.OS === "web") {
-  const isMobileWeb =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    );
+        const isMobileWeb =
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+          );
 
-  // ✅ For mobile web: Use file input with capture attribute
-  if (isMobileWeb) {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "video/*";
-    input.capture = "environment";
-    input.style.display = "none";
-    document.body.appendChild(input);
+        // ✅ For mobile web: Use file input with capture attribute
+        if (isMobileWeb) {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "video/*";
+          input.capture = "environment";
+          input.style.display = "none";
+          document.body.appendChild(input);
 
-    const timeoutId = setTimeout(() => {
-      addToast("Camera dialog timed out. Please try again.", "error");
-      if (document.body.contains(input)) document.body.removeChild(input);
-    }, 10000);
+          const timeoutId = setTimeout(() => {
+            addToast("Camera dialog timed out. Please try again.", "error");
+            if (document.body.contains(input)) document.body.removeChild(input);
+          }, 10000);
 
-    input.onchange = (e: any) => {
-      clearTimeout(timeoutId);
-      const file = e.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const uri = event.target?.result as string;
-          const captureTime = new Date().toLocaleString();
-          setEvidences((prev) => ({
-            ...prev,
-            [qSlNo]: {
-              ...(prev[qSlNo] || {}),
-              video: {
-                uri: uri,
-                type: "video",
-                name: file.name || `video_${Date.now()}.mp4`,
-                quality: selectedQuality,
-                capturedAt: captureTime,
-              },
-            },
-          }));
-          addToast("🎥 Video captured successfully!", "success");
-        };
-        reader.onerror = () => addToast("Failed to read video file", "error");
-        reader.readAsDataURL(file);
-      }
-      if (document.body.contains(input)) document.body.removeChild(input);
-    };
+          input.onchange = (e: any) => {
+            clearTimeout(timeoutId);
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                const uri = event.target?.result as string;
+                const captureTime = new Date().toLocaleString();
+                setEvidences((prev) => ({
+                  ...prev,
+                  [qSlNo]: {
+                    ...(prev[qSlNo] || {}),
+                    video: {
+                      uri: uri,
+                      type: "video",
+                      name: file.name || `video_${Date.now()}.mp4`,
+                      quality: selectedQuality,
+                      capturedAt: captureTime,
+                    },
+                  },
+                }));
+                addToast("🎥 Video captured successfully!", "success");
+              };
+              reader.onerror = () =>
+                addToast("Failed to read video file", "error");
+              reader.readAsDataURL(file);
+            }
+            if (document.body.contains(input)) document.body.removeChild(input);
+          };
 
-    input.oncancel = () => {
-      clearTimeout(timeoutId);
-      addToast("Video capture cancelled", "info");
-      if (document.body.contains(input)) document.body.removeChild(input);
-    };
+          input.oncancel = () => {
+            clearTimeout(timeoutId);
+            addToast("Video capture cancelled", "info");
+            if (document.body.contains(input)) document.body.removeChild(input);
+          };
 
-    input.click();
-    return;
-  }
+          input.click();
+          return;
+        }
 
-  // ✅ For desktop web: Use getUserMedia with MediaRecorder for video recording
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: true,
-    });
-
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-    const chunks: Blob[] = [];
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const uri = event.target?.result as string;
-        const captureTime = new Date().toLocaleString();
-        setEvidences((prev) => ({
-          ...prev,
-          [qSlNo]: {
-            ...(prev[qSlNo] || {}),
+        // ✅ For desktop web: Use getUserMedia with MediaRecorder for video recording
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
             video: {
-              uri: uri,
-              type: "video",
-              name: `video_${Date.now()}.webm`,
-              quality: selectedQuality,
-              capturedAt: captureTime,
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
             },
-          },
-        }));
-        addToast("🎥 Video recorded successfully!", "success");
-      };
-      reader.readAsDataURL(blob);
-      stream.getTracks().forEach((t) => t.stop());
-    };
+            audio: true,
+          });
 
-    // Create video preview
-    const video = document.createElement("video");
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = true;
-    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:12px;";
+          const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: "video/webm",
+          });
+          const chunks: Blob[] = [];
 
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: "video/webm" });
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const uri = event.target?.result as string;
+              const captureTime = new Date().toLocaleString();
+              setEvidences((prev) => ({
+                ...prev,
+                [qSlNo]: {
+                  ...(prev[qSlNo] || {}),
+                  video: {
+                    uri: uri,
+                    type: "video",
+                    name: `video_${Date.now()}.webm`,
+                    quality: selectedQuality,
+                    capturedAt: captureTime,
+                  },
+                },
+              }));
+              addToast("🎥 Video recorded successfully!", "success");
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach((t) => t.stop());
+          };
+
+          // Create video preview
+          const video = document.createElement("video");
+          video.srcObject = stream;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.muted = true;
+          video.style.cssText =
+            "width:100%;height:100%;object-fit:cover;border-radius:12px;";
+
+          const overlay = document.createElement("div");
+          overlay.style.cssText = `
       position:fixed;top:0;left:0;right:0;bottom:0;
       background:rgba(0,0,0,0.9);z-index:99999;
       display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;
     `;
 
-    const container = document.createElement("div");
-    container.style.cssText = "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
-    container.appendChild(video);
+          const container = document.createElement("div");
+          container.style.cssText =
+            "width:100%;max-width:640px;position:relative;border-radius:16px;overflow:hidden;background:#000;";
+          container.appendChild(video);
 
-    const statusText = document.createElement("div");
-    statusText.textContent = "⏺ Ready to record";
-    statusText.style.cssText = "color:#ef4444;font-size:14px;font-weight:600;text-align:center;margin-top:12px;";
+          const statusText = document.createElement("div");
+          statusText.textContent = "⏺ Ready to record";
+          statusText.style.cssText =
+            "color:#ef4444;font-size:14px;font-weight:600;text-align:center;margin-top:12px;";
 
-    const btnRow = document.createElement("div");
-    btnRow.style.cssText = "display:flex;gap:16px;margin-top:16px;justify-content:center;";
+          const btnRow = document.createElement("div");
+          btnRow.style.cssText =
+            "display:flex;gap:16px;margin-top:16px;justify-content:center;";
 
-    const recordBtn = document.createElement("button");
-    recordBtn.textContent = "⏺ Start Recording";
-    recordBtn.style.cssText = "padding:12px 32px;background:#ef4444;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+          const recordBtn = document.createElement("button");
+          recordBtn.textContent = "⏺ Start Recording";
+          recordBtn.style.cssText =
+            "padding:12px 32px;background:#ef4444;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
 
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "✕ Cancel";
-    cancelBtn.style.cssText = "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
+          const cancelBtn = document.createElement("button");
+          cancelBtn.textContent = "✕ Cancel";
+          cancelBtn.style.cssText =
+            "padding:12px 32px;background:#64748b;color:white;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;";
 
-    btnRow.appendChild(cancelBtn);
-    btnRow.appendChild(recordBtn);
-    overlay.appendChild(container);
-    overlay.appendChild(statusText);
-    overlay.appendChild(btnRow);
-    document.body.appendChild(overlay);
+          btnRow.appendChild(cancelBtn);
+          btnRow.appendChild(recordBtn);
+          overlay.appendChild(container);
+          overlay.appendChild(statusText);
+          overlay.appendChild(btnRow);
+          document.body.appendChild(overlay);
 
-    let isRecording = false;
+          let isRecording = false;
 
-    recordBtn.onclick = () => {
-      if (!isRecording) {
-        mediaRecorder.start();
-        isRecording = true;
-        recordBtn.textContent = "⏹ Stop Recording";
-        recordBtn.style.background = "#16a34a";
-        statusText.textContent = "⏺ Recording...";
-      } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        document.body.removeChild(overlay);
+          let autoStopTimer: any = null; // ✅ Add this at the top of the Web video logic
+
+          recordBtn.onclick = () => {
+            if (!isRecording) {
+              mediaRecorder.start();
+              isRecording = true;
+              recordBtn.textContent = "⏹ Stop Recording";
+              recordBtn.style.background = "#16a34a";
+              statusText.textContent = "⏺ Recording... (Max 30s)";
+
+              // ✅ Auto-stop after 30 seconds for Web
+              autoStopTimer = setTimeout(() => {
+                if (isRecording) {
+                  addToast(
+                    "⏱️ 30-second limit reached. Stopping recording.",
+                    "info",
+                  );
+                  mediaRecorder.stop();
+                  isRecording = false;
+                  document.body.removeChild(overlay);
+                }
+              }, 30000);
+            } else {
+              if (autoStopTimer) clearTimeout(autoStopTimer); // ✅ Clear timer if stopped manually
+              mediaRecorder.stop();
+              isRecording = false;
+              document.body.removeChild(overlay);
+            }
+          };
+
+          cancelBtn.onclick = () => {
+            if (isRecording) mediaRecorder.stop();
+            stream.getTracks().forEach((t) => t.stop());
+            document.body.removeChild(overlay);
+            addToast("Video recording cancelled", "info");
+          };
+
+          return;
+        } catch (error: any) {
+          console.error("❌ Video Error:", error);
+          if (
+            error.name === "NotAllowedError" ||
+            error.name === "PermissionDeniedError"
+          ) {
+            addToast(
+              "Camera/Mic permission denied. Please allow access.",
+              "error",
+            );
+          } else if (
+            error.name === "NotFoundError" ||
+            error.name === "DevicesNotFoundError"
+          ) {
+            addToast("No camera found. Please use Upload button.", "error");
+          } else {
+            addToast(
+              `Video error: ${error.message || "Please try Upload instead"}`,
+              "error",
+            );
+          }
+          return;
+        }
       }
-    };
-
-    cancelBtn.onclick = () => {
-      if (isRecording) mediaRecorder.stop();
-      stream.getTracks().forEach((t) => t.stop());
-      document.body.removeChild(overlay);
-      addToast("Video recording cancelled", "info");
-    };
-
-    return;
-  } catch (error: any) {
-    console.error("❌ Video Error:", error);
-    if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-      addToast("Camera/Mic permission denied. Please allow access.", "error");
-    } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      addToast("No camera found. Please use Upload button.", "error");
-    } else {
-      addToast(`Video error: ${error.message || "Please try Upload instead"}`, "error");
-    }
-    return;
-  }
-}
 
       // ==========================================
       // ✅ NATIVE (iOS/Android) IMPLEMENTATION
@@ -780,11 +785,11 @@ const hasFormChanged = useCallback(() => {
       // Step 2: Configure proper options
       const options: any = {
         mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-        allowsEditing: true,
+        allowsEditing: false, // ✅ FIX: Disable editing to prevent Android processing hangs
+        videoMaxDuration: 30, // ✅ FIX: Enforce 30s limit to match Web and prevent massive files
         quality: getQualityValue(selectedQuality),
         presentationStyle: "fullScreen", // Better UX on iOS
       };
-
       // Step 3: Launch camera with proper error handling
       let result = await ImagePicker.launchCameraAsync(options);
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -838,14 +843,15 @@ const hasFormChanged = useCallback(() => {
       allowsEditing: true,
       quality: getQualityValue(selectedQuality),
     });
-
     if (!result.canceled && result.assets[0]) {
+      const compressedUri = await compressImage(result.assets[0].uri); // ✅ COMPRESS
+
       setEvidences((prev) => ({
         ...prev,
         [qSlNo]: {
           ...(prev[qSlNo] || {}),
           image: {
-            uri: result.assets[0].uri,
+            uri: compressedUri, // ✅ FIX: Use the compressed URI here!
             type: "image",
             name: result.assets[0].fileName || `photo_${Date.now()}.jpg`,
             quality: selectedQuality,
@@ -856,44 +862,52 @@ const hasFormChanged = useCallback(() => {
     }
   };
 
-  // ==========================================
   const pickVideoUpload = async (qSlNo: number) => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: true,
+      allowsEditing: false, // ✅ CRITICAL: Prevents Android processing hangs
       quality: getQualityValue(selectedQuality),
     });
 
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+
+      // ✅ First line of defense: Enforce file size limit
+      if (asset.fileSize) {
+        const sizeInMB = asset.fileSize / (1024 * 1024);
+        if (sizeInMB > 20) {
+          addToast(
+            "⚠️ Video is too long/large. Please select a video under 20MB (approx 30 seconds).",
+            "error",
+          );
+          return; // Reject the video immediately
+        }
+      }
+
       setEvidences((prev) => ({
         ...prev,
         [qSlNo]: {
           ...(prev[qSlNo] || {}),
           video: {
-            uri: result.assets[0].uri,
+            uri: asset.uri,
             type: "video",
-            name: result.assets[0].fileName || `video_${Date.now()}.mp4`,
+            name: asset.fileName || `video_${Date.now()}.mp4`,
             quality: selectedQuality,
             capturedAt: new Date().toLocaleString(),
           },
         },
       }));
+      addToast("🎥 Video selected successfully!", "success");
     }
   };
 
-  // ==========================================
-  // 3. AUDIO (Live Microphone Recording & Upload)
-  // ==========================================
-  const startRecording = async () => {
+  const startRecording = async (qSlNo: number) => {
     try {
-      // ✅ Request microphone permissions
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== "granted") {
         addToast("Microphone permission is required!", "error");
         return;
       }
-
-      // ✅ Configure audio mode for recording
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
@@ -902,24 +916,22 @@ const hasFormChanged = useCallback(() => {
         playThroughEarpieceAndroid: false,
       });
 
-      // ✅ Create recording with proper options
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        Audio.RecordingOptionsPresets.LOW_QUALITY,
       );
-
       setRecording(recording);
       setIsRecording(true);
-      addToast("🎙️ Recording started...", "info");
+      addToast("🎙️ Recording started (Max 30s)...", "info");
+
+      // ✅ FIX: Remove the stale 'isRecording' check.
+      // stopRecording() already safely checks if a recording exists before stopping.
+      setTimeout(async () => {
+        addToast("⏱️ 30-second limit reached. Stopping recording.", "info");
+        await stopRecording(qSlNo);
+      }, 30000);
     } catch (err: any) {
       console.error("Failed to start recording", err);
-      if (err.message?.includes("permission")) {
-        addToast(
-          "Microphone permission denied. Please enable in settings.",
-          "error",
-        );
-      } else {
-        addToast("Failed to start recording. Please try again.", "error");
-      }
+      addToast("Failed to start recording. Please try again.", "error");
     }
   };
 
@@ -1044,6 +1056,51 @@ const hasFormChanged = useCallback(() => {
     });
   };
 
+  const uploadEvidencesSequentially = async (
+    targetResponseId: string | number,
+    evidencesList: any[],
+  ) => {
+    console.log(
+      `📤 Starting sequential upload for ${evidencesList.length} files...`,
+    );
+    let successCount = 0;
+
+    for (let i = 0; i < evidencesList.length; i++) {
+      const evidence = evidencesList[i];
+      try {
+        const sizeMB = (evidence.uri.length / (1024 * 1024)).toFixed(2);
+        console.log(
+          `📤 [${i + 1}/${evidencesList.length}] Uploading: ${evidence.name} (~${sizeMB} MB)`,
+        );
+
+        await auditScheduleApi.uploadEvidence(
+          targetResponseId,
+          evidence.questionSlNo,
+          {
+            type: evidence.type,
+            uri: evidence.uri,
+            name: evidence.name,
+            quality: evidence.quality,
+            capturedAt: evidence.capturedAt,
+          },
+        );
+        successCount++;
+        console.log(`✅ Success: ${evidence.name}`);
+      } catch (err: any) {
+        console.error(
+          `❌ Failed to upload ${evidence.name}:`,
+          err.message || err,
+        );
+        addToast(`Failed to upload ${evidence.name}`, "error");
+      }
+    }
+
+    console.log(
+      `✅ Upload complete: ${successCount}/${evidencesList.length} succeeded.`,
+    );
+    return successCount;
+  };
+
   const getLocationHierarchy = (userData: any) => {
     const parts = [];
     if (userData?.companyName) parts.push(userData.companyName);
@@ -1059,7 +1116,6 @@ const hasFormChanged = useCallback(() => {
     if (!locationHierarchy) {
       try {
         const response = await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
         });
         if (!response.ok) throw new Error("Failed to fetch user");
@@ -1068,7 +1124,6 @@ const hasFormChanged = useCallback(() => {
       } catch (error) {
         try {
           const allUsersRes = await fetch(`${API_BASE_URL}/api/users`, {
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
           });
           if (!allUsersRes.ok) throw new Error("Failed to fetch users");
@@ -1085,6 +1140,74 @@ const hasFormChanged = useCallback(() => {
     }
     if (locationHierarchy) {
       setFormData((prev) => ({ ...prev, area: locationHierarchy }));
+    }
+  };
+
+  const fetchScheduleDetails = async () => {
+    if (!scheduleId || !user?.id) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`,
+        {},
+      );
+
+      if (!response.ok) {
+        console.warn("⚠️ schedules-with-status failed:", response.status);
+        return;
+      }
+
+      const raw = await response.json();
+      const list: any[] = Array.isArray(raw) ? raw : (raw?.data ?? []);
+
+      const match = list.find((item: any) => {
+        const sch = item?.schedule ?? item;
+        return String(sch?.id) === String(scheduleId);
+      });
+
+      if (!match) {
+        console.warn("⚠️ Schedule not found in list:", scheduleId);
+        return;
+      }
+
+      const schedule = match.schedule ?? match;
+
+      const resolvedAuditNumber =
+        schedule?.auditNumber ??
+        schedule?.audit_number ??
+        schedule?.documentNumber ??
+        schedule?.reportNumber ??
+        "";
+
+      console.log("🔍 [5S] resolved auditNumber:", {
+        scheduleId,
+        resolvedAuditNumber,
+        schedule,
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        documentNumber: resolvedAuditNumber || prev.documentNumber,
+        department: schedule?.department
+          ? String(schedule.department)
+          : prev.department,
+        area: schedule?.location || prev.area,
+        shift: schedule?.shift || prev.shift,
+        date: schedule?.scheduledDate
+          ? String(schedule.scheduledDate).split("T")[0]
+          : prev.date,
+        auditorName: schedule?.auditorName || prev.auditorName,
+        auditorId: schedule?.auditorId || prev.auditorId,
+      }));
+
+      setAuditeeInfo((prev) => ({
+        ...prev,
+        auditeeId: schedule?.auditeeId || prev.auditeeId || null,
+        auditeeName: schedule?.auditeeName || prev.auditeeName || "",
+        auditeeIds: schedule?.auditeeIds || prev.auditeeIds || [],
+      }));
+    } catch (error) {
+      console.warn("⚠️ Could not fetch schedule details:", error);
     }
   };
 
@@ -1139,7 +1262,6 @@ const hasFormChanged = useCallback(() => {
           const response = await fetch(
             `${API_BASE_URL}/api/audit-schedule/${scheduleId}`,
             {
-              credentials: "include",
               headers: { "Content-Type": "application/json" },
             },
           );
@@ -1185,15 +1307,18 @@ const hasFormChanged = useCallback(() => {
       }
     };
     fetchScheduleAuditeeInfo();
+    fetchScheduleDetails(); // ✅ ADD THIS LINE
     fetchAuditorSignature();
   }, [scheduleId, editId]);
 
   const fetchFiveSCheckSheetIds = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/templates/type/FIVE_S`, {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/templates/type/FIVE_S`,
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (!response.ok) throw new Error("Failed to fetch templates");
       const fiveSSheets = (await response.json()) || [];
       const ids = fiveSSheets.map((sheet: any) => sheet.id);
@@ -1213,10 +1338,12 @@ const hasFormChanged = useCallback(() => {
         throw new Error("No 5S check sheets found in database");
       const checkSheetId = fiveSIds[0];
 
-      const response = await fetch(`${API_BASE_URL}/api/templates/${checkSheetId}`, {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
+      const response = await fetch(
+        `${API_BASE_URL}/api/templates/${checkSheetId}`,
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (!response.ok) throw new Error("Failed to fetch template");
       const checkSheet = await response.json();
       setCurrentCheckSheet(checkSheet);
@@ -1341,7 +1468,6 @@ const hasFormChanged = useCallback(() => {
 
     setFormData((prev) => ({
       ...prev,
-      documentNumber: generateDocumentNumber(sheetKey),
       date: formattedDate,
       auditorName: user?.name || "",
       auditorId: auditorIdValue,
@@ -1363,9 +1489,6 @@ const hasFormChanged = useCallback(() => {
   useEffect(() => {
     if (editId && questions.length > 0) {
       loadAuditData();
-    } else if (!editId && questions.length > 0) {
-      const docNumber = generateDocumentNumber(sheetKey);
-      setFormData((prev) => ({ ...prev, documentNumber: docNumber }));
     }
   }, [editId, questions]);
 
@@ -1432,7 +1555,7 @@ const hasFormChanged = useCallback(() => {
 
         setFormData((prev) => ({
           ...prev,
-          documentNumber: answers.documentNumber || "",
+          documentNumber: answers.documentNumber || prev.documentNumber || "",
           department: savedDepartment || prev.department,
           supervisor: answers.supervisor || "",
           area: answers.area || "",
@@ -1509,36 +1632,18 @@ const hasFormChanged = useCallback(() => {
     setFormData((prev) => ({ ...prev, date: formattedDate }));
   };
 
-const handleInputChange = useCallback((field: string, value: any) => {
-  setFormData((prev) => ({ ...prev, [field]: value }));
-  // ✅ Mark as dirty
-  const initialValue = initialFormData[field as keyof typeof initialFormData];
-  if (JSON.stringify(value) !== JSON.stringify(initialValue)) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
- const handleScoreChange = useCallback((questionId: number, score: number) => {
-  setFormData((prev) => ({
-    ...prev,
-    scores: { ...prev.scores, [questionId]: score },
-  }));
-  // ✅ Mark as dirty
-  const initialScore = initialFormData.scores[questionId];
-  if (score !== initialScore) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
-  const handleCommentChange = useCallback((questionId: number, comment: string) => {
-  setFormData((prev) => ({
-    ...prev,
-    comments: { ...prev.comments, [questionId]: comment },
-  }));
-  // ✅ Mark as dirty
-  const initialComment = initialFormData.comments[questionId] || "";
-  if (comment !== initialComment) {
-    markDirty();
-  }
-}, [markDirty, initialFormData]);
+  const handleInputChange = (field: string, value: any) =>
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  const handleScoreChange = (questionId: number, score: number) =>
+    setFormData((prev) => ({
+      ...prev,
+      scores: { ...prev.scores, [questionId]: score },
+    }));
+  const handleCommentChange = (questionId: number, comment: string) =>
+    setFormData((prev) => ({
+      ...prev,
+      comments: { ...prev.comments, [questionId]: comment },
+    }));
 
   const calculateTotalScore = () => {
     let total = 0;
@@ -1568,25 +1673,13 @@ const handleInputChange = useCallback((field: string, value: any) => {
   };
 
   // ✅ UNIVERSAL NAVIGATION HANDLER
-  // ✅ UNIVERSAL NAVIGATION HANDLER with unsaved changes
-const handleGoBack = useCallback(() => {
-  // ✅ Check if there are unsaved changes
-  if (hasFormChanged() && !formData.status?.includes("SUBMITTED")) {
-    confirmDiscard(() => {
-      if (props.onClose) {
-        props.onClose();
-      } else {
-        router.back();
-      }
-    });
-  } else {
+  const handleGoBack = () => {
     if (props.onClose) {
       props.onClose();
     } else {
       router.back();
     }
-  }
-}, [hasFormChanged, formData.status, confirmDiscard, props.onClose, router]);
+  };
 
   const saveDraft = async () => {
     setSaving(true);
@@ -1604,55 +1697,64 @@ const handleGoBack = useCallback(() => {
 
       // ✅ Prepare evidence for API submission
       // ✅ Prepare evidence for API submission (with await)
-       const preparedEvidences = [];
-        for (const questionKey in evidences) {
-       const evidenceData = evidences[questionKey];
+      const preparedEvidences = [];
+      for (const questionKey in evidences) {
+        const evidenceData = evidences[questionKey];
 
-     if (evidenceData.image) {
-       try {
-         const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-           type: "image",
-           uri: evidenceData.image.uri,
-          name: evidenceData.image.name,
-          quality: evidenceData.image.quality,
-          capturedAt: evidenceData.image.capturedAt,
-      });
-      preparedEvidences.push(prepared);
-    } catch (error) {
-      console.error(`Error preparing image evidence:`, error);
-    }
-  }
+        if (evidenceData.image) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "image",
+                uri: evidenceData.image.uri,
+                name: evidenceData.image.name,
+                quality: evidenceData.image.quality,
+                capturedAt: evidenceData.image.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing image evidence:`, error);
+          }
+        }
 
-  if (evidenceData.video) {
-    try {
-      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-        type: "video",
-        uri: evidenceData.video.uri,
-        name: evidenceData.video.name,
-        quality: evidenceData.video.quality,
-        capturedAt: evidenceData.video.capturedAt,
-      });
-      preparedEvidences.push(prepared);
-    } catch (error) {
-      console.error(`Error preparing video evidence:`, error);
-    }
-  }
+        if (evidenceData.video) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "video",
+                uri: evidenceData.video.uri,
+                name: evidenceData.video.name,
+                quality: evidenceData.video.quality,
+                capturedAt: evidenceData.video.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing video evidence:`, error);
+          }
+        }
 
-  if (evidenceData.audio) {
-    try {
-      const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-        type: "audio",
-        uri: evidenceData.audio.uri,
-        name: evidenceData.audio.name,
-        quality: evidenceData.audio.quality || "Original",
-        capturedAt: evidenceData.audio.capturedAt,
-      });
-      preparedEvidences.push(prepared);
-    } catch (error) {
-      console.error(`Error preparing audio evidence:`, error);
-    }
-  }
-}
+        if (evidenceData.audio) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "audio",
+                uri: evidenceData.audio.uri,
+                name: evidenceData.audio.name,
+                quality: evidenceData.audio.quality || "Original",
+                capturedAt: evidenceData.audio.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing audio evidence:`, error);
+          }
+        }
+      }
 
       // ✅ Create answers object WITHOUT evidences (we'll upload them separately)
       const answersObject = {
@@ -1709,13 +1811,38 @@ const handleGoBack = useCallback(() => {
         // ✅ Upload evidences separately using bulk upload
         if (preparedEvidences.length > 0) {
           console.log(
-            `📤 Uploading ${preparedEvidences.length} evidence files...`,
+            `📤 Uploading ${preparedEvidences.length} evidence files sequentially...`,
           );
-          await auditScheduleApi.bulkUploadEvidence(
-            responseId,
-            preparedEvidences,
-          );
-          console.log("✅ All evidence uploaded successfully");
+          let successCount = 0;
+
+          for (const evidence of preparedEvidences) {
+            try {
+              await auditScheduleApi.uploadEvidence(
+                responseId, // Use responseId for existing drafts
+                evidence.questionSlNo,
+                {
+                  type: evidence.type,
+                  uri: evidence.uri,
+                  name: evidence.name,
+                  quality: evidence.quality,
+                  capturedAt: evidence.capturedAt,
+                },
+              );
+              successCount++;
+              console.log(`✅ Uploaded: ${evidence.name}`);
+            } catch (err) {
+              console.error(`❌ Failed to upload ${evidence.name}:`, err);
+            }
+          }
+
+          if (successCount < preparedEvidences.length) {
+            addToast(
+              `Uploaded ${successCount}/${preparedEvidences.length} files. Some failed.`,
+              "warning",
+            );
+          } else {
+            console.log("✅ All evidence uploaded successfully");
+          }
         }
 
         saved = { id: responseId };
@@ -1735,16 +1862,9 @@ const handleGoBack = useCallback(() => {
 
         setResponseId(saved.id);
 
-        // ✅ Upload evidences after response is created
+        // ✅ Upload evidences sequentially to prevent Network Errors
         if (preparedEvidences.length > 0) {
-          console.log(
-            `📤 Uploading ${preparedEvidences.length} evidence files...`,
-          );
-          await auditScheduleApi.bulkUploadEvidence(
-            saved.id,
-            preparedEvidences,
-          );
-          console.log("✅ All evidence uploaded successfully");
+          await uploadEvidencesSequentially(saved.id, preparedEvidences);
         }
 
         addToast("Draft saved successfully", "success");
@@ -1760,8 +1880,6 @@ const handleGoBack = useCallback(() => {
             },
           });
         }
-          resetDirty(); // ✅ Reset after successful draft save
-
       }
     } catch (error: any) {
       console.error("Error saving draft:", error);
@@ -1771,212 +1889,243 @@ const handleGoBack = useCallback(() => {
     }
   };
 
- const submitAudit = async () => {
-  if (!isManualSubmitRef.current) return;
-  isManualSubmitRef.current = false;
+  const submitAudit = async () => {
+    if (!isManualSubmitRef.current) return;
+    isManualSubmitRef.current = false;
 
-  const unanswered = questions.filter(
-    (q) =>
-      formData.scores[q.slNo] === undefined ||
-      formData.scores[q.slNo] === null,
-  );
-  if (unanswered.length > 0) {
-    addToast(
-      `Please rate all ${unanswered.length} remaining questions`,
-      "error",
+    const unanswered = questions.filter(
+      (q) =>
+        formData.scores[q.slNo] === undefined ||
+        formData.scores[q.slNo] === null,
     );
-    setCurrentStep(2);
-    setCurrentCheckpointIndex(
-      questions.findIndex((q) => formData.scores[q.slNo] === undefined),
-    );
-    return;
-  }
+    if (unanswered.length > 0) {
+      addToast(
+        `Please rate all ${unanswered.length} remaining questions`,
+        "error",
+      );
+      setCurrentStep(2);
+      setCurrentCheckpointIndex(
+        questions.findIndex((q) => formData.scores[q.slNo] === undefined),
+      );
+      return;
+    }
 
-  if (!auditeeInfo.auditeeName?.trim()) {
-    addToast("Please enter auditee name", "error");
-    setCurrentStep(3);
-    return;
-  }
+    if (!auditeeInfo.auditeeName?.trim()) {
+      addToast("Please enter auditee name", "error");
+      setCurrentStep(3);
+      return;
+    }
 
-  if (!auditorSignatureImage && !formData.auditorSignature.trim()) {
-    addToast("Please provide auditor signature", "error");
-    setCurrentStep(3);
-    return;
-  }
+    if (!auditorSignatureImage && !formData.auditorSignature.trim()) {
+      addToast("Please provide auditor signature", "error");
+      setCurrentStep(3);
+      return;
+    }
 
-  setSaving(true);
-  try {
-    if (!currentCheckSheet || !currentCheckSheet.id)
-      throw new Error(
-        "Check sheet not loaded. Please refresh and try again.",
+    setSaving(true);
+    try {
+      if (!currentCheckSheet || !currentCheckSheet.id)
+        throw new Error(
+          "Check sheet not loaded. Please refresh and try again.",
+        );
+
+      const totalScore = calculateTotalScore();
+      const maxPossibleScore = questions.length * 4;
+      const percentage =
+        maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+      const roundedPercentage = Math.round(percentage * 100) / 100;
+
+      // ✅ FIXED: Added `await` before each prepareEvidenceForApi call
+      const preparedEvidences = [];
+      for (const questionKey in evidences) {
+        const evidenceData = evidences[questionKey];
+
+        if (evidenceData.image) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "image",
+                uri: evidenceData.image.uri,
+                name: evidenceData.image.name,
+                quality: evidenceData.image.quality,
+                capturedAt: evidenceData.image.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing image evidence:`, error);
+          }
+        }
+
+        if (evidenceData.video) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "video",
+                uri: evidenceData.video.uri,
+                name: evidenceData.video.name,
+                quality: evidenceData.video.quality,
+                capturedAt: evidenceData.video.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing video evidence:`, error);
+          }
+        }
+
+        if (evidenceData.audio) {
+          try {
+            const prepared = await prepareEvidenceForApi(
+              parseInt(questionKey, 10),
+              {
+                type: "audio",
+                uri: evidenceData.audio.uri,
+                name: evidenceData.audio.name,
+                quality: evidenceData.audio.quality || "Original",
+                capturedAt: evidenceData.audio.capturedAt,
+              },
+            );
+            preparedEvidences.push(prepared);
+          } catch (error) {
+            console.error(`Error preparing audio evidence:`, error);
+          }
+        }
+      }
+
+      const answersObject = {
+        documentNumber: formData.documentNumber,
+        department: formData.department,
+        supervisor: formData.supervisor,
+        area: formData.area,
+        date: formData.date,
+        hodEmail: formData.hodEmail,
+        scores: formData.scores,
+        comments: formData.comments,
+        totalScore: totalScore,
+        percentage: roundedPercentage,
+        auditorSignature: auditorSignatureImage || formData.auditorSignature,
+        auditeeName: auditeeInfo.auditeeName,
+        completedBy: formData.auditorName,
+        formName: "5S Audit Checklist",
+        evidenceCount: preparedEvidences.length,
+      };
+
+      const auditorIdValue = formData.auditorId
+        ? Number(formData.auditorId)
+        : user?.id
+          ? Number(user.id)
+          : null;
+
+      const payload = {
+        checkSheet: { id: currentCheckSheet.id },
+        auditScheduleId: scheduleId ? parseInt(String(scheduleId)) : null,
+        department: formData.department,
+        shift: formData.shift,
+        auditDate: formData.date,
+        auditorName: formData.auditorName,
+        auditorId: auditorIdValue,
+        auditeeId: auditeeInfo.auditeeId
+          ? parseInt(String(auditeeInfo.auditeeId))
+          : null,
+        auditeeName: auditeeInfo.auditeeName,
+        auditeeIds: auditeeInfo.auditeeIds,
+        auditeeAcknowledged: false,
+        answers: JSON.stringify(answersObject),
+        totalScore: totalScore,
+        maxPossibleScore: maxPossibleScore,
+        percentageScore: roundedPercentage,
+        summary: null,
+        recommendations: null,
+        status: "SUBMITTED",
+      };
+
+      let saved;
+      if (responseId) {
+        await auditScheduleApi.updateAuditResponse(responseId, payload);
+
+        // ✅ Upload evidences before submitting
+        // ✅ Upload evidences sequentially to prevent Network Errors
+        if (preparedEvidences.length > 0) {
+          await uploadEvidencesSequentially(responseId, preparedEvidences);
+        }
+        await auditScheduleApi.submitAuditResponse(responseId);
+        saved = { id: responseId };
+      } else {
+        const response = await auditScheduleApi.saveAuditResponse(payload);
+        saved = response?.data || response;
+
+        if (!saved || !saved.id) {
+          throw new Error(
+            "Failed to get ID from submit response. Check console logs.",
+          );
+        }
+
+        setResponseId(saved.id);
+
+        // ✅ Upload evidences before submitting
+        if (preparedEvidences.length > 0) {
+          console.log(
+            `📤 Uploading ${preparedEvidences.length} evidence files sequentially...`,
+          );
+          let successCount = 0;
+
+          for (const evidence of preparedEvidences) {
+            try {
+              await auditScheduleApi.uploadEvidence(
+                saved.id, // Use saved.id for new submissions
+                evidence.questionSlNo,
+                {
+                  type: evidence.type,
+                  uri: evidence.uri,
+                  name: evidence.name,
+                  quality: evidence.quality,
+                  capturedAt: evidence.capturedAt,
+                },
+              );
+              successCount++;
+              console.log(`✅ Uploaded: ${evidence.name}`);
+            } catch (err) {
+              console.error(`❌ Failed to upload ${evidence.name}:`, err);
+            }
+          }
+
+          if (successCount < preparedEvidences.length) {
+            addToast(
+              `Uploaded ${successCount}/${preparedEvidences.length} files. Some failed.`,
+              "warning",
+            );
+          }
+        }
+
+        await auditScheduleApi.submitAuditResponse(saved.id);
+      }
+
+      let ratingText = "";
+      if (roundedPercentage >= 90) ratingText = "Excellent!";
+      else if (roundedPercentage >= 75) ratingText = "Good";
+      else if (roundedPercentage >= 60) ratingText = "Needs Improvement";
+      else ratingText = "Poor - Immediate Action Required";
+
+      addToast(
+        `5S Audit submitted! Score: ${totalScore}/${maxPossibleScore} (${roundedPercentage}%) - ${ratingText}`,
+        "success",
       );
 
-    const totalScore = calculateTotalScore();
-    const maxPossibleScore = questions.length * 4;
-    const percentage =
-      maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
-    const roundedPercentage = Math.round(percentage * 100) / 100;
-
-    // ✅ FIXED: Added `await` before each prepareEvidenceForApi call
-    const preparedEvidences = [];
-    for (const questionKey in evidences) {
-      const evidenceData = evidences[questionKey];
-
-      if (evidenceData.image) {
-        try {
-          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-            type: "image",
-            uri: evidenceData.image.uri,
-            name: evidenceData.image.name,
-            quality: evidenceData.image.quality,
-            capturedAt: evidenceData.image.capturedAt,
-          });
-          preparedEvidences.push(prepared);
-        } catch (error) {
-          console.error(`Error preparing image evidence:`, error);
-        }
+      if (props.onClose) {
+        props.onClose();
+      } else {
+        router.replace("/auditor");
       }
-
-      if (evidenceData.video) {
-        try {
-          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-            type: "video",
-            uri: evidenceData.video.uri,
-            name: evidenceData.video.name,
-            quality: evidenceData.video.quality,
-            capturedAt: evidenceData.video.capturedAt,
-          });
-          preparedEvidences.push(prepared);
-        } catch (error) {
-          console.error(`Error preparing video evidence:`, error);
-        }
-      }
-
-      if (evidenceData.audio) {
-        try {
-          const prepared = await prepareEvidenceForApi(parseInt(questionKey, 10), {
-            type: "audio",
-            uri: evidenceData.audio.uri,
-            name: evidenceData.audio.name,
-            quality: evidenceData.audio.quality || "Original",
-            capturedAt: evidenceData.audio.capturedAt,
-          });
-          preparedEvidences.push(prepared);
-        } catch (error) {
-          console.error(`Error preparing audio evidence:`, error);
-        }
-      }
+    } catch (error: any) {
+      console.error("Error submitting audit:", error);
+      addToast(`Failed to submit audit: ${error.message}`, "error");
+    } finally {
+      setSaving(false);
     }
-
-    const answersObject = {
-      documentNumber: formData.documentNumber,
-      department: formData.department,
-      supervisor: formData.supervisor,
-      area: formData.area,
-      date: formData.date,
-      hodEmail: formData.hodEmail,
-      scores: formData.scores,
-      comments: formData.comments,
-      totalScore: totalScore,
-      percentage: roundedPercentage,
-      auditorSignature: auditorSignatureImage || formData.auditorSignature,
-      auditeeName: auditeeInfo.auditeeName,
-      completedBy: formData.auditorName,
-      formName: "5S Audit Checklist",
-      evidenceCount: preparedEvidences.length,
-    };
-
-    const auditorIdValue = formData.auditorId
-      ? Number(formData.auditorId)
-      : user?.id
-        ? Number(user.id)
-        : null;
-
-    const payload = {
-      checkSheet: { id: currentCheckSheet.id },
-      auditScheduleId: scheduleId ? parseInt(String(scheduleId)) : null,
-      department: formData.department,
-      shift: formData.shift,
-      auditDate: formData.date,
-      auditorName: formData.auditorName,
-      auditorId: auditorIdValue,
-      auditeeId: auditeeInfo.auditeeId
-        ? parseInt(String(auditeeInfo.auditeeId))
-        : null,
-      auditeeName: auditeeInfo.auditeeName,
-      auditeeIds: auditeeInfo.auditeeIds,
-      auditeeAcknowledged: false,
-      answers: JSON.stringify(answersObject),
-      totalScore: totalScore,
-      maxPossibleScore: maxPossibleScore,
-      percentageScore: roundedPercentage,
-      summary: null,
-      recommendations: null,
-      status: "SUBMITTED",
-    };
-
-    let saved;
-    if (responseId) {
-      await auditScheduleApi.updateAuditResponse(responseId, payload);
-
-      // ✅ Upload evidences before submitting
-      if (preparedEvidences.length > 0) {
-        await auditScheduleApi.bulkUploadEvidence(
-          responseId,
-          preparedEvidences,
-        );
-      }
-
-      await auditScheduleApi.submitAuditResponse(responseId);
-      saved = { id: responseId };
-    } else {
-      const response = await auditScheduleApi.saveAuditResponse(payload);
-      saved = response?.data || response;
-
-      if (!saved || !saved.id) {
-        throw new Error(
-          "Failed to get ID from submit response. Check console logs.",
-        );
-      }
-
-      setResponseId(saved.id);
-
-      // ✅ Upload evidences before submitting
-      if (preparedEvidences.length > 0) {
-        await auditScheduleApi.bulkUploadEvidence(
-          saved.id,
-          preparedEvidences,
-        );
-      }
-
-      await auditScheduleApi.submitAuditResponse(saved.id);
-    }
-
-    let ratingText = "";
-    if (roundedPercentage >= 90) ratingText = "Excellent!";
-    else if (roundedPercentage >= 75) ratingText = "Good";
-    else if (roundedPercentage >= 60) ratingText = "Needs Improvement";
-    else ratingText = "Poor - Immediate Action Required";
-
-    addToast(
-      `5S Audit submitted! Score: ${totalScore}/${maxPossibleScore} (${roundedPercentage}%) - ${ratingText}`,
-      "success",
-    );
-
-    if (props.onClose) {
-      props.onClose();
-    } else {
-      router.replace("/auditor");
-    }
-      resetDirty(); // ✅ Reset after successful submission
-
-  } catch (error: any) {
-    console.error("Error submitting audit:", error);
-    addToast(`Failed to submit audit: ${error.message}`, "error");
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   // Add this function after the removeEvidence function
   const syncEvidences = async (
@@ -2106,16 +2255,6 @@ const handleGoBack = useCallback(() => {
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
   }, [currentStep, questions, currentCheckpointIndex, activeSectionIndex]); // ✅ Updated dependencies
-
-  // ✅ Track evidence changes for dirty state
-useEffect(() => {
-  const hasEvidence = Object.keys(evidences).length > 0;
-  const initialEvidenceCount = 0; // Initially no evidence
-  
-  if (hasEvidence && hasFormChanged()) {
-    markDirty();
-  }
-}, [evidences]);
   const handleTabChange = (index: number) => {
     setActiveSectionIndex(index);
     const section = FIVE_S_SECTIONS[index];
@@ -2224,10 +2363,10 @@ useEffect(() => {
   if (loadingQuestions) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <ActivityIndicator
             size="large"
             color={NAVBAR_COLORS.primary}
@@ -2244,10 +2383,10 @@ useEffect(() => {
   if (loading) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <ActivityIndicator
             size="large"
             color={NAVBAR_COLORS.primary}
@@ -2264,19 +2403,19 @@ useEffect(() => {
   if (questions.length === 0) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <Text className="mb-2 text-2xl font-bold text-slate-800">
             No Questions Found
           </Text>
-          <Text className="mb-4 text-sm text-center text-slate-500">
+          <Text className="mb-4 text-center text-sm text-slate-500">
             No checkpoints available for 5S audit.
           </Text>
           <TouchableOpacity
             onPress={handleGoBack}
-            className="px-5 py-2.5 rounded-xl shadow-md"
+            className="rounded-xl px-5 py-2.5 shadow-md"
             style={{ backgroundColor: NAVBAR_COLORS.primary }}
           >
             <Text className="text-sm font-medium text-white">Back</Text>
@@ -2316,10 +2455,10 @@ useEffect(() => {
           >
             {/* Header */}
             <FadeInView delay={0}>
-              <View className="flex-row items-center justify-between mb-8">
+              <View className="mb-8 flex-row items-center justify-between">
                 <TouchableOpacity
                   onPress={handleGoBack}
-                  className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                  className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                 >
                   <ArrowLeft size={16} color="#334155" />
                   <Text className="text-sm font-medium text-slate-700">
@@ -2331,7 +2470,7 @@ useEffect(() => {
                   {currentStep === 2 && (
                     <TouchableOpacity
                       onPress={handleAutoFill}
-                      className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.secondary }}
                     >
                       <Sparkles size={16} color="#ffffff" />
@@ -2343,7 +2482,7 @@ useEffect(() => {
                   <TouchableOpacity
                     onPress={saveDraft}
                     disabled={saving}
-                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm disabled:opacity-50"
+                    className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm disabled:opacity-50"
                   >
                     <Save size={16} color="#334155" />
                     <Text className="text-sm font-medium text-slate-700">
@@ -2357,7 +2496,7 @@ useEffect(() => {
                         submitAudit();
                       }}
                       disabled={!allQuestionsRated || saving}
-                      className={`flex-row items-center gap-2 px-4 py-2.5 rounded-xl shadow-md ${allQuestionsRated && !saving ? "" : "opacity-50"}`}
+                      className={`flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-md ${allQuestionsRated && !saving ? "" : "opacity-50"}`}
                       style={{
                         backgroundColor:
                           allQuestionsRated && !saving
@@ -2377,7 +2516,7 @@ useEffect(() => {
 
             {/* Step Progress Bar */}
             <FadeInView delay={100}>
-              <View className="flex-row items-center justify-between mb-8">
+              <View className="mb-8 flex-row items-center justify-between">
                 {steps.map((step) => {
                   const Icon = step.icon;
                   const isActive = currentStep === step.number;
@@ -2399,10 +2538,10 @@ useEffect(() => {
                           isClickable && setCurrentStep(step.number)
                         }
                         disabled={!isClickable}
-                        className={`flex-row items-center flex-1 ${isClickable ? "" : "opacity-70"}`}
+                        className={`flex-1 flex-row items-center ${isClickable ? "" : "opacity-70"}`}
                       >
                         <View
-                          className={`w-9 h-9 rounded-xl items-center justify-center shadow-sm ${isActive || isCompleted ? "bg-[#00529B]" : "bg-slate-100"}`}
+                          className={`h-9 w-9 items-center justify-center rounded-xl shadow-sm ${isActive || isCompleted ? "bg-[#00529B]" : "bg-slate-100"}`}
                         >
                           {isCompleted ? (
                             <CheckCircle size={18} color="#ffffff" />
@@ -2416,7 +2555,7 @@ useEffect(() => {
                           )}
                         </View>
 
-                        <View className="flex-1 ml-2">
+                        <View className="ml-2 flex-1">
                           <Text className="text-[10px] font-medium text-slate-500">
                             Step {step.number}
                           </Text>
@@ -2433,7 +2572,7 @@ useEffect(() => {
                       {/* ✅ FIX: Responsive connecting line */}
                       {step.number < steps.length && (
                         <View
-                          className={`h-0.5 mx-2 ${isCompleted ? "bg-[#3b82f6]" : "bg-slate-200"}`}
+                          className={`mx-2 h-0.5 ${isCompleted ? "bg-[#3b82f6]" : "bg-slate-200"}`}
                           style={{
                             flex: isDesktop ? 1 : 0,
                             width: isDesktop ? undefined : 24, // Stretches on desktop, fixed 24px on mobile
@@ -2448,13 +2587,13 @@ useEffect(() => {
             {/* Step 1: General Information */}
             {currentStep === 1 && (
               <FadeInView delay={200}>
-                <View className="mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <View
-                    className="flex-row items-center gap-3 p-6 border-b border-slate-100"
+                    className="flex-row items-center gap-3 border-b border-slate-100 p-6"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <View
-                      className="p-2 rounded-lg"
+                      className="rounded-lg p-2"
                       style={{ backgroundColor: NAVBAR_COLORS.lighter }}
                     >
                       <Sparkles size={20} color={NAVBAR_COLORS.primary} />
@@ -2463,7 +2602,7 @@ useEffect(() => {
                       <Text className="text-lg font-bold text-slate-800">
                         5S Audit - General Info
                       </Text>
-                      <Text className="text-xs text-slate-500 mt-0.5">
+                      <Text className="mt-0.5 text-xs text-slate-500">
                         Workplace Organization Audit
                       </Text>
                     </View>
@@ -2477,13 +2616,13 @@ useEffect(() => {
                       {/* Audit Number - Full width */}
                       <View className={isDesktop ? "w-1/2 pr-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Audit Number
                           </Text>
                           <TextInput
                             value={formData.documentNumber}
                             editable={false}
-                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600"
                           />
                         </View>
                       </View>
@@ -2491,7 +2630,7 @@ useEffect(() => {
                       {/* Department - Full width */}
                       <View className={isDesktop ? "w-1/2 pl-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Department <Text className="text-rose-500">*</Text>
                           </Text>
                           <TextInput
@@ -2500,7 +2639,7 @@ useEffect(() => {
                               handleInputChange("department", val)
                             }
                             placeholder="Department"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                           {scheduleId && (
                             <Text
@@ -2516,13 +2655,13 @@ useEffect(() => {
                       {/* Auditor - Full width */}
                       <View className={isDesktop ? "w-1/2 pr-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Auditor (Supervisor)
                           </Text>
                           <TextInput
                             value={formData.auditorName}
                             editable={false}
-                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-600"
                           />
                         </View>
                       </View>
@@ -2530,7 +2669,7 @@ useEffect(() => {
                       {/* Date - Full width */}
                       <View className={isDesktop ? "w-1/2 pl-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Date <Text className="text-rose-500">*</Text>
                           </Text>
 
@@ -2552,7 +2691,7 @@ useEffect(() => {
                                   target.showPicker();
                                 }
                               }}
-                              className="w-5xl px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 outline-none focus:ring-1 focus:ring-black cursor-pointer"
+                              className="w-5xl cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 outline-none focus:ring-1 focus:ring-black"
                               style={{
                                 fontFamily: "inherit",
                                 fontSize: "inherit",
@@ -2563,7 +2702,7 @@ useEffect(() => {
                             <>
                               <TouchableOpacity
                                 onPress={() => setShowDatePicker(true)}
-                                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl flex-row items-center justify-between"
+                                className="w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
                                 activeOpacity={0.7}
                               >
                                 {/* ✅ flex-1 ensures the text area also registers the touch */}
@@ -2611,7 +2750,7 @@ useEffect(() => {
                       {/* Area/Location - Full width */}
                       <View className={isDesktop ? "w-1/2 pr-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Specific Area/Location
                           </Text>
                           <TextInput
@@ -2620,7 +2759,7 @@ useEffect(() => {
                               handleInputChange("area", val)
                             }
                             placeholder="e.g., Assembly Line"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                         </View>
                       </View>
@@ -2628,7 +2767,7 @@ useEffect(() => {
                       {/* Shift - Full width */}
                       <View className={isDesktop ? "w-1/2 pl-2" : "w-full"}>
                         <View className="mb-5">
-                          <Text className="text-sm font-medium text-slate-700 mb-1.5">
+                          <Text className="mb-1.5 text-sm font-medium text-slate-700">
                             Shift
                           </Text>
                           <View className="flex-row flex-wrap gap-2">
@@ -2638,7 +2777,7 @@ useEffect(() => {
                                 onPress={() =>
                                   handleInputChange("shift", shift)
                                 }
-                                className={`px-4 py-2 rounded-lg border ${formData.shift === shift ? "bg-[#00529B] border-[#00529B]" : "bg-white border-slate-200"}`}
+                                className={`rounded-lg border px-4 py-2 ${formData.shift === shift ? "border-[#00529B] bg-[#00529B]" : "border-slate-200 bg-white"}`}
                               >
                                 <Text
                                   className={`text-sm font-medium ${formData.shift === shift ? "text-white" : "text-slate-700"}`}
@@ -2654,7 +2793,7 @@ useEffect(() => {
                       {/* Rating Scale - Full width */}
                       <View className="w-full">
                         <View
-                          className="p-4 mt-2 border rounded-xl"
+                          className="mt-2 rounded-xl border p-4"
                           style={{
                             backgroundColor: NAVBAR_COLORS.bg,
                             borderColor: NAVBAR_COLORS.lighter,
@@ -2694,7 +2833,7 @@ useEffect(() => {
                             ].map((item, idx) => (
                               <View
                                 key={idx}
-                                className={`px-3 py-2 border rounded-lg ${item.color}`}
+                                className={`rounded-lg border px-3 py-2 ${item.color}`}
                               >
                                 <Text className="text-xs font-medium">
                                   {item.label}
@@ -2713,7 +2852,7 @@ useEffect(() => {
                   <View className="flex-row justify-end p-6 pt-0">
                     <TouchableOpacity
                       onPress={nextStep}
-                      className="flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.primary }}
                     >
                       <Text className="text-sm font-medium text-white">
@@ -2730,7 +2869,7 @@ useEffect(() => {
             {currentStep === 2 && currentQ && (
               <FadeInView delay={200}>
                 {/* 5S Tabs */}
-                <View className="p-2 mb-4 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-4 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View className="flex-row gap-2">
                       {FIVE_S_SECTIONS.map((section, index) => {
@@ -2740,10 +2879,10 @@ useEffect(() => {
                           <TouchableOpacity
                             key={index}
                             onPress={() => handleTabChange(index)}
-                            className={`px-4 py-2.5 rounded-xl border flex-row items-center gap-2 ${
+                            className={`flex-row items-center gap-2 rounded-xl border px-4 py-2.5 ${
                               isActive
-                                ? "bg-[#00529B] border-[#00529B]"
-                                : "bg-white border-slate-200"
+                                ? "border-[#00529B] bg-[#00529B]"
+                                : "border-slate-200 bg-white"
                             }`}
                           >
                             <Text
@@ -2754,7 +2893,7 @@ useEffect(() => {
                               {section.name}
                             </Text>
                             <View
-                              className={`px-2 py-0.5 rounded-full ${
+                              className={`rounded-full px-2 py-0.5 ${
                                 isActive ? "bg-white/20" : "bg-slate-100"
                               }`}
                             >
@@ -2774,9 +2913,9 @@ useEffect(() => {
                 </View>
 
                 {/* Question Navigation inside Tab */}
-                <View className="p-5 mb-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   {/* ✅ FIX: Added flex-wrap and gap-y-3 to prevent overflow on mobile */}
-                  <View className="flex-row flex-wrap items-center justify-between mb-4 gap-y-3">
+                  <View className="mb-4 flex-row flex-wrap items-center justify-between gap-y-3">
                     <View className="flex-row flex-wrap items-center gap-2">
                       <Text
                         className="text-sm font-medium text-slate-600"
@@ -2787,7 +2926,7 @@ useEffect(() => {
                         of {sectionQuestions.length}
                       </Text>
                       <View
-                        className="px-3 py-1 rounded-full"
+                        className="rounded-full px-3 py-1"
                         style={{ backgroundColor: NAVBAR_COLORS.bg }}
                       >
                         <Text
@@ -2877,7 +3016,7 @@ useEffect(() => {
                               setCurrentCheckpointIndex(globalIndex);
                               scrollToTop();
                             }}
-                            className="items-center justify-center flex-shrink-0 border rounded-lg w-9 h-9"
+                            className="h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border"
                             style={{
                               backgroundColor: bgColor,
                               borderColor,
@@ -2898,15 +3037,15 @@ useEffect(() => {
                 </View>
 
                 <View
-                  className={`bg-white border shadow-sm rounded-2xl overflow-hidden border-l-4 ${getScoreColor(
+                  className={`overflow-hidden rounded-2xl border border-l-4 bg-white shadow-sm ${getScoreColor(
                     formData.scores[currentQ.slNo],
                   )}`}
                 >
                   <View className="p-6">
-                    <View className="flex-row flex-wrap items-center justify-between gap-3 mb-5">
+                    <View className="mb-5 flex-row flex-wrap items-center justify-between gap-3">
                       <View className="flex-row items-center gap-3">
                         <View
-                          className="items-center justify-center w-10 h-10 shadow-md rounded-xl"
+                          className="h-10 w-10 items-center justify-center rounded-xl shadow-md"
                           style={{ backgroundColor: NAVBAR_COLORS.primary }}
                         >
                           <Text className="font-bold text-white">
@@ -2916,7 +3055,7 @@ useEffect(() => {
                           </Text>
                         </View>
                         <View
-                          className="px-3 py-1 rounded-full"
+                          className="rounded-full px-3 py-1"
                           style={{ backgroundColor: NAVBAR_COLORS.bg }}
                         >
                           <Text
@@ -2928,7 +3067,7 @@ useEffect(() => {
                         </View>
                         {formData.scores[currentQ.slNo] !== undefined &&
                           formData.scores[currentQ.slNo] !== null && (
-                            <View className="px-3 py-1 border rounded-full bg-slate-100 border-slate-200">
+                            <View className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1">
                               <Text className="text-xs font-semibold text-slate-700">
                                 Score: {formData.scores[currentQ.slNo]}/4
                               </Text>
@@ -2943,7 +3082,7 @@ useEffect(() => {
 
                     {currentQ.documentsVerified ? (
                       <View
-                        className="p-4 mb-5 border rounded-xl"
+                        className="mb-5 rounded-xl border p-4"
                         style={{
                           backgroundColor: NAVBAR_COLORS.bg,
                           borderColor: NAVBAR_COLORS.lighter,
@@ -3002,7 +3141,7 @@ useEffect(() => {
                               onPress={() =>
                                 handleScoreChange(currentQ.slNo, option.value)
                               }
-                              className="flex-1 min-w-[60px] p-3 items-center border-2 rounded-xl shadow-sm"
+                              className="min-w-[60px] flex-1 items-center rounded-xl border-2 p-3 shadow-sm"
                               style={{
                                 backgroundColor: bg,
                                 borderColor: isSelected ? border : "#e2e8f0",
@@ -3015,7 +3154,7 @@ useEffect(() => {
                                 {option.short}
                               </Text>
                               <Text
-                                className="text-[10px] font-medium mt-1 text-center"
+                                className="mt-1 text-center text-[10px] font-medium"
                                 style={{ color: isSelected ? text : "#64748b" }}
                               >
                                 {option.label}
@@ -3038,13 +3177,13 @@ useEffect(() => {
                         placeholder="Enter comments or actions..."
                         multiline
                         numberOfLines={3}
-                        className="w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl text-slate-800"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
                         style={{ textAlignVertical: "top" }}
                       />
                     </View>
 
                     {/* ✅ ADD EVIDENCE SECTION */}
-                    <View className="p-4 mb-6 border bg-slate-50 border-slate-200 rounded-xl">
+                    <View className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <Text className="mb-3 text-sm font-bold text-slate-700">
                         📎 Add Evidence (Limit: 1 File)
                       </Text>
@@ -3059,10 +3198,10 @@ useEffect(() => {
                             <TouchableOpacity
                               key={q}
                               onPress={() => setSelectedQuality(q)}
-                              className={`px-3 py-1.5 rounded-lg border ${
+                              className={`rounded-lg border px-3 py-1.5 ${
                                 selectedQuality === q
-                                  ? "bg-[#00529B] border-[#00529B]"
-                                  : "bg-white border-slate-200"
+                                  ? "border-[#00529B] bg-[#00529B]"
+                                  : "border-slate-200 bg-white"
                               }`}
                             >
                               <Text
@@ -3081,16 +3220,16 @@ useEffect(() => {
 
                       {/* Action Buttons */}
                       {/* Action Buttons */}
-                      <View className="gap-3 mb-4">
+                      <View className="mb-4 gap-3">
                         {/* PHOTO ROW */}
                         <View>
-                          <Text className="text-xs font-bold text-slate-600 mb-1.5">
+                          <Text className="mb-1.5 text-xs font-bold text-slate-600">
                             📷 Photo Evidence
                           </Text>
                           <View className="flex-row gap-2">
                             <TouchableOpacity
                               onPress={() => pickImageLive(currentQ.slNo)}
-                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-[#00529B] rounded-xl shadow-sm"
+                              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-[#00529B] py-2.5 shadow-sm"
                             >
                               <Camera size={16} color="#fff" />
                               <Text className="text-xs font-bold text-white">
@@ -3099,7 +3238,7 @@ useEffect(() => {
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => pickImageUpload(currentQ.slNo)}
-                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 shadow-sm"
                             >
                               <Upload size={16} color="#00529B" />
                               <Text className="text-xs font-bold text-[#00529B]">
@@ -3111,13 +3250,13 @@ useEffect(() => {
 
                         {/* VIDEO ROW */}
                         <View>
-                          <Text className="text-xs font-bold text-slate-600 mb-1.5 mt-2">
+                          <Text className="mb-1.5 mt-2 text-xs font-bold text-slate-600">
                             🎥 Video Evidence
                           </Text>
                           <View className="flex-row gap-2">
                             <TouchableOpacity
                               onPress={() => pickVideoLive(currentQ.slNo)}
-                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-[#00529B] rounded-xl shadow-sm"
+                              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-[#00529B] py-2.5 shadow-sm"
                             >
                               <Film size={16} color="#fff" />
                               <Text className="text-xs font-bold text-white">
@@ -3126,7 +3265,7 @@ useEffect(() => {
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => pickVideoUpload(currentQ.slNo)}
-                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 shadow-sm"
                             >
                               <Upload size={16} color="#00529B" />
                               <Text className="text-xs font-bold text-[#00529B]">
@@ -3138,7 +3277,7 @@ useEffect(() => {
 
                         {/* AUDIO ROW */}
                         <View>
-                          <Text className="text-xs font-bold text-slate-600 mb-1.5 mt-2">
+                          <Text className="mb-1.5 mt-2 text-xs font-bold text-slate-600">
                             🎙️ Audio Evidence
                           </Text>
                           <View className="flex-row gap-2">
@@ -3146,9 +3285,9 @@ useEffect(() => {
                               onPress={() =>
                                 isRecording
                                   ? stopRecording(currentQ.slNo)
-                                  : startRecording()
+                                  : startRecording(currentQ.slNo)
                               }
-                              className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-xl shadow-sm ${isRecording ? "bg-rose-500" : "bg-[#00529B]"}`}
+                              className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl py-2.5 shadow-sm ${isRecording ? "bg-rose-500" : "bg-[#00529B]"}`}
                             >
                               <Mic size={16} color="#fff" />
                               <Text className="text-xs font-bold text-white">
@@ -3157,7 +3296,7 @@ useEffect(() => {
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => pickAudioUpload(currentQ.slNo)}
-                              className="flex-1 flex-row items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 shadow-sm"
                             >
                               <Upload size={16} color="#00529B" />
                               <Text className="text-xs font-bold text-[#00529B]">
@@ -3170,11 +3309,11 @@ useEffect(() => {
 
                       {/* Preview Area */}
                       {evidences[currentQ.slNo] && (
-                        <View className="gap-3 mt-4">
+                        <View className="mt-4 gap-3">
                           {/* IMAGE PREVIEW */}
                           {evidences[currentQ.slNo].image && (
-                            <View className="p-3 bg-white border border-slate-200 rounded-xl">
-                              <View className="flex-row items-center justify-between mb-1">
+                            <View className="rounded-xl border border-slate-200 bg-white p-3">
+                              <View className="mb-1 flex-row items-center justify-between">
                                 <Text
                                   className="flex-1 text-xs font-bold text-slate-800"
                                   numberOfLines={1}
@@ -3191,7 +3330,7 @@ useEffect(() => {
                                   </Text>
                                 </TouchableOpacity>
                               </View>
-                              <Text className="text-[10px] text-slate-500 mb-2">
+                              <Text className="mb-2 text-[10px] text-slate-500">
                                 🕒 Captured:{" "}
                                 {evidences[currentQ.slNo].image?.capturedAt} •
                                 Quality:{" "}
@@ -3223,8 +3362,8 @@ useEffect(() => {
 
                           {/* VIDEO PREVIEW */}
                           {evidences[currentQ.slNo].video && (
-                            <View className="p-3 bg-white border border-slate-200 rounded-xl">
-                              <View className="flex-row items-center justify-between mb-1">
+                            <View className="rounded-xl border border-slate-200 bg-white p-3">
+                              <View className="mb-1 flex-row items-center justify-between">
                                 <Text
                                   className="flex-1 text-xs font-bold text-slate-800"
                                   numberOfLines={1}
@@ -3241,7 +3380,7 @@ useEffect(() => {
                                   </Text>
                                 </TouchableOpacity>
                               </View>
-                              <Text className="text-[10px] text-slate-500 mb-2">
+                              <Text className="mb-2 text-[10px] text-slate-500">
                                 🕒 Captured:{" "}
                                 {evidences[currentQ.slNo].video?.capturedAt} •
                                 Quality:{" "}
@@ -3294,8 +3433,8 @@ useEffect(() => {
                           )}
                           {/* AUDIO PREVIEW - Web Compatible */}
                           {evidences[currentQ.slNo]?.audio && (
-                            <View className="p-4 bg-white border border-slate-200 rounded-xl">
-                              <View className="flex-row items-center justify-between mb-2">
+                            <View className="rounded-xl border border-slate-200 bg-white p-4">
+                              <View className="mb-2 flex-row items-center justify-between">
                                 <Text
                                   className="flex-1 text-sm font-semibold text-slate-800"
                                   numberOfLines={1}
@@ -3312,7 +3451,7 @@ useEffect(() => {
                                   </Text>
                                 </TouchableOpacity>
                               </View>
-                              <Text className="text-[10px] text-slate-500 mb-2">
+                              <Text className="mb-2 text-[10px] text-slate-500">
                                 🕒 Attached:{" "}
                                 {evidences[currentQ.slNo].audio?.capturedAt}
                               </Text>
@@ -3327,7 +3466,7 @@ useEffect(() => {
                               ) : (
                                 <ExpoVideo
                                   source={{
-                                    uri: evidences[currentQ.slNo].audio?.uri,
+                                    uri: evidences[currentQ.slNo].audio!.uri,
                                   }}
                                   style={{ width: "100%", height: 50 }}
                                   useNativeControls
@@ -3342,13 +3481,13 @@ useEffect(() => {
                       )}
                     </View>
 
-                    <View className="flex-row items-center justify-between pt-5 mt-5 border-t border-slate-100">
+                    <View className="mt-5 flex-row items-center justify-between border-t border-slate-100 pt-5">
                       <TouchableOpacity
                         onPress={prevCheckpoint}
                         disabled={
                           currentLocalIndex === 0 && activeSectionIndex === 0
                         }
-                        className="flex-row items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl disabled:opacity-50 shadow-sm"
+                        className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 shadow-sm disabled:opacity-50"
                       >
                         <ChevronLeft size={16} color="#334155" />
                         <Text className="text-sm font-medium text-slate-700">
@@ -3381,7 +3520,7 @@ useEffect(() => {
                           currentLocalIndex === sectionQuestions.length - 1 &&
                           activeSectionIndex === FIVE_S_SECTIONS.length - 1
                         }
-                        className="flex-row items-center gap-2 px-5 py-2.5 rounded-xl disabled:opacity-50 shadow-md"
+                        className="flex-row items-center gap-2 rounded-xl px-5 py-2.5 shadow-md disabled:opacity-50"
                         style={{ backgroundColor: NAVBAR_COLORS.primary }}
                       >
                         <Text className="text-sm font-medium text-white">
@@ -3393,8 +3532,8 @@ useEffect(() => {
                   </View>
                 </View>
 
-                <View className="p-5 mt-6 bg-white border shadow-sm border-slate-200 rounded-2xl">
-                  <View className="flex-row items-center justify-between mb-4">
+                <View className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <View className="mb-4 flex-row items-center justify-between">
                     <View className="flex-row items-center gap-2">
                       <Star size={16} color={NAVBAR_COLORS.secondary} />
                       <Text className="text-sm font-bold text-slate-700">
@@ -3415,16 +3554,16 @@ useEffect(() => {
                     </View>
                   </View>
 
-                  <View className="flex-row flex-wrap justify-between gap-3 mt-4">
+                  <View className="mt-4 flex-row flex-wrap justify-between gap-3">
                     {FIVE_S_SECTIONS.map((section) => {
                       const sectionScore = getSectionScore(section);
                       const percentage = getSectionPercentage(section);
                       return (
                         <View
                           key={section.name}
-                          className="flex-1 min-w-[60px] p-3 bg-slate-50 border border-slate-100 rounded-xl items-center"
+                          className="min-w-[60px] flex-1 items-center rounded-xl border border-slate-100 bg-slate-50 p-3"
                         >
-                          <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">
+                          <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
                             {section.name}
                           </Text>
                           <Text className="mt-1 text-lg font-bold text-slate-800">
@@ -3433,7 +3572,7 @@ useEffect(() => {
                           <Text className="text-[10px] text-slate-400">
                             / {section.maxScore}
                           </Text>
-                          <View className="w-full h-1.5 mt-2 bg-slate-200 rounded-full overflow-hidden">
+                          <View className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
                             <View
                               className="h-full rounded-full"
                               style={{
@@ -3448,8 +3587,8 @@ useEffect(() => {
                   </View>
 
                   {!allQuestionsRated && (
-                    <View className="items-center p-3 mt-4 border border-amber-200 rounded-xl bg-amber-50">
-                      <Text className="text-xs font-medium text-center text-amber-700">
+                    <View className="mt-4 items-center rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <Text className="text-center text-xs font-medium text-amber-700">
                         ⚠️ Please rate all {stats.total - stats.rated} remaining
                         checkpoints
                       </Text>
@@ -3458,10 +3597,10 @@ useEffect(() => {
                 </View>
 
                 {allQuestionsRated && (
-                  <View className="flex-row justify-end mt-6 mb-8">
+                  <View className="mb-8 mt-6 flex-row justify-end">
                     <TouchableOpacity
                       onPress={nextStep}
-                      className="flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md"
+                      className="flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md"
                       style={{ backgroundColor: NAVBAR_COLORS.primary }}
                     >
                       <Text className="text-sm font-medium text-white">
@@ -3477,22 +3616,22 @@ useEffect(() => {
             {/* Step 3: Signature & Submit */}
             {currentStep === 3 && (
               <FadeInView delay={200}>
-                <View className="mb-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+                <View className="mb-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <View
-                    className="p-6 border-b border-slate-100"
+                    className="border-b border-slate-100 p-6"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <Text className="text-lg font-bold text-slate-800">
                       Signature & Submit
                     </Text>
-                    <Text className="text-xs text-slate-500 mt-0.5">
+                    <Text className="mt-0.5 text-xs text-slate-500">
                       Review, sign and submit the 5S audit report
                     </Text>
                   </View>
 
                   <View className="gap-6 p-6">
                     <View
-                      className="p-5 border rounded-xl"
+                      className="rounded-xl border p-5"
                       style={{
                         backgroundColor: NAVBAR_COLORS.bg,
                         borderColor: NAVBAR_COLORS.lighter,
@@ -3529,9 +3668,9 @@ useEffect(() => {
                         ].map((item, idx) => (
                           <View
                             key={idx}
-                            className="flex-1 min-w-[70px] p-3 bg-white border border-slate-100 rounded-xl items-center shadow-sm"
+                            className="min-w-[70px] flex-1 items-center rounded-xl border border-slate-100 bg-white p-3 shadow-sm"
                           >
-                            <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">
+                            <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
                               {item.label}
                             </Text>
                             <Text
@@ -3545,7 +3684,7 @@ useEffect(() => {
                     </View>
 
                     <View>
-                      <View className="flex-row items-center mb-2">
+                      <View className="mb-2 flex-row items-center">
                         <FileCheck size={14} color="#334155" />
                         <Text className="ml-1 text-sm font-bold text-slate-700">
                           Auditor Signature{" "}
@@ -3554,7 +3693,7 @@ useEffect(() => {
                       </View>
 
                       {loadingSignature ? (
-                        <View className="flex-row items-center justify-center p-5 border border-slate-200 rounded-xl bg-slate-50">
+                        <View className="flex-row items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
                           <ActivityIndicator
                             size="small"
                             color={NAVBAR_COLORS.primary}
@@ -3565,7 +3704,7 @@ useEffect(() => {
                         </View>
                       ) : auditorSignatureImage ? (
                         <View
-                          className="items-center p-5 border rounded-xl"
+                          className="items-center rounded-xl border p-5"
                           style={{
                             backgroundColor: NAVBAR_COLORS.bg,
                             borderColor: NAVBAR_COLORS.lighter,
@@ -3591,8 +3730,8 @@ useEffect(() => {
                           </Text>
                         </View>
                       ) : signatureError ? (
-                        <View className="p-5 border rounded-xl bg-amber-50 border-amber-200">
-                          <View className="flex-row items-center gap-2 mb-2">
+                        <View className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+                          <View className="mb-2 flex-row items-center gap-2">
                             <AlertTriangle size={16} color="#b45309" />
                             <Text className="text-sm font-medium text-amber-700">
                               No signature found in profile
@@ -3608,11 +3747,11 @@ useEffect(() => {
                               handleInputChange("auditorSignature", val)
                             }
                             placeholder="Type your full name as signature (fallback)"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                         </View>
                       ) : (
-                        <View className="p-5 border rounded-xl bg-slate-50 border-slate-200">
+                        <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
                           <Text className="mb-3 text-sm font-medium text-slate-500">
                             No signature loaded. Please type your signature
                             below.
@@ -3623,14 +3762,14 @@ useEffect(() => {
                               handleInputChange("auditorSignature", val)
                             }
                             placeholder="Type your full name as signature"
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                           />
                         </View>
                       )}
                     </View>
 
                     <View>
-                      <View className="flex-row items-center mb-2">
+                      <View className="mb-2 flex-row items-center">
                         <Calendar size={14} color="#334155" />
                         <Text className="ml-1 text-sm font-bold text-slate-700">
                           Date <Text className="text-rose-500">*</Text>
@@ -3655,7 +3794,7 @@ useEffect(() => {
                               target.showPicker();
                             }
                           }}
-                          className="w-5xl px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 outline-none focus:ring-2 focus:ring-black cursor-pointer"
+                          className="w-5xl cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 outline-none focus:ring-2 focus:ring-black"
                           style={{ fontFamily: "inherit", fontSize: "inherit" }}
                         />
                       ) : (
@@ -3663,7 +3802,7 @@ useEffect(() => {
                         <>
                           <TouchableOpacity
                             onPress={() => setShowDatePicker(true)}
-                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl flex-row items-center justify-between"
+                            className="w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5"
                             activeOpacity={0.7}
                           >
                             {/* ✅ flex-1 ensures the text area also registers the touch */}
@@ -3706,7 +3845,7 @@ useEffect(() => {
                     </View>
 
                     <View>
-                      <View className="flex-row items-center mb-2">
+                      <View className="mb-2 flex-row items-center">
                         <User size={14} color="#334155" />
                         <Text className="ml-1 text-sm font-bold text-slate-700">
                           Auditee Name <Text className="text-rose-500">*</Text>
@@ -3721,14 +3860,14 @@ useEffect(() => {
                           }))
                         }
                         placeholder="Enter auditee name"
-                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800"
                       />
                     </View>
 
-                    <View className="flex-row items-center justify-between pt-6 mt-2 border-t border-slate-100">
+                    <View className="mt-2 flex-row items-center justify-between border-t border-slate-100 pt-6">
                       <TouchableOpacity
                         onPress={prevStep}
-                        className="flex-row items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm"
+                        className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 shadow-sm"
                       >
                         <ChevronLeft size={18} color="#334155" />
                         <Text className="text-sm font-medium text-slate-700">
@@ -3749,7 +3888,7 @@ useEffect(() => {
                           saving ||
                           !allQuestionsRated
                         }
-                        className={`flex-row items-center gap-2 px-6 py-2.5 rounded-xl shadow-md ${(!auditorSignatureImage && !formData.auditorSignature.trim()) || !formData.date.trim() || !auditeeInfo.auditeeName?.trim() || saving || !allQuestionsRated ? "opacity-50" : ""}`}
+                        className={`flex-row items-center gap-2 rounded-xl px-6 py-2.5 shadow-md ${(!auditorSignatureImage && !formData.auditorSignature.trim()) || !formData.date.trim() || !auditeeInfo.auditeeName?.trim() || saving || !allQuestionsRated ? "opacity-50" : ""}`}
                         style={{
                           backgroundColor:
                             (!auditorSignatureImage &&
@@ -3865,121 +4004,6 @@ useEffect(() => {
             ))}
         </View>
       </Modal>
-      {/* ✅ Discard Changes Modal */}
-<Modal
-  visible={showDiscardModal}
-  transparent
-  animationType="fade"
-  onRequestClose={cancelDiscard}
->
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 24,
-    }}
-  >
-    <View
-      style={{
-        width: '100%',
-        maxWidth: 420,
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 24,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-      }}
-    >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: '#fef2f2',
-          alignItems: 'center',
-          justifyContent: 'center',
-          alignSelf: 'center',
-          marginBottom: 16,
-        }}
-      >
-        <X size={26} color="#dc2626" />
-      </View>
-
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: '700',
-          color: '#111827',
-          textAlign: 'center',
-          marginBottom: 8,
-        }}
-      >
-        Discard changes?
-      </Text>
-
-      <Text
-        style={{
-          fontSize: 14,
-          color: '#6b7280',
-          textAlign: 'center',
-          lineHeight: 21,
-          marginBottom: 24,
-        }}
-      >
-        You have unsaved changes. Are you sure you want to leave without saving?
-      </Text>
-
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <TouchableOpacity
-          onPress={cancelDiscard}
-          activeOpacity={0.8}
-          style={{
-            flex: 1,
-            height: 46,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: '#d1d5db',
-            backgroundColor: 'white',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>
-            Stay
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => discardChanges(() => {
-            if (props.onClose) {
-              props.onClose();
-            } else {
-              router.back();
-            }
-          })}
-          activeOpacity={0.8}
-          style={{
-            flex: 1,
-            height: 46,
-            borderRadius: 10,
-            backgroundColor: '#dc2626',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: '600', color: 'white' }}>
-            Discard
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
     </SafeAreaView>
   );
 }

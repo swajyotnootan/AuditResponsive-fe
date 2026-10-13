@@ -91,13 +91,13 @@ const COLORS = {
 // ============================================================================
 
 const FormCard = ({ title, children, icon: Icon, subtitle }: FormCardProps) => (
-  <View className="mb-4 bg-white border shadow-sm border-slate-200 rounded-xl">
+  <View className="mb-4 rounded-xl border border-slate-200 bg-white shadow-sm">
     <View
-      className="flex flex-row items-center gap-3 p-4 border-b border-slate-100"
+      className="flex flex-row items-center gap-3 border-b border-slate-100 p-4"
       style={{ backgroundColor: COLORS.bg }}
     >
       <View
-        className="p-1.5 rounded-lg"
+        className="rounded-lg p-1.5"
         style={{ backgroundColor: COLORS.lighter }}
       >
         {Icon && <Icon size={18} color={COLORS.primary} />}
@@ -105,7 +105,7 @@ const FormCard = ({ title, children, icon: Icon, subtitle }: FormCardProps) => (
       <View className="flex-1">
         <Text className="text-base font-bold text-slate-800">{title}</Text>
         {subtitle && (
-          <Text className="text-xs text-slate-500 mt-0.5">{subtitle}</Text>
+          <Text className="mt-0.5 text-xs text-slate-500">{subtitle}</Text>
         )}
       </View>
     </View>
@@ -123,12 +123,12 @@ const InputField = ({
   disabled,
 }: InputFieldProps) => (
   <View className="mb-4">
-    <View className="flex flex-row items-center mb-1.5">
+    <View className="mb-1.5 flex flex-row items-center">
       <Text className="text-xs font-medium text-slate-700">{label}</Text>
       {required && <Text className="ml-1 text-rose-500">*</Text>}
     </View>
     <TextInput
-      className="w-full px-3 py-3 text-sm bg-white border rounded-lg border-slate-200 text-slate-800"
+      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm text-slate-800"
       style={{
         minHeight: multiline ? 100 : 44,
         textAlignVertical: multiline ? "top" : "center",
@@ -171,7 +171,7 @@ const DateInputField = ({
   if (Platform.OS === "web") {
     return (
       <View className="mb-4">
-        <View className="flex flex-row items-center mb-1.5">
+        <View className="mb-1.5 flex flex-row items-center">
           <Text className="text-xs font-medium text-slate-700">{label}</Text>
           {required && <Text className="ml-1 text-rose-500">*</Text>}
         </View>
@@ -181,7 +181,7 @@ const DateInputField = ({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            className="px-3 py-3 pr-10 text-sm bg-white border rounded-lg w-5xl border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:border-blue-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+            className="w-5xl rounded-lg border border-slate-200 bg-white px-3 py-3 pr-10 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100"
           />
         </View>
       </View>
@@ -204,7 +204,7 @@ const DateInputField = ({
 
   return (
     <View className="mb-4">
-      <View className="flex flex-row items-center mb-1.5">
+      <View className="mb-1.5 flex flex-row items-center">
         <Text className="text-xs font-medium text-slate-700">{label}</Text>
         {required && <Text className="ml-1 text-rose-500">*</Text>}
       </View>
@@ -212,7 +212,7 @@ const DateInputField = ({
       <TouchableOpacity
         onPress={() => !disabled && setShow(true)}
         disabled={disabled}
-        className={`flex flex-row items-center justify-between w-full px-3 py-3 bg-white border rounded-lg border-slate-200 ${disabled ? "bg-slate-100" : ""}`}
+        className={`flex w-full flex-row items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-3 ${disabled ? "bg-slate-100" : ""}`}
         activeOpacity={0.7}
       >
         <Text
@@ -362,7 +362,7 @@ export default function Form8View({ initialParams, onClose }: any) {
                   className={`flex flex-row items-center gap-2 ${isClickable ? "opacity-80" : "opacity-100"}`}
                 >
                   <View
-                    className="items-center justify-center w-10 h-10 rounded-lg shadow-sm"
+                    className="h-10 w-10 items-center justify-center rounded-lg shadow-sm"
                     style={{
                       backgroundColor:
                         isActive || isCompleted ? COLORS.primary : "#94a3b8",
@@ -387,7 +387,7 @@ export default function Form8View({ initialParams, onClose }: any) {
 
                 {index < steps.length - 1 && (
                   <View
-                    className="flex-1 h-0.5 mx-2"
+                    className="mx-2 h-0.5 flex-1"
                     style={{
                       backgroundColor: isCompleted
                         ? COLORS.secondary
@@ -620,10 +620,10 @@ export default function Form8View({ initialParams, onClose }: any) {
   if (loading) {
     return (
       <View
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <ActivityIndicator
             size="large"
             color={COLORS.primary}
@@ -637,7 +637,7 @@ export default function Form8View({ initialParams, onClose }: any) {
     );
   }
 
- if (showDetailView) {
+  if (showDetailView) {
     return (
       <Form8DetailView
         initialParams={{
@@ -669,12 +669,12 @@ export default function Form8View({ initialParams, onClose }: any) {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex flex-row items-center justify-between mb-6">
+        <View className="mb-6 flex flex-row items-center justify-between">
           <TouchableOpacity
             onPress={() =>
               onClose ? onClose() : router.replace(dashboardPath as any)
             }
-            className="flex flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
+            className="flex flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm"
           >
             <ArrowLeft size={16} color="#334155" />
             <Text className="text-sm font-medium text-slate-700">Back</Text>
@@ -683,7 +683,7 @@ export default function Form8View({ initialParams, onClose }: any) {
           <View className="flex flex-row items-center gap-3">
             <TouchableOpacity
               onPress={fillDemoData}
-              className="flex flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-emerald-200"
+              className="flex flex-row items-center gap-2 rounded-lg border border-emerald-200 bg-white px-4 py-2 shadow-sm"
             >
               <Sparkles size={16} color="#047857" />
               <Text className="text-sm font-medium text-emerald-700">
@@ -694,7 +694,7 @@ export default function Form8View({ initialParams, onClose }: any) {
             <TouchableOpacity
               onPress={downloadForm8Pdf}
               disabled={!ncrId || pdfDownloading}
-              className={`flex flex-row items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm ${!ncrId || pdfDownloading ? "opacity-50" : ""}`}
+              className={`flex flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm ${!ncrId || pdfDownloading ? "opacity-50" : ""}`}
             >
               {pdfDownloading ? (
                 <Loader2 size={16} color="#334155" />
@@ -713,21 +713,21 @@ export default function Form8View({ initialParams, onClose }: any) {
 
         {/* Alerts */}
         {success && (
-          <View className="flex flex-row items-center p-3 mb-4 border rounded-lg bg-emerald-50 border-emerald-200">
+          <View className="mb-4 flex flex-row items-center rounded-lg border border-emerald-200 bg-emerald-50 p-3">
             <CheckCircle size={16} color="#047857" style={{ marginRight: 8 }} />
             <Text className="text-sm text-emerald-700">{success}</Text>
           </View>
         )}
 
         {error && (
-          <View className="flex flex-row items-center p-3 mb-4 border rounded-lg bg-rose-50 border-rose-200">
+          <View className="mb-4 flex flex-row items-center rounded-lg border border-rose-200 bg-rose-50 p-3">
             <AlertCircle size={16} color="#be123c" style={{ marginRight: 8 }} />
             <Text className="text-sm text-rose-700">{error}</Text>
           </View>
         )}
 
         {!ncrId && (
-          <View className="flex flex-row items-center p-3 mb-4 border rounded-lg bg-amber-50 border-amber-200">
+          <View className="mb-4 flex flex-row items-center rounded-lg border border-amber-200 bg-amber-50 p-3">
             <AlertCircle size={16} color="#b45309" style={{ marginRight: 8 }} />
             <Text className="text-sm text-amber-700">No NCR selected.</Text>
           </View>
@@ -735,7 +735,7 @@ export default function Form8View({ initialParams, onClose }: any) {
 
         {/* Rejection Reason for NCR2 Mode */}
         {isNCR2Mode && formData.rejectionReason ? (
-          <View className="p-4 mb-4 border bg-rose-50 border-rose-200 rounded-xl">
+          <View className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
             <View className="flex flex-row items-start gap-3">
               <AlertCircle size={18} color="#e11d48" style={{ marginTop: 2 }} />
               <View className="flex-1">
@@ -763,7 +763,7 @@ export default function Form8View({ initialParams, onClose }: any) {
               subtitle="Review NCR details and observation"
               icon={FileText}
             >
-              <View className="flex flex-row flex-wrap -mx-2">
+              <View className="-mx-2 flex flex-row flex-wrap">
                 <View className="w-full px-2 md:w-1/2">
                   <InputField
                     label="NCR No."
@@ -858,7 +858,7 @@ export default function Form8View({ initialParams, onClose }: any) {
                   placeholder="Immediate correction applied..."
                   required
                 />
-                <View className="flex flex-row flex-wrap mt-2 -mx-2">
+                <View className="-mx-2 mt-2 flex flex-row flex-wrap">
                   <View className="w-full px-2 md:w-1/2">
                     <InputField
                       label="Responsible"
@@ -890,7 +890,7 @@ export default function Form8View({ initialParams, onClose }: any) {
                   placeholder="Long-term corrective actions..."
                   required
                 />
-                <View className="flex flex-row flex-wrap mt-2 -mx-2">
+                <View className="-mx-2 mt-2 flex flex-row flex-wrap">
                   <View className="w-full px-2 md:w-1/2">
                     <InputField
                       label="Responsible"
@@ -947,7 +947,7 @@ export default function Form8View({ initialParams, onClose }: any) {
                   onChangeText={(v) => setValue("remarks", v)}
                 />
                 <View
-                  className="flex flex-row items-start gap-2 p-3 mt-4 border rounded-xl"
+                  className="mt-4 flex flex-row items-start gap-2 rounded-xl border p-3"
                   style={{
                     backgroundColor: COLORS.bg,
                     borderColor: COLORS.lighter,
@@ -972,12 +972,12 @@ export default function Form8View({ initialParams, onClose }: any) {
         </View>
 
         {/* Navigation buttons */}
-        <View className="flex flex-row items-center justify-between pt-4 mt-6 border-t border-slate-200">
+        <View className="mt-6 flex flex-row items-center justify-between border-t border-slate-200 pt-4">
           <View>
             {currentStep > 1 && (
               <TouchableOpacity
                 onPress={prevStep}
-                className="flex flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
+                className="flex flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm"
               >
                 <ChevronLeft size={16} color="#334155" />
                 <Text className="text-sm font-medium text-slate-700">
@@ -992,7 +992,7 @@ export default function Form8View({ initialParams, onClose }: any) {
               onPress={() =>
                 onClose ? onClose() : router.replace(dashboardPath as any)
               }
-              className="px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm"
             >
               <Text className="text-sm font-medium text-slate-700">Cancel</Text>
             </TouchableOpacity>
@@ -1000,7 +1000,7 @@ export default function Form8View({ initialParams, onClose }: any) {
             {currentStep < 4 ? (
               <TouchableOpacity
                 onPress={nextStep}
-                className="flex flex-row items-center gap-2 px-5 py-2 rounded-lg shadow-md"
+                className="flex flex-row items-center gap-2 rounded-lg px-5 py-2 shadow-md"
                 style={{ backgroundColor: COLORS.primary }}
               >
                 <Text className="text-sm font-medium text-white">
@@ -1012,7 +1012,7 @@ export default function Form8View({ initialParams, onClose }: any) {
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={saving || !ncrId}
-                className={`flex flex-row items-center gap-2 px-5 py-2 rounded-lg shadow-md ${saving || !ncrId ? "opacity-50" : ""}`}
+                className={`flex flex-row items-center gap-2 rounded-lg px-5 py-2 shadow-md ${saving || !ncrId ? "opacity-50" : ""}`}
                 style={{ backgroundColor: COLORS.primary }}
               >
                 {saving ? (

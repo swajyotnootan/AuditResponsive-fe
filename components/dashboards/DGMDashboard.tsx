@@ -1,1 +1,17 @@
-﻿import React from 'react'; import { View, Text, ScrollView } from 'react-native'; import { SafeAreaView } from 'react-native-safe-area-context'; import { useAuth } from '@/components/context/AuthContext'; export default function DGMDashboard() { const { user } = useAuth(); return (<SafeAreaView className='flex-1 bg-gray-50' edges={['bottom']}><ScrollView className='flex-1 p-4'><View className='bg-blue-900 rounded-xl p-6 mb-4'><Text className='text-white text-2xl font-bold'>DGMDashboard</Text><Text className='text-blue-200 mt-1'>Welcome, {user?.firstName}</Text></View></ScrollView></SafeAreaView>); }
+﻿import React from "react";
+import { View, Text, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/components/context/AuthContext";
+export default function DGMDashboard() {
+  const { user } = useAuth();
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50" edges={["bottom"]}>
+      <ScrollView className="flex-1 p-4">
+        <View className="mb-4 rounded-xl bg-blue-900 p-6">
+          <Text className="text-2xl font-bold text-white">DGMDashboard</Text>
+          <Text className="mt-1 text-blue-200">Welcome, {user?.firstName}</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}

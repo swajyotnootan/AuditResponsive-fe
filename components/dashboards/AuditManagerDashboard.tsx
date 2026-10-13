@@ -58,7 +58,8 @@ import Form5View from "@/components/dashboards/auditManager/Form5View";
 import Form9View from "@/components/dashboards/auditManager/Form9View";
 import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
 import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
-import { apiClient, ncrAPI, userAPI } from "@/services/api";
+import { apiClient, userAPI } from "@/services/api";
+import { ncrService } from "@/services/ncrService";
 import { Picker } from "@react-native-picker/picker";
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
@@ -567,20 +568,27 @@ const DepartmentLineChart = ({
   );
 
   // ✅ SAFE: Calculate points only if data exists
-  const points = hasData ? data.map((item, idx) => {
-    const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
-    const y = padding.top + chartHeight - (item.count / maxCount) * chartHeight;
-    return { x, y, label: item.department, value: item.count };
-  }) : [];
+  const points = hasData
+    ? data.map((item, idx) => {
+        const x = padding.left + (idx / (data.length - 1 || 1)) * chartWidth;
+        const y =
+          padding.top + chartHeight - (item.count / maxCount) * chartHeight;
+        return { x, y, label: item.department, value: item.count };
+      })
+    : [];
 
   // ✅ SAFE: Build paths only if points exist
-  const linePath = points.length > 0
-    ? points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
-    : "";
+  const linePath =
+    points.length > 0
+      ? points
+          .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+          .join(" ")
+      : "";
 
-  const areaPath = points.length > 0
-    ? `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
-    : "";
+  const areaPath =
+    points.length > 0
+      ? `${linePath} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
+      : "";
 
   return (
     <AnimatedGlassCard style={{ flex: isDesktop ? 2 : 1, width: "100%" }}>
@@ -681,9 +689,7 @@ const DepartmentLineChart = ({
               />
 
               {/* ✅ SAFE: Only render path if it exists */}
-              {areaPath && (
-                <Path d={areaPath} fill="url(#areaGradient)" />
-              )}
+              {areaPath && <Path d={areaPath} fill="url(#areaGradient)" />}
 
               {linePath && (
                 <Path
@@ -882,6 +888,24 @@ const RequestCard = ({
   );
 };
 
+// ✅ Helper: figure out which year an NCR belongs to
+const getNcrYear = (ncr: any): number => {
+  const dateValue = ncr?.createdAt || ncr?.raisedDate || ncr?.dueDate;
+  if (!dateValue) return new Date().getFullYear();
+  const d = new Date(dateValue);
+  if (isNaN(d.getTime())) return new Date().getFullYear();
+  return d.getFullYear();
+};
+
+const getRequestYear = (request: any): number | null => {
+  const raw =
+    request?.requestedAt || request?.createdAt || request?.requestDate || null;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return d.getFullYear();
+};
+
 // ============================================================================
 // MAIN DASHBOARD COMPONENT
 // ============================================================================
@@ -1004,6 +1028,10 @@ export default function AuditManagerDashboard() {
     endDate?: string;
   }>({});
 
+  const [selectedPlant, setSelectedPlant] = useState<string | number | null>(
+    () => (user as any)?.plantId ?? null, // lazy init so we don't re-fetch twice
+  );
+  const [availablePlants, setAvailablePlants] = useState<any[]>([]);
   // ✅ FIXED: EXACT COPY OF LEAD AUDITOR PATTERN FOR TAB ROUTING
   useEffect(() => {
     if (params?.tab) {
@@ -1031,9 +1059,40 @@ export default function AuditManagerDashboard() {
     }
   }, [params?.tab]);
 
+  // In AuditManagerDashboard.tsx
+
   useEffect(() => {
+    // Check if we need to open a forum
+    if (params?.openForum) {
+      console.log(
+        "📤 [Dashboard] Opening forum from params:",
+        params.openForum,
+      );
+      const forumId = params.openForum as string;
+
+      // Open the forum
+      openForumById(forumId);
+
+      // Clear the param to prevent re-opening
+      router.setParams({ openForum: undefined, fromShare: undefined });
+    }
+  }, [params?.openForum]);
+
+  useEffect(() => {
+    const fetchPlants = async () => {
+      const res = await apiClient.get("/api/plants").catch(() => []);
+      const list = Array.isArray(res) ? res : (res as any)?.data || [];
+      setAvailablePlants(list);
+      // Optional: default to user's plant
+      if (user?.plantId) setSelectedPlant(user.plantId);
+    };
+    fetchPlants();
+  }, [user?.plantId]);
+
+  useEffect(() => {
+    if (!user?.id) return;
     fetchAllData();
-  }, [selectedYear]);
+  }, [selectedYear, selectedPlant, user?.id]); // ✅ added selectedPlant
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -1041,16 +1100,23 @@ export default function AuditManagerDashboard() {
       const [statsRes, ncrsRes, reqRes, f3Res, f4Res, f5Res, usersRes] =
         await Promise.all([
           apiClient
-            .get(`/api/audit-schedule/year/${selectedYear}`)
+            .get(`/api/audit-schedule/year/${selectedYear}?userId=${user?.id}`)
             .catch(() => []),
-          ncrAPI.getAll().catch(() => []),
-          apiClient.get("/api/audit-schedule/pending-requests").catch(() => []),
-          apiClient.get(`/api/audit-plan/${selectedYear}`).catch(() => null),
+          ncrService.getAllNCRs(user?.id).catch(() => ({ success: false })),
+
           apiClient
-            .get(`/api/department-plan/${selectedYear}`)
+            .get(`/api/audit-schedule/pending-requests?userId=${user?.id}`)
+            .catch(() => []),
+          apiClient
+            .get(`/api/audit-plan/${selectedYear}?userId=${user?.id}`)
             .catch(() => null),
           apiClient
-            .get(`/api/audit-schedule/available-months/${selectedYear}`)
+            .get(`/api/department-plan/${selectedYear}?userId=${user?.id}`)
+            .catch(() => null),
+          apiClient
+            .get(
+              `/api/audit-schedule/available-months/${selectedYear}?userId=${user?.id}`,
+            )
             .catch(() => []),
           userAPI.getAll().catch(() => []),
         ]);
@@ -1058,12 +1124,22 @@ export default function AuditManagerDashboard() {
       const allSchedules = Array.isArray(statsRes)
         ? statsRes
         : (statsRes as any)?.data || [];
-      const allNcrsData = Array.isArray(ncrsRes)
+      const rawNcrs = Array.isArray(ncrsRes)
         ? ncrsRes
         : (ncrsRes as any)?.data || [];
-      const requests = Array.isArray(reqRes)
+
+      // 2. ✅ NEW: Keep only NCRs from the selected year
+      const allNcrsData = rawNcrs.filter(
+        (ncr: any) => getNcrYear(ncr) === selectedYear,
+      );
+      const rawRequests = Array.isArray(reqRes)
         ? reqRes
         : (reqRes as any)?.data || [];
+
+      const requests = rawRequests.filter((r: any) => {
+        const y = getRequestYear(r);
+        return y === null || y === selectedYear;
+      });
       const users = Array.isArray(usersRes)
         ? usersRes
         : (usersRes as any)?.data || [];
@@ -1072,8 +1148,15 @@ export default function AuditManagerDashboard() {
       setAllNcrs(allNcrsData);
       setPendingRequests(requests);
       setAllUsersList(users);
-      setForm3Status({ status: f3Res?.approvalStatus || "NOT_STARTED" });
-      setForm4Status({ status: f4Res?.approvalStatus || "NOT_STARTED" });
+      const extractApprovalStatus = (res: any): string => {
+        if (!res) return "NOT_STARTED";
+        const payload = res.data ?? res;
+        const obj = Array.isArray(payload) ? payload[0] : payload;
+        return obj?.approvalStatus ?? obj?.status ?? "NOT_STARTED";
+      };
+
+      setForm3Status({ status: extractApprovalStatus(f3Res) });
+      setForm4Status({ status: extractApprovalStatus(f4Res) });
       setHasApprovedForm5(
         Array.isArray(f5Res)
           ? f5Res.some((m: any) => m.approvalStatus === "APPROVED")
@@ -1423,40 +1506,196 @@ export default function AuditManagerDashboard() {
     }
   };
 
-  const openAuditForum = () => {
-    // 1. Find all Top Management and Audit Manager users from the fetched list
-    const topManagers = allUsersList.filter((u: any) =>
-      u.role?.toUpperCase().includes("TOP_MANAGEMENT"),
+  // In AuditManagerDashboard.tsx - Simplified openForumById
+
+  const openForumById = (forumId: string) => {
+    console.log("📤 [Dashboard] Opening forum by ID:", forumId);
+    console.log(
+      "📤 [Dashboard] Current showForumModal before:",
+      showForumModal,
     );
-    const auditManagers = allUsersList.filter((u: any) =>
-      u.role?.toUpperCase().includes("AUDIT_MANAGER"),
-    );
 
-    // 2. Build a unique list of member emails
-    const memberEmails: string[] = [];
-
-    topManagers.forEach((tm: any) => {
-      if (tm.email && !memberEmails.includes(tm.email)) {
-        memberEmails.push(tm.email);
-      }
-    });
-
-    auditManagers.forEach((am: any) => {
-      if (am.email && !memberEmails.includes(am.email)) {
-        memberEmails.push(am.email);
-      }
-    });
-
-    // Ensure current user is included just in case their role is named differently
-    if (user?.email && !memberEmails.includes(user.email)) {
-      memberEmails.push(user.email);
+    // ✅ Check if it's the GENERAL forum
+    // ❌ BEFORE
+    if (forumId === "general-forum" || forumId === "AUDIT-general-forum") {
+      // ... general forum WITHOUT plant
+      return;
     }
 
-    // 3. Set the forum data
+    // ✅ AFTER — also match plant-scoped general forums
+    if (
+      forumId === "general-forum" ||
+      forumId === "AUDIT-general-forum" ||
+      forumId.startsWith("AUDIT-general-forum-plant-") // 👈 NEW
+    ) {
+      const topManagers = allUsersList.filter(
+        (u: any) =>
+          u.role?.toUpperCase().includes("TOP_MANAGEMENT") &&
+          (!selectedPlant || String(u.plantId) === String(selectedPlant)),
+      );
+      const auditManagers = allUsersList.filter(
+        (u: any) =>
+          u.role?.toUpperCase().includes("AUDIT_MANAGER") &&
+          (!selectedPlant || String(u.plantId) === String(selectedPlant)),
+      );
+
+      const memberEmails: string[] = [];
+      topManagers.forEach((tm: any) => {
+        if (tm.email && !memberEmails.includes(tm.email))
+          memberEmails.push(tm.email);
+      });
+      auditManagers.forEach((am: any) => {
+        if (am.email && !memberEmails.includes(am.email))
+          memberEmails.push(am.email);
+      });
+      if (user?.email && !memberEmails.includes(user.email)) {
+        memberEmails.push(user.email);
+      }
+
+      const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+      const resolvedPlantName =
+        availablePlants.find(
+          (p: any) => String(p.id) === String(resolvedPlantId),
+        )?.name ??
+        (user as any)?.plantName ??
+        null;
+
+      // ✅ Pass the BARE ID (no "AUDIT-" prefix) to the modal.
+      //    The modal will add the prefix exactly once.
+      const bareGeneralId = forumId.startsWith("AUDIT-")
+        ? forumId.replace(/^AUDIT-/, "") // "general-forum-plant-1"
+        : resolvedPlantId
+          ? `general-forum-plant-${resolvedPlantId}`
+          : "general-forum";
+
+      setSelectedAuditForForum({
+        id: bareGeneralId, // 👈 no prefix
+        auditNumber: "GENERAL",
+        auditType: "General Audit Discussion",
+        department: "All Departments",
+        auditorId: user?.id || null,
+        auditorName: user?.name || "Unknown User",
+        auditeeId: null,
+        auditeeName: "N/A",
+        hodEmail: null,
+        hodName: "N/A",
+        memberEmails: [],
+        plantId: resolvedPlantId,
+        plantName: resolvedPlantName,
+      });
+      setShowForumModal(true);
+      return;
+    }
+
+    // ✅ SCHEDULE PLAN FORUM (one evergreen thread per plant)
+    if (
+      forumId === "schedule-plan" ||
+      forumId.startsWith("schedule-plan-") ||
+      forumId.startsWith("AUDIT-schedule-plan")
+    ) {
+      const bareId = forumId.startsWith("AUDIT-")
+        ? forumId.replace(/^AUDIT-/, "")
+        : forumId;
+
+      const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+      const resolvedPlantName =
+        availablePlants.find(
+          (p: any) => String(p.id) === String(resolvedPlantId),
+        )?.name ??
+        (user as any)?.plantName ??
+        null;
+
+      const memberEmails: string[] = [];
+
+      allUsersList
+        .filter(
+          (u: any) =>
+            u.role?.toUpperCase().includes("TOP_MANAGEMENT") &&
+            (!resolvedPlantId || String(u.plantId) === String(resolvedPlantId)),
+        )
+        .forEach((tm: any) => {
+          if (tm.email && !memberEmails.includes(tm.email))
+            memberEmails.push(tm.email);
+        });
+
+      allUsersList
+        .filter(
+          (u: any) =>
+            u.role?.toUpperCase().includes("AUDIT_MANAGER") &&
+            (!resolvedPlantId || String(u.plantId) === String(resolvedPlantId)),
+        )
+        .forEach((am: any) => {
+          if (am.email && !memberEmails.includes(am.email))
+            memberEmails.push(am.email);
+        });
+
+      allUsersList
+        .filter(
+          (u: any) =>
+            u.role?.toUpperCase().includes("LEAD_AUDITOR") &&
+            (!resolvedPlantId || String(u.plantId) === String(resolvedPlantId)),
+        )
+        .forEach((la: any) => {
+          if (la.email && !memberEmails.includes(la.email))
+            memberEmails.push(la.email);
+        });
+
+      if (user?.email && !memberEmails.includes(user.email))
+        memberEmails.push(user.email);
+
+      setSelectedAuditForForum({
+        id: bareId,
+        auditNumber: "SCHEDULE-PLAN",
+        auditType: "Schedule Plan",
+        department: "All Departments",
+        auditorId: user?.id || null,
+        auditorName: user?.name || "Unknown User",
+        auditeeId: null,
+        auditeeName: "N/A",
+        hodEmail: null,
+        hodName: "N/A",
+        memberEmails: [],
+        plantId: resolvedPlantId,
+        plantName: resolvedPlantName,
+      });
+      setShowForumModal(true);
+      return;
+    }
+
+    const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+    const resolvedPlantName =
+      availablePlants.find((p: any) => String(p.id) === String(resolvedPlantId))
+        ?.name ??
+      (user as any)?.plantName ??
+      null;
+
+    // ✅ For Audit Forums (AUDIT-2026 format)
+    if (forumId.startsWith("AUDIT-")) {
+      const auditId = forumId.replace("AUDIT-", "");
+      setSelectedAuditForForum({
+        id: forumId,
+        auditNumber: auditId,
+        auditType: `Audit Review ${auditId}`,
+        department: "All Departments",
+        auditorId: user?.id || null,
+        auditorName: user?.name || "Unknown User",
+        auditeeId: null,
+        auditeeName: "N/A",
+        hodEmail: null,
+        hodName: "N/A",
+        memberEmails: [user?.email].filter(Boolean),
+        plantId: resolvedPlantId, // 👈 ADD
+        plantName: resolvedPlantName, // 👈 ADD
+      });
+      setShowForumModal(true);
+      return;
+    }
+
+    // ✅ Fallback for any other forum
     setSelectedAuditForForum({
-      id: "general-forum", // ✅ Keep this static so messages persist
-      auditNumber: "GENERAL",
-      auditType: "General Audit Discussion",
+      id: forumId,
+      auditNumber: forumId,
+      auditType: "Forum Discussion",
       department: "All Departments",
       auditorId: user?.id || null,
       auditorName: user?.name || "Unknown User",
@@ -1464,11 +1703,10 @@ export default function AuditManagerDashboard() {
       auditeeName: "N/A",
       hodEmail: null,
       hodName: "N/A",
-      memberEmails: memberEmails, // ✅ Now correctly includes Top Management & Audit Managers
+      memberEmails: [user?.email].filter(Boolean),
     });
     setShowForumModal(true);
   };
-
   const getWorkflowSteps = () => {
     const isForm3Approved = form3Status.status === "APPROVED";
     const isForm4Approved = form4Status.status === "APPROVED";
@@ -1547,18 +1785,21 @@ export default function AuditManagerDashboard() {
       "Dec",
     ];
     const monthCounts = new Array(12).fill(0);
-    schedules.forEach((s: any) => {
-      const dateStr = s.auditDate || s.scheduledDate;
-      if (dateStr) {
-        const date = new Date(dateStr);
-        if (date.getFullYear() === selectedYear) monthCounts[date.getMonth()]++;
-      }
-    });
+    schedules
+      .filter((s: any) => !selectedPlant || s.plantId === selectedPlant)
+      .forEach((s: any) => {
+        const dateStr = s.auditDate || s.scheduledDate;
+        if (dateStr) {
+          const date = new Date(dateStr);
+          if (date.getFullYear() === selectedYear)
+            monthCounts[date.getMonth()]++;
+        }
+      });
     return monthNames.map((name, idx) => ({
       label: name,
       value: monthCounts[idx],
     }));
-  }, [schedules, selectedYear]);
+  }, [schedules, selectedPlant, selectedYear, user?.id]);
 
   const ncrDistributionData = useMemo(() => {
     if (allNcrs.length === 0) return [];
@@ -2206,6 +2447,8 @@ export default function AuditManagerDashboard() {
         <Form3View
           year={selectedYear}
           onBack={() => setActiveSection("schedules")}
+          onOpenForum={openForumById} // ✅ PASS THIS
+          allUsers={allUsersList} // ← Pass from dashboard
         />
       );
     case "form4":
@@ -2213,6 +2456,8 @@ export default function AuditManagerDashboard() {
         <Form4View
           year={selectedYear}
           onBack={() => setActiveSection("schedules")}
+          onOpenForum={openForumById} // ✅ PASS THIS
+          allUsers={allUsersList} // ← Pass from dashboard
         />
       );
     case "form5":
@@ -2232,6 +2477,8 @@ export default function AuditManagerDashboard() {
           preselectedYear={selectedYear}
           preselectedMonth={selectedForm5Month}
           onBack={() => setActiveSection("form5")}
+          onOpenForum={openForumById} // ✅ PASS THIS
+          allUsers={allUsersList} // ← Pass from dashboard
         />
       ) : (
         <Form5Dashboard
@@ -2270,16 +2517,27 @@ export default function AuditManagerDashboard() {
         />
       );
     case "ncr-pending":
-      return <NCRPendingDashboard onBack={() => setActiveSection("ncr")} />;
+      return (
+        <NCRPendingDashboard
+          onBack={() => setActiveSection("ncr")}
+          selectedYear={selectedYear} // 👈 ADD
+        />
+      );
     case "ncr-dashboard":
       return (
         <NCRDashboard
           onBack={() => setActiveSection("ncr")}
           onViewNcr={(id: string) => setActiveNcrViewId(id)}
+          selectedYear={selectedYear} // 👈 ADD
         />
       );
     case "form9":
-      return <Form9View onBack={() => setActiveSection("ncr")} />;
+      return (
+        <Form9View
+          onBack={() => setActiveSection("ncr")}
+          selectedYear={selectedYear} // 👈 ADD
+        />
+      );
     default:
       break;
   }
@@ -2331,6 +2589,7 @@ export default function AuditManagerDashboard() {
             <AnimatedGlassCard
               style={[
                 styles.header,
+                styles.headerOverflowVisible, // 👈 ADD THIS
                 isSmallMobile && styles.headerSmall,
                 isCompactHeader && styles.headerCompact,
               ]}
@@ -2409,31 +2668,6 @@ export default function AuditManagerDashboard() {
                       availableYears={availableYears}
                     />
                   </View>
-
-                  {/* FORUM BUTTON */}
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={[
-                      styles.forumBtn,
-                      isVerySmall && styles.forumBtnSmall,
-                      isCompactHeader && styles.forumBtnCompact,
-                    ]}
-                    onPress={openAuditForum}
-                  >
-                    <MessageSquare
-                      size={isVerySmall ? 15 : 17}
-                      color={COLORS.white}
-                    />
-
-                    <Text
-                      style={[
-                        styles.forumBtnText,
-                        isVerySmall && styles.forumBtnTextSmall,
-                      ]}
-                    >
-                      Forum
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </View>
             </AnimatedGlassCard>
@@ -3278,6 +3512,8 @@ export default function AuditManagerDashboard() {
           }}
           currentUser={user}
           allUsers={allUsersList}
+          plantId={selectedAuditForForum.plantId ?? null} // 👈 ADD
+          plantName={selectedAuditForForum.plantName ?? null} // 👈 ADD
         />
       )}
     </SafeAreaView>
@@ -3818,41 +4054,6 @@ const styles = StyleSheet.create({
     minWidth: 70,
     maxWidth: 100,
     flexShrink: 0,
-  },
-
-  forumBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: COLORS.accent,
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    flexShrink: 0,
-  },
-
-  forumBtnCompact: {
-    minWidth: 100,
-  },
-
-  forumBtnSmall: {
-    minHeight: 40,
-    minWidth: 84,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-
-  forumBtnText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  forumBtnTextSmall: {
-    fontSize: 12,
   },
 
   kpiValue: {
@@ -4399,5 +4600,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textSub,
     textAlign: "center",
+  },
+
+  headerOverflowVisible: {
+    overflow: "visible",
+    zIndex: 100, // 👈 create a new stacking context above siblings
   },
 });

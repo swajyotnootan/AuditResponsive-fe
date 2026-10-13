@@ -1,16 +1,16 @@
 // src/components/common/YearFilter.tsx
 
-import React, { useMemo } from 'react';
+import React, { useMemo } from "react";
 import {
-    FlatList,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+  FlatList,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Icon from "react-native-vector-icons/Feather";
 
 interface YearFilterProps {
   selectedYear: number;
@@ -53,7 +53,9 @@ const YearFilter: React.FC<YearFilterProps> = ({
         activeOpacity={0.7}
       >
         <Icon name="calendar" size={16} color="#6b7280" />
-        <Text style={styles.selectedText}>{formatFinancialYear(selectedYear)}</Text>
+        <Text style={styles.selectedText}>
+          {formatFinancialYear(selectedYear)}
+        </Text>
         <Icon name="chevron-down" size={16} color="#6b7280" />
       </TouchableOpacity>
 
@@ -110,18 +112,18 @@ const YearFilter: React.FC<YearFilterProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
@@ -130,32 +132,32 @@ const styles = StyleSheet.create({
         elevation: 1,
       },
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
       },
     }),
   },
   selectedText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#1F2937',
+    fontWeight: "500",
+    color: "#1F2937",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 16,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 20,
-    width: '90%',
+    width: "90%",
     maxWidth: 400,
-    maxHeight: '70%',
+    maxHeight: "70%",
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 20,
@@ -164,44 +166,44 @@ const styles = StyleSheet.create({
         elevation: 8,
       },
       web: {
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
       },
     }),
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: "#E5E7EB",
     marginBottom: 12,
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: "600",
+    color: "#1F2937",
   },
   yearItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: "#F3F4F6",
   },
   yearItemSelected: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: "#EFF6FF",
     borderRadius: 8,
   },
   yearItemText: {
     fontSize: 14,
-    color: '#4B5563',
+    color: "#4B5563",
   },
   yearItemTextSelected: {
-    color: '#2563EB',
-    fontWeight: '600',
+    color: "#2563EB",
+    fontWeight: "600",
   },
 });
 

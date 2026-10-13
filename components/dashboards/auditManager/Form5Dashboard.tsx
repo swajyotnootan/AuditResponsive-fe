@@ -1,35 +1,35 @@
-import YearFilter from "@/components/common/YearFilter"; // ✅ Add this import (adjust path if needed)
+import YearFilter from "@/components/common/YearFilter";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import {
-    RelativePathString,
-    useLocalSearchParams,
-    useRouter,
+  RelativePathString,
+  useLocalSearchParams,
+  useRouter,
 } from "expo-router";
 import {
-    AlertCircle,
-    ArrowLeft,
-    ArrowRight,
-    Calendar,
-    CheckCircle,
-    Clock,
-    FileText,
-    Info,
-    Plus,
-    RefreshCw,
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  Info,
+  Plus,
+  RefreshCw,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../context/ToastContext"; // ✅ ADD THIS
+import { useToast } from "../../context/ToastContext";
 
-// ═════ MNC STANDARD PALETTE (Matched to Form5View) ═════
+// ═════ MNC STANDARD PALETTE ═════
 const COLORS = {
   bg: "#F8FAFC",
   card: "#FFFFFF",
@@ -51,7 +51,39 @@ const COLORS = {
   warningBorder: "#FDE68A",
 };
 
-// ═════ SUBTLE MONTH COLORS ═════
+// ═════ PLANT FILTER HELPERS ═════
+type PlantKey = string | number | null | undefined;
+
+const PLANT_FIELD_CANDIDATES = [
+  "plantId",
+  "plant_id",
+  "plant",
+  "plantCode",
+  "plantName",
+] as const;
+
+const plantOf = (row: any): string | number | null => {
+  if (!row) return null;
+  for (const k of PLANT_FIELD_CANDIDATES) {
+    const v = (row as any)[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return null;
+};
+
+const samePlant = (row: any, plantId: PlantKey): boolean => {
+  if (plantId === null || plantId === undefined || plantId === "") return true;
+  const rowPlant = plantOf(row);
+  if (rowPlant === null) return true;
+  return String(rowPlant) === String(plantId);
+};
+
+const filterByPlant = <T,>(rows: T[], plantId: PlantKey): T[] => {
+  if (plantId === null || plantId === undefined || plantId === "") return rows;
+  return rows.filter((r) => samePlant(r as any, plantId));
+};
+
+// ═════ MONTH COLORS ═════
 const monthThemeColors: Record<string, any> = {
   Apr: { bg: "#ECFDF5", border: "#A7F3D0", text: "#065F46", icon: "#10B981" },
   May: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#3B82F6" },
@@ -97,10 +129,10 @@ const financialMonths = [
   "Mar",
 ];
 
-// ═════ REUSABLE UI COMPONENTS (Matched to Form5View) ═════
+// ═════ REUSABLE UI ═════
 const Card = ({ children, className }: any) => (
   <View
-    className={`rounded-xl border border-gray-200 bg-white shadow-sm mb-6 ${className || ""}`}
+    className={`mb-6 rounded-xl border border-gray-200 bg-white shadow-sm ${className || ""}`}
   >
     {children}
   </View>
@@ -118,11 +150,11 @@ const AlertBanner = ({ type, title, message, icon: Icon }: any) => {
   const s = stylesMap[type] || stylesMap.info;
   return (
     <View
-      className="flex-row gap-3 p-4 mb-6 border rounded-xl"
+      className="mb-6 flex-row gap-3 rounded-xl border p-4"
       style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
       <View
-        className="items-center justify-center bg-white border rounded-lg w-9 h-9"
+        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
         style={{ borderColor: s.border }}
       >
         <Icon size={18} color={s.iconColor} />
@@ -153,14 +185,13 @@ export default function Form5Dashboard({
   const router = useRouter();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams(); // ✅ Add this
+  const params = useLocalSearchParams();
   const { addToast } = useToast();
 
   const isDesktop = width >= 768;
-
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
-  const isGridDesktop = width >= 1024; // Used for grid layout (4 columns)
+  const isGridDesktop = width >= 1024;
 
   const [selectedYear, setSelectedYear] = useState(
     year ||
@@ -168,14 +199,10 @@ export default function Form5Dashboard({
       new Date().getFullYear(),
   );
 
-  // ✅ Sync state if route params change
   useEffect(() => {
-    if (params?.year) {
-      setSelectedYear(parseInt(params.year as string));
-    }
+    if (params?.year) setSelectedYear(parseInt(params.year as string));
   }, [params?.year]);
 
-  // ✅ Sync state if prop changes
   useEffect(() => {
     if (year) setSelectedYear(year);
   }, [year]);
@@ -183,25 +210,28 @@ export default function Form5Dashboard({
   const [availableMonths, setAvailableMonths] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 📐 Dynamically calculate card width for perfect 4/3/1 grid inside a centered 1400px container
   const getCardWidth = () => {
     const horizontalPadding = isGridDesktop ? 48 : 32;
     const availableWidth = Math.min(width, 1400) - horizontalPadding;
-    const gap = 20; // gap-5 in NativeWind is 20px
-
-    if (isMobile) {
-      return availableWidth; // 1 column
-    } else if (isTablet) {
-      return (availableWidth - 2 * gap) / 3; // 3 columns
-    } else {
-      return (availableWidth - 3 * gap) / 4; // 4 columns
-    }
+    const gap = 20;
+    if (isMobile) return availableWidth;
+    if (isTablet) return (availableWidth - 2 * gap) / 3;
+    return (availableWidth - 3 * gap) / 4;
   };
 
+  // ═════ FETCH (with plant scoping) ═════
   const fetchData = useCallback(async () => {
+    if (!user?.id) {
+      console.warn("⚠️ No userId, skipping fetch");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const response = await auditScheduleApi.getAvailableMonths(selectedYear);
+      const response = await auditScheduleApi.getAvailableMonths(
+        selectedYear,
+        user.id,
+      );
       const months = Array.isArray(response) ? response : response?.data || [];
 
       const validMonths = months.filter((m: any) => m.hasPlannedAudits);
@@ -213,9 +243,17 @@ export default function Form5Dashboard({
             const res = await auditScheduleApi.getByYearAndMonth(
               selectedYear,
               m.month,
+              user?.id,
             );
             const allSchedules = Array.isArray(res) ? res : res?.data || [];
-            const weekSchedules = allSchedules.filter(
+
+            // ✅ PLANT FILTER
+            const plantScopedSchedules = filterByPlant(
+              allSchedules,
+              user?.plantId,
+            );
+
+            const weekSchedules = plantScopedSchedules.filter(
               (s: any) => !s.scheduledDate,
             );
             counts[m.month] = weekSchedules.length;
@@ -237,14 +275,11 @@ export default function Form5Dashboard({
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, addToast]);
+  }, [selectedYear, addToast, user?.id, user?.plantId]); // ✅ added plantId
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-  useEffect(() => {
-    if (year) setSelectedYear(year);
-  }, [year]);
 
   const handleMonthClick = (monthData: any) => {
     if (onMonthSelect) {
@@ -260,6 +295,7 @@ export default function Form5Dashboard({
     router.push(`/form5?preselectedYear=${selectedYear}` as RelativePathString);
   };
 
+  // ═════ STATUS BADGE (extended for full workflow) ═════
   const getStatusBadge = (status: string) => {
     const styles: Record<string, any> = {
       APPROVED: {
@@ -269,6 +305,42 @@ export default function Form5Dashboard({
         text: "Approved",
         Icon: CheckCircle,
         iconColor: "#10B981",
+      },
+      // ✅ NEW
+      PENDING_LA_CONFIRMATION: {
+        bg: "bg-blue-50",
+        color: "text-blue-800",
+        border: "border-blue-200",
+        text: "Awaiting LA",
+        Icon: Clock,
+        iconColor: "#3B82F6",
+      },
+      // ✅ NEW
+      CONFIRMED_BY_LA: {
+        bg: "bg-purple-50",
+        color: "text-purple-800",
+        border: "border-purple-200",
+        text: "Confirmed by LA",
+        Icon: CheckCircle,
+        iconColor: "#8B5CF6",
+      },
+      // ✅ NEW
+      FEASIBILITY_REJECTED: {
+        bg: "bg-red-50",
+        color: "text-red-800",
+        border: "border-red-200",
+        text: "Feasibility Rejected",
+        Icon: AlertCircle,
+        iconColor: "#EF4444",
+      },
+      // ✅ NEW
+      CHANGE_REQUESTED: {
+        bg: "bg-orange-50",
+        color: "text-orange-800",
+        border: "border-orange-200",
+        text: "Changes Requested",
+        Icon: AlertCircle,
+        iconColor: "#F97316",
       },
       PENDING_APPROVAL: {
         bg: "bg-amber-50",
@@ -298,7 +370,7 @@ export default function Form5Dashboard({
     const Icon = s.Icon;
     return (
       <View
-        className={`flex-row items-center gap-1.5 px-2.5 py-1 rounded-full border ${s.bg} ${s.border}`}
+        className={`flex-row items-center gap-1.5 rounded-full border px-2.5 py-1 ${s.bg} ${s.border}`}
       >
         <Icon size={12} color={s.iconColor} />
         <Text className={`text-[11px] font-semibold ${s.color}`}>{s.text}</Text>
@@ -308,7 +380,7 @@ export default function Form5Dashboard({
 
   if (loading) {
     return (
-      <View className="items-center justify-center flex-1 bg-gray-50">
+      <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color={COLORS.accent} />
       </View>
     );
@@ -318,7 +390,7 @@ export default function Form5Dashboard({
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* 🎨 REDESIGNED HEADER - Exact match to your reference code */}
+      {/* Header — unchanged */}
       <View
         style={{
           width: "100%",
@@ -330,14 +402,7 @@ export default function Form5Dashboard({
           borderBottomColor: "#E5E7EB",
         }}
       >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 1400,
-            alignSelf: "center",
-          }}
-        >
-          {/* ✅ Responsive container: row on desktop, column on mobile */}
+        <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
           <View
             style={{
               flexDirection: isDesktop ? "row" : "column",
@@ -346,7 +411,6 @@ export default function Form5Dashboard({
               gap: isDesktop ? 24 : 16,
             }}
           >
-            {/* Title Section - Takes only needed space on desktop, full width on mobile */}
             <View
               style={{
                 flexDirection: "row",
@@ -406,7 +470,6 @@ export default function Form5Dashboard({
               </View>
             </View>
 
-            {/* Controls Section - Properly aligned on desktop, stacked on mobile */}
             <View
               style={{
                 flexDirection: "row",
@@ -416,8 +479,6 @@ export default function Form5Dashboard({
                 justifyContent: isDesktop ? "flex-end" : "flex-start",
               }}
             >
-              {/* Year Selector */}
-              {/* Year Selector */}
               <YearFilter
                 selectedYear={selectedYear}
                 onYearChange={(newYear) => {
@@ -430,7 +491,6 @@ export default function Form5Dashboard({
                 )}
               />
 
-              {/* Create New Button */}
               <TouchableOpacity
                 onPress={handleCreateNew}
                 style={{
@@ -456,7 +516,6 @@ export default function Form5Dashboard({
                 </Text>
               </TouchableOpacity>
 
-              {/* Refresh Button */}
               <TouchableOpacity
                 onPress={fetchData}
                 style={{
@@ -475,26 +534,22 @@ export default function Form5Dashboard({
         </View>
       </View>
 
-      {/* Scrollable Content */}
+      {/* Scrollable content */}
       <ScrollView
         className="flex-1"
         contentContainerStyle={
           isGridDesktop
             ? {
-                maxWidth: 1400, // 🎯 Centers the entire grid block on large screens
+                maxWidth: 1400,
                 alignSelf: "center",
                 width: "100%",
                 padding: 24,
                 paddingBottom: 32,
               }
-            : {
-                padding: 16,
-                paddingBottom: 32,
-              }
+            : { padding: 16, paddingBottom: 32 }
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Info Banner */}
         <AlertBanner
           type="info"
           icon={Info}
@@ -502,11 +557,10 @@ export default function Form5Dashboard({
           message="Select a month below to create week-wise audit schedules. After completing all weeks, submit for approval. Once approved, you can create daily schedules with specific time slots."
         />
 
-        {/* Month Grid Cards */}
         {validMonths.length === 0 ? (
           <Card className="items-center p-10">
             <Calendar size={40} color="#CBD5E1" />
-            <Text className="mt-4 mb-2 text-lg font-semibold text-gray-800">
+            <Text className="mb-2 mt-4 text-lg font-semibold text-gray-800">
               No months available for {selectedYear}
             </Text>
             <Text className="mb-5 text-sm text-gray-500">
@@ -514,7 +568,7 @@ export default function Form5Dashboard({
             </Text>
             <TouchableOpacity
               onPress={() => router.push("/form4" as RelativePathString)}
-              className="flex-row items-center h-10 gap-2 px-5 rounded-lg"
+              className="h-10 flex-row items-center gap-2 rounded-lg px-5"
               style={{ backgroundColor: COLORS.accent }}
             >
               <FileText size={16} color="#FFF" />
@@ -540,22 +594,26 @@ export default function Form5Dashboard({
               return (
                 <TouchableOpacity
                   key={month}
-                  onPress={() => handleMonthClick(monthData || { month })}
+                  onPress={() =>
+                    handleMonthClick(
+                      monthData ?? {
+                        month,
+                        approvalStatus: "DRAFT",
+                        scheduleCount: 0,
+                      },
+                    )
+                  }
                   activeOpacity={0.8}
-                  className="overflow-hidden bg-white border shadow-sm border-slate-200 rounded-xl"
-                  style={{
-                    width: getCardWidth(), // 📐 Applies the perfectly calculated width
-                    opacity: 1,
-                  }}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                  style={{ width: getCardWidth(), opacity: 1 }}
                 >
-                  {/* Card Header */}
                   <View
-                    className="flex-row items-center justify-between px-5 py-4 border-b border-slate-200"
+                    className="flex-row items-center justify-between border-b border-slate-200 px-5 py-4"
                     style={{ backgroundColor: monthTheme.bg }}
                   >
                     <View className="flex-row items-center gap-3">
                       <View
-                        className="items-center justify-center bg-white border rounded-lg w-9 h-9"
+                        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
                         style={{ borderColor: monthTheme.border }}
                       >
                         <Calendar size={18} color={monthTheme.icon} />
@@ -567,7 +625,7 @@ export default function Form5Dashboard({
                         >
                           {monthDisplay[month]}
                         </Text>
-                        <Text className="text-xs text-slate-500 mt-0.5">
+                        <Text className="mt-0.5 text-xs text-slate-500">
                           Financial Year {selectedYear}-{selectedYear + 1}
                         </Text>
                       </View>
@@ -575,7 +633,7 @@ export default function Form5Dashboard({
                     {hasData ? (
                       getStatusBadge(approvalStatus)
                     ) : (
-                      <View className="px-2.5 py-1 rounded-full border border-slate-200 bg-slate-100">
+                      <View className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1">
                         <Text className="text-[11px] font-semibold text-slate-500">
                           No Plan
                         </Text>
@@ -583,14 +641,13 @@ export default function Form5Dashboard({
                     )}
                   </View>
 
-                  {/* Card Body */}
                   <View className="p-5">
-                    <View className="flex-row items-center gap-3 mb-4">
-                      <View className="items-center justify-center w-10 h-10 border border-blue-100 rounded-lg bg-blue-50">
+                    <View className="mb-4 flex-row items-center gap-3">
+                      <View className="h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-blue-50">
                         <FileText size={18} color={COLORS.accent} />
                       </View>
                       <View>
-                        <Text className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        <Text className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                           Schedules
                         </Text>
                         <Text className="text-xl font-bold text-black">
@@ -599,7 +656,7 @@ export default function Form5Dashboard({
                       </View>
                     </View>
 
-                    <View className="flex-row items-center justify-between px-4 py-3 border border-blue-100 rounded-lg bg-blue-50">
+                    <View className="flex-row items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
                       <Text className="text-sm font-semibold text-blue-800">
                         {hasData ? "View Schedule Details" : "Start Planning"}
                       </Text>
@@ -614,12 +671,12 @@ export default function Form5Dashboard({
 
         {/* Legend */}
         <Card className="p-6">
-          <Text className="mb-4 text-xs font-bold tracking-wider text-gray-900 uppercase">
+          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-900">
             Status Legend
           </Text>
           <View className="flex-row flex-wrap gap-6">
             <View className="flex-row items-center gap-2">
-              <View className="items-center justify-center w-4 h-4 border border-green-200 rounded-full bg-green-50">
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-green-200 bg-green-50">
                 <CheckCircle size={10} color="#10B981" />
               </View>
               <Text className="text-sm text-slate-500">
@@ -627,15 +684,31 @@ export default function Form5Dashboard({
               </Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="items-center justify-center w-4 h-4 border rounded-full bg-amber-50 border-amber-200">
-                <Clock size={10} color="#F59E0B" />
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+                <Clock size={10} color="#3B82F6" />
               </View>
               <Text className="text-sm text-slate-500">
-                Pending Approval - Waiting for review
+                Awaiting LA - Pending Lead Auditor confirmation
               </Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="items-center justify-center w-4 h-4 border border-red-200 rounded-full bg-red-50">
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-purple-200 bg-purple-50">
+                <CheckCircle size={10} color="#8B5CF6" />
+              </View>
+              <Text className="text-sm text-slate-500">
+                Confirmed by LA - Awaiting Top Management approval
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-amber-200 bg-amber-50">
+                <Clock size={10} color="#F59E0B" />
+              </View>
+              <Text className="text-sm text-slate-500">
+                Pending - Waiting for review
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-red-200 bg-red-50">
                 <AlertCircle size={10} color="#EF4444" />
               </View>
               <Text className="text-sm text-slate-500">
@@ -643,7 +716,7 @@ export default function Form5Dashboard({
               </Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="items-center justify-center w-4 h-4 border rounded-full bg-slate-100 border-slate-200">
+              <View className="h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
                 <FileText size={10} color="#475569" />
               </View>
               <Text className="text-sm text-slate-500">

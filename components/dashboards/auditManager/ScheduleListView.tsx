@@ -21,7 +21,7 @@ const ScheduleListView = ({
 
   if (!schedules || schedules.length === 0) {
     return (
-      <View className="items-center w-full p-12 bg-white border border-gray-200 rounded-xl">
+      <View className="w-full items-center rounded-xl border border-gray-200 bg-white p-12">
         <Calendar size={48} color="#6B7280" style={{ opacity: 0.5 }} />
         <Text className="mt-2 text-sm text-gray-500">
           No schedules found for this month
@@ -44,7 +44,7 @@ const ScheduleListView = ({
   const totalWidth = columns.reduce((sum, col) => sum + col.width, 0);
 
   return (
-    <View className="w-full overflow-hidden bg-white border border-gray-200 shadow-sm rounded-xl">
+    <View className="w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={true}
@@ -52,7 +52,7 @@ const ScheduleListView = ({
       >
         <View style={{ minWidth: totalWidth, width: "100%" }}>
           {/* Table Header */}
-          <View className="flex-row w-full border-b border-gray-200 bg-gray-50">
+          <View className="w-full flex-row border-b border-gray-200 bg-gray-50">
             {columns.map((col, idx) => (
               <View
                 key={col.label}
@@ -66,7 +66,7 @@ const ScheduleListView = ({
                   alignItems: "center",
                 }}
               >
-                <Text className="text-xs font-bold tracking-wide text-gray-700 uppercase">
+                <Text className="text-xs font-bold uppercase tracking-wide text-gray-700">
                   {col.label}
                 </Text>
               </View>
@@ -89,7 +89,7 @@ const ScheduleListView = ({
             return (
               <View
                 key={schedule.id}
-                className={`flex-row w-full ${
+                className={`w-full flex-row ${
                   index % 2 === 1 ? "bg-gray-50/50" : "bg-white"
                 }`}
                 style={{
@@ -109,7 +109,7 @@ const ScheduleListView = ({
                     alignItems: "center",
                   }}
                 >
-                  <Text className="text-sm text-gray-800 " numberOfLines={2}>
+                  <Text className="text-sm text-gray-800" numberOfLines={2}>
                     {schedule.department || "-"}
                   </Text>
                 </View>
@@ -151,9 +151,9 @@ const ScheduleListView = ({
                       auditElements.map((el: string, idx: number) => (
                         <View
                           key={idx}
-                          className="px-2 py-1 bg-blue-100 rounded"
+                          className="rounded bg-blue-100 px-2 py-1"
                         >
-                          <Text className="text-blue-700 text-[10px] font-medium">
+                          <Text className="text-[10px] font-medium text-blue-700">
                             {auditElementsMap[el] || el.substring(0, 3)}
                           </Text>
                         </View>
@@ -164,6 +164,7 @@ const ScheduleListView = ({
                   </View>
                 </View>
 
+                {/* Auditor */}
                 {/* Auditor */}
                 <View
                   style={{
@@ -176,9 +177,41 @@ const ScheduleListView = ({
                     alignItems: "center",
                   }}
                 >
-                  <Text className="text-sm text-gray-800" numberOfLines={2}>
-                    {schedule.leadAuditorName || schedule.auditorName || "-"}
-                  </Text>
+                  {(() => {
+                    // Pull team auditor names from whichever field has them
+                    let names =
+                      schedule.coAuditorNames ||
+                      schedule.teamAuditorNames ||
+                      [];
+
+                    // Handle JSON-stringified arrays from the backend
+                    if (typeof names === "string") {
+                      try {
+                        names = JSON.parse(names);
+                      } catch {
+                        names = names ? [names] : [];
+                      }
+                    }
+
+                    // Fallback to single scalar fields if no array exists
+                    if (!Array.isArray(names) || names.length === 0) {
+                      const single =
+                        schedule.leadAuditorName || schedule.auditorName;
+                      names = single ? [single] : [];
+                    }
+
+                    // ✅ Join all names with commas
+                    const display = names.length === 0 ? "-" : names.join(", ");
+
+                    return (
+                      <Text
+                        className="text-center text-sm text-gray-800"
+                        numberOfLines={3}
+                      >
+                        {display}
+                      </Text>
+                    );
+                  })()}
                 </View>
 
                 {/* Auditee */}
@@ -237,7 +270,7 @@ const ScheduleListView = ({
                     >
                       <TouchableOpacity
                         onPress={() => onEdit(schedule)}
-                        className="p-2 rounded-lg bg-blue-50 active:bg-blue-100"
+                        className="rounded-lg bg-blue-50 p-2 active:bg-blue-100"
                         style={{
                           minWidth: 36,
                           minHeight: 36,
@@ -249,7 +282,7 @@ const ScheduleListView = ({
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => onDelete(schedule.id, schedule.month)}
-                        className="p-2 rounded-lg bg-red-50 active:bg-red-100"
+                        className="rounded-lg bg-red-50 p-2 active:bg-red-100"
                         style={{
                           minWidth: 36,
                           minHeight: 36,

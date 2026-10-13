@@ -57,20 +57,7 @@ const uriToBase64 = async (uri: string): Promise<string> => {
 
 const NAME_PREFIXES = ["Mr.", "Mrs.", "Miss", "Ms.", "Dr.", "Prof."];
 const GENDERS = ["MALE", "FEMALE", "OTHER"];
-const DEPARTMENTS = [
-  "MR",
-  "ENGG",
-  "PLANT_MAINTENANCE",
-  "STORES_DESPATCH",
-  "PURCHASE",
-  "PPC",
-  "PRODUCTION",
-  "HR",
-  "UNIT_HEAD",
-  "TOOL_MAINTENANCE",
-  "QA",
-  "MARKETING",
-];
+
 const EMPLOYMENT_TYPES = ["PERMANENT", "CONTRACT", "TEMPORARY", "INTERN"];
 const CORE_TOOLS = ["APQP", "FMEA", "PPAP", "SPC", "MSA"];
 const PROBLEM_SOLVING_TOOLS = ["8D", "Why-Why", "Fishbone", "Pareto", "5W1H"];
@@ -652,6 +639,13 @@ export default function UserFormModal({
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
+  const [profilePhotoAction, setProfilePhotoAction] = useState<
+    "KEEP" | "DELETE" | "REPLACE"
+  >("KEEP");
+  const [signatureAction, setSignatureAction] = useState<
+    "KEEP" | "DELETE" | "REPLACE"
+  >("KEEP");
+
   // Enterprise Picker States
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
   const [showPlantPicker, setShowPlantPicker] = useState(false);
@@ -664,6 +658,7 @@ export default function UserFormModal({
   const [sites, setSites] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [availableRoles, setAvailableRoles] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
@@ -699,13 +694,13 @@ export default function UserFormModal({
     workState: user?.workState || "",
     workPincode: user?.workPincode || "",
     workCountry: user?.workCountry || "India",
-    companyId: user?.companyId || "",
+    companyId: user?.companyId ? String(user.companyId) : "",
     companyName: user?.companyName || "",
-    plantId: user?.plantId || "",
+    plantId: user?.plantId ? String(user.plantId) : "",
     plantName: user?.plantName || "",
-    siteId: user?.siteId || "",
+    siteId: user?.siteId ? String(user.siteId) : "",
     siteName: user?.siteName || "",
-    unitId: user?.unitId || "",
+    unitId: user?.unitId ? String(user.unitId) : "",
     unitName: user?.unitName || "",
     managerId: user?.managerId || "",
     hodId: user?.hodId || "",
@@ -771,12 +766,141 @@ export default function UserFormModal({
     formData.role === "AUDITOR" || formData.role === "LEAD_AUDITOR";
 
   // Fetch companies on mount
+  // Fetch companies on mount
   useEffect(() => {
+    console.log("🚀 [INIT] UserFormModal mounted. isEdit:", isEdit);
+    console.log("📦 [INIT] Initial user object:", user);
+
     fetchCompanies();
-    fetchRoles(); // ✅ Add this line
+    fetchRoles();
     loadProfilePhoto();
     loadSignature();
+    fetchDepartments(); // ← ADD
+
+    // ✅ Pre-fetch Enterprise child data for Edit Mode
+    if (isEdit && user) {
+      console.log(
+        "📝 [EDIT MODE] Detected. Pre-fetching enterprise child data...",
+      );
+      console.log("   -> user.companyId:", user.companyId);
+      console.log("   -> user.plantId:", user.plantId);
+      console.log("   -> user.siteId:", user.siteId);
+
+      if (user.companyId) {
+        console.log(
+          "   ⚡ Triggering fetchPlants for companyId:",
+          user.companyId,
+        );
+        fetchPlants(String(user.companyId));
+      }
+      if (user.plantId) {
+        console.log("   ⚡ Triggering fetchSites for plantId:", user.plantId);
+        fetchSites(String(user.plantId));
+      }
+      if (user.siteId) {
+        console.log("   ⚡ Triggering fetchUnits for siteId:", user.siteId);
+        fetchUnits(String(user.siteId));
+      }
+    }
   }, []);
+
+  // ✅ ADD THIS: Auto-fix for missing siteId in Edit Mode
+  useEffect(() => {
+    if (
+      isEdit &&
+      user &&
+      sites.length > 0 &&
+      !user.siteId &&
+      (user.siteName || user.siteCode)
+    ) {
+      const matchedSite = sites.find(
+        (s) => s.name === user.siteName || s.code === user.siteCode,
+      );
+
+      if (matchedSite) {
+        console.log(
+          "🔧 [AUTO-FIX] user.siteId was null, but found matching site:",
+          matchedSite.name,
+          "ID:",
+          matchedSite.id,
+        );
+
+        // Update form data with the correct ID
+        setFormData((prev) => ({
+          ...prev,
+          siteId: String(matchedSite.id),
+          siteName: matchedSite.name,
+        }));
+
+        // Now fetch the units for this site
+        fetchUnits(String(matchedSite.id));
+      }
+    }
+  }, [sites, isEdit, user]);
+
+  // ✅ Auto-fix for Company
+  useEffect(() => {
+    if (isEdit && user && companies.length > 0) {
+      if (
+        !formData.companyId &&
+        (user.companyName || user.companyCode || user.companyId)
+      ) {
+        const matchedCompany = companies.find(
+          (c) =>
+            String(c.id) === String(user.companyId) ||
+            c.name === user.companyName ||
+            c.code === user.companyCode,
+        );
+
+        if (matchedCompany) {
+          console.log(
+            "🔧 [AUTO-FIX] Found matching company:",
+            matchedCompany.name,
+            "ID:",
+            matchedCompany.id,
+          );
+          setFormData((prev) => ({
+            ...prev,
+            companyId: String(matchedCompany.id),
+            companyName: matchedCompany.name,
+          }));
+          fetchPlants(String(matchedCompany.id));
+        }
+      }
+    }
+  }, [companies, isEdit, user]);
+
+  // ✅ Auto-fix for Plant
+  useEffect(() => {
+    if (isEdit && user && plants.length > 0 && formData.companyId) {
+      if (
+        !formData.plantId &&
+        (user.plantName || user.plantCode || user.plantId)
+      ) {
+        const matchedPlant = plants.find(
+          (p) =>
+            String(p.id) === String(user.plantId) ||
+            p.name === user.plantName ||
+            p.code === user.plantCode,
+        );
+
+        if (matchedPlant) {
+          console.log(
+            "🔧 [AUTO-FIX] Found matching plant:",
+            matchedPlant.name,
+            "ID:",
+            matchedPlant.id,
+          );
+          setFormData((prev) => ({
+            ...prev,
+            plantId: String(matchedPlant.id),
+            plantName: matchedPlant.name,
+          }));
+          fetchSites(String(matchedPlant.id));
+        }
+      }
+    }
+  }, [plants, formData.companyId, isEdit, user]);
 
   // Add this function to fetch roles from API
   const fetchRoles = async () => {
@@ -827,6 +951,22 @@ export default function UserFormModal({
       setLoadingRoles(false);
     }
   };
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/departments`);
+      const data = await res.json();
+      setDepartments(Array.isArray(data) ? data : data?.data || []);
+      console.log(
+        "✅ Departments loaded:",
+        (Array.isArray(data) ? data : data?.data || []).length,
+      );
+    } catch (err) {
+      console.error("❌ Failed to load departments:", err);
+      setDepartments([]);
+    }
+  };
+
   // Fetch functions with proper error handling
   const fetchCompanies = async () => {
     try {
@@ -1002,20 +1142,25 @@ export default function UserFormModal({
 
   const loadProfilePhoto = async () => {
     if (user?.profilePhotoPath && user?.id) {
-      setProfilePhoto(`${API_BASE_URL}/api/users/${user.id}/profile-photo`);
+      setProfilePhoto(
+        `${API_BASE_URL}/api/users/${user.id}/profile-photo?t=${Date.now()}`,
+      );
     } else if (user?.profilePhoto) {
       setProfilePhoto(user.profilePhoto);
     }
+    setProfilePhotoAction("KEEP");
   };
 
   const loadSignature = () => {
     if (user?.signaturePath && user?.id) {
-      setSignature(`${API_BASE_URL}/api/users/${user.id}/signature`);
+      setSignature(
+        `${API_BASE_URL}/api/users/${user.id}/signature?t=${Date.now()}`,
+      );
     } else if (user?.signature) {
       setSignature(user.signature);
     }
+    setSignatureAction("KEEP");
   };
-
   // Auto age
   useEffect(() => {
     if (formData.dateOfBirth) {
@@ -1038,6 +1183,17 @@ export default function UserFormModal({
   );
 
   const handleSave = useCallback(() => {
+    console.log("🟢 [SAVE] Fired");
+    console.log(
+      "  profilePhoto (raw):",
+      profilePhoto ? profilePhoto.slice(0, 50) : null,
+    );
+    console.log("  profilePhotoAction:", profilePhotoAction);
+    console.log(
+      "  signature (raw):",
+      signature ? signature.slice(0, 50) : null,
+    );
+    console.log("  signatureAction:", signatureAction);
     if (
       !formData.firstName ||
       !formData.lastName ||
@@ -1054,11 +1210,17 @@ export default function UserFormModal({
 
     onSave({
       ...formData,
-      phone: combinedPhone, // ✅ Use the phone state
-      countryCode: countryCode, // ✅ Use the countryCode state
-      countryIsoCode: countryIsoCode, // ✅ Use the countryIsoCode state
-      profilePhoto,
-      signature,
+      phone: combinedPhone,
+      countryCode: countryCode,
+      countryIsoCode: countryIsoCode,
+
+      // ✅ Only send base64 when REPLACE; otherwise send null
+      profilePhoto: profilePhotoAction === "REPLACE" ? profilePhoto : null,
+      signature: signatureAction === "REPLACE" ? signature : null,
+
+      // ✅ Always send the action flags
+      profilePhotoAction,
+      signatureAction,
     });
   }, [
     formData,
@@ -1067,26 +1229,38 @@ export default function UserFormModal({
     countryIsoCode,
     profilePhoto,
     signature,
+    profilePhotoAction, // ✅ add
+    signatureAction,
     onSave,
     resetDirty,
   ]);
-  const pickImage = useCallback(async (setter: (uri: string) => void) => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-      base64: true,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      const asset = result.assets[0];
-      if (asset.base64) {
-        setter(`data:image/jpeg;base64,${asset.base64}`);
-      } else {
-        const base64 = await uriToBase64(asset.uri);
+
+  const pickImage = useCallback(
+    async (
+      setter: (uri: string) => void,
+      actionSetter?: (a: "KEEP" | "DELETE" | "REPLACE") => void,
+    ) => {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"], // or ImagePicker.MediaTypeOptions.Images → ImagePicker.MediaType.Images
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        let base64: string;
+        if (asset.base64) {
+          base64 = `data:image/jpeg;base64,${asset.base64}`;
+        } else {
+          base64 = await uriToBase64(asset.uri);
+        }
         setter(base64);
+        if (actionSetter) actionSetter("REPLACE"); // ✅ mark as replace
+        markDirty();
       }
-    }
-  }, []);
+    },
+    [markDirty],
+  );
 
   const takePhoto = useCallback(async () => {
     if (Platform.OS === "web") {
@@ -1109,14 +1283,17 @@ export default function UserFormModal({
     });
     if (!result.canceled && result.assets?.[0]) {
       const asset = result.assets[0];
+      let base64: string;
       if (asset.base64) {
-        setProfilePhoto(`data:image/jpeg;base64,${asset.base64}`);
+        base64 = `data:image/jpeg;base64,${asset.base64}`;
       } else {
-        const base64 = await uriToBase64(asset.uri);
-        setProfilePhoto(base64);
+        base64 = await uriToBase64(asset.uri);
       }
+      setProfilePhoto(base64);
+      setProfilePhotoAction("REPLACE"); // ✅ mark as replace
+      markDirty();
     }
-  }, []);
+  }, [markDirty]);
 
   const toggleArray = useCallback(
     (field: string, item: string, isArray = false) => {
@@ -1135,6 +1312,18 @@ export default function UserFormModal({
         };
       });
 
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const removeImage = useCallback(
+    (
+      setter: (uri: string | null) => void,
+      actionSetter: (a: "KEEP" | "DELETE" | "REPLACE") => void,
+    ) => {
+      setter(null);
+      actionSetter("DELETE"); // ✅ mark as delete
       markDirty();
     },
     [markDirty],
@@ -1441,9 +1630,20 @@ export default function UserFormModal({
                 </Field>
                 <Field label="Department">
                   <PickerButton
-                    value={formData.department}
+                    value={
+                      departments.find((d) => d.code === formData.department)
+                        ?.name ||
+                      formData.department ||
+                      ""
+                    }
                     placeholder="Select department"
-                    onPress={() => setShowDeptPicker(true)}
+                    onPress={() => {
+                      if (departments.length === 0) {
+                        fetchDepartments();
+                        return;
+                      }
+                      setShowDeptPicker(true);
+                    }}
                   />
                 </Field>
 
@@ -1518,7 +1718,9 @@ export default function UserFormModal({
                   </View>
                   <View style={{ gap: 8 }}>
                     <TouchableOpacity
-                      onPress={() => pickImage(setProfilePhoto)}
+                      onPress={() =>
+                        pickImage(setProfilePhoto, setProfilePhotoAction)
+                      }
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
@@ -1560,7 +1762,11 @@ export default function UserFormModal({
                       </TouchableOpacity>
                     )}
                     {profilePhoto && (
-                      <TouchableOpacity onPress={() => setProfilePhoto(null)}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          removeImage(setProfilePhoto, setProfilePhotoAction)
+                        }
+                      >
                         <Text style={{ color: "#ef4444", fontSize: 12 }}>
                           Remove Photo
                         </Text>
@@ -1616,7 +1822,9 @@ export default function UserFormModal({
                   </View>
                   <View style={{ gap: 8 }}>
                     <TouchableOpacity
-                      onPress={() => pickImage(setSignature)}
+                      onPress={() =>
+                        pickImage(setSignature, setSignatureAction)
+                      }
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
@@ -1634,7 +1842,11 @@ export default function UserFormModal({
                       </Text>
                     </TouchableOpacity>
                     {signature && (
-                      <TouchableOpacity onPress={() => setSignature(null)}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          removeImage(setSignature, setSignatureAction)
+                        }
+                      >
                         <Text style={{ color: "#ef4444", fontSize: 12 }}>
                           Remove Signature
                         </Text>
@@ -2183,12 +2395,15 @@ export default function UserFormModal({
         options={availableRoles}
         selected={formData.role}
         onSelect={(v: string) => updateField("role", v)}
-      />{" "}
+      />
       <PickerModal
         visible={showDeptPicker}
         onClose={() => setShowDeptPicker(false)}
         title="Select Department"
-        options={DEPARTMENTS}
+        options={departments.map((d) => ({
+          name: d.code, // stored value: "PRODUCTION"
+          displayName: d.name, // shown: "Production"
+        }))}
         selected={formData.department}
         onSelect={(v: string) => updateField("department", v)}
       />

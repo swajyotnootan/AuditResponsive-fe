@@ -1,10 +1,10 @@
 // app/components/dashboards/LeadAuditor/BackButton.tsx
-'use client';
+"use client";
 
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { useRouter } from "expo-router";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import Icon from "react-native-vector-icons/Feather";
 
 interface BackButtonProps {
   defaultTab?: string;
@@ -12,10 +12,10 @@ interface BackButtonProps {
   className?: string;
 }
 
-const BackButton: React.FC<BackButtonProps> = ({ 
-  defaultTab = 'responses', 
-  label = 'Back',
-  className = ''
+const BackButton: React.FC<BackButtonProps> = ({
+  defaultTab = "responses",
+  label = "Back",
+  className = "",
 }) => {
   const router = useRouter();
 
@@ -33,17 +33,17 @@ const BackButton: React.FC<BackButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     padding: 8,
-    backgroundColor: '#00529B',
+    backgroundColor: "#00529B",
     borderRadius: 8,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });
 

@@ -68,7 +68,7 @@ const PlanDetailsModal = ({
   const getStatusBadge = (status: string) => {
     if (status === "APPROVED") {
       return (
-        <View className="flex-row items-center gap-1 px-2 py-1 bg-green-100 rounded-full">
+        <View className="flex-row items-center gap-1 rounded-full bg-green-100 px-2 py-1">
           <CheckCircle size={12} color="#15803d" />
           <Text className="text-xs text-green-700">Approved</Text>
         </View>
@@ -76,7 +76,7 @@ const PlanDetailsModal = ({
     }
     if (status === "PENDING_APPROVAL") {
       return (
-        <View className="flex-row items-center gap-1 px-2 py-1 bg-yellow-100 rounded-full">
+        <View className="flex-row items-center gap-1 rounded-full bg-yellow-100 px-2 py-1">
           <Clock size={12} color="#b45309" />
           <Text className="text-xs text-yellow-700">Pending</Text>
         </View>
@@ -84,14 +84,14 @@ const PlanDetailsModal = ({
     }
     if (status === "REJECTED") {
       return (
-        <View className="flex-row items-center gap-1 px-2 py-1 bg-red-100 rounded-full">
+        <View className="flex-row items-center gap-1 rounded-full bg-red-100 px-2 py-1">
           <X size={12} color="#b91c1c" />
           <Text className="text-xs text-red-700">Rejected</Text>
         </View>
       );
     }
     return (
-      <View className="px-2 py-1 bg-gray-100 rounded-full">
+      <View className="rounded-full bg-gray-100 px-2 py-1">
         <Text className="text-xs text-gray-700">Draft</Text>
       </View>
     );
@@ -114,16 +114,16 @@ const PlanDetailsModal = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View className="items-center justify-center flex-1 p-2 bg-black/50">
+      <View className="flex-1 items-center justify-center bg-black/50 p-2">
         <View
-          className="w-full overflow-hidden bg-white rounded-2xl"
+          className="w-full overflow-hidden rounded-2xl bg-white"
           style={{
             maxWidth: modalMaxWidth,
             height: modalHeight,
           }}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+          <View className="flex-row items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
             <View className="flex-1 pr-2">
               <Text
                 className="text-base font-bold text-gray-900 md:text-lg"
@@ -131,7 +131,7 @@ const PlanDetailsModal = ({
               >
                 Annual Audit Plan {selectedPlan.year}
               </Text>
-              <View className="flex-row flex-wrap items-center gap-1 mt-1">
+              <View className="mt-1 flex-row flex-wrap items-center gap-1">
                 {getStatusBadge(selectedPlan.approvalStatus)}
                 <Text className="text-xs text-gray-500" numberOfLines={1}>
                   Prepared by: {selectedPlan.preparedBy || "N/A"}
@@ -140,7 +140,7 @@ const PlanDetailsModal = ({
             </View>
             <TouchableOpacity
               onPress={onClose}
-              className="p-2 bg-gray-100 rounded-full"
+              className="rounded-full bg-gray-100 p-2"
             >
               <X size={18} color="#64748b" />
             </TouchableOpacity>
@@ -154,12 +154,12 @@ const PlanDetailsModal = ({
             contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
           >
             {/* Stats Cards */}
-            <View className="flex-row flex-wrap gap-2 mb-4">
+            <View className="mb-4 flex-row flex-wrap gap-2">
               <View
-                className="items-center p-2 rounded-lg bg-blue-50"
+                className="items-center rounded-lg bg-blue-50 p-2"
                 style={{ width: isDesktop ? "32%" : "48%" }}
               >
-                <Text className="text-[10px] font-semibold text-blue-600 mb-1">
+                <Text className="mb-1 text-[10px] font-semibold text-blue-600">
                   Total Planned
                 </Text>
                 <Text className="text-lg font-bold text-blue-700">
@@ -167,10 +167,10 @@ const PlanDetailsModal = ({
                 </Text>
               </View>
               <View
-                className="items-center p-2 rounded-lg bg-green-50"
+                className="items-center rounded-lg bg-green-50 p-2"
                 style={{ width: isDesktop ? "32%" : "48%" }}
               >
-                <Text className="text-[10px] font-semibold text-green-600 mb-1">
+                <Text className="mb-1 text-[10px] font-semibold text-green-600">
                   Completed
                 </Text>
                 <Text className="text-lg font-bold text-green-700">
@@ -178,10 +178,10 @@ const PlanDetailsModal = ({
                 </Text>
               </View>
               <View
-                className="items-center p-2 rounded-lg bg-purple-50"
+                className="items-center rounded-lg bg-purple-50 p-2"
                 style={{ width: isDesktop ? "32%" : "100%" }}
               >
-                <Text className="text-[10px] font-semibold text-purple-600 mb-1">
+                <Text className="mb-1 text-[10px] font-semibold text-purple-600">
                   Completion Rate
                 </Text>
                 <Text className="text-lg font-bold text-purple-700">
@@ -192,7 +192,7 @@ const PlanDetailsModal = ({
 
             {/* Audit Matrix Table */}
             <View
-              className="mb-4 overflow-hidden border border-gray-200 rounded-lg"
+              className="mb-4 overflow-hidden rounded-lg border border-gray-200"
               style={{ width: "100%" }}
             >
               <ScrollView
@@ -202,22 +202,22 @@ const PlanDetailsModal = ({
               >
                 <View style={{ width: "100%", minWidth: "100%" }}>
                   {/* Table Header */}
-                  <View className="flex-row bg-gray-100 border-b-2 border-gray-300">
+                  <View className="flex-row border-b-2 border-gray-300 bg-gray-100">
                     <View
-                      className="items-center justify-center px-3 py-3 border-r border-gray-200"
+                      className="items-center justify-center border-r border-gray-200 px-3 py-3"
                       style={{
                         minWidth: isDesktop ? 170 : 140,
                         maxWidth: isDesktop ? 180 : 140,
                       }}
                     >
-                      <Text className="text-xs font-bold text-center text-gray-800">
+                      <Text className="text-center text-xs font-bold text-gray-800">
                         Audit Element
                       </Text>
                     </View>
                     {months.map((month) => (
                       <View
                         key={month}
-                        className="items-center justify-center px-2 py-3 border-r border-gray-200"
+                        className="items-center justify-center border-r border-gray-200 px-2 py-3"
                         style={{
                           minWidth: isDesktop ? 70 : 50,
                           flex: isDesktop ? 1 : 0,
@@ -238,7 +238,7 @@ const PlanDetailsModal = ({
                       style={{ width: "100%" }}
                     >
                       <View
-                        className="justify-center px-3 py-3 border-r border-gray-200"
+                        className="justify-center border-r border-gray-200 px-3 py-3"
                         style={{
                           minWidth: isDesktop ? 170 : 140,
                           maxWidth: isDesktop ? 180 : 140,
@@ -254,21 +254,21 @@ const PlanDetailsModal = ({
                       {element?.months?.map((month: any, monthIdx: number) => (
                         <View
                           key={monthIdx}
-                          className="items-center justify-center px-2 py-3 border-r border-gray-200"
+                          className="items-center justify-center border-r border-gray-200 px-2 py-3"
                           style={{
                             minWidth: isDesktop ? 70 : 50,
                             flex: isDesktop ? 1 : 0,
                           }}
                         >
                           {month?.status === "COMPLETED" && (
-                            <View className="items-center justify-center w-6 h-6 bg-green-100 rounded">
+                            <View className="h-6 w-6 items-center justify-center rounded bg-green-100">
                               <Text className="text-xs font-bold text-green-700">
                                 C
                               </Text>
                             </View>
                           )}
                           {month?.status === "PLANNED" && (
-                            <View className="items-center justify-center w-6 h-6 bg-blue-100 rounded">
+                            <View className="h-6 w-6 items-center justify-center rounded bg-blue-100">
                               <Text className="text-xs font-bold text-blue-700">
                                 P
                               </Text>
@@ -287,13 +287,13 @@ const PlanDetailsModal = ({
 
             {/* Review Decision Section (Only for Pending) */}
             {selectedPlan.approvalStatus === "PENDING_APPROVAL" && (
-              <View className="pt-3 border-t border-gray-200">
+              <View className="border-t border-gray-200 pt-3">
                 <Text className="mb-2 text-sm font-bold text-gray-800">
                   Review Decision
                 </Text>
                 <View className="gap-2">
                   <TextInput
-                    className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-gray-50"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2 text-sm"
                     style={{ minHeight: 60, textAlignVertical: "top" }}
                     multiline
                     numberOfLines={3}
@@ -309,7 +309,7 @@ const PlanDetailsModal = ({
                   >
                     <TouchableOpacity
                       onPress={onReject}
-                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 py-2.5 bg-red-600 rounded-lg active:bg-red-700`}
+                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 rounded-lg bg-red-600 py-2.5 active:bg-red-700`}
                     >
                       <X size={16} color="#ffffff" />
                       <Text
@@ -323,7 +323,7 @@ const PlanDetailsModal = ({
                     <TouchableOpacity
                       onPress={onApprove}
                       disabled={submitting}
-                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 py-2.5 bg-green-600 rounded-lg active:bg-green-700 disabled:opacity-50`}
+                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 active:bg-green-700 disabled:opacity-50`}
                     >
                       {submitting ? (
                         <ActivityIndicator color="#ffffff" size="small" />
@@ -345,7 +345,7 @@ const PlanDetailsModal = ({
             {/* Status Summary for Approved / Rejected (Fills empty space nicely) */}
             {selectedPlan.approvalStatus !== "PENDING_APPROVAL" && (
               <View
-                className="p-4 mt-4 border rounded-xl"
+                className="mt-4 rounded-xl border p-4"
                 style={{
                   borderColor:
                     selectedPlan.approvalStatus === "APPROVED"
@@ -357,7 +357,7 @@ const PlanDetailsModal = ({
                       : "#fef2f2",
                 }}
               >
-                <View className="flex-row items-center gap-2 mb-2">
+                <View className="mb-2 flex-row items-center gap-2">
                   {selectedPlan.approvalStatus === "APPROVED" ? (
                     <CheckCircle size={20} color="#166534" />
                   ) : (
@@ -390,8 +390,8 @@ const PlanDetailsModal = ({
             {/* Rejection Reason Section (Only for Rejected) */}
             {selectedPlan.approvalStatus === "REJECTED" &&
               selectedPlan.rejectionReason && (
-                <View className="p-4 mt-3 border border-red-200 rounded-xl bg-red-50">
-                  <View className="flex-row items-center gap-2 mb-2">
+                <View className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                  <View className="mb-2 flex-row items-center gap-2">
                     <AlertCircle size={18} color="#991b1b" />
                     <Text className="text-sm font-bold text-red-800">
                       Rejection Reason

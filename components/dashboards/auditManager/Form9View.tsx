@@ -1,4 +1,6 @@
 import { API_BASE_URL } from "@/config/apiConfig";
+import { useAuth } from "@/hooks";
+import { ncrService } from "@/services/ncrService";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker, {
@@ -175,13 +177,13 @@ const DatePickerInput = React.memo(
 
     return (
       <View style={{ minWidth: 140, flex: 1 }}>
-        <Text className="text-[11px] font-bold text-[#6B7280] mb-1.5 uppercase tracking-wider">
+        <Text className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
           {label}
         </Text>
         <Pressable
           onPress={() => setShow(true)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // ✅ Ensures tap is registered
-          className="h-10 px-3.5 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] flex-row justify-between items-center"
+          className="h-10 flex-row items-center justify-between rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-3.5"
           style={{ zIndex: 10 }}
         >
           <Text
@@ -249,7 +251,7 @@ const ActionButton = React.memo(
       <Pressable
         onPress={onPress}
         disabled={disabled || loading}
-        className={`h-10 px-5 rounded-lg border ${variantStyle} flex-row items-center justify-center gap-2 active:opacity-80 ${disabled ? "opacity-50" : ""}`}
+        className={`h-10 rounded-lg border px-5 ${variantStyle} flex-row items-center justify-center gap-2 active:opacity-80 ${disabled ? "opacity-50" : ""}`}
         style={{ backgroundColor: disabled ? "#F1F5F9" : bgColor }}
       >
         {loading ? (
@@ -289,7 +291,7 @@ const StatusBadge = React.memo(({ status }: StatusBadgeProps) => {
   const isClosed = isClosedNcrStatus(status);
   return (
     <View
-      className={`flex-row items-center gap-1.5 px-3 py-1 rounded-full border ${
+      className={`flex-row items-center gap-1.5 rounded-full border px-3 py-1 ${
         isClosed
           ? `bg-[${T.successLight}] border-[${T.successBorder}]`
           : `bg-[${T.warningLight}] border-[${T.warningBorder}]`
@@ -337,19 +339,19 @@ const ObservationModal = React.memo(
         onRequestClose={onClose}
       >
         <Pressable
-          className="items-center justify-center flex-1 p-5 bg-black/30"
+          className="flex-1 items-center justify-center bg-black/30 p-5"
           onPress={onClose}
         >
           <Pressable
-            className={`bg-[${T.card}] rounded-2xl w-full max-w-[600px] max-h-[80%] border border-[${T.border}] shadow-lg overflow-hidden`}
+            className={`bg-[${T.card}] max-h-[80%] w-full max-w-[600px] rounded-2xl border border-[${T.border}] overflow-hidden shadow-lg`}
             onPress={() => {}}
           >
             <View
-              className={`p-6 border-b border-[${T.border}] flex-row justify-between items-center`}
+              className={`border-b p-6 border-[${T.border}] flex-row items-center justify-between`}
             >
               <View className="flex-row items-center gap-4">
                 <View
-                  className={`w-11 h-11 rounded-xl bg-[${T.accentLight}] border border-[${T.accentBorder}] items-center justify-center`}
+                  className={`h-11 w-11 rounded-xl bg-[${T.accentLight}] border border-[${T.accentBorder}] items-center justify-center`}
                 >
                   <Feather name="file-text" size={22} color={T.accent} />
                 </View>
@@ -357,14 +359,14 @@ const ObservationModal = React.memo(
                   <Text className="text-lg font-bold text-[#000000]">
                     Observation Details
                   </Text>
-                  <Text className="text-xs text-[#6B7280] mt-1">
+                  <Text className="mt-1 text-xs text-[#6B7280]">
                     NCR: {ncNo}
                   </Text>
                 </View>
               </View>
               <Pressable
                 onPress={onClose}
-                className={`w-9 h-9 rounded-lg border border-[${T.border}] bg-[${T.card}] items-center justify-center`}
+                className={`h-9 w-9 rounded-lg border border-[${T.border}] bg-[${T.card}] items-center justify-center`}
               >
                 <Feather name="x" size={20} color={T.textMuted} />
               </Pressable>
@@ -372,7 +374,7 @@ const ObservationModal = React.memo(
 
             <ScrollView className="flex-1 p-6">
               <Text
-                className="text-[15px] text-[#1F2937] leading-6"
+                className="text-[15px] leading-6 text-[#1F2937]"
                 style={{ fontFamily: FONT_FAMILY }}
               >
                 {observation || "No observation details available."}
@@ -380,7 +382,7 @@ const ObservationModal = React.memo(
             </ScrollView>
 
             <View
-              className={`p-4 border-t border-[${T.border}] bg-[#F8FAFC] items-end`}
+              className={`border-t p-4 border-[${T.border}] items-end bg-[#F8FAFC]`}
             >
               <ActionButton
                 onPress={onClose}
@@ -413,12 +415,12 @@ const CustomSelect = React.memo(
 
     return (
       <View style={{ minWidth: 140, flex: 1 }}>
-        <Text className="text-[11px] font-bold text-[#6B7280] mb-1.5 uppercase tracking-wider">
+        <Text className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
           {label}
         </Text>
         <Pressable
           onPress={() => setIsOpen(true)}
-          className="h-10 px-3.5 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] flex-row justify-between items-center"
+          className="h-10 flex-row items-center justify-between rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-3.5"
         >
           <Text
             className={`text-sm ${value ? "text-[#1F2937]" : "text-[#94A3B8]"}`}
@@ -435,15 +437,15 @@ const CustomSelect = React.memo(
           onRequestClose={() => setIsOpen(false)}
         >
           <Pressable
-            className="items-center justify-center flex-1 p-5 bg-black/30"
+            className="flex-1 items-center justify-center bg-black/30 p-5"
             onPress={() => setIsOpen(false)}
           >
             <View
-              className={`bg-[${T.card}] rounded-xl w-full max-w-[300px] border border-[${T.border}] shadow-lg overflow-hidden`}
+              className={`bg-[${T.card}] w-full max-w-[300px] rounded-xl border border-[${T.border}] overflow-hidden shadow-lg`}
             >
               <ScrollView className="max-h-[300px]">
                 <Pressable
-                  className="p-4 border-b border-[#E2E8F0]"
+                  className="border-b border-[#E2E8F0] p-4"
                   onPress={() => {
                     onChange("");
                     setIsOpen(false);
@@ -456,7 +458,7 @@ const CustomSelect = React.memo(
                 {options.map((opt) => (
                   <Pressable
                     key={opt}
-                    className="p-4 border-b border-[#E2E8F0]"
+                    className="border-b border-[#E2E8F0] p-4"
                     onPress={() => {
                       onChange(opt);
                       setIsOpen(false);
@@ -521,11 +523,11 @@ const FilterPanel = React.memo(
       <Card className="mb-6 overflow-hidden">
         <Pressable
           onPress={() => setIsOpen(!isOpen)}
-          className={`p-4 flex-row justify-between items-center bg-[#F8FAFC] ${isOpen ? `border-b border-[${T.border}]` : ""}`}
+          className={`flex-row items-center justify-between bg-[#F8FAFC] p-4 ${isOpen ? `border-b border-[${T.border}]` : ""}`}
         >
           <View className="flex-row items-center gap-3">
             <View
-              className={`w-8 h-8 rounded-lg bg-[${T.purpleLight}] border border-[${T.purpleBorder}] items-center justify-center`}
+              className={`h-8 w-8 rounded-lg bg-[${T.purpleLight}] border border-[${T.purpleBorder}] items-center justify-center`}
             >
               <Feather name="sliders" size={16} color={T.purple} />
             </View>
@@ -533,7 +535,7 @@ const FilterPanel = React.memo(
               Filters & Search
             </Text>
             {activeFilterCount > 0 && (
-              <View className="w-6 h-6 rounded-full bg-[#8B5CF6] items-center justify-center">
+              <View className="h-6 w-6 items-center justify-center rounded-full bg-[#8B5CF6]">
                 <Text className="text-[11px] font-bold text-white">
                   {activeFilterCount}
                 </Text>
@@ -544,7 +546,7 @@ const FilterPanel = React.memo(
             {activeFilterCount > 0 && (
               <Pressable
                 onPress={onReset}
-                className="h-8 px-3 rounded-md border border-[#E2E8F0] bg-[#FFFFFF] flex-row items-center gap-1.5"
+                className="h-8 flex-row items-center gap-1.5 rounded-md border border-[#E2E8F0] bg-[#FFFFFF] px-3"
               >
                 <Feather name="rotate-cw" size={12} color={T.textValue} />
                 <Text className="text-[13px] font-semibold text-[#1F2937]">
@@ -572,7 +574,7 @@ const FilterPanel = React.memo(
             }}
           >
             <View style={{ flex: 1, minWidth: 200 }}>
-              <Text className="text-[11px] font-bold text-[#6B7280] mb-1.5 uppercase tracking-wider">
+              <Text className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                 Global Search
               </Text>
               <View className="relative">
@@ -587,14 +589,14 @@ const FilterPanel = React.memo(
                   onChangeText={(text) => onFilterChange("search", text)}
                   placeholder="Search any field..."
                   placeholderTextColor="#94A3B8"
-                  className="h-10 pl-10 pr-3.5 text-sm rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] text-[#1F2937]"
+                  className="h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] pl-10 pr-3.5 text-sm text-[#1F2937]"
                   style={{ fontFamily: FONT_FAMILY }}
                 />
               </View>
             </View>
 
             <View style={{ minWidth: 140, flex: 1 }}>
-              <Text className="text-[11px] font-bold text-[#6B7280] mb-1.5 uppercase tracking-wider">
+              <Text className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
                 NCR No.
               </Text>
               <TextInput
@@ -602,7 +604,7 @@ const FilterPanel = React.memo(
                 onChangeText={(text) => onFilterChange("ncNo", text)}
                 placeholder="e.g. NCR-001"
                 placeholderTextColor="#94A3B8"
-                className="h-10 px-3.5 text-sm rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] text-[#1F2937]"
+                className="h-10 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-3.5 text-sm text-[#1F2937]"
                 style={{ fontFamily: FONT_FAMILY }}
               />
             </View>
@@ -677,7 +679,7 @@ function HighlightText({ text, query }: HighlightTextProps) {
         part.toLowerCase() === query.toLowerCase() ? (
           <Text
             key={i}
-            className="bg-[#FEF08A] text-[#713f12] rounded-sm px-0.5"
+            className="rounded-sm bg-[#FEF08A] px-0.5 text-[#713f12]"
           >
             {part}
           </Text>
@@ -707,12 +709,26 @@ const DEFAULT_FILTERS: Filters = {
   dateTo: "",
 };
 
-export default function Form9View({ onBack }: { onBack?: () => void }) {
+const getNcrYear = (ncr: any): number | null => {
+  const raw = ncr?.createdAt || ncr?.raisedDate || ncr?.dueDate;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return d.getFullYear();
+};
+
+export default function Form9View({
+  onBack,
+  selectedYear, // 👈 ADD
+}: {
+  onBack?: () => void;
+  selectedYear?: number; // 👈 ADD
+}) {
   const navigation = useNavigation<NavigationProp<any>>();
   const scrollViewRef = useRef<ScrollView>(null);
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
-
+  const { user } = useAuth();
   const [loading, setLoading] = useState<boolean>(true);
   const [pdfLoading, setPdfLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -729,67 +745,75 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
   }>({ text: "", ncNo: "" });
 
   const fetchNCRSummary = useCallback(async () => {
+    if (!user?.id) return;
+
     setLoading(true);
     setError(null);
+
     try {
-      const token = await AsyncStorage.getItem("token");
-      const response = await fetch(`${API_BASE_URL}/api/ncr/all`, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-          "Content-Type": "application/json",
-        },
-      });
-      if (response.ok) {
-        const ncrList: RawNCR[] = await response.json();
-        const transformedRows: NCRRow[] = ncrList.map((ncr, index) => {
-          const isClosed = isClosedNcrStatus(ncr.status);
-          const correctiveAction = getCorrectiveActionText(ncr);
-          return {
-            srNo: String(index + 1),
-            ncNo: ncr.ncrNumber || `NCR-${index + 1}`,
-            auditDate: ncr.createdAt
-              ? new Date(ncr.createdAt).toLocaleDateString("en-GB")
-              : "",
-            auditDateISO: ncr.createdAt
-              ? new Date(ncr.createdAt).toISOString().split("T")[0]
-              : "",
-            auditorName: ncr.auditorName || "Not Assigned",
-            auditeeName: ncr.auditeeName || "Not Assigned",
-            observation:
-              ncr.statementOfNonconformity || ncr.objectiveEvidence || "",
-            department: ncr.department || "",
-            correctiveAction,
-            audit: ncr.auditType || "IATF",
-            responsibility: ncr.department || "",
-            targetDate: ncr.dueDate || "8/08/2025",
-            implementationStatus: isClosed
-              ? "Done"
-              : correctiveAction !== "Pending"
-                ? "In Progress"
-                : "Pending",
-            status: isClosed ? "Close" : "Open",
-          };
-        });
-        setFormData({
-          title: `Summary of Non Conformity (${new Date().getFullYear()})`,
-          rows: transformedRows,
-        });
-        setSuccess(`Loaded ${transformedRows.length} NCR records`);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setError("Failed to fetch NCR data");
+      // ✅ Plant-scoped: pass user id so backend filters by plant
+      const result = await ncrService.getAllNCRs(user.id);
+
+      if (!result.success) {
+        setError(result.error || "Failed to fetch NCR data");
+        return;
       }
+
+      const rawList = (result.data || []) as RawNCR[];
+      const ncrList: RawNCR[] = selectedYear
+        ? rawList.filter((ncr: any) => {
+            const y = getNcrYear(ncr);
+            return y === null || y === selectedYear;
+          })
+        : rawList;
+      const transformedRows: NCRRow[] = ncrList.map((ncr, index) => {
+        const isClosed = isClosedNcrStatus(ncr.status);
+        const correctiveAction = getCorrectiveActionText(ncr);
+        return {
+          srNo: String(index + 1),
+          ncNo: ncr.ncrNumber || `NCR-${index + 1}`,
+          auditDate: ncr.createdAt
+            ? new Date(ncr.createdAt).toLocaleDateString("en-GB")
+            : "",
+          auditDateISO: ncr.createdAt
+            ? new Date(ncr.createdAt).toISOString().split("T")[0]
+            : "",
+          auditorName: ncr.auditorName || "Not Assigned",
+          auditeeName: ncr.auditeeName || "Not Assigned",
+          observation:
+            ncr.statementOfNonconformity || ncr.objectiveEvidence || "",
+          department: ncr.department || "",
+          correctiveAction,
+          audit: ncr.auditType || "IATF",
+          responsibility: ncr.department || "",
+          targetDate: ncr.dueDate || "8/08/2025",
+          implementationStatus: isClosed
+            ? "Done"
+            : correctiveAction !== "Pending"
+              ? "In Progress"
+              : "Pending",
+          status: isClosed ? "Close" : "Open",
+        };
+      });
+
+      setFormData({
+        title: `Summary of Non Conformity (${new Date().getFullYear()})`,
+        rows: transformedRows,
+      });
+      setSuccess(`Loaded ${transformedRows.length} NCR records`);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       console.error("Error fetching NCRs:", err);
       setError("Cannot connect to server. Please check if backend is running.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
+    if (!user?.id) return;
     fetchNCRSummary();
-  }, [fetchNCRSummary]);
+  }, [user?.id, fetchNCRSummary, selectedYear]);
 
   const filteredRows = useMemo(() => {
     const {
@@ -858,10 +882,43 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
     setPdfLoading(true);
     setError(null);
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await AsyncStorage.getItem("authToken");
+
+      // ✅ Resolve user id for plant-scoped Form 9 PDF
+      let userId: string | null = null;
+      try {
+        if (Platform.OS === "web") {
+          userId =
+            typeof window !== "undefined"
+              ? localStorage.getItem("userId")
+              : null;
+        } else {
+          userId = await AsyncStorage.getItem("userId");
+        }
+        if (!userId) {
+          // Fallback: parse stored "user" object
+          const raw =
+            Platform.OS === "web"
+              ? typeof window !== "undefined"
+                ? localStorage.getItem("user")
+                : null
+              : await AsyncStorage.getItem("user");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.id != null) userId = String(parsed.id);
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ Could not resolve userId:", e);
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/ncr/form9/pdf`, {
         method: "GET",
-        headers: { Authorization: token ? `Bearer ${token}` : "" },
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          // ✅ Plant-scoping for the PDF
+          ...(userId ? { "X-User-Id": String(userId) } : {}),
+        },
       });
       if (!response.ok) {
         const text = await response.text();
@@ -922,7 +979,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#F8FAFC] items-center justify-center">
+      <View className="flex-1 items-center justify-center bg-[#F8FAFC]">
         <Spinner size={40} color={T.accent} />
         <Text className="mt-4 text-[15px] font-bold text-[#000000]">
           Loading NCR Summary...
@@ -934,13 +991,13 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
     );
   }
 
- return (
+  return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-[#F8FAFC]"
     >
       {/* ✅ FULL-WIDTH HEADER - Outside ScrollView */}
-      <View className="w-full px-4 py-4 bg-white border-b border-[#E2E8F0] shadow-sm">
+      <View className="w-full border-b border-[#E2E8F0] bg-white px-4 py-4 shadow-sm">
         <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
           <View
             className="flex-row flex-wrap items-center justify-between"
@@ -957,7 +1014,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                       navigation.goBack(); // ✅ Fallback: Uses React Navigation if no prop is passed
                     }
                   }}
-                  className="w-10 h-10 rounded-lg border border-[#E2E8F0] bg-white items-center justify-center"
+                  className="h-10 w-10 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white"
                 >
                   {({ pressed }) => (
                     <Feather
@@ -983,7 +1040,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
               <Pressable
                 onPress={fetchNCRSummary}
                 disabled={loading}
-                className="flex-row items-center px-4 py-2.5 bg-white border border-[#E2E8F0] shadow-sm rounded-xl active:opacity-70"
+                className="flex-row items-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 shadow-sm active:opacity-70"
                 style={{ opacity: loading ? 0.6 : 1 }}
               >
                 {loading ? (
@@ -1011,21 +1068,21 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
 
       {/* ✅ SCROLLABLE CONTENT */}
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="max-w-[1400px] w-full mx-auto p-6">
+        <View className="mx-auto w-full max-w-[1400px] p-6">
           {/* Alerts */}
           {success && (
             <View
-              className={`p-4 bg-[${T.successLight}] border border-[${T.successBorder}] rounded-xl mb-6 flex-row gap-3 items-center`}
+              className={`p-4 bg-[${T.successLight}] border border-[${T.successBorder}] mb-6 flex-row items-center gap-3 rounded-xl`}
             >
               <Feather name="check-circle" size={20} color={T.success} />
-              <Text className="text-sm font-semibold text-[#065F46] flex-1">
+              <Text className="flex-1 text-sm font-semibold text-[#065F46]">
                 {success}
               </Text>
             </View>
           )}
           {error && (
             <View
-              className={`p-4 bg-[${T.errorLight}] border border-[${T.errorBorder}] rounded-xl mb-6 flex-row gap-3 items-start`}
+              className={`p-4 bg-[${T.errorLight}] border border-[${T.errorBorder}] mb-6 flex-row items-start gap-3 rounded-xl`}
             >
               <Feather
                 name="alert-circle"
@@ -1037,7 +1094,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                 <Text className="text-sm font-semibold text-[#991B1B]">
                   Error
                 </Text>
-                <Text className="text-sm text-[#991B1B] opacity-90 mt-1">
+                <Text className="mt-1 text-sm text-[#991B1B] opacity-90">
                   {error}
                 </Text>
               </View>
@@ -1046,11 +1103,11 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
 
           {/* Title Card */}
           <View
-            className={`bg-[${T.card}] border border-[${T.border}] rounded-xl p-6 mb-6 shadow-sm flex-row justify-between items-center flex-wrap gap-4`}
+            className={`bg-[${T.card}] border border-[${T.border}] mb-6 flex-row flex-wrap items-center justify-between gap-4 rounded-xl p-6 shadow-sm`}
           >
             <View className="flex-row items-center gap-4">
               <View
-                className={`w-12 h-12 rounded-xl bg-[${T.successLight}] border border-[${T.successBorder}] items-center justify-center`}
+                className={`h-12 w-12 rounded-xl bg-[${T.successLight}] border border-[${T.successBorder}] items-center justify-center`}
               >
                 <Feather name="grid" size={24} color={T.success} />
               </View>
@@ -1058,13 +1115,13 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                 <Text className="text-xl font-bold text-[#000000]">
                   {formData.title}
                 </Text>
-                <Text className="text-sm text-[#6B7280] mt-1">
+                <Text className="mt-1 text-sm text-[#6B7280]">
                   Total Records:{" "}
                   <Text className="font-semibold text-[#1F2937]">
                     {formData.rows.length}
                   </Text>
                   {activeFilterCount > 0 && (
-                    <Text className="ml-2 text-[#8B5CF6] font-semibold">
+                    <Text className="ml-2 font-semibold text-[#8B5CF6]">
                       · {filteredRows.length} filtered
                     </Text>
                   )}
@@ -1094,14 +1151,14 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
           {/* No Results */}
           {activeFilterCount > 0 && filteredRows.length === 0 && (
             <View
-              className={`p-4 bg-[${T.warningLight}] border border-[${T.warningBorder}] rounded-xl mb-6 flex-row gap-3 items-center`}
+              className={`p-4 bg-[${T.warningLight}] border border-[${T.warningBorder}] mb-6 flex-row items-center gap-3 rounded-xl`}
             >
               <Feather name="filter" size={20} color={T.warning} />
               <View className="flex-1">
                 <Text className="text-sm font-semibold text-[#92400E]">
                   No records match your filters
                 </Text>
-                <Text className="text-xs text-[#92400E] opacity-90 mt-1">
+                <Text className="mt-1 text-xs text-[#92400E] opacity-90">
                   Try adjusting or clearing the active filters.
                 </Text>
               </View>
@@ -1115,10 +1172,10 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
 
           {/* Table Card */}
           <View
-            className={`bg-[${T.card}] border border-[${T.border}] rounded-xl shadow-sm overflow-hidden`}
+            className={`bg-[${T.card}] border border-[${T.border}] overflow-hidden rounded-xl shadow-sm`}
           >
             <View
-              className={`p-4 border-b border-[${T.border}] bg-[#F8FAFC] flex-row justify-between items-center`}
+              className={`border-b p-4 border-[${T.border}] flex-row items-center justify-between bg-[#F8FAFC]`}
             >
               <View className="flex-row items-center gap-3">
                 <Feather name="layers" size={18} color={T.textMuted} />
@@ -1129,14 +1186,14 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
               <View className="flex-row items-center gap-2">
                 {activeFilterCount > 0 && (
                   <View
-                    className={`px-2.5 py-1 rounded-full bg-[${T.purpleLight}] border border-[${T.purpleBorder}]`}
+                    className={`rounded-full px-2.5 py-1 bg-[${T.purpleLight}] border border-[${T.purpleBorder}]`}
                   >
                     <Text className="text-xs font-semibold text-[#5B21B6]">
                       {filteredRows.length} / {formData.rows.length} shown
                     </Text>
                   </View>
                 )}
-                <View className="px-2.5 py-1 rounded-full bg-[#F1F5F9] border border-[#E2E8F0]">
+                <View className="rounded-full border border-[#E2E8F0] bg-[#F1F5F9] px-2.5 py-1">
                   <Text className="text-xs font-semibold text-[#6B7280]">
                     {formData.rows.length} rows
                   </Text>
@@ -1147,7 +1204,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
             {/* Scroll Controls */}
             {filteredRows.length > 0 && (
               <View
-                className={`border-b border-[${T.border}] bg-[${T.card}] flex-row justify-between items-center ${isDesktop ? "p-4" : "p-3"}`}
+                className={`border-b border-[${T.border}] bg-[${T.card}] flex-row items-center justify-between ${isDesktop ? "p-4" : "p-3"}`}
               >
                 <View className="flex-row items-center gap-2">
                   <Feather
@@ -1165,11 +1222,11 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                 </View>
 
                 <View
-                  className={`flex-row items-center bg-[#F8FAFC] rounded-lg border border-[${T.border}] overflow-hidden`}
+                  className={`flex-row items-center rounded-lg border bg-[#F8FAFC] border-[${T.border}] overflow-hidden`}
                 >
                   <Pressable
                     onPress={() => scrollTable("left")}
-                    className={`items-center justify-center border-r border-[${T.border}] active:bg-[#E2E8F0] ${isDesktop ? "w-10 h-10" : "w-9 h-9"}`}
+                    className={`items-center justify-center border-r border-[${T.border}] active:bg-[#E2E8F0] ${isDesktop ? "h-10 w-10" : "h-9 w-9"}`}
                   >
                     <Feather
                       name="chevron-left"
@@ -1179,7 +1236,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                   </Pressable>
                   <Pressable
                     onPress={() => scrollTable("right")}
-                    className={`items-center justify-center active:bg-[#E2E8F0] ${isDesktop ? "w-10 h-10" : "w-9 h-9"}`}
+                    className={`items-center justify-center active:bg-[#E2E8F0] ${isDesktop ? "h-10 w-10" : "h-9 w-9"}`}
                   >
                     <Feather
                       name="chevron-right"
@@ -1199,72 +1256,72 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
             >
               <View className="w-[1680px]">
                 {/* Header */}
-                <View className="flex-row bg-[#F8FAFC] border-b-2 border-[#E2E8F0]">
-                  <View className="w-[60px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                <View className="flex-row border-b-2 border-[#E2E8F0] bg-[#F8FAFC]">
+                  <View className="w-[60px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Sr.
                     </Text>
                   </View>
-                  <View className="w-[110px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[110px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       NCR No.
                     </Text>
                   </View>
-                  <View className="w-[100px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[100px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Audit Date
                     </Text>
                   </View>
-                  <View className="w-[140px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[140px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Auditor Name
                     </Text>
                   </View>
-                  <View className="w-[140px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[140px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Auditee Name
                     </Text>
                   </View>
-                  <View className="w-[250px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[250px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Observation
                     </Text>
-                    <Text className="text-[10px] font-normal text-[#6B7280] lowercase">
+                    <Text className="text-[10px] font-normal lowercase text-[#6B7280]">
                       Description of non conformity
                     </Text>
                   </View>
-                  <View className="w-[100px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[100px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Dept.
                     </Text>
                   </View>
-                  <View className="w-[200px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[200px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Corrective Action
                     </Text>
                   </View>
-                  <View className="w-[100px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[100px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Audit
                     </Text>
                   </View>
-                  <View className="w-[120px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[120px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Responsibility
                     </Text>
                   </View>
-                  <View className="w-[110px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[110px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Target Date
                     </Text>
                   </View>
-                  <View className="w-[130px] p-3 border-r border-[#E2E8F0] shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider">
+                  <View className="w-[130px] shrink-0 border-r border-[#E2E8F0] p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Impl. Status
                     </Text>
                   </View>
-                  <View className="w-[120px] p-3 shrink-0">
-                    <Text className="text-[11px] font-bold text-[#000000] uppercase tracking-wider text-center">
+                  <View className="w-[120px] shrink-0 p-3">
+                    <Text className="text-center text-[11px] font-bold uppercase tracking-wider text-[#000000]">
                       Status
                     </Text>
                   </View>
@@ -1272,7 +1329,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
 
                 {/* Rows */}
                 {filteredRows.length === 0 ? (
-                  <View className="items-center w-full p-10">
+                  <View className="w-full items-center p-10">
                     <Text className="text-sm text-[#6B7280]">
                       {formData.rows.length === 0
                         ? "No NCR records found"
@@ -1285,7 +1342,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                       key={`${row.ncNo}-${index}`}
                       className="flex-row border-b border-[#E2E8F0]"
                     >
-                      <View className="w-[60px] p-3.5 border-r border-[#E2E8F0] bg-white shrink-0">
+                      <View className="w-[60px] shrink-0 border-r border-[#E2E8F0] bg-white p-3.5">
                         <Text
                           className="text-sm text-[#6B7280]"
                           style={{ fontFamily: "monospace" }}
@@ -1293,19 +1350,19 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           {index + 1}
                         </Text>
                       </View>
-                      <View className="w-[110px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[110px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <HighlightText
                           text={row.ncNo}
                           query={filters.search || filters.ncNo}
                         />
                       </View>
-                      <View className="w-[100px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[100px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <HighlightText
                           text={row.auditDate || "—"}
                           query={filters.search}
                         />
                       </View>
-                      <View className="w-[140px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[140px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <Text numberOfLines={1} ellipsizeMode="tail">
                           <HighlightText
                             text={row.auditorName}
@@ -1313,7 +1370,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           />
                         </Text>
                       </View>
-                      <View className="w-[140px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[140px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <Text numberOfLines={1} ellipsizeMode="tail">
                           <HighlightText
                             text={row.auditeeName}
@@ -1321,7 +1378,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           />
                         </Text>
                       </View>
-                      <View className="w-[250px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[250px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <View className="flex-row items-start gap-2">
                           <View className="flex-1">
                             <Text numberOfLines={2} ellipsizeMode="tail">
@@ -1336,7 +1393,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                               onPress={() =>
                                 handleOpenObservation(row.observation, row.ncNo)
                               }
-                              className={`w-7 h-7 rounded-md border border-[${T.accentBorder}] bg-[${T.accentLight}] items-center justify-center shrink-0`}
+                              className={`h-7 w-7 rounded-md border border-[${T.accentBorder}] bg-[${T.accentLight}] shrink-0 items-center justify-center`}
                             >
                               <Feather
                                 name="maximize-2"
@@ -1347,13 +1404,13 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           )}
                         </View>
                       </View>
-                      <View className="w-[100px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[100px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <HighlightText
                           text={row.department || "—"}
                           query={filters.search}
                         />
                       </View>
-                      <View className="w-[200px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[200px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <Text numberOfLines={2} ellipsizeMode="tail">
                           <HighlightText
                             text={row.correctiveAction || "—"}
@@ -1361,13 +1418,13 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           />
                         </Text>
                       </View>
-                      <View className="w-[100px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[100px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <HighlightText
                           text={row.audit || "—"}
                           query={filters.search}
                         />
                       </View>
-                      <View className="w-[120px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[120px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <Text numberOfLines={1} ellipsizeMode="tail">
                           <HighlightText
                             text={row.responsibility || "—"}
@@ -1375,18 +1432,18 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
                           />
                         </Text>
                       </View>
-                      <View className="w-[110px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[110px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <Text className="text-sm text-[#1F2937]">
                           {row.targetDate || "—"}
                         </Text>
                       </View>
-                      <View className="w-[130px] p-3.5 justify-center border-r border-[#E2E8F0] shrink-0">
+                      <View className="w-[130px] shrink-0 justify-center border-r border-[#E2E8F0] p-3.5">
                         <HighlightText
                           text={row.implementationStatus || "—"}
                           query={filters.search}
                         />
                       </View>
-                      <View className="w-[120px] p-3.5 items-center justify-center shrink-0">
+                      <View className="w-[120px] shrink-0 items-center justify-center p-3.5">
                         <StatusBadge status={row.status} />
                       </View>
                     </View>
@@ -1398,7 +1455,7 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
             {/* Footer */}
             {filteredRows.length > 0 && (
               <View
-                className={`p-3 bg-[#F8FAFC] border-t border-[${T.border}] flex-row justify-between items-center`}
+                className={`border-t bg-[#F8FAFC] p-3 border-[${T.border}] flex-row items-center justify-between`}
               >
                 <Text className="text-xs text-[#6B7280]">
                   Showing{" "}
@@ -1428,8 +1485,8 @@ export default function Form9View({ onBack }: { onBack?: () => void }) {
           </View>
 
           {/* Helper Text */}
-          <View className="items-center mt-6 mb-8">
-            <Text className="text-xs text-[#6B7280] text-center">
+          <View className="mb-8 mt-6 items-center">
+            <Text className="text-center text-xs text-[#6B7280]">
               💡 <Text className="font-semibold">Tip:</Text> Use the Filters &
               Search panel to narrow results • Click the maximize icon to view
               full observation details

@@ -1,3 +1,4 @@
+import PDFViewer from "@/components/audit/PDFViewer";
 import { useAuth } from "@/components/context/AuthContext";
 import FinalPreview from "@/components/eightd/steps/FinalPreview";
 import { API_BASE_URL } from "@/config/apiConfig";
@@ -42,6 +43,16 @@ import {
 import Form8View from "../../auditee/Form8View";
 
 // ─────────────────────────────────────────────────────────────
+// ✅ Build auth headers consistently
+// ─────────────────────────────────────────────────────────────
+const getAuthHeaders = (user: any) => {
+  return {
+    "X-User-Id": user?.id != null ? String(user.id) : "",
+    "X-Timezone":
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+  };
+};
+// ─────────────────────────────────────────────────────────────
 // COLOR PALETTE & STYLES
 // ─────────────────────────────────────────────────────────────
 const COLORS = {
@@ -60,17 +71,19 @@ const COLORS = {
 // ─────────────────────────────────────────────────────────────
 // ✅ UTC TO IST CONVERTER
 // ─────────────────────────────────────────────────────────────
-const convertUTCToIST = (utcDateString: string | null | undefined): string | null => {
+const convertUTCToIST = (
+  utcDateString: string | null | undefined,
+): string | null => {
   if (!utcDateString) return null;
-  
+
   try {
     const date = new Date(utcDateString);
     if (isNaN(date.getTime())) return null;
-    
+
     // IST is UTC + 5:30
     const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
     const istDate = new Date(date.getTime() + istOffset);
-    
+
     return istDate.toLocaleString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -91,11 +104,11 @@ const convertUTCToIST = (utcDateString: string | null | undefined): string | nul
 // ─────────────────────────────────────────────────────────────
 const formatDateIST = (dateString: string | null | undefined): string => {
   if (!dateString) return "—";
-  
+
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "—";
-    
+
     return date.toLocaleDateString("en-IN", {
       day: "2-digit",
       month: "short",
@@ -130,7 +143,7 @@ const BackButton = ({
 }) => (
   <TouchableOpacity
     onPress={onPress}
-    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border rounded-xl shadow-sm border-slate-200"
+    className="flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
   >
     <ArrowLeft size={16} color="#334155" />
     <Text className="font-serif text-sm font-medium text-slate-700">
@@ -211,7 +224,7 @@ const StatusBadge = ({ status }: { status: string }) => {
   const { bg, text, icon: Icon, label } = config[status] || config.OPEN;
   return (
     <View
-      className={`flex-row items-center gap-1.5 px-3 py-1 rounded-full ${bg}`}
+      className={`flex-row items-center gap-1.5 rounded-full px-3 py-1 ${bg}`}
     >
       <Icon size={12} color={getIconColor(text)} />
       <Text className={`text-xs font-semibold ${text} font-serif`}>
@@ -222,12 +235,12 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 const InfoCard = ({ icon: Icon, label, value }: any) => (
-  <View className="flex-row items-start gap-3 p-3 border border-gray-100 bg-gray-50 rounded-xl">
-    <View className="p-2 bg-white rounded-lg shadow-sm">
+  <View className="flex-row items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+    <View className="rounded-lg bg-white p-2 shadow-sm">
       <Icon size={16} color="#ef4444" />
     </View>
     <View className="flex-1">
-      <Text className="font-serif text-xs tracking-wider text-gray-500 uppercase">
+      <Text className="font-serif text-xs uppercase tracking-wider text-gray-500">
         {label}
       </Text>
       <Text className="font-serif text-sm font-semibold text-gray-800">
@@ -238,8 +251,8 @@ const InfoCard = ({ icon: Icon, label, value }: any) => (
 );
 
 const FormSection = ({ title, children }: any) => (
-  <View className="px-4 py-5 border-b border-gray-100">
-    <View className="self-start pb-2 mb-4 border-b-2 border-red-500">
+  <View className="border-b border-gray-100 px-4 py-5">
+    <View className="mb-4 self-start border-b-2 border-red-500 pb-2">
       <Text className="font-serif text-base font-bold text-gray-800">
         {title}
       </Text>
@@ -249,12 +262,12 @@ const FormSection = ({ title, children }: any) => (
 );
 
 const DetailRow = ({ label, value, multiline = false }: any) => (
-  <View className="pb-2 mb-3 border-b border-gray-50">
-    <Text className="mb-1 font-serif text-xs font-semibold tracking-wider text-gray-500 uppercase">
+  <View className="mb-3 border-b border-gray-50 pb-2">
+    <Text className="mb-1 font-serif text-xs font-semibold uppercase tracking-wider text-gray-500">
       {label}
     </Text>
     {multiline ? (
-      <View className="p-3 rounded-lg bg-gray-50">
+      <View className="rounded-lg bg-gray-50 p-3">
         <Text className="font-serif text-sm leading-relaxed text-gray-800">
           {value || "—"}
         </Text>
@@ -287,15 +300,15 @@ const SignatureField = ({
   }
 
   return (
-    <View className="items-center w-full">
-      <Text className="mb-2 font-serif text-xs font-semibold tracking-wider text-gray-600 uppercase">
+    <View className="w-full items-center">
+      <Text className="mb-2 font-serif text-xs font-semibold uppercase tracking-wider text-gray-600">
         {label}
       </Text>
 
       {signature &&
       (signature.startsWith("data:image") || signature.startsWith("http")) ? (
         <View
-          className="w-full p-2 border border-gray-200 rounded-lg bg-gray-50"
+          className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2"
           style={{
             minHeight: 60,
             alignItems: "center",
@@ -315,14 +328,14 @@ const SignatureField = ({
           />
         </View>
       ) : pending ? (
-        <View className="flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded-lg border-amber-300 bg-amber-50">
+        <View className="h-20 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-amber-300 bg-amber-50">
           <Clock size={20} color="#f59e0b" style={{ marginBottom: 4 }} />
           <Text className="font-serif text-xs font-medium text-amber-600">
             Pending Acknowledgement
           </Text>
         </View>
       ) : (
-        <View className="w-full h-20 border-2 border-gray-300 border-dashed rounded-lg bg-gray-50" />
+        <View className="h-20 w-full rounded-lg border-2 border-dashed border-gray-300 bg-gray-50" />
       )}
 
       <Text className="mt-2 font-serif text-xs font-medium text-gray-500">
@@ -330,7 +343,7 @@ const SignatureField = ({
       </Text>
 
       {formattedTimestamp && (
-        <View className="flex-row items-center justify-center gap-1 mt-1">
+        <View className="mt-1 flex-row items-center justify-center gap-1">
           <Clock size={11} color="#9ca3af" />
           <Text className="font-serif text-xs text-gray-400">
             {formattedTimestamp}
@@ -370,8 +383,8 @@ const ReviewModal = ({
 
   return (
     <Modal visible={true} transparent animationType="fade">
-      <View className="items-center justify-center flex-1 bg-black/50">
-        <View className="w-full max-w-md mx-4 overflow-hidden bg-white shadow-2xl rounded-2xl">
+      <View className="flex-1 items-center justify-center bg-black/50">
+        <View className="mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
           <View
             className="flex-row items-center justify-between px-5 py-4"
             style={{ backgroundColor: "rgba(220, 38, 38, 0.1)" }}
@@ -386,14 +399,14 @@ const ReviewModal = ({
                   ? "Rejecting..."
                   : title}
             </Text>
-            <TouchableOpacity onPress={onClose} className="p-1 rounded-lg">
+            <TouchableOpacity onPress={onClose} className="rounded-lg p-1">
               <X size={20} color="rgba(220, 38, 38, 0.7)" />
             </TouchableOpacity>
           </View>
 
           <ScrollView className="p-5" keyboardShouldPersistTaps="handled">
             <View
-              className="p-3 mb-4 rounded-lg"
+              className="mb-4 rounded-lg p-3"
               style={{
                 backgroundColor: "rgba(220, 38, 38, 0.05)",
                 borderWidth: 1,
@@ -420,13 +433,13 @@ const ReviewModal = ({
 
             {ncr?.auditScore != null && (
               <View
-                className="p-4 mb-4 border rounded-xl"
+                className="mb-4 rounded-xl border p-4"
                 style={{
                   backgroundColor: ncr.auditScore >= 70 ? "#f0fdf4" : "#fef2f2",
                   borderColor: ncr.auditScore >= 70 ? "#bbf7d0" : "#fecaca",
                 }}
               >
-                <View className="flex-row items-center justify-between mb-2">
+                <View className="mb-2 flex-row items-center justify-between">
                   <View>
                     <Text className="text-xs font-medium text-slate-500">
                       Audit Score
@@ -440,15 +453,15 @@ const ReviewModal = ({
                       {ncr.auditScore}%
                     </Text>
                   </View>
-                  <View className="items-end flex-1 pl-2">
-                    <Text className="text-xs text-right text-slate-600">
+                  <View className="flex-1 items-end pl-2">
+                    <Text className="text-right text-xs text-slate-600">
                       {ncr.auditScore >= 70
                         ? "✅ Above threshold - Normal NCR flow"
                         : "⚠️ Below threshold - Requires 8D process"}
                     </Text>
                   </View>
                 </View>
-                <View className="w-full bg-white rounded-full h-1.5 overflow-hidden">
+                <View className="h-1.5 w-full overflow-hidden rounded-full bg-white">
                   <View
                     className="h-1.5 rounded-full"
                     style={{
@@ -463,7 +476,7 @@ const ReviewModal = ({
 
             {ncr?.auditScore != null && ncr.auditScore < 70 && (
               <View
-                className="flex-row items-start gap-3 p-3 mb-4 border rounded-xl"
+                className="mb-4 flex-row items-start gap-3 rounded-xl border p-3"
                 style={{ backgroundColor: "#faf5ff", borderColor: "#e9d5ff" }}
               >
                 <TouchableOpacity
@@ -471,7 +484,7 @@ const ReviewModal = ({
                   className="mt-0.5"
                 >
                   <View
-                    className={`w-4 h-4 rounded border items-center justify-center ${sendTo8D ? "bg-purple-600 border-purple-600" : "bg-white border-slate-300"}`}
+                    className={`h-4 w-4 items-center justify-center rounded border ${sendTo8D ? "border-purple-600 bg-purple-600" : "border-slate-300 bg-white"}`}
                   >
                     {sendTo8D && <CheckCircle size={12} color="#fff" />}
                   </View>
@@ -504,7 +517,7 @@ const ReviewModal = ({
               <TextInput
                 multiline
                 numberOfLines={4}
-                className="w-full p-3 font-serif border rounded-xl"
+                className="w-full rounded-xl border p-3 font-serif"
                 style={{
                   borderColor: "rgba(209, 213, 219, 0.5)",
                   backgroundColor: "rgba(255, 255, 255, 0.9)",
@@ -520,7 +533,7 @@ const ReviewModal = ({
               <TouchableOpacity
                 onPress={() => handleReview(false)}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-xl flex-row items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 disabled:opacity-50"
                 style={{ backgroundColor: "rgba(220, 38, 38, 0.8)" }}
               >
                 {loading && decision === "reject" && (
@@ -534,7 +547,7 @@ const ReviewModal = ({
               <TouchableOpacity
                 onPress={() => handleReview(true)}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 rounded-xl flex-row items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 disabled:opacity-50"
                 style={{ backgroundColor: "rgba(16, 185, 129, 0.8)" }}
               >
                 {loading && decision === "approve" && (
@@ -563,13 +576,13 @@ const AuditeeReviewModal = ({
 }: any) => {
   return (
     <Modal visible={true} transparent animationType="fade">
-      <View className="items-center justify-center flex-1 bg-black/50">
-        <View className="w-full max-w-md mx-4 overflow-hidden bg-white shadow-2xl rounded-2xl">
+      <View className="flex-1 items-center justify-center bg-black/50">
+        <View className="mx-4 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
           <View
-            className="items-center px-6 pt-8 pb-6"
+            className="items-center px-6 pb-6 pt-8"
             style={{ backgroundColor: COLORS.bg }}
           >
-            <View className="items-center justify-center w-16 h-16 mb-4 bg-white rounded-full shadow-lg">
+            <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg">
               <Users size={32} color={COLORS.primary} />
             </View>
             <Text className="font-serif text-xl font-bold text-slate-800">
@@ -583,7 +596,7 @@ const AuditeeReviewModal = ({
             </Text>
             <TouchableOpacity
               onPress={onClose}
-              className="absolute p-2 rounded-lg top-4 right-4"
+              className="absolute right-4 top-4 rounded-lg p-2"
             >
               <X size={18} color="#64748b" />
             </TouchableOpacity>
@@ -591,7 +604,7 @@ const AuditeeReviewModal = ({
 
           <ScrollView className="p-6" keyboardShouldPersistTaps="handled">
             <View className="mb-5">
-              <View className="items-center p-3 border rounded-xl bg-slate-50 border-slate-200">
+              <View className="items-center rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <Text className="mb-1 font-serif text-xs text-slate-500">
                   Department
                 </Text>
@@ -612,7 +625,7 @@ const AuditeeReviewModal = ({
               <TextInput
                 multiline
                 numberOfLines={4}
-                className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white shadow-sm font-serif"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-serif text-sm shadow-sm"
                 placeholder="Enter your review comments..."
                 placeholderTextColor="#94a3b8"
                 value={reviewComment}
@@ -624,7 +637,7 @@ const AuditeeReviewModal = ({
               <TouchableOpacity
                 onPress={() => onReview(false, reviewComment)}
                 disabled={loading}
-                className="flex-1 flex-row items-center justify-center gap-2 px-4 py-2.5 rounded-xl disabled:opacity-50 shadow-md"
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
                 style={{ backgroundColor: COLORS.danger }}
               >
                 {loading ? (
@@ -639,7 +652,7 @@ const AuditeeReviewModal = ({
               <TouchableOpacity
                 onPress={() => onReview(true, reviewComment)}
                 disabled={loading}
-                className="flex-1 flex-row items-center justify-center gap-2 px-4 py-2.5 rounded-xl disabled:opacity-50 shadow-md"
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
                 style={{ backgroundColor: COLORS.secondary }}
               >
                 {loading ? (
@@ -697,6 +710,34 @@ export default function Form7DetailView({
   const [loading8DReport, setLoading8DReport] = useState(false);
   const [activeForm8DetailConfig, setActiveForm8DetailConfig] =
     useState<any>(null);
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
+  // ✅ 1. Add state for users
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+
+  // ✅ 2. Fetch users on mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/users`, {
+          headers: {
+            Accept: "application/json",
+            ...getAuthHeaders(user), // ✅ ADD
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setAllUsers(Array.isArray(data) ? data : data.users || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users for email:", error);
+      }
+    };
+    fetchUsers();
+  }, [user?.id]); // 👈 also add user.id as dependency
 
   const fetchSignature = async (userId: string | number, fullName?: string) => {
     try {
@@ -722,7 +763,10 @@ export default function Form7DetailView({
 
       if (Platform.OS === "web") {
         const response = await fetch(url, {
-          headers: { Accept: "image/png, image/jpeg, application/json" },
+          headers: {
+            Accept: "image/png, image/jpeg, application/json",
+            ...getAuthHeaders(user), // ✅ ADD
+          },
         });
 
         if (response.ok) {
@@ -761,10 +805,12 @@ export default function Form7DetailView({
           url,
           fileUri,
           {
-            headers: { Accept: "image/png, image/jpeg, application/json" },
+            headers: {
+              Accept: "image/png, image/jpeg, application/json",
+              ...getAuthHeaders(user), // ✅ ADD
+            },
           },
         );
-
         const downloadResult = await downloadResumable.downloadAsync();
 
         if (!downloadResult || downloadResult.status !== 200) {
@@ -874,14 +920,17 @@ export default function Form7DetailView({
         const AsyncStorage = (
           await import("@react-native-async-storage/async-storage")
         ).default;
-        token = await AsyncStorage.getItem("token");
+        token = await AsyncStorage.getItem("authToken");
       }
 
       const url = `${API_BASE_URL}/api/ncr/${ncr.id}/form7-pdf`;
 
       if (Platform.OS === "web") {
         const response = await fetch(url, {
-          headers: { Authorization: token ? `Bearer ${token}` : "" },
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            ...getAuthHeaders(user), // ✅ ADD
+          },
         });
         if (response.ok) {
           const blob = await response.blob();
@@ -905,6 +954,57 @@ export default function Form7DetailView({
     }
   };
 
+  const handleViewPDF = async () => {
+    if (!ncr?.id) {
+      Alert.alert("Error", "NCR ID not found");
+      return;
+    }
+    setPdfDownloading(true);
+    try {
+      let token = null;
+      if (Platform.OS === "web") {
+        token = localStorage.getItem("token");
+      } else {
+        const AsyncStorage = (
+          await import("@react-native-async-storage/async-storage")
+        ).default;
+        token = await AsyncStorage.getItem("authToken");
+      }
+
+      const url = `${API_BASE_URL}/api/ncr/${ncr.id}/form7-pdf`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          ...getAuthHeaders(user), // ✅ ADD
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch PDF");
+
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      setPDFViewer({
+        visible: true,
+        pdfData: base64,
+        fileName: `Form7_NCR_${ncr.ncrNumber || ncr.id}.pdf`,
+      });
+    } catch (err) {
+      console.error("PDF view error:", err);
+      Alert.alert("Error", "Failed to load PDF");
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
   const handleReview = async (approved: boolean, comment: string) => {
     setReviewLoading(true);
     setError(null);
@@ -964,6 +1064,9 @@ export default function Form7DetailView({
       try {
         const response = await fetch(
           `${API_BASE_URL}/api/eightd/data/${encodeURIComponent(candidate as string)}`,
+          {
+            headers: getAuthHeaders(user), // ✅ ADD
+          },
         );
         const data = await response.json();
         if (response.ok && data?.success && data?.data) return candidate;
@@ -974,6 +1077,9 @@ export default function Form7DetailView({
 
     const response = await fetch(
       `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
+      {
+        headers: getAuthHeaders(user), // ✅ ADD
+      },
     );
     const data = await response.json();
     const events = Array.isArray(data?.data) ? data.data : [];
@@ -1082,7 +1188,7 @@ export default function Form7DetailView({
   if (loading) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1 bg-gray-50"
+        className="flex-1 items-center justify-center bg-gray-50"
         style={{ flex: 1 }}
       >
         <View className="items-center">
@@ -1098,19 +1204,19 @@ export default function Form7DetailView({
   if (error || !ncr) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1 bg-gray-50"
+        className="flex-1 items-center justify-center bg-gray-50"
         style={{ flex: 1 }}
       >
-        <View className="items-center max-w-md p-8 mx-4 bg-white shadow-lg rounded-2xl">
+        <View className="mx-4 max-w-md items-center rounded-2xl bg-white p-8 shadow-lg">
           <AlertCircle size={48} color="#ef4444" className="mb-4" />
-          <Text className="mb-4 font-serif text-center text-gray-600">
+          <Text className="mb-4 text-center font-serif text-gray-600">
             {error || "NCR not found"}
           </Text>
           <TouchableOpacity
             onPress={() =>
               onClose ? onClose() : router.replace(dashboardPath as any)
             }
-            className="px-5 py-2.5 bg-red-500 rounded-xl"
+            className="rounded-xl bg-red-500 px-5 py-2.5"
           >
             <Text className="font-serif font-medium text-white">
               Back to Dashboard
@@ -1137,7 +1243,7 @@ export default function Form7DetailView({
           contentContainerClassName="p-4"
         >
           {/* Top Action Bar */}
-          <View className="flex-row flex-wrap items-center justify-between w-full max-w-5xl gap-3 mx-auto mb-5">
+          <View className="mx-auto mb-5 w-full max-w-5xl flex-row flex-wrap items-center justify-between gap-3">
             <BackButton
               label="Back"
               onPress={() =>
@@ -1149,7 +1255,7 @@ export default function Form7DetailView({
               <TouchableOpacity
                 onPress={downloadPDF}
                 disabled={pdfDownloading}
-                className="flex-row items-center gap-2 px-3 py-2.5 rounded-xl shadow-sm disabled:opacity-50"
+                className="flex-row items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm disabled:opacity-50"
                 style={{ backgroundColor: COLORS.primary }}
               >
                 {pdfDownloading ? (
@@ -1161,18 +1267,34 @@ export default function Form7DetailView({
                   Download PDF
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleViewPDF}
+                disabled={pdfDownloading}
+                className="flex-row items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm disabled:opacity-50"
+                style={{ backgroundColor: "#8B5CF6" }}
+              >
+                {pdfDownloading ? (
+                  <Loader2 size={18} color="#fff" />
+                ) : (
+                  <FileText size={18} color="#fff" />
+                )}
+                <Text className="font-serif text-sm font-medium text-white">
+                  View PDF
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
           {/* Main Form Card */}
-          <View className="w-full max-w-5xl mx-auto overflow-hidden bg-white shadow-xl rounded-2xl">
+          <View className="mx-auto w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl">
             {/* Header */}
             <View
               className="px-4 py-5"
               style={{ backgroundColor: COLORS.primary }}
             >
               <View className="flex-row flex-wrap items-start justify-between gap-4">
-                <View className="flex-1 min-w-[200px]">
+                <View className="min-w-[200px] flex-1">
                   <Text className="font-serif text-lg font-bold text-white">
                     Nonconformity Report (NCR)
                   </Text>
@@ -1193,7 +1315,7 @@ export default function Form7DetailView({
             </View>
 
             {/* Info Cards Row - ✅ UPDATED: Due Date with IST conversion */}
-            <View className="px-4 py-4 border-b border-gray-100 bg-gray-50">
+            <View className="border-b border-gray-100 bg-gray-50 px-4 py-4">
               <View className="flex-row flex-wrap gap-3">
                 <View className="w-[48%] md:w-[23%]">
                   <InfoCard
@@ -1248,7 +1370,7 @@ export default function Form7DetailView({
             {/* Section 2: Acknowledgement & Signatures */}
             <FormSection title="✍️ Acknowledgement">
               <View className="flex-row flex-wrap gap-6">
-                <View className="flex-1 min-w-[45%]">
+                <View className="min-w-[45%] flex-1">
                   <SignatureField
                     label="Auditor Signature"
                     name={ncr.auditorName}
@@ -1256,7 +1378,7 @@ export default function Form7DetailView({
                     timestamp={ncr.createdAt || ncr.auditorSignedAt || null}
                   />
                 </View>
-                <View className="flex-1 min-w-[45%]">
+                <View className="min-w-[45%] flex-1">
                   <SignatureField
                     label="Auditee Representative"
                     name={ncr.auditeeName}
@@ -1274,13 +1396,13 @@ export default function Form7DetailView({
 
             {/* Manager Comment Section */}
             {ncr.managerReviewComment && (
-              <View className="px-4 py-4 border-b border-blue-100 bg-blue-50">
+              <View className="border-b border-blue-100 bg-blue-50 px-4 py-4">
                 <View className="flex-row gap-3">
-                  <View className="p-2 bg-blue-100 rounded-lg">
+                  <View className="rounded-lg bg-blue-100 p-2">
                     <AlertCircle size={18} color="#2563eb" />
                   </View>
                   <View className="flex-1">
-                    <Text className="font-serif text-xs font-semibold tracking-wider text-blue-700 uppercase">
+                    <Text className="font-serif text-xs font-semibold uppercase tracking-wider text-blue-700">
                       Audit Manager Comment
                     </Text>
                     <Text className="mt-1 font-serif text-sm text-blue-900">
@@ -1292,22 +1414,22 @@ export default function Form7DetailView({
             )}
 
             {/* Footer */}
-            <View className="px-4 py-4 border-t border-gray-200 bg-gray-50">
+            <View className="border-t border-gray-200 bg-gray-50 px-4 py-4">
               <View className="flex-row flex-wrap justify-center gap-4">
                 <View className="flex-row items-center gap-1">
-                  <View className="w-2 h-2 bg-green-500 rounded-full" />
+                  <View className="h-2 w-2 rounded-full bg-green-500" />
                   <Text className="font-serif text-xs">
                     (O+)Ve: Conformance
                   </Text>
                 </View>
                 <View className="flex-row items-center gap-1">
-                  <View className="w-2 h-2 bg-red-500 rounded-full" />
+                  <View className="h-2 w-2 rounded-full bg-red-500" />
                   <Text className="font-serif text-xs">
                     (O-)Ve: Non Conformance
                   </Text>
                 </View>
                 <View className="flex-row items-center gap-1">
-                  <View className="w-2 h-2 rounded-full bg-amber-500" />
+                  <View className="h-2 w-2 rounded-full bg-amber-500" />
                   <Text className="font-serif text-xs">
                     (OI): Opportunity for Improvement
                   </Text>
@@ -1317,7 +1439,7 @@ export default function Form7DetailView({
           </View>
 
           {/* Action Buttons */}
-          <View className="flex-row flex-wrap justify-end w-full max-w-5xl gap-3 px-4 mx-auto mt-6">
+          <View className="mx-auto mt-6 w-full max-w-5xl flex-row flex-wrap justify-end gap-3 px-4">
             {(ncr?.rootCause?.trim() ||
               ncr?.correction?.trim() ||
               ncr?.correctiveAction?.trim() ||
@@ -1333,7 +1455,7 @@ export default function Form7DetailView({
                     });
                   }
                 }}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                 style={{ backgroundColor: "#f97316" }}
               >
                 <Eye size={16} color="#fff" />
@@ -1346,7 +1468,7 @@ export default function Form7DetailView({
               <TouchableOpacity
                 onPress={open8DReport}
                 disabled={loading8DReport}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm disabled:opacity-60"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm disabled:opacity-60"
                 style={{ backgroundColor: COLORS.primary }}
               >
                 {loading8DReport ? (
@@ -1363,7 +1485,7 @@ export default function Form7DetailView({
             {canManagerReview && (
               <TouchableOpacity
                 onPress={() => setShowReviewModal(true)}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                 style={{ backgroundColor: COLORS.warning }}
               >
                 <CheckCircle size={16} color="#fff" />
@@ -1376,7 +1498,7 @@ export default function Form7DetailView({
             {canAuditeeReview && (
               <TouchableOpacity
                 onPress={() => setShowAuditeeReviewModal(true)}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                 style={{ backgroundColor: COLORS.success }}
               >
                 <ThumbsUp size={16} color="#fff" />
@@ -1389,7 +1511,7 @@ export default function Form7DetailView({
             {canEdit && (
               <TouchableOpacity
                 onPress={() => router.push(`/form7?id=${ncr.id}` as any)}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                 style={{ backgroundColor: COLORS.secondary }}
               >
                 <Edit size={16} color="#fff" />
@@ -1407,7 +1529,7 @@ export default function Form7DetailView({
                     type: ncr?.status === "READY_FOR_NCR2" ? "ncr2" : "normal",
                   });
                 }}
-                className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                 style={{ backgroundColor: "#f97316" }}
               >
                 <FileText size={16} color="#fff" />
@@ -1423,7 +1545,7 @@ export default function Form7DetailView({
               ncr.rejectionReason && (
                 <TouchableOpacity
                   onPress={() => router.push(`/form8?id=${ncr.id}` as any)}
-                  className="flex-row items-center justify-center gap-2 px-5 py-2.5 rounded-xl shadow-sm"
+                  className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
                   style={{ backgroundColor: COLORS.warning }}
                 >
                   <Edit size={16} color="#fff" />
@@ -1470,7 +1592,7 @@ export default function Form7DetailView({
       {show8DReportModal && selected8DEventId && (
         <Modal visible={true} transparent animationType="slide">
           <View className="flex-1 bg-black/60">
-            <View className="flex-row justify-end flex-1">
+            <View className="flex-1 flex-row justify-end">
               <TouchableOpacity
                 className="flex-1"
                 activeOpacity={1}
@@ -1480,8 +1602,8 @@ export default function Form7DetailView({
                 }}
               />
 
-              <View className="w-full md:w-[500px] lg:w-[600px] bg-white h-full shadow-2xl border-l border-gray-200">
-                <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200 bg-gray-50">
+              <View className="h-full w-full border-l border-gray-200 bg-white shadow-2xl md:w-[500px] lg:w-[600px]">
+                <View className="flex-row items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
                   <View className="flex-row items-center gap-3">
                     <FileBarChart size={20} color={COLORS.primary} />
                     <Text className="font-serif text-lg font-bold text-gray-800">
@@ -1493,7 +1615,7 @@ export default function Form7DetailView({
                       setShow8DReportModal(false);
                       setSelected8DEventId(null);
                     }}
-                    className="p-2 bg-white border border-gray-200 rounded-full shadow-sm active:bg-gray-100"
+                    className="rounded-full border border-gray-200 bg-white p-2 shadow-sm active:bg-gray-100"
                   >
                     <X size={20} color="#475569" />
                   </TouchableOpacity>
@@ -1515,6 +1637,37 @@ export default function Form7DetailView({
           </View>
         </Modal>
       )}
+
+      <PDFViewer
+        visible={pdfViewer.visible}
+        pdfData={pdfViewer.pdfData}
+        fileName={pdfViewer.fileName}
+        auditId={String(ncr?.id || "")}
+        auditNumber={`NCR-${ncr?.ncrNumber || ""}`}
+        pdfType="ncr"
+        formVariant="form7"
+        forumGroups={[
+          {
+            id: `AUDIT-${ncr?.auditId || ""}`, // ✅ CHANGED: was `NCR-${ncr?.id}`
+            name: `📋 NCR ${ncr?.ncrNumber || ""}`,
+            type: "NCR",
+          },
+          {
+            id: "AUDIT-general-forum",
+            name: "📢 General Discussion",
+            type: "General",
+          },
+        ]}
+        onClose={() =>
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+        }
+        onShareComplete={(forumId?: string) => {
+          Alert.alert("Success", "PDF shared to forum successfully!");
+          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+        }}
+        currentUser={user}
+        allUsers={allUsers}
+      />
     </SafeAreaView>
   );
 }

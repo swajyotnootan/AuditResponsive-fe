@@ -55,6 +55,30 @@ const COLORS = {
 };
 
 // ============================================================================
+// BUILD "Company Name, Plant Name" DISPLAY STRING
+// ============================================================================
+const buildCompanyDisplay = (user: any): string => {
+  if (!user) return "";
+
+  const companyName =
+    user.companyName?.trim() ||
+    user.company?.name?.trim() ||
+    user.company_name?.trim() ||
+    "";
+
+  const plantName =
+    user.plantName?.trim() ||
+    user.plant?.name?.trim() ||
+    user.plant_name?.trim() ||
+    "";
+
+  if (companyName && plantName) return `${companyName}, ${plantName}`;
+  if (companyName) return companyName;
+  if (plantName) return plantName;
+  return "";
+};
+
+// ============================================================================
 // ANIMATION WRAPPER (Mimics Tailwind animate-fadeInUp)
 // ============================================================================
 const FadeInView = ({ children, delay = 0, className = "" }: any) => {
@@ -97,7 +121,7 @@ const InputField = ({
       </Text>
     )}
     <TextInput
-      className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white shadow-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
+      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm disabled:bg-slate-100 disabled:text-slate-500"
       placeholder={placeholder}
       placeholderTextColor="#94a3b8"
       value={value}
@@ -150,7 +174,7 @@ const DateInput = ({
           type="date"
           value={value || ""}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2.5 text-sm border border-slate-100 rounded-lg bg-white shadow-sm text-slate-800 cursor-pointer"
+          className="w-full cursor-pointer rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm"
           style={{ width: "100%", boxSizing: "border-box" }}
         />
       </View>
@@ -164,7 +188,7 @@ const DateInput = ({
       )}
       <TouchableOpacity
         onPress={() => setShow(true)}
-        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-white shadow-sm flex-row items-center justify-between"
+        className="w-full flex-row items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
         style={{ width: "100%" }}
         activeOpacity={0.7}
       >
@@ -212,6 +236,14 @@ export default function Form7View({ initialParams, onClose }: any) {
   }, [JSON.stringify(urlParams), JSON.stringify(initialParams)]);
 
   const { user } = useAuth();
+
+  useEffect(() => {
+    console.log(
+      "🔍 USER OBJECT FROM useAuth():",
+      JSON.stringify(user, null, 2),
+    );
+  }, [user]);
+
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [loading, setLoading] = useState(false);
@@ -262,7 +294,7 @@ export default function Form7View({ initialParams, onClose }: any) {
         token =
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
       } else {
-        token = await AsyncStorage.getItem("token"); // ✅ Works perfectly on iOS/Android
+        token = await AsyncStorage.getItem("authToken"); // ✅ Works perfectly on iOS/Android
       }
 
       const response = await fetch(
@@ -313,6 +345,8 @@ export default function Form7View({ initialParams, onClose }: any) {
 
     loadAuditorSignature();
   }, [user?.id]); // ✅ CHANGE THIS: Only depend on user?.id, not the whole user object
+
+  // Inside Form7View component — replace the prefill useEffect
   useEffect(() => {
     loadAuditeeOptions();
 
@@ -331,11 +365,16 @@ export default function Form7View({ initialParams, onClose }: any) {
         auditeeName: (params.auditeeName as string) || "",
         shift: (params.shift as string) || "Day",
         auditReportNumber: (params.auditReportNumber as string) || "",
+        // ✅ AFTER — builds "Company Name, Plant Name"
+        companyName:
+          (params.companyName as string) || buildCompanyDisplay(user),
       };
+
       const incomingAuditReportNumber = (
         (params.auditReportNumber as string) || ""
       ).trim();
       setSourceAuditReportNumber(incomingAuditReportNumber);
+
       const hasPrefill = Object.values(prefill).some(
         (value) => value !== "" && value !== null && value !== "Day",
       );
@@ -344,6 +383,7 @@ export default function Form7View({ initialParams, onClose }: any) {
       }
     }
 
+    // ✅ AFTER
     if (user) {
       setFormData((prev) => ({
         ...prev,
@@ -352,9 +392,10 @@ export default function Form7View({ initialParams, onClose }: any) {
           user.name ||
           user.username ||
           `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        // ✅ Always use "Company Name, Plant Name"
+        companyName: prev.companyName || buildCompanyDisplay(user),
       }));
     }
-    // ✅ CRITICAL FIX: Depend on stringified params and user.id to prevent infinite re-renders
   }, [JSON.stringify(params), user?.id]);
 
   const loadAuditeeOptions = async () => {
@@ -507,12 +548,24 @@ export default function Form7View({ initialParams, onClose }: any) {
       auditorId: formData.auditorId,
       auditeeId: formData.auditeeId,
       shift: formData.shift,
-      companyName: formData.companyName,
+      // companyName: formData.companyName,
       auditReportNumber: formData.auditReportNumber,
       auditorName: formData.auditorName,
       auditorSignature: formData.auditorSignature,
       auditeeName: formData.auditeeName,
       auditeeSignature: "",
+      companyId: (user as any)?.companyId,
+      companyCode: (user as any)?.companyCode,
+      companyName: formData.companyName || (user as any)?.companyName,
+      plantId: (user as any)?.plantId,
+      plantCode: (user as any)?.plantCode,
+      plantName: (user as any)?.plantName,
+      siteId: (user as any)?.siteId,
+      siteCode: (user as any)?.siteCode,
+      siteName: (user as any)?.siteName,
+      unitId: (user as any)?.unitId,
+      unitCode: (user as any)?.unitCode,
+      unitName: (user as any)?.unitName,
     };
 
     const result = await ncrService.createNCR(ncrData);
@@ -568,22 +621,22 @@ export default function Form7View({ initialParams, onClose }: any) {
 
   // ✅ FIXED: Function to go back/dismiss - same as Back button
   // ✅ FIXED: Function to go back/dismiss - same as Back button
-// ✅ FIXED: Properly navigate back to parent dashboard
-const handleGoBack = () => {
-  // Close modal first if it's open
-  if (showSuccessModal) {
-    setShowSuccessModal(false);
-  }
-  
-  // ✅ If onClose is provided (coming from AuditorDashboard via onRaiseNcr), call it to close Form7
-  if (onClose && typeof onClose === 'function') {
-    onClose();
-  } else {
-    // Fallback: Navigate to dashboard based on role
-    const dashboardPath = getDashboardPath(user) || "/";
-    router.replace(dashboardPath as any);
-  }
-};
+  // ✅ FIXED: Properly navigate back to parent dashboard
+  const handleGoBack = () => {
+    // Close modal first if it's open
+    if (showSuccessModal) {
+      setShowSuccessModal(false);
+    }
+
+    // ✅ If onClose is provided (coming from AuditorDashboard via onRaiseNcr), call it to close Form7
+    if (onClose && typeof onClose === "function") {
+      onClose();
+    } else {
+      // Fallback: Navigate to dashboard based on role
+      const dashboardPath = getDashboardPath(user) || "/";
+      router.replace(dashboardPath as any);
+    }
+  };
   // ============================================================================
   // SUCCESS MODAL
   // ============================================================================
@@ -602,15 +655,15 @@ const handleGoBack = () => {
     return (
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View
-          className="items-center justify-center flex-1 p-4"
+          className="flex-1 items-center justify-center p-4"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <View className="w-full max-w-md overflow-hidden bg-white shadow-2xl rounded-2xl">
+          <View className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
             <View
-              className="items-center px-6 pt-8 pb-6"
+              className="items-center px-6 pb-6 pt-8"
               style={{ backgroundColor: COLORS.bg }}
             >
-              <View className="items-center justify-center w-16 h-16 mb-4 bg-white rounded-full shadow-lg">
+              <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg">
                 <CheckCircle size={32} color={COLORS.success} />
               </View>
               <Text className="text-xl font-bold text-slate-800">
@@ -628,8 +681,8 @@ const handleGoBack = () => {
             </View>
 
             <View className="px-6 py-5">
-              <View className="flex-row gap-3 mb-5">
-                <View className="items-center flex-1 p-3 border rounded-xl bg-slate-50 border-slate-100">
+              <View className="mb-5 flex-row gap-3">
+                <View className="flex-1 items-center rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <Text className="mb-1 text-xs text-slate-500">
                     Department
                   </Text>
@@ -640,7 +693,7 @@ const handleGoBack = () => {
                     {formData.processDepartment || "—"}
                   </Text>
                 </View>
-                <View className="items-center flex-1 p-3 border rounded-xl bg-slate-50 border-slate-100">
+                <View className="flex-1 items-center rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <Text className="mb-1 text-xs text-slate-500">Auditee</Text>
                   <Text
                     className="text-sm font-semibold text-slate-800"
@@ -652,7 +705,7 @@ const handleGoBack = () => {
               </View>
 
               <View
-                className="flex-row items-start gap-2 p-3 mb-5 border rounded-xl"
+                className="mb-5 flex-row items-start gap-2 rounded-xl border p-3"
                 style={{
                   backgroundColor: COLORS.bg,
                   borderColor: COLORS.lighter,
@@ -673,7 +726,7 @@ const handleGoBack = () => {
                   <TouchableOpacity
                     onPress={handleDownloadPdf}
                     disabled={pdfDownloading}
-                    className="flex-1 flex-row items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-md disabled:opacity-50"
+                    className="flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
                     style={{ backgroundColor: COLORS.primary }}
                   >
                     {pdfDownloading ? (
@@ -687,7 +740,7 @@ const handleGoBack = () => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleViewNcr}
-                    className="flex-1 flex-row items-center justify-center gap-2 px-4 py-2.5 rounded-xl border shadow-sm bg-white border-slate-200"
+                    className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                   >
                     <FileText size={16} color="#334155" />
                     <Text className="text-sm font-semibold text-slate-700">
@@ -695,26 +748,26 @@ const handleGoBack = () => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-<TouchableOpacity
-  onPress={() => {
-    setShowSuccessModal(false);
-    // ✅ Close the form and go back to parent dashboard
-    if (onClose && typeof onClose === 'function') {
-      onClose();
-    } else {
-      // ✅ Use replace to clear navigation stack
-      const dashboardPath = getDashboardPath(user) || "/";
-      router.replace(dashboardPath as any);
-    }
-  }}
-  className="flex-row items-center justify-center gap-2 px-5 py-3 shadow-md rounded-xl"
-  style={{ backgroundColor: COLORS.secondary }}
->
-  <ArrowLeft size={18} color="#fff" />
-  <Text className="font-semibold text-white">
-    Back to Dashboard
-  </Text>
-</TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    // ✅ Close the form and go back to parent dashboard
+                    if (onClose && typeof onClose === "function") {
+                      onClose();
+                    } else {
+                      // ✅ Use replace to clear navigation stack
+                      const dashboardPath = getDashboardPath(user) || "/";
+                      router.replace(dashboardPath as any);
+                    }
+                  }}
+                  className="flex-row items-center justify-center gap-2 rounded-xl px-5 py-3 shadow-md"
+                  style={{ backgroundColor: COLORS.secondary }}
+                >
+                  <ArrowLeft size={18} color="#fff" />
+                  <Text className="font-semibold text-white">
+                    Back to Dashboard
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -735,7 +788,7 @@ const handleGoBack = () => {
     return (
       <View className="mb-6">
         {/* ✅ CHANGE: Remove max-w-2xl and add w-full */}
-        <View className="flex-row items-center justify-between w-full px-4">
+        <View className="w-full flex-row items-center justify-between px-4">
           {steps.map((step, index) => {
             const Icon = step.icon;
             const isActive = currentStep === step.number;
@@ -756,7 +809,7 @@ const handleGoBack = () => {
                   className="flex-row items-center gap-3"
                 >
                   <View
-                    className="items-center justify-center w-10 h-10 rounded-lg shadow-sm"
+                    className="h-10 w-10 items-center justify-center rounded-lg shadow-sm"
                     style={{
                       backgroundColor:
                         isActive || isCompleted ? COLORS.primary : "#cbd5e1",
@@ -782,7 +835,7 @@ const handleGoBack = () => {
                 </TouchableOpacity>
                 {index < steps.length - 1 && (
                   <View
-                    className="flex-1 h-0.5 mx-4"
+                    className="mx-4 h-0.5 flex-1"
                     style={{
                       backgroundColor: isCompleted
                         ? COLORS.secondary
@@ -801,10 +854,10 @@ const handleGoBack = () => {
   if (loading) {
     return (
       <SafeAreaView
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: COLORS.bg }}
       >
-        <View className="items-center p-8 bg-white border shadow-sm border-slate-200 rounded-2xl">
+        <View className="items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
           <ActivityIndicator
             size="large"
             color={COLORS.primary}
@@ -833,25 +886,25 @@ const handleGoBack = () => {
 
           {/* Header */}
           <FadeInView delay={0}>
-            <View className="flex-row items-center justify-between mb-6">
+            <View className="mb-6 flex-row items-center justify-between">
               <TouchableOpacity
-  onPress={() => {
-    if (onClose && typeof onClose === 'function') {
-      onClose();
-    } else {
-      const dashboardPath = getDashboardPath(user) || "/";
-      router.replace(dashboardPath as any);
-    }
-  }}
-  className="flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200"
->
-  <ArrowLeft size={16} color="#334155" />
-  <Text className="text-sm font-medium text-slate-700">Back</Text>
-</TouchableOpacity>
+                onPress={() => {
+                  if (onClose && typeof onClose === "function") {
+                    onClose();
+                  } else {
+                    const dashboardPath = getDashboardPath(user) || "/";
+                    router.replace(dashboardPath as any);
+                  }
+                }}
+                className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm"
+              >
+                <ArrowLeft size={16} color="#334155" />
+                <Text className="text-sm font-medium text-slate-700">Back</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={downloadForm7Pdf}
                 disabled={pdfDownloading || (!createdNcr?.id && !params.id)}
-                className="flex-row items-center gap-2 px-4 py-2 bg-white border rounded-lg shadow-sm border-slate-200 disabled:opacity-50"
+                className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 shadow-sm disabled:opacity-50"
               >
                 {pdfDownloading ? (
                   <Loader2 size={16} color="#334155" />
@@ -872,7 +925,7 @@ const handleGoBack = () => {
 
           {error && (
             <FadeInView delay={150}>
-              <View className="flex-row items-center p-3 mb-4 border rounded-lg bg-rose-50 border-rose-200">
+              <View className="mb-4 flex-row items-center rounded-lg border border-rose-200 bg-rose-50 p-3">
                 <AlertCircle size={16} color="#e11d48" className="mr-2" />
                 <Text className="flex-1 text-sm text-rose-700">{error}</Text>
               </View>
@@ -881,7 +934,7 @@ const handleGoBack = () => {
 
           {success && (
             <FadeInView delay={150}>
-              <View className="flex-row items-center p-3 mb-4 border rounded-lg bg-emerald-50 border-emerald-200">
+              <View className="mb-4 flex-row items-center rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                 <CheckCircle size={16} color="#059669" className="mr-2" />
                 <Text className="flex-1 text-sm text-emerald-700">
                   {success}
@@ -895,14 +948,14 @@ const handleGoBack = () => {
               ============================================================================ */}
           {currentStep === 1 && (
             <FadeInView delay={200}>
-              <View className="bg-white border shadow-sm border-slate-200 rounded-xl">
+              <View className="rounded-xl border border-slate-200 bg-white shadow-sm">
                 <View
-                  className="p-4 border-b border-slate-100"
+                  className="border-b border-slate-100 p-4"
                   style={{ backgroundColor: COLORS.bg }}
                 >
                   <View className="flex-row items-center gap-3">
                     <View
-                      className="p-1.5 rounded-lg"
+                      className="rounded-lg p-1.5"
                       style={{ backgroundColor: COLORS.lighter }}
                     >
                       <AlertCircle size={18} color={COLORS.primary} />
@@ -943,7 +996,7 @@ const handleGoBack = () => {
                     </View>
 
                     {/* Right Column */}
-                    <View className="flex-1 gap-3 mt-4 md:mt-0">
+                    <View className="mt-4 flex-1 gap-3 md:mt-0">
                       <View>
                         <Text className="mb-1 text-xs font-medium text-slate-700">
                           Due date <Text className="text-rose-500">*</Text>
@@ -983,7 +1036,7 @@ const handleGoBack = () => {
                 <View className="flex-row justify-end p-4 pt-0">
                   <TouchableOpacity
                     onPress={nextStep}
-                    className="flex-row items-center gap-2 px-5 py-2.5 rounded-lg shadow-md"
+                    className="flex-row items-center gap-2 rounded-lg px-5 py-2.5 shadow-md"
                     style={{ backgroundColor: COLORS.primary }}
                   >
                     <Text className="text-sm font-medium text-white">
@@ -1001,14 +1054,14 @@ const handleGoBack = () => {
               ============================================================================ */}
           {currentStep === 2 && (
             <FadeInView delay={200}>
-              <View className="bg-white border shadow-sm border-slate-200 rounded-xl">
+              <View className="rounded-xl border border-slate-200 bg-white shadow-sm">
                 <View
-                  className="p-4 border-b border-slate-100"
+                  className="border-b border-slate-100 p-4"
                   style={{ backgroundColor: COLORS.bg }}
                 >
                   <View className="flex-row items-center gap-3">
                     <View
-                      className="p-1.5 rounded-lg"
+                      className="rounded-lg p-1.5"
                       style={{ backgroundColor: COLORS.lighter }}
                     >
                       <Users size={18} color={COLORS.primary} />
@@ -1026,16 +1079,17 @@ const handleGoBack = () => {
 
                 <View className="p-4">
                   {/* Header Information Section */}
-                  <View className="gap-3 mb-4 md:flex-row">
+                  <View className="mb-4 gap-3 md:flex-row">
                     <View className="flex-1">
                       <InputField
                         label="Company Name"
                         value={formData.companyName}
-                        onChange={(v: string) => setValue("companyName", v)}
-                        placeholder="Company name"
+                        onChange={() => {}} // ← no-op
+                        placeholder="Auto-filled from plant"
+                        disabled // ← read-only
                       />
                     </View>
-                    <View className="flex-1 mt-4 md:mt-0">
+                    <View className="mt-4 flex-1 md:mt-0">
                       <InputField
                         label="Audit report number"
                         value={formData.auditReportNumber}
@@ -1054,13 +1108,14 @@ const handleGoBack = () => {
                   <View className="gap-4 md:flex-row">
                     {/* Left Column - Auditor */}
                     <View className="flex-1 gap-3">
-                      <View className="flex-row items-center gap-2 mb-1">
+                      <View className="mb-1 flex-row items-center gap-2">
                         <User size={14} color={COLORS.primary} />
                         <Text className="text-sm font-bold text-slate-800">
                           Auditor
                         </Text>
                       </View>
-                      <InputField                        label="Name"
+                      <InputField
+                        label="Name"
                         value={formData.auditorName}
                         onChange={(v: string) => setValue("auditorName", v)}
                         placeholder="Auditor name"
@@ -1071,7 +1126,7 @@ const handleGoBack = () => {
                         </Text>
                         {formData.auditorSignature ? (
                           <View
-                            className="p-3 mt-1 border rounded-lg"
+                            className="mt-1 rounded-lg border p-3"
                             style={{
                               backgroundColor: COLORS.bg,
                               borderColor: COLORS.lighter,
@@ -1079,7 +1134,7 @@ const handleGoBack = () => {
                           >
                             <Image
                               source={{ uri: formData.auditorSignature }}
-                              className="w-full h-10"
+                              className="h-10 w-full"
                               resizeMode="contain"
                             />
                             <Text
@@ -1090,7 +1145,7 @@ const handleGoBack = () => {
                             </Text>
                           </View>
                         ) : (
-                          <View className="p-3 mt-1 border rounded-lg bg-slate-50 border-slate-200">
+                          <View className="mt-1 rounded-lg border border-slate-200 bg-slate-50 p-3">
                             <Text className="text-xs italic text-slate-500">
                               Loading signature...
                             </Text>
@@ -1100,8 +1155,8 @@ const handleGoBack = () => {
                     </View>
 
                     {/* Right Column - Auditee */}
-                    <View className="flex-1 gap-3 mt-4 md:mt-0">
-                      <View className="flex-row items-center gap-2 mb-1">
+                    <View className="mt-4 flex-1 gap-3 md:mt-0">
+                      <View className="mb-1 flex-row items-center gap-2">
                         <Users size={14} color={COLORS.primary} />
                         <Text className="text-sm font-bold text-slate-800">
                           Auditee
@@ -1112,7 +1167,7 @@ const handleGoBack = () => {
                           Name <Text className="text-rose-500">*</Text>
                         </Text>
                         {/* Dropdown simulation for Auditee Selection */}
-                        <TouchableOpacity className="w-full px-3 py-2.5 border border-slate-200 rounded-lg bg-white shadow-sm flex-row items-center justify-between">
+                        <TouchableOpacity className="w-full flex-row items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
                           <Text
                             className={`text-sm ${formData.auditeeName ? "text-slate-800" : "text-slate-400"}`}
                           >
@@ -1127,7 +1182,7 @@ const handleGoBack = () => {
                           Signature
                         </Text>
                         <View
-                          className="p-3 mt-1 border rounded-xl"
+                          className="mt-1 rounded-xl border p-3"
                           style={{
                             backgroundColor: "#fef3c7",
                             borderColor: "#fde68a",
@@ -1151,7 +1206,7 @@ const handleGoBack = () => {
                 <View className="flex-row justify-between p-4 pt-0">
                   <TouchableOpacity
                     onPress={prevStep}
-                    className="flex-row items-center gap-2 px-4 py-2.5 bg-white border rounded-lg shadow-sm border-slate-200"
+                    className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
                   >
                     <ChevronLeft size={16} color="#334155" />
                     <Text className="text-sm font-medium text-slate-700">
@@ -1161,22 +1216,24 @@ const handleGoBack = () => {
 
                   <View className="flex-row gap-2">
                     <TouchableOpacity
-  onPress={() => {
-    if (onClose && typeof onClose === 'function') {
-      onClose();
-    } else {
-      const dashboardPath = getDashboardPath(user) || "/";
-      router.replace(dashboardPath as any);
-    }
-  }}
-  className="px-4 py-2.5 bg-white border rounded-lg shadow-sm border-slate-200"
->
-  <Text className="text-sm font-medium text-slate-700">Cancel</Text>
-</TouchableOpacity>
+                      onPress={() => {
+                        if (onClose && typeof onClose === "function") {
+                          onClose();
+                        } else {
+                          const dashboardPath = getDashboardPath(user) || "/";
+                          router.replace(dashboardPath as any);
+                        }
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm"
+                    >
+                      <Text className="text-sm font-medium text-slate-700">
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleSave}
                       disabled={saving || !!createdNcr?.id}
-                      className="flex-row items-center gap-2 px-5 py-2.5 rounded-lg shadow-md disabled:opacity-50"
+                      className="flex-row items-center gap-2 rounded-lg px-5 py-2.5 shadow-md disabled:opacity-50"
                       style={{ backgroundColor: COLORS.primary }}
                     >
                       {saving ? (

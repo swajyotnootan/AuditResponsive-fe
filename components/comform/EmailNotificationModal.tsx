@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -23,6 +24,8 @@ interface User {
   name?: string;
   email: string;
   role?: string;
+  profileImage?: string; // ✅ ADD
+  profilePhoto?: string; // ✅ ADD
 }
 
 interface EmailNotificationModalProps {
@@ -34,12 +37,47 @@ interface EmailNotificationModalProps {
   onProceed?: () => Promise<void>;
 }
 
-// =============================================
-// Custom Native Dropdown Component
-// =============================================
-// =============================================
-// Custom Native Dropdown Component (Now Creatable)
-// =============================================
+// ============================================================================
+// PROFILE AVATAR — shows photo if available, otherwise initials
+// ============================================================================
+const ProfileAvatar = ({
+  userId,
+  profileImage,
+  name,
+}: {
+  userId?: string | number;
+  profileImage?: string | null;
+  name?: string;
+}) => {
+  const [imgError, setImgError] = useState(false);
+
+  const url = (() => {
+    if (
+      profileImage &&
+      (profileImage.startsWith("http") || profileImage.startsWith("data:"))
+    ) {
+      return profileImage;
+    }
+    if (userId) return `${API_BASE_URL}/api/users/${userId}/profile-photo`;
+    return null;
+  })();
+
+  const initials = (name || "?").trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <View style={styles.dropdownAvatar}>
+      {url && !imgError ? (
+        <Image
+          source={{ uri: url }}
+          style={{ width: "100%", height: "100%" }}
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <Text style={styles.dropdownAvatarInitials}>{initials}</Text>
+      )}
+    </View>
+  );
+};
 // =============================================
 // Custom Native Dropdown Component (Now Creatable)
 // =============================================
@@ -55,7 +93,7 @@ const NativeDropdown = ({
 
   // Filter options based on search text
   const filteredOptions = options.filter((opt: any) =>
-    opt.label.toLowerCase().includes(searchText.toLowerCase())
+    opt.label.toLowerCase().includes(searchText.toLowerCase()),
   );
 
   // Check if the search text looks like an email
@@ -109,8 +147,8 @@ const NativeDropdown = ({
               ? value.map((v: any) => v.label).join(", ")
               : placeholder
             : value
-            ? value.label
-            : placeholder}
+              ? value.label
+              : placeholder}
         </Text>
       </TouchableOpacity>
 
@@ -141,15 +179,36 @@ const NativeDropdown = ({
                 const isSelected = isMulti
                   ? value.some((v: any) => v.value === opt.value)
                   : value?.value === opt.value;
+
                 return (
                   <TouchableOpacity
                     key={opt.value}
                     onPress={() => handleSelect(opt)}
-                    style={[styles.dropdownItem, isSelected && styles.dropdownItemSelected]}
+                    style={[
+                      styles.dropdownItem,
+                      isSelected && styles.dropdownItemSelected,
+                    ]}
                   >
-                    <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
-                      {opt.label}
-                    </Text>
+                    <View style={styles.dropdownItemRow}>
+                      {/* ✅ Profile avatar */}
+                      <ProfileAvatar
+                        userId={opt.userId}
+                        profileImage={opt.profileImage}
+                        name={opt.label}
+                      />
+
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            isSelected && styles.dropdownItemTextSelected,
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {opt.label}
+                        </Text>
+                      </View>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -198,7 +257,12 @@ export default function EmailNotificationModal({
   const [isSending, setIsSending] = useState(false);
 
   // ✅ Wrap plain text into the official company email HTML template (for backend)
-  const wrapInOfficialTemplate = (plainText: string, name: string, role: string, id: string | number) => {
+  const wrapInOfficialTemplate = (
+    plainText: string,
+    name: string,
+    role: string,
+    id: string | number,
+  ) => {
     const userHtml = plainText
       .split("\n\n")
       .filter((line) => line.trim() !== "")
@@ -206,7 +270,7 @@ export default function EmailNotificationModal({
         (line) =>
           `<p style="margin: 0 0 16px 0; line-height: 1.6;">${line
             .trim()
-            .replace(/\n/g, "<br>")}</p>`
+            .replace(/\n/g, "<br>")}</p>`,
       )
       .join("");
 
@@ -245,19 +309,22 @@ export default function EmailNotificationModal({
 
         // Check AsyncStorage for current user
         // Note: We assume 'user' exists in storage from login
-        const storedUserStr = await (require("@react-native-async-storage/async-storage").default.getItem("user"));
+        const storedUserStr =
+          await require("@react-native-async-storage/async-storage").default.getItem(
+            "user",
+          );
         let currentUser: User | null = null;
-              if (storedUserStr) {
-        currentUser = JSON.parse(storedUserStr);
-        
-        // ✅ SAFE CHECK: Ensure currentUser exists before using it
-        const name = currentUser?.name || currentUser?.username || "User";
-        const email = currentUser?.email || "";
-        const role = currentUser?.role || "";
-        
-        setSenderName(name);
-        setSenderEmail(email);
-        setSenderRole(role);
+        if (storedUserStr) {
+          currentUser = JSON.parse(storedUserStr);
+
+          // ✅ SAFE CHECK: Ensure currentUser exists before using it
+          const name = currentUser?.name || currentUser?.username || "User";
+          const email = currentUser?.email || "";
+          const role = currentUser?.role || "";
+
+          setSenderName(name);
+          setSenderEmail(email);
+          setSenderRole(role);
 
           // Set default subject and body based on mode
           let defaultSubject = "";
@@ -320,12 +387,16 @@ ${name} (${role})
           if (currentUser?.role?.toUpperCase() === "INITIATOR") {
             toOpts = allUsers.filter((u) => u.role?.toUpperCase() === "HOD");
           } else if (currentUser?.role?.toUpperCase() === "HOD") {
-            toOpts = allUsers.filter((u) => u.role?.toUpperCase() === "INITIATOR");
+            toOpts = allUsers.filter(
+              (u) => u.role?.toUpperCase() === "INITIATOR",
+            );
           } else {
             toOpts = allUsers;
           }
         } else if (mode === "approve" || mode === "reject") {
-          toOpts = allUsers.filter((u) => u.role?.toUpperCase() === "INITIATOR");
+          toOpts = allUsers.filter(
+            (u) => u.role?.toUpperCase() === "INITIATOR",
+          );
         }
 
         setToOptions(
@@ -333,19 +404,24 @@ ${name} (${role})
             value: user.email,
             label: `${user.username || user.name || "User"} (${user.role}) <${user.email}>`,
             email: user.email,
-          }))
+            userId: user.id, // ✅ ADD
+            profileImage:
+              (user as any).profileImage || (user as any).profilePhoto || null, // ✅ ADD
+          })),
         );
-
         // CC: only renewsys emails
         const ccOpts = allUsers.filter(
-          (user) => user.email && user.email.toLowerCase().includes("renewsys")
+          (user) => user.email && user.email.toLowerCase().includes("renewsys"),
         );
         setCcOptions(
           ccOpts.map((user) => ({
             value: user.email,
             label: `${user.username || user.name} <${user.email}>`,
             email: user.email,
-          }))
+            userId: user.id, // ✅ ADD
+            profileImage:
+              (user as any).profileImage || (user as any).profilePhoto || null, // ✅ ADD
+          })),
         );
 
         setUsers(allUsers);
@@ -372,7 +448,7 @@ ${name} (${role})
           plainBody,
           senderName,
           senderRole,
-          inspectionId
+          inspectionId,
         );
 
         const payload = {
@@ -397,7 +473,7 @@ ${name} (${role})
         } else {
           Alert.alert(
             "Error",
-            `❌ Email failed: ${result.message || "Unknown error"}`
+            `❌ Email failed: ${result.message || "Unknown error"}`,
           );
         }
       }
@@ -408,7 +484,10 @@ ${name} (${role})
       }
     } catch (err: any) {
       console.error("Email send failed:", err);
-      Alert.alert("Error", `❌ Failed to send email: ${err.message || "Network error"}`);
+      Alert.alert(
+        "Error",
+        `❌ Failed to send email: ${err.message || "Network error"}`,
+      );
     } finally {
       setIsSending(false);
       onClose();
@@ -427,8 +506,8 @@ ${name} (${role})
               {mode === "approve"
                 ? "Approve & Notify"
                 : mode === "reject"
-                ? "Reject & Notify"
-                : "Notify & Submit"}
+                  ? "Reject & Notify"
+                  : "Notify & Submit"}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <X size={24} color="white" />
@@ -441,8 +520,16 @@ ${name} (${role})
               style={[styles.tab, activeTab === "email" && styles.tabActive]}
               onPress={() => setActiveTab("email")}
             >
-              <Mail size={16} color={activeTab === "email" ? "#2563eb" : "#6b7280"} />
-              <Text style={[styles.tabText, activeTab === "email" && styles.tabTextActive]}>
+              <Mail
+                size={16}
+                color={activeTab === "email" ? "#2563eb" : "#6b7280"}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "email" && styles.tabTextActive,
+                ]}
+              >
                 Email
               </Text>
             </TouchableOpacity>
@@ -450,8 +537,16 @@ ${name} (${role})
               style={[styles.tab, activeTab === "sms" && styles.tabActive]}
               onPress={() => setActiveTab("sms")}
             >
-              <MessageSquare size={16} color={activeTab === "sms" ? "#2563eb" : "#6b7280"} />
-              <Text style={[styles.tabText, activeTab === "sms" && styles.tabTextActive]}>
+              <MessageSquare
+                size={16}
+                color={activeTab === "sms" ? "#2563eb" : "#6b7280"}
+              />
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === "sms" && styles.tabTextActive,
+                ]}
+              >
                 SMS
               </Text>
             </TouchableOpacity>
@@ -543,8 +638,8 @@ ${name} (${role})
                   {mode === "approve"
                     ? "Send Email & Approve"
                     : mode === "reject"
-                    ? "Send Email & Reject"
-                    : "Send Email & Submit"}
+                      ? "Send Email & Reject"
+                      : "Send Email & Submit"}
                 </Text>
               )}
             </TouchableOpacity>
@@ -565,7 +660,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
-    
   },
   modalContent: {
     width: "100%",
@@ -745,31 +839,51 @@ const styles = StyleSheet.create({
     padding: 16,
     maxHeight: 400,
   },
-    dropdownSearchInput: {
+  dropdownSearchInput: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: "#d1d5db",
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
     marginBottom: 12,
-    backgroundColor: '#f9fafb',
+    backgroundColor: "#f9fafb",
   },
   dropdownCreateItem: {
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
+    borderTopColor: "#e5e7eb",
+    backgroundColor: "#f0fdf4",
+    alignItems: "center",
   },
   dropdownCreateText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#16a34a',
+    fontWeight: "600",
+    color: "#16a34a",
   },
   dropdownItem: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
+  },
+  dropdownItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dropdownAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden", // ✅ clips the image to the circle
+    flexShrink: 0,
+  },
+  dropdownAvatarInitials: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#00529B",
   },
   dropdownItemSelected: {
     backgroundColor: "#eff6ff",

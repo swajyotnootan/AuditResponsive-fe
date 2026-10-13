@@ -55,16 +55,16 @@ const RejectModal = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
-        <View className="items-center justify-center flex-1 p-4 bg-black/50">
-          <View className="w-full max-w-md p-6 bg-white rounded-xl">
+        <View className="flex-1 items-center justify-center bg-black/50 p-4">
+          <View className="w-full max-w-md rounded-xl bg-white p-6">
             {/* Header */}
-            <View className="flex-row items-center justify-between mb-4">
+            <View className="mb-4 flex-row items-center justify-between">
               <Text className="text-xl font-semibold text-gray-800">
                 Reject Plan
               </Text>
               <TouchableOpacity
                 onPress={onClose}
-                className="p-2 bg-gray-100 rounded-lg"
+                className="rounded-lg bg-gray-100 p-2"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <X size={20} color="#64748b" />
@@ -79,7 +79,7 @@ const RejectModal = ({
             {/* Text Input */}
             <TextInput
               ref={inputRef}
-              className="w-full p-3 border border-gray-200 rounded-lg text-gray-900 min-h-[120px]"
+              className="min-h-[120px] w-full rounded-lg border border-gray-200 p-3 text-gray-900"
               multiline
               numberOfLines={4}
               value={rejectionReason}
@@ -91,11 +91,11 @@ const RejectModal = ({
             />
 
             {/* Action Buttons */}
-            <View className="flex-row justify-end gap-3 mt-6">
+            <View className="mt-6 flex-row justify-end gap-3">
               <TouchableOpacity
                 onPress={onClose}
                 disabled={submitting}
-                className="px-5 py-3 bg-white border border-gray-200 rounded-lg"
+                className="rounded-lg border border-gray-200 bg-white px-5 py-3"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text className="text-base font-medium text-gray-700">
@@ -105,7 +105,7 @@ const RejectModal = ({
               <TouchableOpacity
                 onPress={onConfirm}
                 disabled={submitting}
-                className="flex-row items-center gap-2 px-5 py-3 bg-red-600 rounded-lg disabled:opacity-50"
+                className="flex-row items-center gap-2 rounded-lg bg-red-600 px-5 py-3 disabled:opacity-50"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 {submitting ? (

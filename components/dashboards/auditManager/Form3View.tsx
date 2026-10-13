@@ -1,7 +1,10 @@
 import YearFilter from "@/components/common/YearFilter";
 import { apiClient } from "@/services/api"; // Adjust path if needed
-import axios from "axios";
 import { useLocalSearchParams, useRouter } from "expo-router";
+// At the top of your Form3View file, add these imports:
+import PDFViewer from "@/components/audit/PDFViewer";
+
+import { pdfService } from "@/services/pdfService";
 import {
   AlertCircle,
   ArrowLeft,
@@ -9,7 +12,7 @@ import {
   Check,
   CheckCircle,
   Clock,
-  Download,
+  Eye,
   FileText,
   MessageSquare,
   RefreshCw,
@@ -22,7 +25,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,10 +36,6 @@ import {
 
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext"; // ✅ Toast Context Imported
-
-import { API_BASE_URL } from "@/config/apiConfig";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 
 // ══════ MNC STANDARD PALETTE ══════
 const COLORS = {
@@ -78,6 +76,8 @@ interface PlanItem {
 interface Form3ViewProps {
   year?: number;
   onBack?: () => void;
+  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
+  allUsers?: any[]; // ← Add this
 }
 
 interface PlanInfo {
@@ -356,7 +356,17 @@ const ActionModal = ({
   );
 };
 
-export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
+export default function Form3View({
+  year: propYear,
+  onBack,
+  onOpenForum,
+  allUsers = [],
+}: Form3ViewProps) {
+  const [pdfViewer, setPDFViewer] = useState({
+    visible: false,
+    pdfData: "",
+    fileName: "",
+  });
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement } = useAuth();
@@ -412,9 +422,10 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
 
   // ✅ Fetch data when year changes
   useEffect(() => {
-    fetchPlanData();
-  }, [selectedYear]);
-
+    if (user?.id) {
+      fetchPlanData();
+    }
+  }, [selectedYear, user?.id]);
   const [planInfo, setPlanInfo] = useState<PlanInfo>({
     preparedBy: "",
     approvedBy: "",
@@ -451,7 +462,10 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
   const fetchPlanData = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get(`/api/audit-plan/${selectedYear}`);
+      // ✅ CORRECT
+      const response = await apiClient.get(
+        `/api/audit-plan/${selectedYear}?userId=${user?.id}`,
+      );
       const data = response.data || response;
       if (data) {
         setPlanData(data.planItems || []);
@@ -472,6 +486,39 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
       addToast("Failed to load plan data", "error"); // ✅ Toast
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add this function inside your component
+  const handleViewPDF = async () => {
+    try {
+      if (!user?.id) {
+        addToast("User session not ready. Please wait.", "warning");
+        return;
+      }
+
+      setExporting(true);
+
+      await pdfService.viewPDF(
+        {
+          auditId: String(selectedYear),
+          type: "form3",
+          year: selectedYear,
+          userId: user.id, // ✅ ADD THIS
+        },
+        (result) => {
+          setPDFViewer({
+            visible: true,
+            pdfData: result.pdfData,
+            fileName: result.fileName,
+          });
+          setExporting(false);
+        },
+      );
+    } catch (error) {
+      console.error("PDF View error:", error);
+      addToast("Failed to load PDF", "error");
+      setExporting(false);
     }
   };
 
@@ -507,9 +554,10 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
         }
       });
       setPlanData(newPlanData);
+      // ✅ CORRECT — already has ?userId
       await apiClient.post(`/api/audit-plan/save?userId=${user?.id}`, {
         planYear: selectedYear,
-        planItems: newPlanData,
+        planItems: planData,
       });
       addToast(
         `Demo mode: ${totalPlannedCount} audits marked as PLANNED!`,
@@ -693,83 +741,8 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
   };
 
   const handleExportPDF = async () => {
-    setExporting(true);
-    try {
-      const pdfUrl = `${API_BASE_URL}/api/audit-plan/${selectedYear}/export-pdf`;
-
-      if (Platform.OS === "web") {
-        // ✅ WEB: Standard Blob Download
-        const response = await axios.get(pdfUrl, {
-          responseType: "blob",
-          withCredentials: true,
-        });
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Annual_Audit_Plan_${selectedYear}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
-
-        addToast("PDF exported successfully!", "success");
-      } else {
-        // ✅ MOBILE: FileSystem Download + Native Share Sheet (Save to Files)
-
-        // 1. Get Auth Token (adjust key if you store it differently)
-        let token = null;
-        try {
-          const AsyncStorage = (
-            await import("@react-native-async-storage/async-storage")
-          ).default;
-          token = await AsyncStorage.getItem("token");
-        } catch (e) {
-          console.warn("AsyncStorage not found, proceeding without token.");
-        }
-
-        // ✅ FIX: Explicitly type headers as Record<string, string> to fix TS Error #2
-        const headers: Record<string, string> = token
-          ? { Authorization: `Bearer ${token}` }
-          : {};
-
-        // Using documentDirectory safely from the legacy import
-        const fileUri = `${FileSystem.documentDirectory}Annual_Audit_Plan_${selectedYear}.pdf`;
-
-        // 2. Download the file to the app's local directory
-        const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri, {
-          headers,
-        });
-
-        // 3. Open the native Share Sheet so the user can save it to "Files" or share it
-        if (downloadResult.status === 200) {
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: "application/pdf",
-              dialogTitle: "Save or Share Annual Audit Plan",
-              UTI: "com.adobe.pdf", // iOS specific
-            });
-            addToast("PDF ready to save/share!", "success");
-          } else {
-            addToast("PDF downloaded to app directory.", "success");
-          }
-        } else {
-          throw new Error(
-            "Download failed with status: " + downloadResult.status,
-          );
-        }
-      }
-    } catch (error: any) {
-      console.error("PDF Export Error:", error);
-      addToast(
-        error.response?.data?.message ||
-          error.message ||
-          "Failed to export PDF",
-        "error",
-      );
-    } finally {
-      setExporting(false);
-    }
+    // ✅ Now just calls the view function
+    await handleViewPDF();
   };
   const totalPlanned = useMemo(() => {
     let count = 0;
@@ -801,7 +774,7 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
   return (
     <View style={styles.container}>
       {/* ✅ NEW HEADER (Matches UserManagement look & feel, fixed at top) */}
-      <View className="px-4 pt-3 pb-3 bg-white border-b border-gray-200">
+      <View className="border-b border-gray-200 bg-white px-4 pb-3 pt-3">
         <View
           style={
             isDesktop
@@ -811,18 +784,18 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
         >
           {/* Top Row: Back, Icon, Title (Always visible) */}
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1 mr-4">
+            <View className="mr-4 flex-1 flex-row items-center">
               {/* Back Button */}
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
-                className="items-center justify-center w-10 h-10 mr-2 bg-gray-100 rounded-xl"
+                className="mr-2 h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
               >
                 <ArrowLeft size={20} color="#6b7280" />
               </TouchableOpacity>
 
               {/* Icon Box */}
               <View
-                className="items-center justify-center w-10 h-10 rounded-xl"
+                className="h-10 w-10 items-center justify-center rounded-xl"
                 style={{
                   backgroundColor: COLORS.primaryLight,
                   borderWidth: 1,
@@ -833,7 +806,7 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
               </View>
 
               {/* Title & Subtitle */}
-              <View className="flex-1 ml-3">
+              <View className="ml-3 flex-1">
                 <Text
                   className="text-lg font-bold text-gray-900"
                   numberOfLines={1}
@@ -862,7 +835,7 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
                 />
                 <TouchableOpacity
                   onPress={fetchPlanData}
-                  className="p-2 bg-gray-100 rounded-lg"
+                  className="rounded-lg bg-gray-100 p-2"
                 >
                   <RefreshCw size={16} color="#6b7280" />
                 </TouchableOpacity>
@@ -872,7 +845,7 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
 
           {/* Mobile Only: Right side controls drop to a second row */}
           {!isDesktop && (
-            <View className="flex-row flex-wrap items-center justify-end gap-2 mt-3">
+            <View className="mt-3 flex-row flex-wrap items-center justify-end gap-2">
               <View className="flex-row items-center gap-1">
                 <Text className="text-xs font-semibold text-gray-500">
                   Status:
@@ -886,7 +859,7 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
               />
               <TouchableOpacity
                 onPress={fetchPlanData}
-                className="p-2 bg-gray-100 rounded-lg"
+                className="rounded-lg bg-gray-100 p-2"
               >
                 <RefreshCw size={16} color="#6b7280" />
               </TouchableOpacity>
@@ -1078,9 +1051,9 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
                 color={COLORS.textValue}
                 bgColor={COLORS.card}
                 borderColor={COLORS.border}
-                icon={Download}
+                icon={Eye}
               >
-                Export PDF
+                View PDF
               </ActionButton>
             )}
             {canEdit && (
@@ -1268,6 +1241,65 @@ export default function Form3View({ year: propYear, onBack }: Form3ViewProps) {
             </View>
           </View>
         </Card>
+
+        <PDFViewer
+          visible={pdfViewer.visible}
+          pdfData={pdfViewer.pdfData}
+          fileName={pdfViewer.fileName}
+          auditId={String(selectedYear)}
+          auditNumber={`Form3-${selectedYear}`}
+          pdfType="form3" // ✅ ADD THIS - tells PDFViewer it's Form3
+          forumGroups={[]} // 👈 leave empty now
+          plantId={(user as any)?.plantId ?? null} // 👈 ADD
+          plantName={(user as any)?.plantName ?? null} // 👈 ADD
+          onClose={() => {
+            console.log("🔴 PDFViewer closed");
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+          }}
+          onShareComplete={(forumId?: string) => {
+            console.log(
+              "🟡 [Form3View] onShareComplete called with forumId:",
+              forumId,
+            );
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+            addToast("✅ PDF shared to forum successfully!", "success");
+            if (forumId) {
+              console.log(
+                "🟢 [Form3View] Navigating to dashboard with forum:",
+                forumId,
+              );
+              router.push({
+                pathname: "/",
+                params: {
+                  tab: "dashboard",
+                  openForum: forumId,
+                  fromShare: "true",
+                },
+              });
+            }
+          }}
+          onNavigateToForum={(forumId: string) => {
+            console.log(
+              "🟣 [Form3View] onNavigateToForum called with:",
+              forumId,
+            );
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+            if (onOpenForum) {
+              console.log(
+                "🟢 [Form3View] Direct navigation via onOpenForum:",
+                forumId,
+              );
+              setTimeout(() => {
+                onOpenForum(forumId);
+              }, 300);
+            } else {
+              console.log("🔴 [Form3View] onOpenForum not available!");
+              addToast("Please open the forum from the main menu", "info");
+            }
+          }}
+          currentUser={user}
+          allUsers={allUsers} // ✅ PASS allUsers from props to PDFViewer
+        />
       </ScrollView>
 
       {/* Modals */}

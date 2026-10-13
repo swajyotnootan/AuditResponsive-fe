@@ -4,28 +4,65 @@ import { Platform } from "react-native";
 
 // ✅ Dynamic API Base (Update the mobile IP to your machine's local IP if testing on a physical device)
 
-
 // ✅ Cross-platform token retrieval
 const getToken = async () => {
   if (Platform.OS === "web") {
     return typeof window !== "undefined" ? localStorage.getItem("token") : null;
   }
   try {
-    return await AsyncStorage.getItem("token");
+    return await AsyncStorage.getItem("authToken");
   } catch (error) {
     console.error("Error getting token from AsyncStorage:", error);
     return null;
   }
 };
 
-// ✅ Centralized Fetch Helper (Replaces Axios Interceptor)
-const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
-  const token = await getToken();
+// ✅ Cross-platform user-id retrieval (mirrors getToken)
+const getCurrentUserId = async (): Promise<string | null> => {
+  // 1. Try the flat "userId" key first (fast path)
+  try {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") {
+        const v = localStorage.getItem("userId");
+        if (v) return v;
+      }
+    } else {
+      const v = await AsyncStorage.getItem("userId");
+      if (v) return v;
+    }
+  } catch {}
 
-  const headers = {
+  // 2. Fall back to parsing the stored "user" object
+  try {
+    let raw: string | null = null;
+    if (Platform.OS === "web") {
+      raw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+    } else {
+      raw = await AsyncStorage.getItem("user");
+    }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.id != null) return String(parsed.id);
+    }
+  } catch (err) {
+    console.warn("⚠️ getCurrentUserId: could not parse stored user", err);
+  }
+
+  return null;
+};
+
+const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
+  const [token, userId] = await Promise.all([getToken(), getCurrentUserId()]);
+
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
+    // ✅ Plant-scoping: backend resolves this user's plant/company
+    ...(userId ? { "X-User-Id": userId } : {}),
+    // ✅ Consistent timezone for date handling
+    "X-Timezone":
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+    ...((options.headers as Record<string, string>) || {}),
   };
 
   const response = await fetch(`${API_BASE_URL}/api${endpoint}`, {
@@ -33,11 +70,10 @@ const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
     headers,
   });
 
-  // Safely parse JSON, fallback to text if response is not JSON
   let data;
   try {
     data = await response.json();
-  } catch (e) {
+  } catch {
     data = await response.text();
   }
 
@@ -72,19 +108,40 @@ export const ncrService = {
     }
   },
 
-  getAllNCRs: async () => {
+  /**
+   * Get all NCRs visible to the current user.
+   * The backend filters by the user's plant/company automatically
+   * when the X-User-Id header is present.
+   */
+  getAllNCRs: async (userId?: string | number) => {
     try {
-      const data = await fetchWithAuth("/ncr/all");
-      return { success: true, data };
-    } catch (error: any) {
-      console.error("Fetch all NCRs error:", error);
-      return {
-        success: false,
-        error: getErrorMessage(error, "Failed to fetch NCRs."),
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Timezone":
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
       };
+
+      // ✅ Only send header if we have a user id
+      if (userId != null && String(userId).trim() !== "") {
+        headers["X-User-Id"] = String(userId);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/ncr/all`, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      return { success: true, data: Array.isArray(data) ? data : [] };
+    } catch (error: any) {
+      console.error("❌ [ncrService.getAllNCRs]", error);
+      return { success: false, error: error.message || "Network error" };
     }
   },
-
   getNCRById: async (ncrId: string | number) => {
     try {
       const data = await fetchWithAuth(`/ncr/${ncrId}`);

@@ -1,10 +1,10 @@
-﻿import { API_BASE_URL } from "@/config/apiConfig";
+import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   AlertCircle,
-  AlertTriangle, // ✅ Added
+  AlertTriangle, // ? Added
   Calendar,
   CheckCircle,
   ChevronDown,
@@ -14,7 +14,7 @@ import {
   Eye,
   FileText,
   Grid3x3,
-  Layers, // ✅ Added
+  Layers, // ? Added
   List,
   MessageCircle,
   Play,
@@ -45,7 +45,7 @@ import FiveSAuditForm from "./auditor/FiveSAuditForm";
 import ManufacturingProcessAuditForm from "./auditor/ManufacturingProcessAuditForm";
 import NCRViewManager from "./auditor/view/NCRViewManager";
 // ============================================================================
-// ⚠️ STEP 1: UNCOMMENT YOUR REAL IMPORTS & DELETE THE FALLBACKS BELOW
+// ?? STEP 1: UNCOMMENT YOUR REAL IMPORTS & DELETE THE FALLBACKS BELOW
 // ============================================================================
 
 import { useAuth } from "@/components/context/AuthContext";
@@ -57,7 +57,6 @@ import IATFInternalView from "./auditor/view/IATFInternalView";
 import ManufacturingProcessView from "./auditor/view/ManufacturingProcessView";
 // ============================================================================
 import Form7View from "./auditor/Form7View";
-
 
 const TIME_OPTIONS = [
   "09:00 AM",
@@ -90,11 +89,11 @@ const NAVBAR_COLORS = {
 };
 
 // ============================================================================
-// ✅ NATIVE FETCH HELPER
+// ? NATIVE FETCH HELPER
 // ============================================================================
 const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${API_BASE_URL}/api${endpoint}`;
-  const token = await AsyncStorage.getItem("token");
+  const token = await AsyncStorage.getItem("authToken");
 
   const config: RequestInit = {
     headers: {
@@ -115,7 +114,7 @@ const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     }
     return await response.json();
   } catch (error) {
-    console.error(`❌ [API FETCH] Failed (${endpoint}):`, error);
+    console.error(`? [API FETCH] Failed (${endpoint}):`, error);
     throw error;
   }
 };
@@ -128,7 +127,7 @@ const getFormRoute = (audit: any) => {
 
   // 1. 5S Audit
   if (t.includes("5s") || t.includes("five_s") || t.includes("five s")) {
-    return "AuditFiveS"; // ⚠️ CHANGE THIS to match your EXACT file name (e.g., "AuditFiveS" or "FiveSAuditForm")
+    return "AuditFiveS"; // ?? CHANGE THIS to match your EXACT file name (e.g., "AuditFiveS" or "FiveSAuditForm")
   }
   // 2. System / IATF / Internal Audit
   if (
@@ -137,11 +136,11 @@ const getFormRoute = (audit: any) => {
     t.includes("internal") ||
     t.includes("16949")
   ) {
-    return "AuditIATFInternal"; // ⚠️ CHANGE THIS to match your file name
+    return "AuditIATFInternal"; // ?? CHANGE THIS to match your file name
   }
   // 3. Process / Manufacturing Audit
   if (t.includes("process") || t.includes("manufacturing")) {
-    return "AuditManufacturingProcess"; // ⚠️ CHANGE THIS to match your file name
+    return "AuditManufacturingProcess"; // ?? CHANGE THIS to match your file name
   }
 
   // Default fallback
@@ -150,9 +149,9 @@ const getFormRoute = (audit: any) => {
 
 const getViewRoute = (audit: any) => {
   const auditType = (audit.auditType || "").toLowerCase().trim();
-  console.log("📂 [DEBUG] Determining route for auditType:", auditType);
+  console.log("?? [DEBUG] Determining route for auditType:", auditType);
 
-  // ⚠️ VERIFY THESE PATHS MATCH YOUR EXACT FILE NAMES IN THE `app` FOLDER
+  // ?? VERIFY THESE PATHS MATCH YOUR EXACT FILE NAMES IN THE `app` FOLDER
   if (
     auditType.includes("5s") ||
     auditType.includes("five_s") ||
@@ -173,7 +172,7 @@ const getViewRoute = (audit: any) => {
   }
 
   console.warn(
-    "⚠️ [DEBUG] Unknown audit type, defaulting to /auditor/fives-view",
+    "?? [DEBUG] Unknown audit type, defaulting to /auditor/fives-view",
   );
   return "/auditor/fives-view";
 };
@@ -188,7 +187,7 @@ const isAuditExpired = (audit: any) => {
     audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate;
 
   if (isDateRange) {
-    // ✅ USE parseServerDate HERE
+    // ? USE parseServerDate HERE
     const fromDate = parseServerDate(audit.fromDate);
     const toDate = parseServerDate(audit.toDate);
     fromDate.setHours(0, 0, 0, 0);
@@ -208,7 +207,7 @@ const isAuditExpired = (audit: any) => {
 
   if (!audit?.scheduledDate) return false;
 
-  // ✅ USE parseServerDate HERE
+  // ? USE parseServerDate HERE
   const scheduleDate = parseServerDate(audit.scheduledDate);
   scheduleDate.setHours(0, 0, 0, 0);
 
@@ -218,7 +217,6 @@ const isAuditExpired = (audit: any) => {
   }
   return false;
 };
-
 
 const parseResponseAnswers = (r: any) => {
   try {
@@ -315,12 +313,12 @@ const TimePicker = ({ value, onChange, disabled, options }: any) => {
       <TouchableOpacity
         onPress={() => !disabled && setShowPicker(true)}
         disabled={disabled}
-        className={`w-full p-3 border rounded-xl bg-white flex-row items-center justify-between ${
-          disabled ? "bg-slate-100 border-slate-200" : "border-slate-200"
+        className={`w-full flex-row items-center justify-between rounded-xl border bg-white p-3 ${
+          disabled ? "border-slate-200 bg-slate-100" : "border-slate-200"
         }`}
       >
         <Text
-          className={`text-sm flex-1 ${disabled ? "text-slate-400" : "text-slate-800"}`}
+          className={`flex-1 text-sm ${disabled ? "text-slate-400" : "text-slate-800"}`}
         >
           {value || "Select Time"}
         </Text>
@@ -329,19 +327,19 @@ const TimePicker = ({ value, onChange, disabled, options }: any) => {
 
       {/* Centered, Constrained Modal for Professional Web/Mobile Look */}
       <Modal visible={showPicker} transparent animationType="fade">
-        <View className="items-center justify-center flex-1 bg-slate-900/40">
+        <View className="flex-1 items-center justify-center bg-slate-900/40">
           <View
-            className="overflow-hidden bg-white border shadow-2xl rounded-2xl border-slate-200"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
             style={{ width: "70%", maxWidth: 320, maxHeight: "30%" }}
           >
             {/* Header */}
-            <View className="flex-row items-center justify-between px-5 py-4 bg-blue-600 border-b border-slate-100">
+            <View className="flex-row items-center justify-between border-b border-slate-100 bg-blue-600 px-5 py-4">
               <Text className="text-base font-semibold text-slate-800">
                 Select Time
               </Text>
               <TouchableOpacity
                 onPress={() => setShowPicker(false)}
-                className="p-1.5 rounded-full bg-slate-200/50"
+                className="rounded-full bg-slate-200/50 p-1.5"
               >
                 <X size={18} color="#64748b" />
               </TouchableOpacity>
@@ -361,16 +359,16 @@ const TimePicker = ({ value, onChange, disabled, options }: any) => {
                       onChange(item);
                       setShowPicker(false);
                     }}
-                    className={`flex-row items-center justify-between p-3 rounded-xl mb-1 ${
+                    className={`mb-1 flex-row items-center justify-between rounded-xl p-3 ${
                       isSelected
-                        ? "bg-blue-50 border border-blue-200"
-                        : "bg-white border border-slate-100"
+                        ? "border border-blue-200 bg-blue-50"
+                        : "border border-slate-100 bg-white"
                     }`}
                   >
                     <View className="flex-row items-center gap-3">
                       {/* Visual Dot Indicator */}
                       <View
-                        className={`w-2 h-2 rounded-full ${isSelected ? "bg-blue-500" : "bg-slate-300"}`}
+                        className={`h-2 w-2 rounded-full ${isSelected ? "bg-blue-500" : "bg-slate-300"}`}
                       />
                       <Text
                         className={`text-sm font-medium ${
@@ -391,25 +389,25 @@ const TimePicker = ({ value, onChange, disabled, options }: any) => {
       </Modal>
     </View>
   );
-}
+};
 const StatCard = ({ title, value, icon: Icon }: any) => (
-  <View className="flex-1 p-3 bg-white border shadow-sm border-slate-200 rounded-2xl">
-    <View className="flex-row items-start justify-start mb-2">
+  <View className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <View className="mb-2 flex-row items-start justify-start">
       <View
-        className="p-2 rounded-xl"
+        className="rounded-xl p-2"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
         <Icon size={18} color={NAVBAR_COLORS.primary} />
       </View>
     </View>
     <Text
-      className="mb-1 text-lg font-bold tracking-tight text-left text-slate-800"
+      className="mb-1 text-left text-lg font-bold tracking-tight text-slate-800"
       numberOfLines={1}
     >
       {value}
     </Text>
     <Text
-      className="text-[10px] font-semibold tracking-wide uppercase text-left text-slate-500"
+      className="text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500"
       numberOfLines={2}
     >
       {title}
@@ -445,7 +443,7 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
 
   const statsData = isNcr ? ncrStatsData : auditStats;
 
-  // ✅ MOBILE: Horizontal ScrollView (Fixed width per card so it doesn't squish)
+  // ? MOBILE: Horizontal ScrollView (Fixed width per card so it doesn't squish)
   if (isMobile) {
     return (
       <ScrollView
@@ -463,12 +461,12 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
     );
   }
 
-  // ✅ TABLET & DESKTOP: Force ALL cards into a SINGLE row
+  // ? TABLET & DESKTOP: Force ALL cards into a SINGLE row
   // Using flex: 1 ensures they divide the available width equally (whether 6 or 7 cards)
   return (
     <View className="flex-row">
       {statsData.map((stat, index) => (
-        <View key={index} className="px-1 mb-4" style={{ flex: 1 }}>
+        <View key={index} className="mb-4 px-1" style={{ flex: 1 }}>
           <StatCard title={stat.title} value={stat.value} icon={stat.icon} />
         </View>
       ))}
@@ -476,7 +474,45 @@ const StatCardsContainer = ({ stats, isNcr = false }: any) => {
   );
 };
 
-// ✅ NEW: COMPACT LIST ITEM COMPONENT FOR LIST VIEW
+const getAuditeeNames = (audit: any): string[] => {
+  if (!audit) return [];
+
+  // 1. Array of names (preferred)
+  if (Array.isArray(audit.auditeeNames) && audit.auditeeNames.length > 0) {
+    return audit.auditeeNames.filter(Boolean);
+  }
+
+  // 2. Array of auditee objects
+  if (Array.isArray(audit.auditees) && audit.auditees.length > 0) {
+    return audit.auditees
+      .map((a: any) => a?.name || a?.auditeeName || a?.fullName)
+      .filter(Boolean);
+  }
+
+  // 3. Comma-separated string from backend
+  if (
+    typeof audit.auditeeName === "string" &&
+    audit.auditeeName.includes(",")
+  ) {
+    return audit.auditeeName
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+  }
+
+  // 4. Fallback: single name
+  if (audit.auditeeName) return [audit.auditeeName];
+
+  return [];
+};
+
+const formatAuditeeDisplay = (names: string[], maxVisible = 2) => {
+  if (names.length === 0) return "TBD";
+  if (names.length <= maxVisible) return names.join(", ");
+  return `${names.slice(0, maxVisible).join(", ")} +${names.length - maxVisible}`;
+};
+
+// ? NEW: COMPACT LIST ITEM COMPONENT FOR LIST VIEW
 const AuditListItem = ({
   item,
   handleViewForm,
@@ -505,7 +541,7 @@ const AuditListItem = ({
       "flex-row items-center gap-1.5 px-2 py-1 rounded-lg border";
     if (allFormsCompleted)
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <CheckCircle size={12} color="#047857" />
           <Text className="text-[10px] font-semibold text-emerald-700">
             Completed
@@ -514,7 +550,7 @@ const AuditListItem = ({
       );
     if (hasPendingReschedule)
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <Clock size={12} color="#1d4ed8" />
           <Text className="text-[10px] font-semibold text-blue-700">
             Reschedule Pending
@@ -523,7 +559,7 @@ const AuditListItem = ({
       );
     if (hasPendingExtension)
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <Clock size={12} color="#1d4ed8" />
           <Text className="text-[10px] font-semibold text-blue-700">
             Extension Pending
@@ -532,7 +568,7 @@ const AuditListItem = ({
       );
     if (isOverduePartialWork)
       return (
-        <View className={`${baseClass} bg-amber-50 border-amber-200`}>
+        <View className={`${baseClass} border-amber-200 bg-amber-50`}>
           <AlertCircle size={12} color="#b45309" />
           <Text className="text-[10px] font-semibold text-amber-700">
             Overdue
@@ -541,7 +577,7 @@ const AuditListItem = ({
       );
     if (isOverdueNoWork)
       return (
-        <View className={`${baseClass} bg-rose-50 border-rose-200`}>
+        <View className={`${baseClass} border-rose-200 bg-rose-50`}>
           <AlertCircle size={12} color="#be123c" />
           <Text className="text-[10px] font-semibold text-rose-700">
             Overdue
@@ -550,7 +586,7 @@ const AuditListItem = ({
       );
     if (timeStatus === "UPCOMING")
       return (
-        <View className={`${baseClass} bg-slate-50 border-slate-200`}>
+        <View className={`${baseClass} border-slate-200 bg-slate-50`}>
           <Calendar size={12} color="#475569" />
           <Text className="text-[10px] font-semibold text-slate-700">
             Upcoming
@@ -559,7 +595,7 @@ const AuditListItem = ({
       );
     if (timeStatus === "ACTIVE" && canStart)
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <Play size={12} color="#047857" />
           <Text className="text-[10px] font-semibold text-emerald-700">
             Ready
@@ -567,7 +603,7 @@ const AuditListItem = ({
         </View>
       );
     return (
-      <View className={`${baseClass} bg-slate-50 border-slate-200`}>
+      <View className={`${baseClass} border-slate-200 bg-slate-50`}>
         <Calendar size={12} color="#475569" />
         <Text className="text-[10px] font-semibold text-slate-700">
           Scheduled
@@ -577,9 +613,9 @@ const AuditListItem = ({
   };
 
   return (
-    <View className="flex-row items-center justify-between w-full p-4 mb-3 bg-white border shadow-sm border-slate-200 rounded-xl">
-      <View className="flex-1 mr-4">
-        <View className="flex-row flex-wrap items-center gap-2 mb-2">
+    <View className="mb-3 w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <View className="mr-4 flex-1">
+        <View className="mb-2 flex-row flex-wrap items-center gap-2">
           {getStatusBadge()}
           {audit.auditNumber && (
             <Text className="font-mono text-xs text-slate-600">
@@ -598,15 +634,15 @@ const AuditListItem = ({
             <Calendar size={12} color="#94a3b8" />
             <Text className="text-xs text-slate-600">
               {audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate
-                ? `${audit.fromDate} → ${audit.toDate}`
+                ? `${audit.fromDate} ? ${audit.toDate}`
                 : audit.scheduledDate}
             </Text>
-             {audit.originalScheduledDate && (
+            {audit.originalScheduledDate && (
               <>
-                <Text className="ml-1 text-xs line-through text-rose-500">
+                <Text className="ml-1 text-xs text-rose-500 line-through">
                   Was: {audit.originalScheduledDate}
                 </Text>
-                <View className="px-1.5 py-0.5 bg-amber-100 border border-amber-200 rounded">
+                <View className="rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5">
                   <Text className="text-[9px] font-bold text-amber-800">
                     Rescheduled
                   </Text>
@@ -614,10 +650,10 @@ const AuditListItem = ({
               </>
             )}
           </View>
-          <View className="flex-row items-center gap-1">
+          <View className="flex-shrink flex-row items-center gap-1">
             <UserCheck size={12} color="#94a3b8" />
-            <Text className="text-xs text-slate-600">
-              {audit.auditeeName || "TBD"}
+            <Text className="text-xs text-slate-600" numberOfLines={1}>
+              {formatAuditeeDisplay(getAuditeeNames(audit))}
             </Text>
           </View>
         </View>
@@ -626,7 +662,7 @@ const AuditListItem = ({
       <View className="flex-row items-center gap-2">
         <TouchableOpacity
           onPress={() => onOpenForum(audit, null)}
-          className="p-2 border rounded-lg bg-slate-50 border-slate-200"
+          className="rounded-lg border border-slate-200 bg-slate-50 p-2"
         >
           <MessageCircle size={16} color="#334155" />
         </TouchableOpacity>
@@ -634,14 +670,14 @@ const AuditListItem = ({
         {isOverdueNoWork && !hasPendingReschedule ? (
           <TouchableOpacity
             onPress={() => onRequestReschedule(audit)}
-            className="px-3 py-2 bg-blue-600 rounded-lg"
+            className="rounded-lg bg-blue-600 px-3 py-2"
           >
             <Text className="text-xs font-semibold text-white">Reschedule</Text>
           </TouchableOpacity>
         ) : isOverduePartialWork && !hasPendingExtension ? (
           <TouchableOpacity
             onPress={() => onRequestExtension(audit)}
-            className="px-3 py-2 bg-blue-600 rounded-lg"
+            className="rounded-lg bg-blue-600 px-3 py-2"
           >
             <Text className="text-xs font-semibold text-white">Extend</Text>
           </TouchableOpacity>
@@ -651,10 +687,10 @@ const AuditListItem = ({
           !allFormsCompleted &&
           hasPendingForms &&
           nextPendingForm &&
-          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
+          (timeStatus === "ACTIVE" || canStart) ? ( // ? ADD THIS LINE
           <TouchableOpacity
             onPress={() => handleViewForm(audit, nextPendingForm)}
-            className="px-3 py-2 border border-blue-200 rounded-lg bg-blue-50"
+            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2"
           >
             <Text className="text-xs font-semibold text-blue-700">
               Fill Next
@@ -664,14 +700,14 @@ const AuditListItem = ({
           !hasPendingExtension &&
           !hasStartedWork &&
           !isExpired &&
-          (timeStatus === "ACTIVE" || canStart) ? ( // ✅ ADD THIS LINE
+          (timeStatus === "ACTIVE" || canStart) ? ( // ? ADD THIS LINE
           <TouchableOpacity
             onPress={() => handleViewForm(audit, audit.formDetails?.[0])}
-            className="px-3 py-2 bg-blue-600 rounded-lg"
+            className="rounded-lg bg-blue-600 px-3 py-2"
           >
             <Text className="text-xs font-semibold text-white">Start</Text>
           </TouchableOpacity>
-        ) : audit.formDetails?.[0]?.responseId && allFormsCompleted ? ( // ✅ Added && allFormsCompleted
+        ) : audit.formDetails?.[0]?.responseId && allFormsCompleted ? ( // ? Added && allFormsCompleted
           <TouchableOpacity
             onPress={() =>
               handleViewReport(
@@ -680,7 +716,7 @@ const AuditListItem = ({
                 audit.formDetails?.[0],
               )
             }
-            className="px-3 py-2 border rounded-lg bg-emerald-50 border-emerald-200"
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
           >
             <Text className="text-xs font-semibold text-emerald-700">
               View Report
@@ -710,7 +746,7 @@ const AuditCard = ({
   onOpenForum,
 }: any) => {
   const [expanded, setExpanded] = useState(false);
-  
+
   const isExpired = timeStatus === "EXPIRED" || isAuditExpired(audit);
   const isMultiForm = totalForms > 1;
   const allFormsCompleted = completedForms === totalForms && totalForms > 0;
@@ -731,7 +767,7 @@ const AuditCard = ({
       "flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg border";
     if (allFormsCompleted)
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <CheckCircle size={14} color="#047857" />
           <Text className="ml-1 text-[11px] font-semibold text-emerald-700">
             All Completed
@@ -740,7 +776,7 @@ const AuditCard = ({
       );
     if (hasPendingReschedule)
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <Clock size={14} color="#1d4ed8" />
           <Text className="ml-1 text-[11px] font-semibold text-blue-700">
             Reschedule Pending
@@ -749,7 +785,7 @@ const AuditCard = ({
       );
     if (hasPendingExtension)
       return (
-        <View className={`${baseClass} bg-blue-50 border-blue-200`}>
+        <View className={`${baseClass} border-blue-200 bg-blue-50`}>
           <Clock size={14} color="#1d4ed8" />
           <Text className="ml-1 text-[11px] font-semibold text-blue-700">
             Extension Pending
@@ -758,7 +794,7 @@ const AuditCard = ({
       );
     if (isOverduePartialWork)
       return (
-        <View className={`${baseClass} bg-amber-50 border-amber-200`}>
+        <View className={`${baseClass} border-amber-200 bg-amber-50`}>
           <AlertCircle size={14} color="#b45309" />
           <Text className="ml-1 text-[11px] font-semibold text-amber-700">
             Overdue (In Progress)
@@ -767,7 +803,7 @@ const AuditCard = ({
       );
     if (isOverdueNoWork)
       return (
-        <View className={`${baseClass} bg-rose-50 border-rose-200`}>
+        <View className={`${baseClass} border-rose-200 bg-rose-50`}>
           <AlertCircle size={14} color="#be123c" />
           <Text className="ml-1 text-[11px] font-semibold text-rose-700">
             Overdue (Not Started)
@@ -776,7 +812,7 @@ const AuditCard = ({
       );
     if (hasFormData && hasPendingForms)
       return (
-        <View className={`${baseClass} bg-indigo-50 border-indigo-200`}>
+        <View className={`${baseClass} border-indigo-200 bg-indigo-50`}>
           <Edit size={14} color="#4338ca" />
           <Text className="ml-1 text-[11px] font-semibold text-indigo-700">
             In Progress
@@ -785,7 +821,7 @@ const AuditCard = ({
       );
     if (audit.status === "IN_PROGRESS")
       return (
-        <View className={`${baseClass} bg-amber-50 border-amber-200`}>
+        <View className={`${baseClass} border-amber-200 bg-amber-50`}>
           <Play size={14} color="#b45309" />
           <Text className="ml-1 text-[11px] font-semibold text-amber-700">
             In Progress
@@ -794,7 +830,7 @@ const AuditCard = ({
       );
     if (timeStatus === "UPCOMING")
       return (
-        <View className={`${baseClass} bg-slate-50 border-slate-200`}>
+        <View className={`${baseClass} border-slate-200 bg-slate-50`}>
           <Calendar size={14} color="#475569" />
           <Text className="ml-1 text-[11px] font-semibold text-slate-700">
             Upcoming
@@ -803,7 +839,7 @@ const AuditCard = ({
       );
     if (timeStatus === "ACTIVE" && canStart)
       return (
-        <View className={`${baseClass} bg-emerald-50 border-emerald-200`}>
+        <View className={`${baseClass} border-emerald-200 bg-emerald-50`}>
           <Play size={14} color="#047857" />
           <Text className="ml-1 text-[11px] font-semibold text-emerald-700">
             Ready to Start
@@ -811,7 +847,7 @@ const AuditCard = ({
         </View>
       );
     return (
-      <View className={`${baseClass} bg-slate-50 border-slate-200`}>
+      <View className={`${baseClass} border-slate-200 bg-slate-50`}>
         <Calendar size={14} color="#475569" />
         <Text className="ml-1 text-[11px] font-semibold text-slate-700">
           Scheduled
@@ -830,40 +866,40 @@ const AuditCard = ({
 
   return (
     <View
-      className={`flex-1 border shadow-sm rounded-2xl border-slate-200 ${getCardBgColor()}`}
+      className={`flex-1 rounded-2xl border border-slate-200 shadow-sm ${getCardBgColor()}`}
     >
       <View className="flex-1 p-4">
-        {/* ✅ ROW 1: Status badges at the TOP (full width, wrap safely) */}
-        {/* ✅ HEADER: Status badges (LEFT) + Date (RIGHT) on the SAME line */}
-        <View className="flex-row items-center justify-between gap-2 mb-3">
-          {/* LEFT: badges — can wrap/shrink, so they never collide with the date */}
+        {/* ? ROW 1: Status badges at the TOP (full width, wrap safely) */}
+        {/* ? HEADER: Status badges (LEFT) + Date (RIGHT) on the SAME line */}
+        <View className="mb-3 flex-row items-center justify-between gap-2">
+          {/* LEFT: badges � can wrap/shrink, so they never collide with the date */}
           <View
             className="flex-row flex-wrap items-center gap-2"
             style={{ flexShrink: 1 }}
           >
             {getStatusBadge()}
             {isMultiForm && (
-              <View className="flex-row items-center gap-1 px-2 py-1 border rounded-lg bg-slate-100 border-slate-200">
+              <View className="flex-row items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 py-1">
                 <Text className="text-[10px] font-semibold text-slate-700">
                   {completedForms}/{totalForms} Forms
                 </Text>
               </View>
             )}
             {audit.auditNumber && (
-              <View className="flex-row items-center gap-1 px-2 py-1 border rounded-lg bg-slate-50 border-slate-200">
-                <Text className="text-[10px] font-mono font-semibold text-slate-600">
+              <View className="flex-row items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+                <Text className="font-mono text-[10px] font-semibold text-slate-600">
                   #{audit.auditNumber}
                 </Text>
               </View>
             )}
           </View>
 
-          {/* RIGHT: date chip — same line, capped at 55% so it can't overlap the badges */}
+          {/* RIGHT: date chip � same line, capped at 55% so it can't overlap the badges */}
           <View
-            className={`flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg border ${
+            className={`flex-row items-center gap-1.5 rounded-lg border px-2 py-1.5 ${
               audit.originalScheduledDate
-                ? "bg-emerald-50 border-emerald-200"
-                : "bg-slate-50 border-slate-200"
+                ? "border-emerald-200 bg-emerald-50"
+                : "border-slate-200 bg-slate-50"
             }`}
             style={{ flexShrink: 0, maxWidth: "55%" }}
           >
@@ -880,12 +916,12 @@ const AuditCard = ({
               numberOfLines={1}
             >
               {audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate
-                ? `${audit.fromDate} → ${audit.toDate}`
+                ? `${audit.fromDate} ? ${audit.toDate}`
                 : audit.scheduledDate}
             </Text>
           </View>
-           {audit.originalScheduledDate && (
-            <View className="flex-row items-center gap-1.5 mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+          {audit.originalScheduledDate && (
+            <View className="mt-1.5 flex-row items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1">
               <Text className="text-[10px] font-semibold text-amber-800 line-through">
                 Was: {audit.originalScheduledDate}
               </Text>
@@ -893,8 +929,7 @@ const AuditCard = ({
           )}
         </View>
 
-
-        {/* ✅ ROW 2: Title */}
+        {/* ? ROW 2: Title */}
         <Text
           className="mb-3 text-sm font-bold text-slate-800"
           numberOfLines={2}
@@ -902,28 +937,36 @@ const AuditCard = ({
           {audit.auditType || "Audit"} - {audit.department || "General"}
         </Text>
 
-        {/* ✅ ROW 3: ALL meta chips together — Date + Time + Auditee (wrap naturally, overlap impossible) */}
-        <View className="flex-row flex-wrap gap-2 mb-3">
-          {/* 🕐 Time chip */}
-          <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
+        {/* ? ROW 3: ALL meta chips together � Date + Time + Auditee (wrap naturally, overlap impossible) */}
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          {/* ?? Time chip */}
+          <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
             <Clock size={12} color="#94a3b8" />
             <Text className="text-[11px] font-medium text-slate-600">
               {audit.startTime} - {audit.endTime}
             </Text>
           </View>
 
-          {/* 👤 Auditee chip */}
-          <View className="flex-row items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded-md border border-slate-200">
-            <UserCheck size={12} color="#94a3b8" />
-            <Text className="text-[11px] font-medium text-slate-600">
-              {audit.auditeeName || "TBD"}
-            </Text>
-          </View>
+          {/* ?? Auditee chip (supports multiple) */}
+          {(() => {
+            const auditeeNames = getAuditeeNames(audit);
+            return (
+              <View className="max-w-full flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                <UserCheck size={12} color="#94a3b8" />
+                <Text
+                  className="flex-shrink text-[11px] font-medium text-slate-600"
+                  numberOfLines={1}
+                >
+                  {formatAuditeeDisplay(auditeeNames)}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
 
-        {/* ✅ Overdue warnings (keep as-is) */}
+        {/* ? Overdue warnings (keep as-is) */}
         {isOverdueNoWork && !hasPendingReschedule && (
-          <View className="flex-row items-center gap-2 p-3 mb-3 border text-rose-700 bg-rose-50 rounded-xl border-rose-200">
+          <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-700">
             <AlertCircle size={14} color="#be123c" />
             <Text className="flex-1 text-[11px] font-medium text-rose-700">
               This audit hasn't started and is overdue! Please reschedule.
@@ -931,7 +974,7 @@ const AuditCard = ({
           </View>
         )}
         {isOverduePartialWork && !hasPendingExtension && (
-          <View className="flex-row items-center gap-2 p-3 mb-3 border text-amber-700 bg-amber-50 rounded-xl border-amber-200">
+          <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-700">
             <AlertCircle size={14} color="#b45309" />
             <Text className="flex-1 text-[11px] font-medium text-amber-700">
               You've completed {completedForms} of {totalForms} forms. Request
@@ -942,15 +985,15 @@ const AuditCard = ({
 
         {isMultiForm && (
           <View className="mb-3">
-            <View className="flex-row items-center justify-between mb-1.5">
-              <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            <View className="mb-1.5 flex-row items-center justify-between">
+              <Text className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Progress
               </Text>
               <Text className="text-[10px] font-bold text-blue-600">
                 {Math.round(progressPercent)}%
               </Text>
             </View>
-            <View className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <View className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <View
                 className={`h-full rounded-full ${hasPendingReschedule || hasPendingExtension ? "bg-blue-500" : isOverduePartialWork ? "bg-amber-500" : isOverdueNoWork ? "bg-rose-500" : "bg-emerald-500"}`}
                 style={{ width: `${progressPercent}%` }}
@@ -963,7 +1006,7 @@ const AuditCard = ({
           <View className="mb-3">
             <TouchableOpacity
               onPress={() => setExpanded(!expanded)}
-              className="flex-row items-center justify-between w-full px-3 py-2.5 border rounded-lg border-slate-200 bg-slate-50"
+              className="w-full flex-row items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
             >
               <Text className="text-[11px] font-semibold text-slate-600">
                 Forms ({completedForms}/{totalForms})
@@ -987,14 +1030,14 @@ const AuditCard = ({
                   return (
                     <View
                       key={idx}
-                      className={`flex-row items-center justify-between p-3 border rounded-lg mb-2 ${isFormOverdue ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200"}`}
+                      className={`mb-2 flex-row items-center justify-between rounded-lg border p-3 ${isFormOverdue ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}
                     >
-                      <View className="flex-row items-center flex-1 gap-2">
+                      <View className="flex-1 flex-row items-center gap-2">
                         <View
-                          className={`w-2 h-2 rounded-full ${form.completed ? "bg-emerald-500" : isFormOverdue ? "bg-amber-500" : "bg-slate-400"}`}
+                          className={`h-2 w-2 rounded-full ${form.completed ? "bg-emerald-500" : isFormOverdue ? "bg-amber-500" : "bg-slate-400"}`}
                         />
                         <Text
-                          className="flex-1 font-medium truncate text-slate-700"
+                          className="flex-1 truncate font-medium text-slate-700"
                           numberOfLines={1}
                         >
                           {form.processName || form.name}
@@ -1005,7 +1048,7 @@ const AuditCard = ({
                           onPress={() =>
                             onViewReport(form.responseId, audit, form)
                           }
-                          className="flex-row items-center gap-1 px-2.5 py-1.5 border border-blue-200 rounded-md bg-blue-50"
+                          className="flex-row items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5"
                         >
                           <Eye size={12} color="#1d4ed8" />
                           <Text className="text-[10px] font-semibold text-blue-700">
@@ -1018,7 +1061,7 @@ const AuditCard = ({
                             canFill ? onViewForm(audit, form) : null
                           }
                           disabled={!canFill}
-                          className={`flex-row items-center gap-1 px-2.5 py-1.5 rounded-md border ${canFill ? "bg-emerald-50 border-emerald-200" : "bg-slate-100 border-slate-200"}`}
+                          className={`flex-row items-center gap-1 rounded-md border px-2.5 py-1.5 ${canFill ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-100"}`}
                         >
                           <Edit
                             size={12}
@@ -1039,10 +1082,10 @@ const AuditCard = ({
           </View>
         )}
 
-        <View className="flex-row flex-wrap justify-end gap-2 pt-3 mt-auto border-t border-slate-100">
+        <View className="mt-auto flex-row flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
           <TouchableOpacity
             onPress={() => onOpenForum(audit, null)}
-            className="flex-row items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200"
+            className="flex-row items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
           >
             <MessageCircle size={14} color="#334155" />
             <Text className="text-xs font-semibold text-slate-700">Forum</Text>
@@ -1051,7 +1094,7 @@ const AuditCard = ({
           {showRescheduleButton && (
             <TouchableOpacity
               onPress={() => onRequestReschedule(audit)}
-              className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
+              className="flex-row items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 shadow-sm"
             >
               <Calendar size={14} color="#ffffff" />
               <Text className="text-xs font-semibold text-white">
@@ -1063,33 +1106,33 @@ const AuditCard = ({
           {showExtensionButton && (
             <TouchableOpacity
               onPress={() => onRequestExtension(audit)}
-              className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
+              className="flex-row items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 shadow-sm"
             >
               <Clock size={14} color="#ffffff" />
               <Text className="text-xs font-semibold text-white">Extend</Text>
             </TouchableOpacity>
           )}
 
-          {/* ✅ View Report Button */}
+          {/* ? View Report Button */}
           {formDetails?.[0]?.responseId &&
-            allFormsCompleted && ( // ✅ Added && allFormsCompleted
+            allFormsCompleted && ( // ? Added && allFormsCompleted
               <TouchableOpacity
                 onPress={() =>
                   onViewReport(formDetails[0].responseId, audit, formDetails[0])
                 }
-                className="flex-row items-center gap-1.5 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200"
+                className="flex-row items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
               >
                 <Eye size={14} color="#047857" />
                 <Text className="text-xs font-semibold text-emerald-700">
-                  View Report {/* ✅ Removed ternary, strictly "View Report" */}
+                  View Report {/* ? Removed ternary, strictly "View Report" */}
                 </Text>
               </TouchableOpacity>
             )}
-          {/* ✅ Continue Button */}
-                    {/* ✅ Continue Button - Only for multi-form audits */}
+          {/* ? Continue Button */}
+          {/* ? Continue Button - Only for multi-form audits */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
-            isMultiForm && // ✅ Only show for multi-form audits
+            isMultiForm && // ? Only show for multi-form audits
             hasFormData &&
             !allFormsCompleted &&
             !isExpired &&
@@ -1101,7 +1144,7 @@ const AuditCard = ({
                     formDetails?.[0];
                   if (nextForm) onViewForm(audit, nextForm);
                 }}
-                className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-50 rounded-lg border border-blue-200"
+                className="flex-row items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2"
               >
                 <Edit size={14} color="#1d4ed8" />
                 <Text className="text-xs font-semibold text-blue-700">
@@ -1110,18 +1153,18 @@ const AuditCard = ({
               </TouchableOpacity>
             )}
 
-          {/* ✅ Start Audit Button */}
+          {/* ? Start Audit Button */}
           {!hasPendingReschedule &&
             !hasPendingExtension &&
             !hasFormData &&
             !isExpired &&
-            (timeStatus === "ACTIVE" || canStart) && ( // ✅ ADD THIS LINE
+            (timeStatus === "ACTIVE" || canStart) && ( // ? ADD THIS LINE
               <TouchableOpacity
                 onPress={() => {
                   const first = formDetails?.[0];
                   if (first) onViewForm(audit, first);
                 }}
-                className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
+                className="flex-row items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 shadow-sm"
               >
                 <Text className="text-xs font-semibold text-white">
                   Start Audit
@@ -1137,8 +1180,8 @@ const AuditCard = ({
 const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
   if (pendingNcrAudits.length === 0) {
     return (
-      <View className="flex-col items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
-        <View className="flex items-center justify-center w-16 h-16 mb-4 shadow-md rounded-2xl bg-emerald-50">
+      <View className="flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 shadow-sm">
+        <View className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 shadow-md">
           <CheckCircle size={32} color="#059669" />
         </View>
         <Text className="text-lg font-semibold text-slate-700">
@@ -1152,44 +1195,44 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
   }
 
   return (
-    <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
+    <View className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {/* HEADER WITH COUNT BADGE */}
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+      <View className="flex-row items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
         <View className="flex-row items-center gap-2">
           <AlertCircle size={20} color="#e11d48" />
           <Text className="text-sm font-bold text-slate-800">
             Audits with NCR Findings
           </Text>
         </View>
-        <View className="px-3 py-1.5 bg-rose-50 rounded-lg border border-rose-200">
+        <View className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5">
           <Text className="text-xs font-bold text-rose-700">
             {pendingNcrAudits.length} pending
           </Text>
         </View>
       </View>
 
-      {/* ✅ FIX: Replaced FlatList with .map() to fix nested ScrollView rendering bugs */}
+      {/* ? FIX: Replaced FlatList with .map() to fix nested ScrollView rendering bugs */}
       <View>
         {pendingNcrAudits.map((item: any) => (
           <View
             key={String(item.responseId)}
-            className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100"
+            className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4"
           >
-            <View className="flex-1 mr-3">
+            <View className="mr-3 flex-1">
               <Text className="font-mono text-sm font-bold text-slate-900">
                 {item.auditReportNumber}
               </Text>
               <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-                {item.formName} · {item.department}
+                {item.formName} � {item.department}
               </Text>
-              <View className="flex-row flex-wrap gap-1.5 mt-2">
+              <View className="mt-2 flex-row flex-wrap gap-1.5">
                 {item.findings.slice(0, 3).map((f: any, i: number) => (
                   <View
                     key={i}
-                    className={`px-2 py-1 rounded-md border ${
+                    className={`rounded-md border px-2 py-1 ${
                       f.severity === "Major NC"
-                        ? "bg-rose-50 border-rose-200"
-                        : "bg-amber-50 border-amber-200"
+                        ? "border-rose-200 bg-rose-50"
+                        : "border-amber-200 bg-amber-50"
                     }`}
                   >
                     <Text
@@ -1199,17 +1242,16 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
                           : "text-amber-700"
                       }`}
                     >
-                      {f.severity} · {f.clause}
+                      {f.severity} � {f.clause}
                     </Text>
                   </View>
                 ))}
               </View>
             </View>
             <View className="flex-row gap-2">
-              
               <TouchableOpacity
                 onPress={() => onRaise(item)}
-                className="flex-row items-center gap-1.5 px-3 py-2 bg-blue-600 rounded-lg shadow-sm"
+                className="flex-row items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 shadow-sm"
               >
                 <AlertCircle size={16} color="#ffffff" />
                 <Text className="text-xs font-semibold text-white">
@@ -1232,24 +1274,24 @@ const NcrListTab = ({
 }: any) => {
   if (ncrLoading)
     return (
-      <View className="flex-row items-center justify-center py-16 bg-white border shadow-sm rounded-2xl border-slate-200">
+      <View className="flex-row items-center justify-center rounded-2xl border border-slate-200 bg-white py-16 shadow-sm">
         <ActivityIndicator size="small" color={NAVBAR_COLORS.primary} />
         <Text className="ml-2 text-sm text-slate-500">Loading NCRs...</Text>
       </View>
     );
   return (
-    <View className="overflow-hidden bg-white border shadow-sm rounded-2xl border-slate-200">
-      <View className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+    <View className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <View className="flex-row items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
         <View>
           <Text className="text-sm font-bold text-slate-800">
             Your Raised NCRs
           </Text>
-          <Text className="text-xs text-slate-500 mt-0.5">
+          <Text className="mt-0.5 text-xs text-slate-500">
             All nonconformity reports you have created
           </Text>
         </View>
         {raisedNCRs.length > 0 && (
-          <View className="px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200">
+          <View className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-1.5">
             <Text className="text-xs font-bold text-slate-700">
               {raisedNCRs.length} total
             </Text>
@@ -1257,8 +1299,8 @@ const NcrListTab = ({
         )}
       </View>
       {raisedNCRs.length === 0 ? (
-        <View className="flex-col items-center justify-center py-16 text-center bg-white">
-          <View className="flex items-center justify-center w-12 h-12 mb-3 rounded-xl bg-slate-100">
+        <View className="flex-col items-center justify-center bg-white py-16 text-center">
+          <View className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
             <AlertCircle size={24} color="#94a3b8" />
           </View>
           <Text className="text-sm font-semibold text-slate-700">
@@ -1266,7 +1308,7 @@ const NcrListTab = ({
           </Text>
         </View>
       ) : (
-        /* ✅ FIX: Replaced FlatList with .map() to fix nested ScrollView rendering bugs */
+        /* ? FIX: Replaced FlatList with .map() to fix nested ScrollView rendering bugs */
         <View>
           {raisedNCRs.map((item: any) => {
             const statusConfig: any = {
@@ -1283,7 +1325,7 @@ const NcrListTab = ({
             return (
               <View
                 key={String(item.id)}
-                className="flex-row items-center justify-between px-5 py-4 border-b border-slate-100"
+                className="flex-row items-center justify-between border-b border-slate-100 px-5 py-4"
               >
                 <View className="flex-1">
                   <Text
@@ -1295,11 +1337,11 @@ const NcrListTab = ({
                   <Text className="mt-1 text-sm text-slate-600">
                     {item.dueDate
                       ? new Date(item.dueDate).toLocaleDateString("en-GB")
-                      : "—"}
+                      : "�"}
                   </Text>
                 </View>
                 <View
-                  className={`px-3 py-1.5 rounded-lg border mr-3 ${className}`}
+                  className={`mr-3 rounded-lg border px-3 py-1.5 ${className}`}
                 >
                   <Text className="text-xs font-semibold">
                     {item.status.replace("_", " ")}
@@ -1308,13 +1350,13 @@ const NcrListTab = ({
                 <View className="flex-row gap-2">
                   <TouchableOpacity
                     onPress={() => onOpenForum(item)}
-                    className="p-2 rounded-lg bg-slate-50"
+                    className="rounded-lg bg-slate-50 p-2"
                   >
                     <MessageCircle size={18} color="#475569" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => onViewNcr(item.id)}
-                    className="p-2 rounded-lg bg-slate-50"
+                    className="rounded-lg bg-slate-50 p-2"
                   >
                     <Eye size={18} color="#475569" />
                   </TouchableOpacity>
@@ -1336,19 +1378,18 @@ export default function AuditorDashboard() {
 
   const isMobile = width < 768;
 
-  // ✅ FIX 1: These MUST be on separate lines
+  // ? FIX 1: These MUST be on separate lines
   const { user, loading: authLoading } = useAuth();
   const { addToast } = useToast();
 
-  // ✅ FIXED: Single source of truth for tab routing (matches Audit Manager & Top Management)
+  // ? FIXED: Single source of truth for tab routing (matches Audit Manager & Top Management)
   const [activeTab, setActiveTab] = useState("my-audits");
   // Add these state variables
-const [forumModalVisible, setForumModalVisible] = useState(false);
-const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
-const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [forumModalVisible, setForumModalVisible] = useState(false);
+  const [selectedAuditForForum, setSelectedAuditForForum] = useState<any>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  
-  // ✅ FIXED: Listen for param changes and update activeTab
+  // ? FIXED: Listen for param changes and update activeTab
   useEffect(() => {
     if (params?.tab) {
       const tabValue = Array.isArray(params.tab)
@@ -1370,12 +1411,11 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const [activeReportConfig, setActiveReportConfig] = useState<any>(null);
   const [activeFormConfig, setActiveFormConfig] = useState<any>(null);
-    const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
 
-
-  // ✅ 1. Add new state for viewing NCR details
+  // ? 1. Add new state for viewing NCR details
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
-  // ✅ FIX 2: These MUST be on separate lines
+  // ? FIX 2: These MUST be on separate lines
   const [isFetching, setIsFetching] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1403,9 +1443,8 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
   const [raisedNCRs, setRaisedNCRs] = useState<any[]>([]);
   const [ncrLoading, setNcrLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  
 
-  // ✅ ADD THIS: Calculate NCR Stats dynamically
+  // ? ADD THIS: Calculate NCR Stats dynamically
   const ncrStats = useMemo(
     () => ({
       total: raisedNCRs.length,
@@ -1435,7 +1474,7 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
     AsyncStorage.setItem("auditorSelectedYear", selectedYear.toString());
   }, [selectedYear]);
 
-    const fetchRaisedNCRs = async (year = selectedYear) => {
+  const fetchRaisedNCRs = async (year = selectedYear) => {
     if (!user?.id) return;
     try {
       setNcrLoading(true);
@@ -1457,12 +1496,12 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
       });
 
       console.log(
-        "✅ [NCR DEBUG] Final filtered raised NCRs count:",
+        "? [NCR DEBUG] Final filtered raised NCRs count:",
         filteredNCRs.length,
       );
       setRaisedNCRs(filteredNCRs);
     } catch (error) {
-      console.error("❌ [NCR DEBUG] Error fetching raised NCRs:", error);
+      console.error("? [NCR DEBUG] Error fetching raised NCRs:", error);
       addToast("Failed to load NCR list", "error");
       setRaisedNCRs([]);
     } finally {
@@ -1470,108 +1509,120 @@ const [allUsers, setAllUsers] = useState<any[]>([]);
     }
   };
 
-   // ============================================================
-  // ✅ CRITICAL FIX: Timezone-safe date helpers
+  // ============================================================
+  // ? CRITICAL FIX: Timezone-safe date helpers
   // ============================================================
 
-  
   const toDateString = (date: any) => {
     if (!date) return null;
     const d = new Date(date);
     if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
+    return d.toISOString().split("T")[0];
   };
 
-  // ✅ RECALCULATE TIME STATUS ON FRONTEND (Fixes timezone issues)
-// ✅ RECALCULATE TIME STATUS - FIXES DATE RANGE (BULK SCHEDULES) + TIME
-const recalculateTimeStatus = (schedule: any): string => {
-  if (!schedule) return "UPCOMING";
-  
-  // If completed, return completed
-  if (schedule.allFormsCompleted || 
-      schedule.status === "COMPLETED" || 
+  // ? RECALCULATE TIME STATUS ON FRONTEND (Fixes timezone issues)
+  // ? RECALCULATE TIME STATUS - FIXES DATE RANGE (BULK SCHEDULES) + TIME
+  const recalculateTimeStatus = (schedule: any): string => {
+    if (!schedule) return "UPCOMING";
+
+    // If completed, return completed
+    if (
+      schedule.allFormsCompleted ||
+      schedule.status === "COMPLETED" ||
       schedule.status === "APPROVED" ||
-      schedule.status === "CLOSED") {
-    return "COMPLETED";
-  }
-
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  // Parse all possible date fields
-  const hasFromDate = !!schedule.fromDate;
-  const hasToDate = !!schedule.toDate;
-  const hasScheduledDate = !!schedule.scheduledDate;
-  
-  const fromDate = hasFromDate ? parseServerDate(schedule.fromDate) : null;
-  const toDate = hasToDate ? parseServerDate(schedule.toDate) : null;
-  const scheduledDate = hasScheduledDate ? parseServerDate(schedule.scheduledDate) : null;
-
-  // Normalize dates for comparison (strip time)
-  if (fromDate) fromDate.setHours(0, 0, 0, 0);
-  if (toDate) toDate.setHours(0, 0, 0, 0);
-  if (scheduledDate) scheduledDate.setHours(0, 0, 0, 0);
-
-  // ✅ Detect if this is a DATE RANGE (bulk schedule: fromDate + toDate, different dates)
-  const isDateRange = hasFromDate && hasToDate && 
-                      fromDate && toDate && 
-                      fromDate.getTime() !== toDate.getTime();
-
-  // ============ DATE RANGE LOGIC (Bulk Schedules) ============
-  if (isDateRange && fromDate && toDate) {
-    // ✅ BEFORE the range starts → UPCOMING
-    if (today.getTime() < fromDate.getTime()) {
-      return "UPCOMING";
+      schedule.status === "CLOSED" ||
+      schedule.status === "RESCHEDULE_REQUESTED" || // ? ADD
+      schedule.status === "EXTENSION_REQUESTED" // ? ADD
+    ) {
+      return schedule.status === "RESCHEDULE_REQUESTED" ||
+        schedule.status === "EXTENSION_REQUESTED"
+        ? "ACTIVE"
+        : "COMPLETED";
     }
-    
-    // ✅ AFTER the range ends → EXPIRED
-    if (today.getTime() > toDate.getTime()) {
-      return "EXPIRED";
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Parse all possible date fields
+    const hasFromDate = !!schedule.fromDate;
+    const hasToDate = !!schedule.toDate;
+    const hasScheduledDate = !!schedule.scheduledDate;
+
+    const fromDate = hasFromDate ? parseServerDate(schedule.fromDate) : null;
+    const toDate = hasToDate ? parseServerDate(schedule.toDate) : null;
+    const scheduledDate = hasScheduledDate
+      ? parseServerDate(schedule.scheduledDate)
+      : null;
+
+    // Normalize dates for comparison (strip time)
+    if (fromDate) fromDate.setHours(0, 0, 0, 0);
+    if (toDate) toDate.setHours(0, 0, 0, 0);
+    if (scheduledDate) scheduledDate.setHours(0, 0, 0, 0);
+
+    // ? Detect if this is a DATE RANGE (bulk schedule: fromDate + toDate, different dates)
+    const isDateRange =
+      hasFromDate &&
+      hasToDate &&
+      fromDate &&
+      toDate &&
+      fromDate.getTime() !== toDate.getTime();
+
+    // ============ DATE RANGE LOGIC (Bulk Schedules) ============
+    if (isDateRange && fromDate && toDate) {
+      // ? BEFORE the range starts ? UPCOMING
+      if (today.getTime() < fromDate.getTime()) {
+        return "UPCOMING";
+      }
+
+      // ? AFTER the range ends ? EXPIRED
+      if (today.getTime() > toDate.getTime()) {
+        return "EXPIRED";
+      }
+
+      // ? WITHIN the range (today is between fromDate and toDate)
+
+      // On the FIRST day of range ? check start time
+      if (today.getTime() === fromDate.getTime() && schedule.startTime) {
+        const startMinutes = parseTimeToMinutesRobust(schedule.startTime);
+        if (nowMinutes < startMinutes) return "UPCOMING";
+      }
+
+      // On the LAST day of range ? check end time
+      if (today.getTime() === toDate.getTime() && schedule.endTime) {
+        const endMinutes = parseTimeToMinutesRobust(schedule.endTime);
+        if (nowMinutes > endMinutes) return "EXPIRED";
+      }
+
+      // Middle days OR within valid times on first/last day ? ACTIVE
+      return "ACTIVE";
     }
-    
-    // ✅ WITHIN the range (today is between fromDate and toDate)
-    
-    // On the FIRST day of range → check start time
-    if (today.getTime() === fromDate.getTime() && schedule.startTime) {
-      const startMinutes = parseTimeToMinutesRobust(schedule.startTime);
-      if (nowMinutes < startMinutes) return "UPCOMING";
-    }
-    
-    // On the LAST day of range → check end time
-    if (today.getTime() === toDate.getTime() && schedule.endTime) {
-      const endMinutes = parseTimeToMinutesRobust(schedule.endTime);
-      if (nowMinutes > endMinutes) return "EXPIRED";
-    }
-    
-    // Middle days OR within valid times on first/last day → ACTIVE
+
+    // ============ SINGLE DATE LOGIC ============
+    const singleDate = scheduledDate || fromDate;
+    if (!singleDate) return "UPCOMING";
+
+    const daysDiff = Math.floor(
+      (singleDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    // ? Future date ? UPCOMING
+    if (daysDiff > 0) return "UPCOMING";
+
+    // ? Past date ? EXPIRED
+    if (daysDiff < 0) return "EXPIRED";
+
+    // ? Same day ? check time window
+    if (!schedule.startTime || !schedule.endTime) return "ACTIVE";
+
+    const startTimeMinutes = parseTimeToMinutesRobust(schedule.startTime);
+    const endTimeMinutes = parseTimeToMinutesRobust(schedule.endTime);
+
+    if (nowMinutes < startTimeMinutes) return "UPCOMING";
+    if (nowMinutes > endTimeMinutes) return "EXPIRED";
     return "ACTIVE";
-  }
-
-  // ============ SINGLE DATE LOGIC ============
-  const singleDate = scheduledDate || fromDate;
-  if (!singleDate) return "UPCOMING";
-
-  const daysDiff = Math.floor((singleDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  // ✅ Future date → UPCOMING
-  if (daysDiff > 0) return "UPCOMING";
-  
-  // ✅ Past date → EXPIRED
-  if (daysDiff < 0) return "EXPIRED";
-
-  // ✅ Same day → check time window
-  if (!schedule.startTime || !schedule.endTime) return "ACTIVE";
-
-  const startTimeMinutes = parseTimeToMinutesRobust(schedule.startTime);
-  const endTimeMinutes = parseTimeToMinutesRobust(schedule.endTime);
-
-  if (nowMinutes < startTimeMinutes) return "UPCOMING";
-  if (nowMinutes > endTimeMinutes) return "EXPIRED";
-  return "ACTIVE";
-};
+  };
 
   const parseTimeToMinutes = (timeStr: string) => {
     if (!timeStr) return 0;
@@ -1585,8 +1636,8 @@ const recalculateTimeStatus = (schedule: any): string => {
     return hours * 60 + minutes;
   };
 
-  // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
-    // ✅ ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
+  // ? ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
+  // ? ADD THIS HELPER FUNCTION ABOVE fetchSchedulesWithStatus
   const fetchAvailableFormsForDepartment = async (
     department: string,
     auditType: string,
@@ -1606,7 +1657,7 @@ const recalculateTimeStatus = (schedule: any): string => {
       let isGenericQualityEndpoint = false;
 
       if (deptUpper === "SQA") {
-        // ✅ SQA has its own specific endpoint
+        // ? SQA has its own specific endpoint
         endpoint = `/templates/iatf/by-department/SQA`;
       } else {
         const isQualityDept =
@@ -1621,32 +1672,31 @@ const recalculateTimeStatus = (schedule: any): string => {
       }
 
       const forms = await apiFetch(endpoint);
-      
-      // ✅ CRITICAL FIX: Only filter if we used the generic endpoint.
+
+      // ? CRITICAL FIX: Only filter if we used the generic endpoint.
       // If we used the specific /by-department/SQA endpoint, the backend already filtered it!
       // Previously, filtering SQA forms by department === "QA" was causing them to be dropped (returning []).
       if (isGenericQualityEndpoint) {
-        return (forms || []).filter((f: any) => f.department === "QA" || f.department === "SQA");
+        return (forms || []).filter(
+          (f: any) => f.department === "QA" || f.department === "SQA",
+        );
       }
-      
+
       return forms || [];
     } catch (error) {
-      console.error("❌ Error fetching forms for department:", error);
+      console.error("? Error fetching forms for department:", error);
       return [];
     }
   };
 
   // ============================================================
-  // ✅ FIXED: Full fetchSchedulesWithStatus
-  // ============================================================
-// ============================================================
-  // ✅ FIXED: Full fetchSchedulesWithStatus with Top Management Approval Filter
+  // ? FIXED: Full fetchSchedulesWithStatus with Top Management Approval Filter
   // ============================================================
   const fetchSchedulesWithStatus = async (year = selectedYear) => {
     try {
       setIsFetching(true);
       setRefreshing(true);
- 
+
       const [
         responsesData,
         ncrData,
@@ -1666,22 +1716,25 @@ const recalculateTimeStatus = (schedule: any): string => {
           `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
         ).catch(() => []),
       ]);
- 
-      const pendingRescheduleIds = new Set();
+
+      const pendingRescheduleIds = new Set<number>();
       (rescheduleData || []).forEach((req: any) => {
-        if (req.status === "PENDING") pendingRescheduleIds.add(req.scheduleId);
+        if (req.status === "PENDING") {
+          pendingRescheduleIds.add(Number(req.scheduleId));
+        }
       });
- 
-      const pendingExtensionIds = new Set();
+      const pendingExtensionIds = new Set<number>();
       (extensionData || []).forEach((req: any) => {
-        if (req.status === "PENDING") pendingExtensionIds.add(req.scheduleId);
+        if (req.status === "PENDING") {
+          pendingExtensionIds.add(Number(req.scheduleId));
+        }
       });
- 
+
       const allResponses: any[] = responsesData || [];
       const existingNcrAuditIds = new Set(
         (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
       );
- 
+
       const pendingNcrItems = allResponses
         .filter((r: any) => {
           const isMyAudit = Number(r.auditorId) === Number(user?.id);
@@ -1708,15 +1761,15 @@ const recalculateTimeStatus = (schedule: any): string => {
           const hasFindings = item.findings.length > 0;
           const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
           const isCurrentYear = itemYear === year;
- 
+
           return hasFindings && notRaised && isCurrentYear;
         });
- 
+
       setPendingNcrAudits(pendingNcrItems);
- 
+
       if (schedulesData && schedulesData.length > 0) {
         console.log(
-          "🔍 [DEBUG] RAW SCHEDULE DATA FROM BACKEND:",
+          "?? [DEBUG] RAW SCHEDULE DATA FROM BACKEND:",
           JSON.stringify(
             schedulesData[0].schedule || schedulesData[0],
             null,
@@ -1724,30 +1777,30 @@ const recalculateTimeStatus = (schedule: any): string => {
           ),
         );
       }
- 
+
       let filteredSchedules = (schedulesData || []).filter((item: any) => {
         const schedule = item.schedule || item;
- 
-        // ✅ FIXED: Use the correct field name from your backend
+
+        // ? FIXED: Use the correct field name from your backend
         return schedule.detailedApprovalStatus === "APPROVED";
       });
- 
-      // 🔍 DEBUG: Check your console to see if the filter is working
+
+      // ?? DEBUG: Check your console to see if the filter is working
       console.log(
-        "🔍 [DEBUG] Total schedules fetched from API:",
+        "?? [DEBUG] Total schedules fetched from API:",
         schedulesData?.length,
       );
       console.log(
-        "🔍 [DEBUG] Approved schedules remaining after filter:",
+        "?? [DEBUG] Approved schedules remaining after filter:",
         filteredSchedules.length,
       );
- 
-      // ✅ Existing Year Filter Logic
+
+      // ? Existing Year Filter Logic
       if (year) {
         filteredSchedules = filteredSchedules.filter((item: any) => {
           const schedule = item.schedule || item;
           if (!schedule) return false;
- 
+
           if (schedule.scheduledDate) {
             return (
               parseServerDate(schedule.scheduledDate).getFullYear() === year
@@ -1761,21 +1814,21 @@ const recalculateTimeStatus = (schedule: any): string => {
           return false;
         });
       }
- 
+
       const todayStr = toDateString(new Date()) || "";
- 
+
       const enhancedData = await Promise.all(
         filteredSchedules.map(async (item: any) => {
           const schedule = item.schedule || item;
           const scheduleId = schedule.id;
           const department = schedule.department || "";
           const auditType = schedule.auditType || "";
- 
+
           // 1. Find all saved responses for this specific schedule
           const scheduleResponses = allResponses.filter(
             (r: any) => Number(r.auditScheduleId) === Number(scheduleId),
           );
- 
+
           // Create a map for quick lookup: checkSheetId -> response
           const responseMap = new Map();
           scheduleResponses.forEach((r: any) => {
@@ -1783,15 +1836,15 @@ const recalculateTimeStatus = (schedule: any): string => {
               responseMap.set(String(r.checkSheet.id), r);
             }
           });
- 
+
           // 2. Determine the list of ALL assigned forms
           let formDetails: any[] = [];
- 
+
           const isIATFOrSystem =
             auditType.toLowerCase().includes("iatf") ||
             auditType.toLowerCase().includes("16949") ||
             auditType.toLowerCase().includes("system");
- 
+
           if (isIATFOrSystem) {
             const availableForms = await fetchAvailableFormsForDepartment(
               department,
@@ -1816,11 +1869,11 @@ const recalculateTimeStatus = (schedule: any): string => {
               });
             }
           }
- 
+
           // Fallback to assignedForms if not IATF or if fetch returned empty
           const assignedForms =
             schedule.forms || schedule.checkSheets || schedule.assignedForms;
- 
+
           if (
             formDetails.length === 0 &&
             Array.isArray(assignedForms) &&
@@ -1843,7 +1896,7 @@ const recalculateTimeStatus = (schedule: any): string => {
               };
             });
           }
- 
+
           if (formDetails.length === 0) {
             const availableForms = await fetchAvailableFormsForDepartment(
               department,
@@ -1873,7 +1926,7 @@ const recalculateTimeStatus = (schedule: any): string => {
                   const dateB = new Date(b.createdAt || 0).getTime();
                   return dateB - dateA;
                 });
- 
+
                 const latestResponse = sortedResponses[0];
                 formDetails = [
                   {
@@ -1909,7 +1962,7 @@ const recalculateTimeStatus = (schedule: any): string => {
               }
             }
           }
- 
+
           // 3. Calculate accurate stats based on ALL forms
           const totalForms = formDetails.length;
           const completedForms = formDetails.filter(
@@ -1918,20 +1971,20 @@ const recalculateTimeStatus = (schedule: any): string => {
           const hasFormData = completedForms > 0;
           const isAllFormsCompleted =
             totalForms > 0 && completedForms === totalForms;
- 
+
           const isAuditCompleted =
             schedule.status === "COMPLETED" ||
             schedule.status === "APPROVED" ||
             schedule.status === "CLOSED";
- 
+
           const allFormsCompleted = isAllFormsCompleted || isAuditCompleted;
- 
+
           const finalTimeStatus = allFormsCompleted
             ? "COMPLETED"
             : recalculateTimeStatus(schedule);
           const finalCanStart =
             !allFormsCompleted && finalTimeStatus === "ACTIVE";
- 
+
           return {
             ...item,
             schedule: {
@@ -1942,8 +1995,13 @@ const recalculateTimeStatus = (schedule: any): string => {
               pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
               allFormsCompleted,
               formDetails,
-              rescheduleRequested: pendingRescheduleIds.has(scheduleId),
-              extensionRequested: pendingExtensionIds.has(scheduleId),
+              // ? Trust the backend � it already has rescheduleRequested: true on row 23
+              rescheduleRequested:
+                schedule.rescheduleRequested === true ||
+                pendingRescheduleIds.has(Number(scheduleId)),
+              extensionRequested:
+                schedule.extensionRequested === true ||
+                pendingExtensionIds.has(Number(scheduleId)),
               coAuditorNames: schedule.coAuditorNames || [],
             },
             timeStatus: finalTimeStatus,
@@ -1951,15 +2009,21 @@ const recalculateTimeStatus = (schedule: any): string => {
           };
         }),
       );
- 
+
+      enhancedData.forEach((s) => {
+        console.log(
+          `?? Schedule ${s.schedule.id} | status=${s.schedule.status} | reschedReq=${s.schedule.rescheduleRequested} | extReq=${s.schedule.extensionRequested}`,
+        );
+      });
+
       setSchedules(enhancedData);
- 
+
       console.log(
-        "✅ [TIME STATUS DEBUG] Current time:",
+        "? [TIME STATUS DEBUG] Current time:",
         new Date().toLocaleTimeString(),
       );
       console.log(
-        "✅ [TIME STATUS DEBUG] Schedules:",
+        "? [TIME STATUS DEBUG] Schedules:",
         enhancedData.map((s) => ({
           auditType: s.schedule.auditType,
           scheduledDate: s.schedule.scheduledDate,
@@ -1968,7 +2032,7 @@ const recalculateTimeStatus = (schedule: any): string => {
           timeStatus: s.timeStatus,
         })),
       );
- 
+
       setStats({
         upcoming: enhancedData.filter((s: any) => s.timeStatus === "UPCOMING")
           .length,
@@ -1986,14 +2050,13 @@ const recalculateTimeStatus = (schedule: any): string => {
         overduePartialWork: 0,
       });
     } catch (error) {
-      console.error("❌ CRITICAL ERROR in fetchSchedulesWithStatus:", error);
+      console.error("? CRITICAL ERROR in fetchSchedulesWithStatus:", error);
       addToast("Failed to load schedules", "error");
     } finally {
       setIsFetching(false);
       setRefreshing(false);
     }
   };
- 
 
   useEffect(() => {
     if (user?.id) {
@@ -2002,26 +2065,26 @@ const recalculateTimeStatus = (schedule: any): string => {
     }
   }, [user?.id, selectedYear]);
 
-   useEffect(() => {
+  useEffect(() => {
     if (activeTab === "ncr-list" && user?.id) {
       fetchRaisedNCRs(selectedYear);
     }
   }, [activeTab, selectedYear, user?.id]);
 
   // Fetch all users for forum member selection
-useEffect(() => {
-  const fetchUsers = async () => {
-    try {
-      const users = await apiFetch("/users");
-      setAllUsers(users || []);
-    } catch (error) {
-      console.error("Failed to fetch users for forum:", error);
-    }
-  };
-  fetchUsers();
-}, []);
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const users = await apiFetch("/users");
+        setAllUsers(users || []);
+      } catch (error) {
+        console.error("Failed to fetch users for forum:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
     const currentYear = new Date().getFullYear();
     const startYear = 2020;
     const endYear = currentYear + 5;
@@ -2053,7 +2116,7 @@ useEffect(() => {
     setAvailableYears(allYears.sort((a, b) => b - a));
   }, [schedules]);
 
-   const handleRefresh = () => {
+  const handleRefresh = () => {
     setRefreshing(true);
     fetchSchedulesWithStatus(selectedYear);
     fetchRaisedNCRs(selectedYear);
@@ -2062,38 +2125,54 @@ useEffect(() => {
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const handleViewForm = (audit: any, form: any) => {
-  setActiveFormConfig({
-    scheduleId: audit.id,
-    department: audit.department,
-    auditeeId: audit.auditeeId,
-    auditeeName: audit.auditeeName,
-    location: audit.location,
-    auditType: audit.auditType,
-    formId: form?.id,
-    processName: form?.processName || form?.name,
-    // Pass these for forum
-    auditorId: user?.id,
-    auditorName: user?.name,
-    hodEmail: audit.hodEmail,
-    hodName: audit.hodName,
-    memberEmails: audit.memberEmails || [],
-  });
-};
+  const handleViewForm = async (audit: any, form: any) => {
+    const auditeeNames = getAuditeeNames(audit);
+
+    // ? NEW: flip SCHEDULED ? IN_PROGRESS the first time a form is opened
+    if (audit.status === "SCHEDULED") {
+      try {
+        await apiFetch(`/audit-schedule/schedule/${audit.id}/start`, {
+          method: "POST",
+        });
+        console.log(`? Schedule ${audit.id} marked IN_PROGRESS`);
+      } catch (e) {
+        console.warn("Failed to mark work started:", e);
+      }
+    }
+
+    setActiveFormConfig({
+      scheduleId: audit.id,
+      department: audit.department,
+      auditeeId: audit.auditeeId,
+      auditeeName: auditeeNames[0] || "",
+      auditeeNames: auditeeNames,
+      auditeeIds:
+        audit.auditeeIds || (audit.auditeeId ? [audit.auditeeId] : []),
+      location: audit.location,
+      auditType: audit.auditType,
+      formId: form?.id,
+      processName: form?.processName || form?.name,
+      auditorId: user?.id,
+      auditorName: user?.name,
+      hodEmail: audit.hodEmail,
+      hodName: audit.hodName,
+      memberEmails: audit.memberEmails || [],
+    });
+  };
 
   const handleViewReport = (responseId: any, audit: any, form: any) => {
-    console.log("🔍 [DEBUG] handleViewReport called with:", {
+    console.log("?? [DEBUG] handleViewReport called with:", {
       responseId,
       auditType: audit?.auditType,
     });
 
     if (!responseId) {
-      console.warn("⚠️ [DEBUG] responseId is missing!");
+      console.warn("?? [DEBUG] responseId is missing!");
       addToast("Report not found (No response ID)", "error");
       return;
     }
 
-    // ✅ Set state to render the report inline
+    // ? Set state to render the report inline
     setActiveReportConfig({
       id: String(responseId),
       audit,
@@ -2153,56 +2232,41 @@ useEffect(() => {
     }
   };
 
-    // Add this function in both dashboards
-// Add this function in AuditorDashboard (already added, but ensure it's complete)
-const handleOpenForum = (audit: any, form: any = null) => {
-  console.log("🔍 Opening forum for audit:", audit);
-  
-  // Check if it's an NCR item (has id and ncrNumber or isNcr flag)
-  const isNcrItem = audit?.ncrNumber || audit?.isNcr || audit?.status?.includes('NCR');
-  
-  if (!audit) {
-    addToast("No data available for forum", "error");
-    return;
-  }
-  
-  setSelectedAuditForForum(audit);
-  setForumModalVisible(true);
-};
+  // Add this function in both dashboards
+  // Add this function in AuditorDashboard (already added, but ensure it's complete)
+  const handleOpenForum = (audit: any, form: any = null) => {
+    if (!audit) {
+      addToast("No data available for forum", "error");
+      return;
+    }
 
-    const openNCRForum = (ncr: any) => {
+    const auditPlantId =
+      audit.plantId ?? audit.plant?.id ?? (user as any)?.plantId ?? null;
+    const auditPlantName =
+      audit.plantName ?? audit.plant?.name ?? (user as any)?.plantName ?? null;
+
+    setSelectedAuditForForum({
+      ...audit,
+      // ? Backend created the forum with the right members.
+      //    Frontend doesn't need to compute or send them.
+      memberEmails: [],
+      plantId: auditPlantId,
+      plantName: auditPlantName,
+    });
+    setForumModalVisible(true);
+  };
+
+  const openNCRForum = (ncr: any) => {
     if (!ncr) {
       addToast("No NCR data available for forum", "error");
       return;
     }
 
-    // 1. Find all Audit Managers and Masters from the fetched user list
-    const managers = allUsers.filter((u: any) => {
-      const role = (u.role || "").toUpperCase();
-      return role.includes("AUDIT_MANAGER");
-    });
+    const ncrPlantId =
+      ncr.plantId ?? ncr.plant?.id ?? (user as any)?.plantId ?? null;
+    const ncrPlantName =
+      ncr.plantName ?? ncr.plant?.name ?? (user as any)?.plantName ?? null;
 
-    // 2. Build a unique list of member emails
-    const memberEmails: string[] = [];
-    
-    // Add Managers & Masters
-    managers.forEach((m: any) => {
-      if (m.email && !memberEmails.includes(m.email)) {
-        memberEmails.push(m.email);
-      }
-    });
-
-    // Add NCR specific members (HOD, Auditor, Auditee)
-    if (ncr.hodEmail && !memberEmails.includes(ncr.hodEmail)) memberEmails.push(ncr.hodEmail);
-    if (ncr.auditorEmail && !memberEmails.includes(ncr.auditorEmail)) memberEmails.push(ncr.auditorEmail);
-    if (ncr.auditeeEmail && !memberEmails.includes(ncr.auditeeEmail)) memberEmails.push(ncr.auditeeEmail);
-
-    // Ensure current logged-in user is included just in case
-    if (user?.email && !memberEmails.includes(user.email)) {
-      memberEmails.push(user.email);
-    }
-
-    // 3. Set the forum data to open the modal
     setSelectedAuditForForum({
       id: ncr.id,
       auditNumber: ncr.ncrNumber || `NCR-${ncr.id}`,
@@ -2216,9 +2280,12 @@ const handleOpenForum = (audit: any, form: any = null) => {
       auditeeName: ncr.auditeeName,
       hodEmail: ncr.hodEmail || null,
       hodName: ncr.hodName || null,
-      memberEmails: memberEmails, // ✅ Now correctly includes MASTER, AUDIT_MANAGER, HOD, Auditor, and Auditee
+      // ? Backend created the NCR forum with the right members.
+      //    Frontend doesn't need to compute or send them.
+      memberEmails: [],
+      plantId: ncrPlantId,
+      plantName: ncrPlantName,
     });
-    
     setForumModalVisible(true);
   };
 
@@ -2228,11 +2295,11 @@ const handleOpenForum = (audit: any, form: any = null) => {
     const audit = activeReportConfig.audit || {};
     const form = activeReportConfig.form || {};
 
-    // 🔍 DEBUG: Log the exact objects to see what data we actually have
-    console.log("🔍 [DEBUG] renderActiveReport - audit object:", audit);
-    console.log("🔍 [DEBUG] renderActiveReport - form object:", form);
+    // ?? DEBUG: Log the exact objects to see what data we actually have
+    console.log("?? [DEBUG] renderActiveReport - audit object:", audit);
+    console.log("?? [DEBUG] renderActiveReport - form object:", form);
 
-    // ✅ Combine ALL possible fields that might contain the audit type
+    // ? Combine ALL possible fields that might contain the audit type
     const typeString = `
       ${audit.auditType || ""} 
       ${audit.auditName || ""} 
@@ -2242,9 +2309,9 @@ const handleOpenForum = (audit: any, form: any = null) => {
       ${form.name || ""}
     `.toLowerCase();
 
-    console.log("🔍 [DEBUG] Evaluating combined typeString:", typeString);
+    console.log("?? [DEBUG] Evaluating combined typeString:", typeString);
 
-    // ✅ 1. IATF / System / Internal Audit Report
+    // ? 1. IATF / System / Internal Audit Report
     if (
       typeString.includes("iatf") ||
       typeString.includes("system") ||
@@ -2255,7 +2322,7 @@ const handleOpenForum = (audit: any, form: any = null) => {
       typeString.includes("vda") ||
       typeString.includes("iso")
     ) {
-      console.log("✅ Matched IATF / System / Internal Audit");
+      console.log("? Matched IATF / System / Internal Audit");
       return (
         <IATFInternalView
           initialId={activeReportConfig.id}
@@ -2267,12 +2334,12 @@ const handleOpenForum = (audit: any, form: any = null) => {
       );
     }
 
-    // ✅ 2. Process / Manufacturing Audit Report
+    // ? 2. Process / Manufacturing Audit Report
     if (
       typeString.includes("process") ||
       typeString.includes("manufacturing")
     ) {
-      console.log("✅ Matched Process / Manufacturing Audit");
+      console.log("? Matched Process / Manufacturing Audit");
       return (
         <ManufacturingProcessView
           initialId={activeReportConfig.id}
@@ -2284,9 +2351,9 @@ const handleOpenForum = (audit: any, form: any = null) => {
       );
     }
 
-    // ✅ 3. 5S Audit Report (Default Fallback)
+    // ? 3. 5S Audit Report (Default Fallback)
     console.log(
-      "⚠️ No specific match found, defaulting to FiveSView. typeString was:",
+      "?? No specific match found, defaulting to FiveSView. typeString was:",
       typeString,
     );
     return (
@@ -2299,72 +2366,85 @@ const handleOpenForum = (audit: any, form: any = null) => {
       />
     );
   };
-  // ✅ ADD THIS NEW FUNCTION RIGHT HERE
- // In AuditorDashboard - renderActiveForm function
-const renderActiveForm = () => {
-  if (!activeFormConfig) return null;
+  // ? ADD THIS NEW FUNCTION RIGHT HERE
+  // In AuditorDashboard - renderActiveForm function
+  const renderActiveForm = () => {
+    if (!activeFormConfig) return null;
 
-  const commonProps = {
-    ...activeFormConfig,
-    onClose: () => {
-      setActiveFormConfig(null);
-      handleRefresh();
-    },
-    onUpdateEditId: (newEditId: string) => {
-      setActiveFormConfig((prev: any) => ({ ...prev, editId: newEditId }));
-    },
-    // ✅ ADD THIS: Pass the callback to handle NCR raising
-    onRaiseNcr: (routeParams: any) => {
-      setActiveNcrConfig(routeParams);
-    },
+    const commonProps = {
+      ...activeFormConfig,
+      onClose: async () => {
+        const scheduleId = activeFormConfig?.scheduleId;
+
+        // ? NEW: if this was the last form, flip the schedule to COMPLETED
+        if (scheduleId) {
+          try {
+            await apiFetch(
+              `/audit-schedule/schedule/${scheduleId}/check-completion`,
+              { method: "POST" },
+            );
+          } catch (e) {
+            console.warn("Completion check failed:", e);
+          }
+        }
+
+        setActiveFormConfig(null);
+        handleRefresh();
+      },
+      onUpdateEditId: (newEditId: string) => {
+        setActiveFormConfig((prev: any) => ({ ...prev, editId: newEditId }));
+      },
+      onRaiseNcr: (routeParams: any) => {
+        setActiveNcrConfig(routeParams);
+      },
+    };
+
+    const type = (activeFormConfig.auditType || "").toLowerCase();
+
+    if (
+      type.includes("5s") ||
+      type.includes("five_s") ||
+      type.includes("five s")
+    ) {
+      return <FiveSAuditForm {...commonProps} />;
+    }
+
+    if (
+      type.includes("iatf") ||
+      type.includes("system") ||
+      type.includes("internal") ||
+      type.includes("16949")
+    ) {
+      return <IATFInternalAuditForm {...commonProps} />;
+    }
+
+    if (type.includes("process") || type.includes("manufacturing")) {
+      return <ManufacturingProcessAuditForm {...commonProps} />;
+    }
+
+    return <FiveSAuditForm {...commonProps} />;
   };
 
-  const type = (activeFormConfig.auditType || "").toLowerCase();
+  // ? ADD THIS NEW FUNCTION
+  // ? FIXED: Properly close NCR form and return to dashboard
+  const renderActiveNcrForm = () => {
+    if (!activeNcrConfig) return null;
 
-  if (
-    type.includes("5s") ||
-    type.includes("five_s") ||
-    type.includes("five s")
-  ) {
-    return <FiveSAuditForm {...commonProps} />;
-  }
-
-  if (
-    type.includes("iatf") ||
-    type.includes("system") ||
-    type.includes("internal") ||
-    type.includes("16949")
-  ) {
-    return <IATFInternalAuditForm {...commonProps} />;
-  }
-
-  if (type.includes("process") || type.includes("manufacturing")) {
-    return <ManufacturingProcessAuditForm {...commonProps} />;
-  }
-
-  return <FiveSAuditForm {...commonProps} />;
-};
-
-  // ✅ ADD THIS NEW FUNCTION
-  // ✅ FIXED: Properly close NCR form and return to dashboard
-const renderActiveNcrForm = () => {
-  if (!activeNcrConfig) return null;
-
-  return (
-    <Form7View
-      initialParams={activeNcrConfig}
-      onClose={() => {
-        setActiveNcrConfig(null); // ✅ This clears the NCR form state
-        handleRefresh(); // ✅ Refresh the dashboard data
-      }}
-    />
-  );
-};
+    return (
+      <Form7View
+        initialParams={activeNcrConfig}
+        onClose={() => {
+          setActiveNcrConfig(null); // ? This clears the NCR form state
+          handleRefresh(); // ? Refresh the dashboard data
+        }}
+      />
+    );
+  };
 
   const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
     return (
-      // ✅ USE YOUR NEW COMMON MANAGER HERE
+      // ? USE YOUR NEW COMMON MANAGER HERE
       <NCRViewManager
         initialId={activeNcrViewConfig.id}
         initialType={activeNcrViewConfig.type || "form7"}
@@ -2379,7 +2459,7 @@ const renderActiveNcrForm = () => {
   if (authLoading || isFetching) {
     return (
       <View
-        className="items-center justify-center flex-1"
+        className="flex-1 items-center justify-center"
         style={{ backgroundColor: NAVBAR_COLORS.bg }}
       >
         <ActivityIndicator
@@ -2405,12 +2485,12 @@ const renderActiveNcrForm = () => {
         .includes(searchQuery.toLowerCase()),
   );
 
-  // ✅ NEW: how many columns the grid currently shows (must match the flex layout)
-  // 3 cols need: 3×300 (minWidth) + 2×16 (gap-4) = 932px | 2 cols need: 616px
+  // ? NEW: how many columns the grid currently shows (must match the flex layout)
+  // 3 cols need: 3�300 (minWidth) + 2�16 (gap-4) = 932px | 2 cols need: 616px
   const containerWidth = Math.min(width - 32, 1200);
   const cols = containerWidth >= 932 ? 3 : containerWidth >= 616 ? 2 : 1;
 
-  // ✅ NEW: how many invisible placeholders are needed to complete the last row
+  // ? NEW: how many invisible placeholders are needed to complete the last row
   const remainder = filteredAudits.length % cols;
   const placeholders = remainder === 0 ? 0 : cols - remainder;
 
@@ -2419,7 +2499,7 @@ const renderActiveNcrForm = () => {
       className="flex-1"
       style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}
     >
-      {/* ✅ UPDATE THIS: Add activeNcrConfig check at the very top */}
+      {/* ? UPDATE THIS: Add activeNcrConfig check at the very top */}
       {activeNcrViewConfig ? (
         renderActiveNcrView()
       ) : activeNcrConfig ? (
@@ -2448,10 +2528,10 @@ const renderActiveNcrForm = () => {
             }}
           >
             {/* Header */}
-             {/* Header */}
+            {/* Header */}
             {/* Replace the existing Header section (around line 850-880) with this: */}
-            <View className="flex-row flex-wrap items-start justify-between gap-4 mb-6">
-              <View className="flex-1 min-w-[200px]">
+            <View className="mb-6 flex-row flex-wrap items-start justify-between gap-4">
+              <View className="min-w-[200px] flex-1">
                 <Text className="text-2xl font-bold text-slate-800">
                   Auditor Dashboard
                 </Text>
@@ -2483,7 +2563,7 @@ const renderActiveNcrForm = () => {
                 <TouchableOpacity
                   onPress={handleRefresh}
                   disabled={refreshing}
-                  className={`flex-row items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl ${refreshing ? "opacity-60" : ""}`}
+                  className={`flex-row items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm md:gap-2 md:px-4 ${refreshing ? "opacity-60" : ""}`}
                 >
                   {refreshing ? (
                     <ActivityIndicator
@@ -2505,9 +2585,9 @@ const renderActiveNcrForm = () => {
 
             {activeTab === "my-audits" && (
               <View className="mb-6">
-                <View className="flex-row items-center gap-2 mb-4">
+                <View className="mb-4 flex-row items-center gap-2">
                   <View
-                    className="p-1.5 rounded-lg"
+                    className="rounded-lg p-1.5"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <FileText size={16} color={NAVBAR_COLORS.primary} />
@@ -2521,7 +2601,7 @@ const renderActiveNcrForm = () => {
             )}
             {/* Search & View Mode Toggle */}
             {activeTab === "my-audits" && (
-              <View className="flex-row flex-wrap items-center justify-between gap-3 mb-6">
+              <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
                 <View className="relative flex-1">
                   <View className="absolute left-3 top-3.5">
                     <Search size={18} color="#94a3b8" />
@@ -2530,14 +2610,14 @@ const renderActiveNcrForm = () => {
                     placeholder="Search audits..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    className="w-full py-3 pl-10 pr-4 text-sm bg-white border shadow-sm border-slate-200 rounded-xl"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm shadow-sm"
                     placeholderTextColor="#94a3b8"
                   />
                 </View>
-                <View className="flex-row gap-1 p-1 bg-white border shadow-sm border-slate-200 rounded-xl">
+                <View className="flex-row gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
                   <TouchableOpacity
                     onPress={() => setViewMode("grid")}
-                    className={`p-2.5 rounded-lg ${viewMode === "grid" ? "bg-blue-600" : "bg-white"}`}
+                    className={`rounded-lg p-2.5 ${viewMode === "grid" ? "bg-blue-600" : "bg-white"}`}
                   >
                     <Grid3x3
                       size={18}
@@ -2546,7 +2626,7 @@ const renderActiveNcrForm = () => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => setViewMode("list")}
-                    className={`p-2.5 rounded-lg ${viewMode === "list" ? "bg-blue-600" : "bg-white"}`}
+                    className={`rounded-lg p-2.5 ${viewMode === "list" ? "bg-blue-600" : "bg-white"}`}
                   >
                     <List
                       size={18}
@@ -2560,8 +2640,8 @@ const renderActiveNcrForm = () => {
             {/* Content: Grid vs List View */}
             {activeTab === "my-audits" &&
               (filteredAudits.length === 0 ? (
-                <View className="items-center py-16 text-center bg-white border shadow-sm rounded-2xl border-slate-200">
-                  <View className="flex items-center justify-center w-16 h-16 mb-4 shadow-md rounded-2xl bg-blue-50">
+                <View className="items-center rounded-2xl border border-slate-200 bg-white py-16 text-center shadow-sm">
+                  <View className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 shadow-md">
                     <Calendar size={32} color="#2563eb" />
                   </View>
                   <Text className="text-lg font-semibold text-slate-700">
@@ -2607,11 +2687,11 @@ const renderActiveNcrForm = () => {
                         }}
                         onViewForm={handleViewForm}
                         onViewReport={handleViewReport}
-                        onOpenForum={handleOpenForum}  // ✅ Change this
+                        onOpenForum={handleOpenForum} // ? Change this
                       />
                     </View>
                   ))}
-                  {/* ✅ NEW: invisible fillers so the last card doesn't stretch */}
+                  {/* ? NEW: invisible fillers so the last card doesn't stretch */}
                   {Array.from({ length: placeholders }).map((_, i) => (
                     <View
                       key={`placeholder-${i}`}
@@ -2643,7 +2723,7 @@ const renderActiveNcrForm = () => {
                         setSelectedForm(form);
                         setShowExtensionModal(true);
                       }}
-                        onOpenForum={handleOpenForum}  // ✅ Change this
+                      onOpenForum={handleOpenForum} // ? Change this
                     />
                   ))}
                 </View>
@@ -2651,9 +2731,9 @@ const renderActiveNcrForm = () => {
 
             {(activeTab === "ncr-pending" || activeTab === "ncr-list") && (
               <View className="mb-6">
-                <View className="flex-row items-center gap-2 mb-4">
+                <View className="mb-4 flex-row items-center gap-2">
                   <View
-                    className="p-1.5 rounded-lg"
+                    className="rounded-lg p-1.5"
                     style={{ backgroundColor: NAVBAR_COLORS.bg }}
                   >
                     <AlertCircle size={16} color={NAVBAR_COLORS.primary} />
@@ -2667,43 +2747,45 @@ const renderActiveNcrForm = () => {
             )}
             {/* NCR Tabs */}
             {activeTab === "ncr-pending" && (
-  <NcrPendingList
-    pendingNcrAudits={pendingNcrAudits}
-    onRaise={(item: any) => {
-      const routeParams = {
-        auditId: String(item.responseId),
-        auditReportNumber: item.auditReportNumber || "",
-        department: item.department || "",
-        shift: item.shift || "Day",
-        auditeeId: item.auditeeId ? String(item.auditeeId) : "",
-        auditeeName: item.auditeeName || "",
-        clause: item.findings.map((f: any) => f.clause).join("\n"),
-        evidence: item.findings
-          .map(
-            (f: any) =>
-              `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
-          )
-          .join("\n"),
-        statement: item.findings
-          .map(
-            (f: any) =>
-              `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
-          )
-          .join("\n"),
-      };
-      setActiveNcrConfig(routeParams);
-    }}
-    onOpenForum={handleOpenForum}  // ✅ ADD THIS
-  />
-)}
+              <NcrPendingList
+                pendingNcrAudits={pendingNcrAudits}
+                onRaise={(item: any) => {
+                  const routeParams = {
+                    auditId: String(item.responseId),
+                    auditReportNumber: item.auditReportNumber || "",
+                    department: item.department || "",
+                    shift: item.shift || "Day",
+                    auditeeId: item.auditeeId ? String(item.auditeeId) : "",
+                    auditeeName: item.auditeeName || "",
+                    clause: item.findings.map((f: any) => f.clause).join("\n"),
+                    evidence: item.findings
+                      .map(
+                        (f: any) =>
+                          `${f.questionId}: ${f.checkpoint}\nStatus: ${f.severity}\nEvidence: ${f.observation}`,
+                      )
+                      .join("\n"),
+                    statement: item.findings
+                      .map(
+                        (f: any) =>
+                          `${f.severity} identified for ${f.questionId}: ${f.checkpoint}`,
+                      )
+                      .join("\n"),
+                  };
+                  setActiveNcrConfig(routeParams);
+                }}
+                onOpenForum={handleOpenForum} // ? ADD THIS
+              />
+            )}
             {activeTab === "ncr-list" && (
-  <NcrListTab
-    raisedNCRs={raisedNCRs}
-    ncrLoading={ncrLoading}
-    onViewNcr={(id: string) => setActiveNcrViewConfig({ id, type: "form7" })}
-    onOpenForum={openNCRForum}
-  />
-)}
+              <NcrListTab
+                raisedNCRs={raisedNCRs}
+                ncrLoading={ncrLoading}
+                onViewNcr={(id: string) =>
+                  setActiveNcrViewConfig({ id, type: "form7" })
+                }
+                onOpenForum={openNCRForum}
+              />
+            )}
           </View>
         </ScrollView>
       )}
@@ -2734,39 +2816,52 @@ const renderActiveNcrForm = () => {
         addToast={addToast}
       />
       {/* Forum Modal */}
-{selectedAuditForForum && (
-  <AuditCheckSheetNCRForumModal
-    auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
-    auditNumber={selectedAuditForForum.auditNumber || selectedAuditForForum.id?.toString() || ""}
-    auditTitle={selectedAuditForForum.auditType || "Audit"}
-    auditStatus={selectedAuditForForum.status || "ACTIVE"}
-    auditType={selectedAuditForForum.auditType || ""}
-    department={selectedAuditForForum.department || ""}
-    auditorId={selectedAuditForForum.auditorId || selectedAuditForForum.leadAuditorId || null}
-    auditorName={selectedAuditForForum.auditorName || selectedAuditForForum.leadAuditorName || ""}
-    auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
-    auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
-    hodEmail={selectedAuditForForum.hodEmail || null}
-    hodName={selectedAuditForForum.hodName || null}
-    memberEmails={selectedAuditForForum.memberEmails || []}
-    isOpen={forumModalVisible}
-    onClose={() => {
-      setForumModalVisible(false);
-      setSelectedAuditForForum(null);
-    }}
-    currentUser={user}
-    allUsers={allUsers}
-    onNCRCreated={() => {
-      handleRefresh();
-    }}
-    onNCRUpdated={() => {
-      handleRefresh();
-    }}
-  />
-)}
+      {selectedAuditForForum && (
+        <AuditCheckSheetNCRForumModal
+          auditId={selectedAuditForForum.id || selectedAuditForForum.scheduleId}
+          auditNumber={
+            selectedAuditForForum.auditNumber ||
+            selectedAuditForForum.id?.toString() ||
+            ""
+          }
+          auditTitle={selectedAuditForForum.auditType || "Audit"}
+          auditStatus={selectedAuditForForum.status || "ACTIVE"}
+          auditType={selectedAuditForForum.auditType || ""}
+          department={selectedAuditForForum.department || ""}
+          auditorId={
+            selectedAuditForForum.auditorId ||
+            selectedAuditForForum.leadAuditorId ||
+            null
+          }
+          auditorName={
+            selectedAuditForForum.auditorName ||
+            selectedAuditForForum.leadAuditorName ||
+            ""
+          }
+          auditeeId={selectedAuditForForum.auditeeId || user?.id || null}
+          auditeeName={selectedAuditForForum.auditeeName || user?.name || ""}
+          hodEmail={selectedAuditForForum.hodEmail || null}
+          hodName={selectedAuditForForum.hodName || null}
+          memberEmails={selectedAuditForForum.memberEmails || []}
+          plantId={selectedAuditForForum.plantId ?? null}
+          plantName={selectedAuditForForum.plantName ?? null}
+          isOpen={forumModalVisible}
+          onClose={() => {
+            setForumModalVisible(false);
+            setSelectedAuditForForum(null);
+          }}
+          currentUser={user}
+          allUsers={allUsers}
+          onNCRCreated={() => {
+            handleRefresh();
+          }}
+          onNCRUpdated={() => {
+            handleRefresh();
+          }}
+        />
+      )}
 
-{/* 8D Forum Drawer */}
-
+      {/* 8D Forum Drawer */}
     </SafeAreaView>
   );
 }
@@ -2774,24 +2869,28 @@ const renderActiveNcrForm = () => {
 // ============================================================================
 // REUSABLE DATE PICKER COMPONENT
 // ============================================================================
-const DatePickerField = ({ 
-  label, 
-  value, 
-  onChange, 
-  error 
-}: { 
-  label: string, 
-  value: string, 
-  onChange: (val: string) => void, 
-  error?: string 
+const DatePickerField = ({
+  label,
+  value,
+  onChange,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  error?: string;
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  
+
   const parseDateSafe = (dateStr: string) => {
     if (!dateStr) return new Date();
     const parts = dateStr.split("-");
     if (parts.length === 3) {
-      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return new Date(
+        parseInt(parts[0]),
+        parseInt(parts[1]) - 1,
+        parseInt(parts[2]),
+      );
     }
     return new Date(dateStr);
   };
@@ -2822,10 +2921,14 @@ const DatePickerField = ({
 
   return (
     <View>
-      <Text className="mb-1.5 text-sm font-semibold text-slate-700">{label}</Text>
-      
+      <Text className="mb-1.5 text-sm font-semibold text-slate-700">
+        {label}
+      </Text>
+
       {Platform.OS === "web" ? (
-        <View className={`w-full flex-row items-center px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}>
+        <View
+          className={`h-12 w-full flex-row items-center rounded-xl border bg-white px-3 ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
+        >
           <Calendar size={18} color="#64748b" />
           {/* @ts-ignore */}
           <input
@@ -2833,9 +2936,17 @@ const DatePickerField = ({
             value={value}
             onChange={(e: any) => onChange(e.target.value)}
             style={{
-              flex: 1, border: "none", outline: "none", backgroundColor: "transparent",
-              color: value ? "#1e293b" : "#94a3b8", fontSize: 14, padding: 0,
-              marginLeft: 8, fontFamily: "inherit", cursor: "pointer", width: "100%",
+              flex: 1,
+              border: "none",
+              outline: "none",
+              backgroundColor: "transparent",
+              color: value ? "#1e293b" : "#94a3b8",
+              fontSize: 14,
+              padding: 0,
+              marginLeft: 8,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              width: "100%",
             }}
           />
         </View>
@@ -2843,9 +2954,11 @@ const DatePickerField = ({
         <>
           <TouchableOpacity
             onPress={() => setShowPicker(true)}
-            className={`w-full flex-row items-center justify-between px-3 h-12 bg-white border rounded-xl ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
+            className={`h-12 w-full flex-row items-center justify-between rounded-xl border bg-white px-3 ${error ? "border-rose-500 bg-rose-50" : "border-slate-200"}`}
           >
-            <Text className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}>
+            <Text
+              className={`text-sm ${value ? "text-slate-800" : "text-slate-400"}`}
+            >
               {value || "Select Date"}
             </Text>
             <Calendar size={18} color="#64748b" />
@@ -2853,29 +2966,48 @@ const DatePickerField = ({
 
           {Platform.OS === "ios" && showPicker && (
             <Modal transparent animationType="slide" visible={showPicker}>
-              <View className="justify-end flex-1 bg-slate-900/60">
-                <View className="p-4 pb-8 bg-white rounded-t-3xl">
-                  <View className="flex-row items-center justify-between mb-3">
+              <View className="flex-1 justify-end bg-slate-900/60">
+                <View className="rounded-t-3xl bg-white p-4 pb-8">
+                  <View className="mb-3 flex-row items-center justify-between">
                     <TouchableOpacity onPress={() => setShowPicker(false)}>
-                      <Text className="text-base font-medium text-rose-500">Cancel</Text>
+                      <Text className="text-base font-medium text-rose-500">
+                        Cancel
+                      </Text>
                     </TouchableOpacity>
-                    <Text className="text-base font-semibold text-slate-800">Select Date</Text>
+                    <Text className="text-base font-semibold text-slate-800">
+                      Select Date
+                    </Text>
                     <TouchableOpacity onPress={handleConfirm}>
-                      <Text className="text-base font-bold text-blue-600">Done</Text>
+                      <Text className="text-base font-bold text-blue-600">
+                        Done
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                  <DateTimePicker value={tempDate} mode="date" display="spinner" onChange={onDateChange} textColor="#000000" />
+                  <DateTimePicker
+                    value={tempDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={onDateChange}
+                    textColor="#000000"
+                  />
                 </View>
               </View>
             </Modal>
           )}
 
           {Platform.OS === "android" && showPicker && (
-            <DateTimePicker value={tempDate} mode="date" display="default" onChange={onDateChange} />
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+            />
           )}
         </>
       )}
-      {error ? <Text className="mt-1 text-xs text-rose-600">{error}</Text> : null}
+      {error ? (
+        <Text className="mt-1 text-xs text-rose-600">{error}</Text>
+      ) : null}
     </View>
   );
 };
@@ -2971,7 +3103,7 @@ const RescheduleRequestModal = ({
     return start1Min < end2Min && end1Min > start2Min;
   };
 
-  // ✅ MATCHES REACT CODE: Fetches schedules directly
+  // ? MATCHES REACT CODE: Fetches schedules directly
   const fetchExistingSchedules = async () => {
     try {
       const auditorId = audit?.auditorId || audit?.leadAuditorId || user?.id;
@@ -3000,7 +3132,7 @@ const RescheduleRequestModal = ({
     }
   };
 
-  // ✅ SIMPLIFIED TO MATCH REACT CODE EXACTLY
+  // ? SIMPLIFIED TO MATCH REACT CODE EXACTLY
   const checkSchedulingConflict = async (
     date: string,
     startTime: string,
@@ -3017,11 +3149,11 @@ const RescheduleRequestModal = ({
         return true;
       }
 
-      // ✅ FIX: Fetch fresh data every time to avoid stale state/closure bugs
+      // ? FIX: Fetch fresh data every time to avoid stale state/closure bugs
       const schedules = await fetchExistingSchedules();
       const pendingRequests = await fetchPendingRescheduleRequests();
 
-      // ✅ CHECK 0: Prevent submitting the exact same time
+      // ? CHECK 0: Prevent submitting the exact same time
       const originalDate =
         getLocalDateString(audit.scheduledDate) ||
         getLocalDateString(audit.fromDate);
@@ -3036,7 +3168,7 @@ const RescheduleRequestModal = ({
         return true;
       }
 
-      // ✅ CHECK 1: Conflicts with EXISTING scheduled audits (Matches React Logic exactly)
+      // ? CHECK 1: Conflicts with EXISTING scheduled audits (Matches React Logic exactly)
       const scheduleConflicts = schedules.filter((scheduleItem: any) => {
         const sch = scheduleItem.schedule || scheduleItem;
         if (String(sch?.id) === String(audit.id)) return false;
@@ -3066,14 +3198,14 @@ const RescheduleRequestModal = ({
         return true;
       }
 
-      // ✅ CHECK 2: Conflicts with PENDING reschedule requests
-      // (NOW INCLUDES this audit's OWN pending request → blocks duplicates)
+      // ? CHECK 2: Conflicts with PENDING reschedule requests
+      // (NOW INCLUDES this audit's OWN pending request ? blocks duplicates)
       console.log(
-        "🔍 [CONFLICT DEBUG] Pending requests:",
+        "?? [CONFLICT DEBUG] Pending requests:",
         JSON.stringify(pendingRequests),
       );
 
-      // ✅ CHECK 2: Conflicts with PENDING reschedule requests
+      // ? CHECK 2: Conflicts with PENDING reschedule requests
       // (Backend uses requestedNewDate / requestedNewStartTime / requestedNewEndTime)
       const pendingConflicts = pendingRequests.filter((req: any) => {
         if (req.status !== "PENDING") return false;
@@ -3239,9 +3371,9 @@ const RescheduleRequestModal = ({
     <Modal visible={isOpen} transparent animationType="fade">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="items-center justify-center flex-1 bg-slate-900/60"
+        className="flex-1 items-center justify-center bg-slate-900/60"
       >
-        <View className="w-[90%] max-w-md p-6 bg-white shadow-2xl rounded-3xl border border-slate-100">
+        <View className="w-[90%] max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
           <Text className="mb-4 text-lg font-bold text-slate-800">
             Request Reschedule
           </Text>
@@ -3270,7 +3402,17 @@ const RescheduleRequestModal = ({
                 </Text>
                 <TimePicker
                   value={newStartTime}
-                  onChange={setNewStartTime}
+                  onChange={(val: string) => {
+                    setNewStartTime(val);
+                    // If end time becomes invalid, clear it
+                    if (
+                      newEndTime &&
+                      parseTimeToMinutesRobust(val) >=
+                        parseTimeToMinutesRobust(newEndTime)
+                    ) {
+                      setNewEndTime("");
+                    }
+                  }}
                   options={TIME_OPTIONS}
                 />
               </View>
@@ -3287,7 +3429,7 @@ const RescheduleRequestModal = ({
               </View>
             </View>
             {timeConflictError ? (
-              <View className="flex-row items-center gap-2 p-3 text-sm border bg-rose-50 rounded-xl border-rose-200">
+              <View className="flex-row items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm">
                 <AlertCircle size={14} color="#be123c" />
                 <Text className="flex-1 text-rose-700">
                   {timeConflictError}
@@ -3304,14 +3446,14 @@ const RescheduleRequestModal = ({
                 placeholder="Reason for rescheduling..."
                 multiline
                 numberOfLines={3}
-                className="w-full h-24 p-3 text-sm bg-white border border-slate-200 rounded-xl"
+                className="h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
               />
             </View>
           </View>
-          <View className="flex-row justify-end gap-3 mt-6">
+          <View className="mt-6 flex-row justify-end gap-3">
             <TouchableOpacity
               onPress={onClose}
-              className="px-5 py-2.5 text-sm font-semibold text-slate-700 rounded-xl border border-slate-200 bg-white"
+              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700"
             >
               <Text>Cancel</Text>
             </TouchableOpacity>
@@ -3323,7 +3465,7 @@ const RescheduleRequestModal = ({
                 !!timeConflictError ||
                 checkingConflict
               }
-              className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md ${submitting || dateError || timeConflictError || checkingConflict ? "bg-slate-400" : "bg-blue-600"}`}
+              className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md ${submitting || dateError || timeConflictError || checkingConflict ? "bg-slate-400" : "bg-blue-600"}`}
             >
               <Text>{submitting ? "Submitting..." : "Submit Request"}</Text>
             </TouchableOpacity>
@@ -3392,9 +3534,9 @@ const ExtensionRequestModal = ({
     <Modal visible={isOpen} transparent animationType="fade">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="items-center justify-center flex-1 bg-slate-900/60"
+        className="flex-1 items-center justify-center bg-slate-900/60"
       >
-        <View className="w-[90%] max-w-md p-6 bg-white shadow-2xl rounded-3xl border border-slate-100">
+        <View className="w-[90%] max-w-md rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
           <Text className="mb-4 text-lg font-bold text-slate-800">
             Request Extension
           </Text>
@@ -3441,21 +3583,21 @@ const ExtensionRequestModal = ({
                 placeholder="Detailed reason..."
                 multiline
                 numberOfLines={3}
-                className="w-full h-24 p-3 text-sm bg-white border border-slate-200 rounded-xl"
+                className="h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
               />
             </View>
           </View>
-          <View className="flex-row justify-end gap-3 mt-6">
+          <View className="mt-6 flex-row justify-end gap-3">
             <TouchableOpacity
               onPress={onClose}
-              className="px-5 py-2.5 text-sm font-semibold text-slate-700 rounded-xl border border-slate-200 bg-white"
+              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700"
             >
               <Text>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={submitting}
-              className={`px-5 py-2.5 text-sm font-semibold text-white rounded-xl shadow-md ${submitting ? "bg-slate-400" : "bg-blue-600"}`}
+              className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md ${submitting ? "bg-slate-400" : "bg-blue-600"}`}
             >
               <Text>{submitting ? "Submitting..." : "Submit Request"}</Text>
             </TouchableOpacity>

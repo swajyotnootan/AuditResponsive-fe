@@ -1,4 +1,4 @@
-﻿import { API_BASE_URL } from "@/config/apiConfig";
+import { API_BASE_URL } from "@/config/apiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,6 +23,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { useAuth } from "../context/AuthContext"; // adjust path to match your project
 
 // ==================== TYPES & INTERFACES ====================
 
@@ -458,7 +459,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
           text: "#166534",
           border: "#bbf7d0",
           label: "Completed",
-          icon: "✅",
+          icon: "?",
         };
       case "IN_PROGRESS":
         return {
@@ -466,7 +467,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
           text: "#155e75",
           border: "#a5f3fc",
           label: "In Progress",
-          icon: "🔄",
+          icon: "??",
         };
       case "UNDER_REVIEW":
         return {
@@ -474,7 +475,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
           text: "#854d0e",
           border: "#fde047",
           label: "Under Review",
-          icon: "📋",
+          icon: "??",
         };
       case "DRAFT":
         return {
@@ -482,7 +483,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
           text: "#1f2937",
           border: "#e5e7eb",
           label: "Draft",
-          icon: "📝",
+          icon: "??",
         };
       default:
         return {
@@ -490,7 +491,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
           text: "#1f2937",
           border: "#e5e7eb",
           label: status || "Draft",
-          icon: "📄",
+          icon: "??",
         };
     }
   };
@@ -531,7 +532,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
           text: "#b91c1c",
           border: "#fecaca",
           label: "Critical",
-          icon: "🔴",
+          icon: "??",
         };
       case "HIGH":
         return {
@@ -539,7 +540,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
           text: "#c2410c",
           border: "#fed7aa",
           label: "High",
-          icon: "🟠",
+          icon: "??",
         };
       case "MEDIUM":
         return {
@@ -547,7 +548,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
           text: "#a16207",
           border: "#fde047",
           label: "Medium",
-          icon: "🟡",
+          icon: "??",
         };
       case "LOW":
         return {
@@ -555,7 +556,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
           text: "#15803d",
           border: "#bbf7d0",
           label: "Low",
-          icon: "🟢",
+          icon: "??",
         };
       default:
         return {
@@ -563,7 +564,7 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
           text: "#a16207",
           border: "#fde047",
           label: "Medium",
-          icon: "🟡",
+          icon: "??",
         };
     }
   };
@@ -598,18 +599,18 @@ const PriorityBadge: React.FC<PriorityBadgeProps> = ({ priority }) => {
 // ==================== EIGHT D CARD ====================
 
 const EightDCard: React.FC<EightDCardProps> = ({ report, onClick }) => {
-  // ✅ 1. Normalize the status: convert to lowercase and remove all spaces
+  // ? 1. Normalize the status: convert to lowercase and remove all spaces
   // "in progress" -> "inprogress", "D0 Approved" -> "d0approved", "Approval Pending" -> "approvalpending"
   const statusLower = (report.status || "").toLowerCase().replace(/\s+/g, "");
 
-  // ✅ 2. Check if it's an approved state (HOD has approved D0)
+  // ? 2. Check if it's an approved state (HOD has approved D0)
   const isD0Approved =
     statusLower.includes("inprogress") ||
     statusLower.includes("d0approved") ||
     statusLower.includes("completed") ||
     statusLower.includes("closed");
 
-  // ✅ 3. Set Pending UI configurations based on the normalized status
+  // ? 3. Set Pending UI configurations based on the normalized status
   let pendingText = "Awaiting HOD Approval";
   let bgColor = "#fef3c7"; // amber-100
   let textColor = "#92400e"; // amber-800
@@ -693,7 +694,7 @@ const EightDCard: React.FC<EightDCardProps> = ({ report, onClick }) => {
             <View style={styles.initiatorInfo}>
               {/* Action button OR Pending State */}
               {isD0Approved ? (
-                // ✅ SHOW IF APPROVED: Normal Continue Button
+                // ? SHOW IF APPROVED: Normal Continue Button
                 <LinearGradient
                   colors={["#f3e8ff", "#fce7f3"] as [string, string]}
                   style={styles.continueButton}
@@ -704,7 +705,7 @@ const EightDCard: React.FC<EightDCardProps> = ({ report, onClick }) => {
                   <ChevronRight size={12} color="#334155" />
                 </LinearGradient>
               ) : (
-                // ✅ SHOW IF PENDING: Flat Status Indicator
+                // ? SHOW IF PENDING: Flat Status Indicator
                 <View
                   style={[
                     styles.continueButton,
@@ -829,13 +830,31 @@ const InitiatorDashboard: React.FC<InitiatorDashboardProps> = ({ user }) => {
   const router = useRouter();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const { user: authUser } = useAuth();
   const [stats, setStats] = useState<Stats>({
     total: 0,
     inProgress: 0,
     completed: 0,
   });
 
-  
+  useEffect(() => {
+    console.log("---------------------------------------");
+    console.log(
+      "?? [InitiatorDashboard] user PROP:",
+      JSON.stringify(user, null, 2),
+    );
+    console.log("?? [InitiatorDashboard] user PROP.id:", (user as any)?.id);
+    console.log(
+      "?? [InitiatorDashboard] AUTH user:",
+      JSON.stringify(authUser, null, 2),
+    );
+    console.log("?? [InitiatorDashboard] AUTH user.id:", (authUser as any)?.id);
+    console.log(
+      "?? [InitiatorDashboard] AUTH user.plantId:",
+      (authUser as any)?.plantId,
+    );
+    console.log("---------------------------------------");
+  }, [user, authUser]);
 
   // Helper to get current step
   const getCurrentStep = (item: any): string => {
@@ -868,10 +887,19 @@ const InitiatorDashboard: React.FC<InitiatorDashboardProps> = ({ user }) => {
 
   const fetchReports = async (): Promise<void> => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await AsyncStorage.getItem("authToken");
       const response = await axios.get(
         `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-User-Id": String((authUser as any)?.id ?? ""),
+            "X-Plant-Id": String((authUser as any)?.plantId ?? ""),
+            "X-Timezone":
+              Intl.DateTimeFormat().resolvedOptions().timeZone ||
+              "Asia/Kolkata",
+          },
+        },
       );
 
       if (response.data?.success && Array.isArray(response.data.data)) {
@@ -914,8 +942,8 @@ const InitiatorDashboard: React.FC<InitiatorDashboardProps> = ({ user }) => {
               title: item.eventNo,
               owner:
                 item.initiatorEmail ||
-                user?.name ||
-                user?.email ||
+                (authUser as any)?.name ||
+                (authUser as any)?.email ||
                 "Unassigned",
               status,
               created: item.createdAt

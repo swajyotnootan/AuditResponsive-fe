@@ -1,4 +1,4 @@
-﻿// app/components/dashboards/LeadAuditorDashboard.tsx
+// app/components/dashboards/LeadAuditorDashboard.tsx
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import { useLocalSearchParams } from "expo-router";
@@ -21,94 +21,13 @@ import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
 import { ToastProvider, useToast } from "../context/ToastContext";
 import AuditsAndResponses from "./LeadAuditor/AuditsAndResponses";
+import DailyFeasibilityQueue from "./LeadAuditor/DailyFeasibilityQueue";
 import DashboardAnalytics from "./LeadAuditor/DashboardAnalytics";
+import FeasibilityConfirmationQueue from "./LeadAuditor/FeasibilityConfirmationQueue";
 import ResponseDetailModal from "./LeadAuditor/ResponseDetailModal";
 import StakeholderManagement from "./LeadAuditor/StakeholderManagement";
-
-// Types (keep same)
-interface User {
-  id: string | number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role: string;
-  department?: string | { displayName?: string; name?: string };
-  username?: string;
-  name?: string;
-}
-
-interface Schedule {
-  id: string | number;
-  department?: string;
-  auditeeName?: string;
-  auditorId?: string | number;
-  auditorName?: string;
-  leadAuditorName?: string;
-  coAuditorIds?: string[] | string;
-  scheduledDate?: string;
-  startTime?: string;
-  endTime?: string;
-  status?: string;
-  approvalStatus?: string;
-  detailedApprovalStatus?: string;
-  createdAt?: string;
-}
-
-interface NCR {
-  id: string | number;
-  ncrNumber?: string;
-  title?: string;
-  department?: string;
-  severity?: string;
-  status?: string;
-  auditorId?: string | number;
-  auditeeId?: string | number;
-  createdAt?: string;
-  raisedDate?: string;
-  dueDate?: string;
-}
-
-interface Response {
-  id: string | number;
-  department?: string;
-  auditeeName?: string;
-  auditorId?: string | number;
-  auditorName?: string;
-  auditeeId?: string | number;
-  status?: string;
-  approvalStatus?: string;
-  answers?: any;
-  percentageScore?: number;
-  totalScore?: number;
-  maxPossibleScore?: number;
-  createdAt?: string;
-  submittedAt?: string;
-  checkSheet?: { name: string };
-}
-
-interface Stats {
-  totalSchedules: number;
-  completedSchedules: number;
-  approved: number;
-  rejected: number;
-  pendingApproval: number;
-  inProgress: number;
-  scheduled: number;
-  overdue: number;
-  totalNCRs: number;
-  openNCRs: number;
-  closedNCRs: number;
-  criticalNCRs: number;
-  majorNCRs: number;
-  minorNCRs: number;
-  totalResponses: number;
-  responsesApproved: number;
-  responsesRejected: number;
-  responsesSubmitted: number;
-  ncrApproved: number;
-  ncrInProgress: number;
-  ncrOpen: number;
-}
+import type { NCR, Response, Schedule, Stats, User } from "./LeadAuditor/types";
+import { normalizePlantId } from "./LeadAuditor/types"; // Types
 
 const NAVBAR_COLORS = {
   primary: "#00529B",
@@ -125,7 +44,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
-  
+
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -137,8 +56,17 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [carouselSpeed, setCarouselSpeed] = useState(5000);
   const [responseViewMode, setResponseViewMode] = useState("grid");
   const [ncrViewMode, setNcrViewMode] = useState("grid");
-  const [leadAuditorDepartment, setLeadAuditorDepartment] = useState<string | null>(null);
 
+  const [leadAuditorPlantId, setLeadAuditorPlantId] = useState<number | null>(
+    null,
+  );
+  const [leadAuditorPlantName, setLeadAuditorPlantName] = useState<
+    string | null
+  >(null);
+  // ? NEW: company display name
+  const [leadAuditorCompanyName, setLeadAuditorCompanyName] = useState<
+    string | null
+  >(null);
   const [allSchedules, setAllSchedules] = useState<Schedule[]>([]);
   const [allNCRs, setAllNCRs] = useState<NCR[]>([]);
   const [allAuditors, setAllAuditors] = useState<User[]>([]);
@@ -151,12 +79,15 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [filteredAuditees, setFilteredAuditees] = useState<User[]>([]);
   const [filteredResponses, setFilteredResponses] = useState<Response[]>([]);
 
-  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(null);
+  const [reviewingResponse, setReviewingResponse] = useState<Response | null>(
+    null,
+  );
   const [reviewComment, setReviewComment] = useState("");
   const [reviewApproved, setReviewApproved] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [selectedResponseForDetail, setSelectedResponseForDetail] = useState<Response | null>(null);
+  const [selectedResponseForDetail, setSelectedResponseForDetail] =
+    useState<Response | null>(null);
   const [showResponseDetailModal, setShowResponseDetailModal] = useState(false);
 
   const [stats, setStats] = useState<Stats>({
@@ -183,8 +114,17 @@ const LeadAuditorDashboardContent: React.FC = () => {
     ncrOpen: 0,
   });
 
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState(() =>
+    new Date().getFullYear(),
+  );
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+
+  const subtabParam =
+    typeof params?.subtab === "string"
+      ? (params.subtab as "PENDING" | "CONFIRMED" | "REJECTED" | "OVERDUE")
+      : Array.isArray(params?.subtab)
+        ? (params.subtab[0] as "PENDING" | "CONFIRMED" | "REJECTED" | "OVERDUE")
+        : undefined;
 
   // Listen for tab param from drawer clicks
   useEffect(() => {
@@ -203,112 +143,157 @@ const LeadAuditorDashboardContent: React.FC = () => {
     return "";
   };
 
-  const fetchLeadAuditorDepartment = async () => {
+  const fetchLeadAuditorPlant = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/users/${user?.id}`, {
-        withCredentials: true,
-      });
+      const response = await axios.get(
+        `${API_BASE_URL}/api/users/${user?.id}`,
+        {},
+      );
       const userData = response.data;
-      let department = null;
-      if (userData.department) {
-        department = getDepartmentString(userData.department);
-      } else if (userData.departmentName) {
-        department = userData.departmentName;
-      } else if (userData.departmentCode) {
-        department = userData.departmentCode;
+
+      let plantId = normalizePlantId(userData.plantId);
+      let plantName: string | null = userData.plantName || null;
+
+      // ? Try to read company name from user payload � cover the likely shapes
+      let companyName: string | null =
+        userData.companyName ||
+        userData.company?.name ||
+        userData.plant?.company?.name ||
+        userData.plant?.companyName ||
+        null;
+
+      // Fallback to user context
+      if (plantId === null && user?.plantId) {
+        plantId = normalizePlantId(user.plantId);
+        plantName = (user.plantName as string) || null;
       }
-      setLeadAuditorDepartment(department);
-      return department;
+
+      // ? If company name still missing but we have a plantId, fetch the plant
+      if (!companyName && plantId !== null) {
+        try {
+          const plantRes = await axios.get(
+            `${API_BASE_URL}/api/plants/${plantId}`,
+            {},
+          );
+          const plantData = plantRes.data;
+          companyName =
+            plantData?.company?.name ||
+            plantData?.companyName ||
+            plantData?.company?.displayName ||
+            null;
+        } catch (plantErr) {
+          console.warn(
+            "Could not fetch plant detail for company name:",
+            plantErr,
+          );
+        }
+      }
+
+      setLeadAuditorPlantId(plantId);
+      setLeadAuditorPlantName(plantName);
+      setLeadAuditorCompanyName(companyName);
+
+      console.log("?? Lead Auditor Plant:", {
+        plantId,
+        plantName,
+        companyName,
+      });
+      return { plantId, plantName, companyName };
     } catch (error) {
-      if (user?.department) {
-        const dept = getDepartmentString(user.department);
-        setLeadAuditorDepartment(dept);
-        return dept;
+      console.error("Error fetching lead auditor plant:", error);
+
+      if (user?.plantId) {
+        const fallbackId = normalizePlantId(user.plantId);
+        setLeadAuditorPlantId(fallbackId);
+        setLeadAuditorPlantName((user.plantName as string) || null);
+        setLeadAuditorCompanyName(null);
+        return {
+          plantId: fallbackId,
+          plantName: user.plantName,
+          companyName: null,
+        };
       }
-      return null;
+
+      return { plantId: null, plantName: null, companyName: null };
     }
   };
 
-  const normalizeDepartment = (dept: any): string => {
-    const deptStr = getDepartmentString(dept).toUpperCase().trim();
-    if (!deptStr) return "";
-    const deptMap: Record<string, string> = {
-      HR: "HR",
-      "R&D": "ENGG",
-      ENGINEERING: "ENGG",
-      "R AND D": "ENGG",
-      PURCHASE: "PURCHASE",
-      RMS: "STORES_DESPATCH",
-      SQA: "QA",
-      PPC: "PPC",
-      PRODUCTION: "PRODUCTION",
-      "QA/QC": "QA",
-      QA: "QA",
-      QC: "QA",
-      FGS: "STORES_DESPATCH",
-      MARKETING: "MARKETING",
-      "IMS (BE)": "MR",
-      "IMS(BE)": "MR",
-      IMS: "MR",
-      MAINTENANCE: "PLANT_MAINTENANCE",
-      MANAGEMENT: "UNIT_HEAD",
-      "PLANT MAINTENANCE": "PLANT_MAINTENANCE",
-      "TOOL MAINTENANCE": "TOOL_MAINTENANCE",
-      "TOOL MANAGEMENT": "TOOL_MAINTENANCE",
-      "STORES & DESPATCH": "STORES_DESPATCH",
-      STORES: "STORES_DESPATCH",
-      DESPATCH: "STORES_DESPATCH",
-      "UNIT HEAD": "UNIT_HEAD",
-      MR: "MR",
-    };
-    return deptMap[deptStr] || deptStr;
+  // Map scheduleId ? plantId (for records that lack plantId directly)
+  const buildSchedulePlantMap = (
+    schedules: Schedule[],
+  ): Map<string, number | null> => {
+    const map = new Map<string, number | null>();
+    schedules.forEach((s) => {
+      if (s.id != null) {
+        map.set(String(s.id), normalizePlantId(s.plantId));
+      }
+    });
+    return map;
   };
 
-  const filterDataByDepartment = (
-    department: string | null,
+  const filterDataByPlant = (
+    plantId: number | null,
     schedules: Schedule[],
     ncrs: NCR[],
     auditors: User[],
     auditees: User[],
     responses: Response[],
   ) => {
-    if (!department) return { schedules, ncrs, auditors, auditees, responses };
-    const normalizedTarget = normalizeDepartment(department);
+    if (plantId === null) {
+      return { schedules, ncrs, auditors, auditees, responses };
+    }
+
+    const schedulePlantMap = buildSchedulePlantMap(schedules);
+
+    // Resolve plantId for an NCR/Response: direct ? or via linked schedule
+    const resolvePlant = (item: any): number | null => {
+      const direct = normalizePlantId(item.plantId);
+      if (direct !== null) return direct;
+
+      // Fallbacks: try common foreign keys
+      const schedId =
+        item.auditScheduleId ?? item.scheduleId ?? item.auditSchedule?.id;
+      if (schedId != null) {
+        const viaSchedule = schedulePlantMap.get(String(schedId));
+        if (viaSchedule !== undefined) return viaSchedule;
+      }
+      return null;
+    };
+
     return {
       schedules: schedules.filter(
-        (s) => normalizeDepartment(s.department) === normalizedTarget,
+        (s) => normalizePlantId(s.plantId) === plantId,
       ),
-      ncrs: ncrs.filter(
-        (n) => normalizeDepartment(n.department) === normalizedTarget,
-      ),
-      auditors: auditors.filter(
-        (a) => normalizeDepartment(a.department) === normalizedTarget,
-      ),
-      auditees: auditees.filter(
-        (a) => normalizeDepartment(a.department) === normalizedTarget,
-      ),
-      responses: responses.filter(
-        (r) => normalizeDepartment(r.department) === normalizedTarget,
-      ),
+      ncrs: ncrs.filter((n) => {
+        const p = resolvePlant(n);
+        return p === null || p === plantId; // fail-open when unresolvable
+      }),
+      auditors: auditors.filter((a) => normalizePlantId(a.plantId) === plantId),
+      auditees: auditees.filter((a) => normalizePlantId(a.plantId) === plantId),
+      responses: responses.filter((r) => {
+        const p = resolvePlant(r);
+        return p === null || p === plantId;
+      }),
     };
   };
 
   const updateFilteredData = (
-    department: string | null,
+    plantId: number | null,
     schedules: Schedule[],
     ncrs: NCR[],
     auditors: User[],
     auditees: User[],
     responses: Response[],
   ) => {
-    const filtered = filterDataByDepartment(
-      department,
+    const filtered = filterDataByPlant(
+      plantId,
       schedules,
       ncrs,
       auditors,
       auditees,
       responses,
     );
+
     setFilteredSchedules(filtered.schedules);
     setFilteredNCRs(filtered.ncrs);
     setFilteredAuditors(filtered.auditors);
@@ -344,18 +329,22 @@ const LeadAuditorDashboardContent: React.FC = () => {
         (s) =>
           s.status === "APPROVED" || s.detailedApprovalStatus === "APPROVED",
       ).length,
-      rejected: filtered.schedules.filter((s) => s.status === "REJECTED").length,
+      rejected: filtered.schedules.filter((s) => s.status === "REJECTED")
+        .length,
       pendingApproval: filtered.schedules.filter(
         (s) =>
           s.status === "COMPLETED" && s.detailedApprovalStatus !== "APPROVED",
       ).length,
-      inProgress: filtered.schedules.filter((s) => s.status === "IN_PROGRESS").length,
-      scheduled: filtered.schedules.filter((s) => s.status === "SCHEDULED").length,
+      inProgress: filtered.schedules.filter((s) => s.status === "IN_PROGRESS")
+        .length,
+      scheduled: filtered.schedules.filter((s) => s.status === "SCHEDULED")
+        .length,
       overdue,
       totalNCRs: filtered.ncrs.length,
       openNCRs: filtered.ncrs.filter((n) => n.status !== "CLOSED").length,
       closedNCRs: filtered.ncrs.filter((n) => n.status === "CLOSED").length,
-      criticalNCRs: filtered.ncrs.filter((n) => n.severity === "CRITICAL").length,
+      criticalNCRs: filtered.ncrs.filter((n) => n.severity === "CRITICAL")
+        .length,
       majorNCRs: filtered.ncrs.filter((n) => n.severity === "MAJOR").length,
       minorNCRs: filtered.ncrs.filter((n) => n.severity === "MINOR").length,
       totalResponses: filtered.responses.length,
@@ -363,7 +352,8 @@ const LeadAuditorDashboardContent: React.FC = () => {
       responsesRejected,
       responsesSubmitted,
       ncrApproved: filtered.ncrs.filter((n) => n.status === "APPROVED").length,
-      ncrInProgress: filtered.ncrs.filter((n) => n.status === "IN_PROGRESS").length,
+      ncrInProgress: filtered.ncrs.filter((n) => n.status === "IN_PROGRESS")
+        .length,
       ncrOpen: filtered.ncrs.filter((n) => n.status === "OPEN").length,
     });
   };
@@ -371,29 +361,22 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const fetchAllData = async (year: number = selectedYear) => {
     try {
       setLoading(true);
-      const department = await fetchLeadAuditorDepartment();
+      const { plantId } = await fetchLeadAuditorPlant();
+
       const [schedulesRes, ncrRes, auditorsRes, auditeesRes, responsesRes] =
         await Promise.all([
-          axios.get(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {
-            withCredentials: true,
-          }),
+          axios.get(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {}),
           axios
-            .get(`${API_BASE_URL}/api/ncr/all`, { withCredentials: true })
+            .get(`${API_BASE_URL}/api/ncr/all`, {})
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/audit-schedule/auditors`, {
-              withCredentials: true,
-            })
+            .get(`${API_BASE_URL}/api/audit-schedule/auditors`, {})
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/audit-schedule/auditees`, {
-              withCredentials: true,
-            })
+            .get(`${API_BASE_URL}/api/audit-schedule/auditees`, {})
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/templates/responses/all`, {
-              withCredentials: true,
-            })
+            .get(`${API_BASE_URL}/api/templates/responses/all`, {})
             .catch(() => ({ data: [] })),
         ]);
 
@@ -403,25 +386,84 @@ const LeadAuditorDashboardContent: React.FC = () => {
       const auditees = auditeesRes.data || [];
       let responses = responsesRes.data || [];
 
+      // ============================================================
+      // ?? DEBUG LOGS � ADD THIS BLOCK
+      // ============================================================
+      console.log("?? leadAuditorPlantId:", plantId);
+      console.log("?? selectedYear:", year);
+      console.log(
+        "?? RAW schedules:",
+        schedules.length,
+        "sample plantIds:",
+        schedules.slice(0, 5).map((s: any) => s.plantId),
+      );
+      console.log("?? RAW NCRs:", ncrs.length, "sample:", ncrs.slice(0, 2));
+      console.log(
+        "?? NCR plantIds:",
+        ncrs.slice(0, 5).map((n: any) => n.plantId),
+      );
+      console.log(
+        "?? NCR dates:",
+        ncrs.slice(0, 5).map((n: any) => ({
+          createdAt: n.createdAt,
+          raisedDate: n.raisedDate,
+          dueDate: n.dueDate,
+        })),
+      );
+      console.log(
+        "?? RAW Responses:",
+        responses.length,
+        "sample:",
+        responses.slice(0, 2),
+      );
+      console.log(
+        "?? Response plantIds:",
+        responses.slice(0, 5).map((r: any) => r.plantId),
+      );
+      console.log(
+        "?? Response dates:",
+        responses.slice(0, 5).map((r: any) => r.createdAt),
+      );
+      // ============================================================
+
+      // Filter by year
       ncrs = ncrs.filter((ncr: NCR) => {
         const ncrDate = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
-        if (ncrDate) return new Date(ncrDate as string).getFullYear() === year;
-        return false;
+        if (!ncrDate) return true; // ? keep if no date (was: return false)
+        try {
+          return new Date(ncrDate as string).getFullYear() === year;
+        } catch {
+          return true; // ? keep if unparseable
+        }
       });
 
       responses = responses.filter((response: Response) => {
-        const responseYear = response.createdAt
-          ? new Date(response.createdAt as string).getFullYear()
-          : null;
-        return responseYear === year;
+        if (!response.createdAt) return true; // ? keep if no date
+        try {
+          return new Date(response.createdAt as string).getFullYear() === year;
+        } catch {
+          return true;
+        }
       });
+
+      console.log("?? NCRs after year filter:", ncrs.length);
+      console.log("?? Responses after year filter:", responses.length);
 
       setAllSchedules(schedules);
       setAllNCRs(ncrs);
       setAllAuditors(auditors);
       setAllAuditees(auditees);
       setAllResponses(responses);
-      updateFilteredData(department, schedules, ncrs, auditors, auditees, responses);
+
+      // ? Update filtered data using plantId instead of department
+      updateFilteredData(
+        plantId,
+        schedules,
+        ncrs,
+        auditors,
+        auditees,
+        responses,
+      );
     } catch (error) {
       console.error("Error fetching data:", error);
       addToast("Failed to load dashboard data", "error");
@@ -463,11 +505,13 @@ const LeadAuditorDashboardContent: React.FC = () => {
     }
     setSubmitting(true);
     try {
-      const endpoint = reviewApproved ? "lead-auditor/approve" : "lead-auditor/reject";
+      const endpoint = reviewApproved
+        ? "lead-auditor/approve"
+        : "lead-auditor/reject";
       await axios.put(
         `${API_BASE_URL}/api/templates/responses/${reviewingResponse.id}/${endpoint}`,
         { comment: reviewComment, signature: "Lead Auditor" },
-        { withCredentials: true },
+        {},
       );
       addToast(
         `Response ${reviewApproved ? "approved" : "rejected"} successfully!`,
@@ -497,12 +541,24 @@ const LeadAuditorDashboardContent: React.FC = () => {
     fetchAllData(selectedYear);
   }, [selectedYear]);
 
-  const departmentDisplayName = leadAuditorDepartment || "All Departments";
+  const plantDisplayName =
+    leadAuditorCompanyName || leadAuditorPlantName || "All Plants";
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8FAFC" }}>
-        <ActivityIndicator size="large" color={NAVBAR_COLORS.primary} style={{ marginBottom: 16 }} />
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#F8FAFC",
+        }}
+      >
+        <ActivityIndicator
+          size="large"
+          color={NAVBAR_COLORS.primary}
+          style={{ marginBottom: 16 }}
+        />
         <Text style={{ fontSize: 14, fontWeight: "500", color: "#64748B" }}>
           Loading dashboard...
         </Text>
@@ -523,15 +579,33 @@ const LeadAuditorDashboardContent: React.FC = () => {
             setCarouselSpeed={setCarouselSpeed}
             onRefresh={handleRefresh}
             refreshing={refreshing}
-            leadAuditorDepartment={leadAuditorDepartment}
+            leadAuditorDepartment={leadAuditorPlantName}
           />
         );
-      case "audits":
-      case "responses":
-      case "ncrs":
+      case "feasibility":
+        return (
+          <FeasibilityConfirmationQueue
+            selectedYear={selectedYear}
+            onNavigateToForm5={(year, month) => {
+              // Optional: navigate to Form5View
+            }}
+          />
+        );
+      case "daily-feasibility":
+        return (
+          <DailyFeasibilityQueue
+            selectedYear={selectedYear}
+            initialStatusTab={subtabParam}
+            onNavigateToForm5={(year, month) => {
+              // Optional: navigate to Form5DetailedView
+            }}
+          />
+        );
+      // ? MERGED: CheckSheets + NCRs in one tab
+      case "checksheets-ncrs":
         return (
           <AuditsAndResponses
-            activeTab={activeTab}
+            activeTab="checksheets-ncrs"
             allSchedules={filteredSchedules}
             allNCRs={filteredNCRs}
             allResponses={filteredResponses}
@@ -547,14 +621,14 @@ const LeadAuditorDashboardContent: React.FC = () => {
             onReviewResponse={handleReviewResponseClick}
             onViewNCR={handleViewNCR}
             onViewResponseDetail={handleViewResponseDetail}
-            leadAuditorDepartment={leadAuditorDepartment}
+            leadAuditorDepartment={leadAuditorPlantName}
           />
         );
-      case "auditors":
-      case "auditees":
+      // ? MERGED: Auditors + Auditees in one tab
+      case "stakeholders":
         return (
           <StakeholderManagement
-            activeTab={activeTab}
+            activeTab="stakeholders"
             allAuditors={filteredAuditors}
             allAuditees={filteredAuditees}
             allSchedules={filteredSchedules}
@@ -563,13 +637,26 @@ const LeadAuditorDashboardContent: React.FC = () => {
             onViewResponse={handleViewResponse}
             onViewNCR={handleViewNCR}
             onViewResponseDetail={handleViewResponseDetail}
-            leadAuditorDepartment={leadAuditorDepartment}
+            leadAuditorDepartment={leadAuditorPlantName}
           />
         );
       default:
         return (
-          <View style={{ justifyContent: "center", alignItems: "center", padding: 40, marginTop: 16, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0" }}>
-            <Text style={{ fontSize: 16, textAlign: "center", color: "#64748B" }}>
+          <View
+            style={{
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 40,
+              marginTop: 16,
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+            }}
+          >
+            <Text
+              style={{ fontSize: 16, textAlign: "center", color: "#64748B" }}
+            >
               Select a section from the navigation
             </Text>
           </View>
@@ -579,101 +666,115 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
-      {/* ✅ RESPONSIVE HEADER */}
-      <View style={{
-        width: "100%",
-        backgroundColor: "#FFFFFF",
-        borderBottomWidth: 1,
-        borderBottomColor: "#E2E8F0",
-        paddingHorizontal: isMobile ? 16 : 24,
-        paddingVertical: isMobile ? 12 : 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-      }}>
+      {/* ? RESPONSIVE HEADER */}
+      <View
+        style={{
+          width: "100%",
+          backgroundColor: "#FFFFFF",
+          borderBottomWidth: 1,
+          borderBottomColor: "#E2E8F0",
+          paddingHorizontal: isMobile ? 16 : 24,
+          paddingVertical: isMobile ? 12 : 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2,
+        }}
+      >
         <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
-          <View style={{
-            flexDirection: isMobile ? "column" : "row",
-            flexWrap: "wrap",
-            alignItems: isMobile ? "flex-start" : "center",
-            justifyContent: "space-between",
-            gap: isMobile ? 12 : 16,
-          }}>
+          <View
+            style={{
+              flexDirection: isMobile ? "column" : "row",
+              flexWrap: "wrap",
+              alignItems: isMobile ? "flex-start" : "center",
+              justifyContent: "space-between",
+              gap: isMobile ? 12 : 16,
+            }}
+          >
             {/* Title Section */}
             <View style={{ minWidth: isMobile ? "100%" : 200 }}>
-              <Text style={{
-                fontSize: isMobile ? 18 : 24,
-                fontWeight: "bold",
-                color: "#1E293B",
-              }}>
+              <Text
+                style={{
+                  fontSize: isMobile ? 18 : 24,
+                  fontWeight: "bold",
+                  color: "#1E293B",
+                }}
+              >
                 Lead Auditor Dashboard
               </Text>
-              <Text style={{
-                fontSize: isMobile ? 11 : 13,
-                color: "#64748B",
-                marginTop: 4,
-                flexWrap: "wrap",
-              }}>
+              <Text
+                style={{
+                  fontSize: isMobile ? 11 : 13,
+                  color: "#64748B",
+                  marginTop: 4,
+                  flexWrap: "wrap",
+                }}
+              >
                 Welcome back,{" "}
                 <Text style={{ fontWeight: "600", color: "#334155" }}>
                   {user?.name || user?.username || "User"}
                 </Text>
                 {" | "}
-                <Text style={{ fontWeight: "500", color: NAVBAR_COLORS.primary }}>
-                  Dept: {departmentDisplayName}
+                <Text
+                  style={{ fontWeight: "500", color: NAVBAR_COLORS.primary }}
+                >
+                  🏢 {leadAuditorCompanyName || "Company"}
+                  {leadAuditorPlantName ? ` • 🏭 ${leadAuditorPlantName}` : ""}
                 </Text>
               </Text>
             </View>
 
             {/* Controls Section */}
-            {/* ✅ FIXED: Year Filter & Refresh - Side by side, Refresh with text */}
-<View style={{
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 10,
-  flexWrap: "wrap",
-}}>
-  <YearFilter
-    selectedYear={selectedYear}
-    onYearChange={setSelectedYear}
-    availableYears={availableYears}
-  />
-  
-  <TouchableOpacity
-    onPress={handleRefresh}
-    disabled={refreshing}
-    style={{
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      backgroundColor: NAVBAR_COLORS.primary,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: NAVBAR_COLORS.primary,
-      opacity: refreshing ? 0.6 : 1,
-      minWidth: 100,
-    }}
-  >
-    {refreshing ? (
-      <ActivityIndicator size="small" color="#FFFFFF" />
-    ) : (
-      <RefreshCw size={16} color="#FFFFFF" />
-    )}
-    <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>
-      Refresh
-    </Text>
-  </TouchableOpacity>
-</View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <YearFilter
+                selectedYear={selectedYear}
+                onYearChange={setSelectedYear}
+                availableYears={availableYears}
+              />
+
+              <TouchableOpacity
+                onPress={handleRefresh}
+                disabled={refreshing}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: NAVBAR_COLORS.primary,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: NAVBAR_COLORS.primary,
+                  opacity: refreshing ? 0.6 : 1,
+                  minWidth: 100,
+                }}
+              >
+                {refreshing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <RefreshCw size={16} color="#FFFFFF" />
+                )}
+                <Text
+                  style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}
+                >
+                  Refresh
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
 
-      {/* ✅ RESPONSIVE SCROLLABLE CONTENT */}
+      {/* ? RESPONSIVE SCROLLABLE CONTENT */}
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -703,7 +804,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
         />
       )}
 
-      {/* ✅ RESPONSIVE REVIEW MODAL */}
+      {/* ? RESPONSIVE REVIEW MODAL */}
       {reviewingResponse && (
         <Modal
           visible={true}
@@ -721,39 +822,61 @@ const LeadAuditorDashboardContent: React.FC = () => {
               paddingHorizontal: isMobile ? 16 : 24,
             }}
           >
-            <View style={{
-              width: isMobile ? "100%" : "100%",
-              maxWidth: isMobile ? 400 : 480,
-              backgroundColor: "#FFFFFF",
-              borderRadius: 24,
-              padding: isMobile ? 16 : 24,
-              borderWidth: 1,
-              borderColor: "#F1F5F9",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.1,
-              shadowRadius: 20,
-              elevation: 10,
-            }}>
+            <View
+              style={{
+                width: isMobile ? "100%" : "100%",
+                maxWidth: isMobile ? 400 : 480,
+                backgroundColor: "#FFFFFF",
+                borderRadius: 24,
+                padding: isMobile ? 16 : 24,
+                borderWidth: 1,
+                borderColor: "#F1F5F9",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.1,
+                shadowRadius: 20,
+                elevation: 10,
+              }}
+            >
               {/* Header */}
-              <View style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingBottom: 16,
-                marginBottom: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: "#F1F5F9",
-              }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: NAVBAR_COLORS.bg }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingBottom: 16,
+                  marginBottom: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#F1F5F9",
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: NAVBAR_COLORS.bg,
+                    }}
+                  >
                     <FileText size={20} color={NAVBAR_COLORS.primary} />
                   </View>
-                  <Text style={{ fontSize: isMobile ? 16 : 18, fontWeight: "bold", color: "#1E293B" }}>
+                  <Text
+                    style={{
+                      fontSize: isMobile ? 16 : 18,
+                      fontWeight: "bold",
+                      color: "#1E293B",
+                    }}
+                  >
                     Review Response
                   </Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setReviewingResponse(null)}
                   style={{ padding: 4 }}
                 >
@@ -762,53 +885,53 @@ const LeadAuditorDashboardContent: React.FC = () => {
               </View>
 
               {/* Info Card */}
-              <View style={{
-                padding: 16,
-                marginBottom: 20,
-                backgroundColor: "#F8FAFC",
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#F1F5F9",
-              }}>
-                <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1E293B" }}>
+              <View
+                style={{
+                  padding: 16,
+                  marginBottom: 20,
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#F1F5F9",
+                }}
+              >
+                <Text
+                  style={{ fontSize: 14, fontWeight: "bold", color: "#1E293B" }}
+                >
                   {reviewingResponse.department}
                 </Text>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8, flexWrap: "wrap", gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginTop: 8,
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
                   <Text style={{ fontSize: 12, color: "#64748B" }}>
                     Score:{" "}
-                    <Text style={{ fontWeight: "bold", color: NAVBAR_COLORS.primary }}>
-                      {reviewingResponse.totalScore}/{reviewingResponse.maxPossibleScore}
+                    <Text
+                      style={{
+                        fontWeight: "bold",
+                        color: NAVBAR_COLORS.primary,
+                      }}
+                    >
+                      {reviewingResponse.totalScore}/
+                      {reviewingResponse.maxPossibleScore}
                     </Text>
                   </Text>
                   <Text style={{ fontSize: 12, color: "#64748B" }}>
                     Auditee:{" "}
-                    <Text style={{ fontWeight: "bold", color: NAVBAR_COLORS.primary }}>
+                    <Text
+                      style={{
+                        fontWeight: "bold",
+                        color: NAVBAR_COLORS.primary,
+                      }}
+                    >
                       {reviewingResponse.auditeeName}
                     </Text>
                   </Text>
-                </View>
-                <View style={{ marginTop: 12 }}>
-                  <View style={{
-                    alignSelf: "flex-start",
-                    paddingHorizontal: 12,
-                    paddingVertical: 4,
-                    borderRadius: 8,
-                    backgroundColor: 
-                      reviewingResponse.status === "APPROVED" ? "#D1FAE5" :
-                      reviewingResponse.status === "REJECTED" ? "#FEE2E2" :
-                      reviewingResponse.status === "SUBMITTED" ? "#DBEAFE" : "#F3F4F6",
-                  }}>
-                    <Text style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color:
-                        reviewingResponse.status === "APPROVED" ? "#059669" :
-                        reviewingResponse.status === "REJECTED" ? "#DC2626" :
-                        reviewingResponse.status === "SUBMITTED" ? "#2563EB" : "#6B7280",
-                    }}>
-                      {reviewingResponse.status || "DRAFT"}
-                    </Text>
-                  </View>
                 </View>
               </View>
 
@@ -829,18 +952,35 @@ const LeadAuditorDashboardContent: React.FC = () => {
                   }}
                   onPress={() => setReviewApproved(true)}
                 >
-                  <View style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    borderColor: reviewApproved ? "#10B981" : "#CBD5E1",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}>
-                    {reviewApproved && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#10B981" }} />}
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: reviewApproved ? "#10B981" : "#CBD5E1",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    {reviewApproved && (
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#10B981",
+                        }}
+                      />
+                    )}
                   </View>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: reviewApproved ? "#059669" : "#64748B" }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: reviewApproved ? "#059669" : "#64748B",
+                    }}
+                  >
                     Approve
                   </Text>
                 </TouchableOpacity>
@@ -860,18 +1000,35 @@ const LeadAuditorDashboardContent: React.FC = () => {
                   }}
                   onPress={() => setReviewApproved(false)}
                 >
-                  <View style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 2,
-                    borderColor: !reviewApproved ? "#EF4444" : "#CBD5E1",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}>
-                    {!reviewApproved && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#EF4444" }} />}
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: !reviewApproved ? "#EF4444" : "#CBD5E1",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    {!reviewApproved && (
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: "#EF4444",
+                        }}
+                      />
+                    )}
                   </View>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: !reviewApproved ? "#DC2626" : "#64748B" }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: !reviewApproved ? "#DC2626" : "#64748B",
+                    }}
+                  >
                     Reject
                   </Text>
                 </TouchableOpacity>
@@ -894,13 +1051,23 @@ const LeadAuditorDashboardContent: React.FC = () => {
                 }}
                 value={reviewComment}
                 onChangeText={setReviewComment}
-                placeholder={reviewApproved ? "Add approval comments (optional)..." : "Please provide reason for rejection..."}
+                placeholder={
+                  reviewApproved
+                    ? "Add approval comments (optional)..."
+                    : "Please provide reason for rejection..."
+                }
                 placeholderTextColor="#9CA3AF"
                 multiline
               />
 
               {/* Footer Buttons */}
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: 12,
+                }}
+              >
                 <TouchableOpacity
                   onPress={() => setReviewingResponse(null)}
                   style={{
@@ -912,7 +1079,13 @@ const LeadAuditorDashboardContent: React.FC = () => {
                     backgroundColor: "#FFFFFF",
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#334155" }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#334155",
+                    }}
+                  >
                     Cancel
                   </Text>
                 </TouchableOpacity>
@@ -923,16 +1096,25 @@ const LeadAuditorDashboardContent: React.FC = () => {
                     paddingHorizontal: 20,
                     paddingVertical: 10,
                     borderRadius: 12,
-                    backgroundColor: submitting ? "#94A3B8" : reviewApproved ? "#10B981" : "#EF4444",
-                    shadowColor: submitting ? "transparent" : reviewApproved ? "#10B981" : "#EF4444",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 4,
-                    elevation: 3,
+                    backgroundColor: submitting
+                      ? "#94A3B8"
+                      : reviewApproved
+                        ? "#10B981"
+                        : "#EF4444",
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#FFFFFF" }}>
-                    {submitting ? "Processing..." : reviewApproved ? "Approve" : "Reject"}
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {submitting
+                      ? "Processing..."
+                      : reviewApproved
+                        ? "Approve"
+                        : "Reject"}
                   </Text>
                 </TouchableOpacity>
               </View>
