@@ -19,6 +19,9 @@ import {
   listWebAuthnCredentials,
   registerWebAuthn,
   removeWebAuthnCredential,
+  signalAllAcceptedCredentials,
+  signalUnknownCredential,
+  userHandleB64Url,
   loginWithDiscoverablePasskey as webauthnDiscoverableLogin,
   loginWithWebAuthn as webauthnLogin,
 } from "@/utils/webauthn";
@@ -93,7 +96,6 @@ export interface UseAuthReturn {
   unlockWithBiometric: () => Promise<User | null>;
   disableBiometric: () => Promise<void>;
 
-  // WebAuthn (web biometric)
   webAuthnDevices: WebAuthnDevice[];
   webAuthnAvailable: boolean;
   webAuthnBusy: boolean;
@@ -117,7 +119,6 @@ export const useAuth = (): UseAuthReturn => {
     label: "Not available",
   });
 
-  // WebAuthn state
   const [webAuthnDevices, setWebAuthnDevices] = useState<WebAuthnDevice[]>([]);
   const [webAuthnAvailable, setWebAuthnAvailable] = useState(false);
   const [webAuthnBusy, setWebAuthnBusy] = useState(false);
@@ -126,12 +127,10 @@ export const useAuth = (): UseAuthReturn => {
     void loadUser();
   }, []);
 
-  // Re-run biometric status whenever mode changes OR user logs in
   useEffect(() => {
     void loadBiometricStatus();
   }, [isDemo, user?.id]);
 
-  // Check WebAuthn availability once
   useEffect(() => {
     (async () => {
       const ok = await isWebAuthnAvailable();
@@ -144,13 +143,10 @@ export const useAuth = (): UseAuthReturn => {
     })();
   }, []);
 
-  // Refresh devices whenever the user changes
   useEffect(() => {
     void refreshWebAuthnDevices();
   }, [user?.id]);
 
-  /* Biometric status loader ---------------------------------------------- */
-  /* Biometric status loader ---------------------------------------------- */
   const loadBiometricStatus = async () => {
     const info = await getBiometricInfo();
     const enabledRaw = await readSecure(BIOMETRIC_ENABLED_KEY);
@@ -163,7 +159,6 @@ export const useAuth = (): UseAuthReturn => {
     });
   };
 
-  /* Enrich ---------------------------------------------------------------- */
   const enrichUserWithPlant = async (targetUser: User): Promise<User> => {
     const enriched = { ...targetUser };
 
@@ -236,7 +231,6 @@ export const useAuth = (): UseAuthReturn => {
     return enriched;
   };
 
-  /* Load user on mount ---------------------------------------------------- */
   const loadUser = async () => {
     try {
       const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
@@ -273,7 +267,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /* Login ------------------------------------------------------------------ */
   const login = async (userData: User) => {
     try {
       const normalizedRole = normalizeRole(userData.role) || "AUDITOR";
@@ -301,13 +294,27 @@ export const useAuth = (): UseAuthReturn => {
       await AsyncStorage.setItem("userRole", normalizedRole);
 
       setUser(userWithRole);
+
+      // 🧹 Best-effort: sync accepted credentials with the browser after login.
+      // Runs silently on unsupported browsers.
+      try {
+        const devices = await listWebAuthnCredentials(Number(userWithRole.id));
+        const accepted = devices.map((d) => d.credentialId);
+        if (accepted.length > 0) {
+          await signalAllAcceptedCredentials(
+            userHandleB64Url(userWithRole.id),
+            accepted,
+          );
+        }
+      } catch (e) {
+        console.warn("Signal API sync after login failed (ignored):", e);
+      }
     } catch (error) {
       console.error("Login error:", error);
       throw error;
     }
   };
 
-  /* Logout ----------------------------------------------------------------- */
   const logout = async () => {
     try {
       console.log("🔴 useAuth - Logging out...");
@@ -322,13 +329,9 @@ export const useAuth = (): UseAuthReturn => {
         "refreshToken",
       ]);
 
-      // ⚠️ IMPORTANT: Do NOT delete biometric keys here.
-      // Keeping them lets the user sign in with fingerprint next time.
-      // We only clear the *in-memory* enabled state from the actual stored value.
       const enabledRaw = await readSecure(BIOMETRIC_ENABLED_KEY);
       setBiometricStatus((s) => ({ ...s, enabled: enabledRaw === "1" }));
 
-      // Clear cached WebAuthn device list (does NOT delete from server)
       setWebAuthnDevices([]);
 
       console.log(
@@ -340,7 +343,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /* Update user ------------------------------------------------------------ */
   const updateUser = async (userData: Partial<User>) => {
     if (user) {
       const updatedUser: User = { ...user, ...userData };
@@ -358,7 +360,6 @@ export const useAuth = (): UseAuthReturn => {
 
       console.log("🔄 [refreshUser] Re-fetching profile for id:", user.id);
 
-      // Re-use enrichUserWithPlant, which hits /api/users/:id
       const refreshed = await enrichUserWithPlant({ ...user });
       setUser(refreshed);
       await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(refreshed));
@@ -369,10 +370,8 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /* Biometric methods (mobile / Expo LocalAuthentication) ---------------- */
   const enrollBiometric = async (): Promise<boolean> => {
     if (isDemo) {
-      // Demo: just flip the UI state, no persistence
       setBiometricStatus((s) => ({ ...s, enabled: true }));
       return true;
     }
@@ -463,9 +462,6 @@ export const useAuth = (): UseAuthReturn => {
    * WebAuthn methods (web biometric / passkeys)
    * ============================================================ */
 
-  /**
-   * Register the current device's passkey for the logged-in user.
-   */
   const registerWebAuthnDevice = async (
     deviceName?: string,
   ): Promise<boolean> => {
@@ -501,10 +497,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /**
-   * Login via WebAuthn. Returns the User object on success,
-   * null on failure. Same shape as password login.
-   */
   const loginWithWebAuthn = async (username: string): Promise<User | null> => {
     if (!webAuthnAvailable) {
       console.warn("🔐 [WebAuthn] Not available on this device");
@@ -552,9 +544,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /**
-   * Login WITHOUT a username. The passkey tells the server who the user is.
-   */
   const loginWithDiscoverablePasskey = async (): Promise<User | null> => {
     if (!webAuthnAvailable) {
       console.warn("🔐 [WebAuthn] Not available on this device");
@@ -606,7 +595,9 @@ export const useAuth = (): UseAuthReturn => {
   };
 
   /**
-   * Remove a WebAuthn device (passkey) from the server.
+   * Remove a WebAuthn device (passkey).
+   * Also tells the browser to forget it via the Signal API, so the
+   * passkey no longer appears in the picker.
    */
   const removeWebAuthnDevice = async (
     credentialId: number,
@@ -615,9 +606,19 @@ export const useAuth = (): UseAuthReturn => {
 
     setWebAuthnBusy(true);
     try {
+      // Grab the credentialId string BEFORE deleting — we need it for the signal
+      const device = webAuthnDevices.find((d) => d.id === credentialId);
+      const credentialIdB64 = device?.credentialId;
+
       const ok = await removeWebAuthnCredential(credentialId, Number(user.id));
       if (ok) {
-        console.log("✅ [WebAuthn] device removed:", credentialId);
+        console.log("✅ [WebAuthn] device removed from DB:", credentialId);
+
+        // 🧹 Tell the browser to hide this passkey from its picker
+        if (credentialIdB64) {
+          await signalUnknownCredential(credentialIdB64);
+        }
+
         await refreshWebAuthnDevices();
       }
       return ok;
@@ -629,9 +630,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /**
-   * Reload the list of devices from the server for the current user.
-   */
   const refreshWebAuthnDevices = async (): Promise<void> => {
     if (!user?.id) {
       setWebAuthnDevices([]);
@@ -646,10 +644,6 @@ export const useAuth = (): UseAuthReturn => {
     }
   };
 
-  /**
-   * Called by the login screen to decide whether to show
-   * the "Sign in with biometrics" button for a given username.
-   */
   const userHasWebAuthnDevices = async (username: string): Promise<boolean> => {
     return checkUserHasWebAuthnDevices(username);
   };
@@ -671,7 +665,6 @@ export const useAuth = (): UseAuthReturn => {
     unlockWithBiometric,
     disableBiometric,
 
-    // WebAuthn
     webAuthnDevices,
     webAuthnAvailable,
     webAuthnBusy,

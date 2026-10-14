@@ -61,6 +61,85 @@ function guessDeviceName(): string {
 }
 
 // ============================================================
+// WEBAUTHN SIGNAL API
+// Lets the browser hide/remove credentials it should no longer offer.
+// Spec: https://w3c.github.io/webauthn/#signal-methods
+// Supported: Chrome/Edge 132+ (desktop), Chrome Android 144+
+// Silently no-ops on unsupported browsers.
+// ============================================================
+
+/**
+ * Tell the browser a specific credential is no longer valid.
+ * Call after a 401 on verify, or right after the user deletes a passkey.
+ */
+export async function signalUnknownCredential(
+  credentialIdB64Url: string,
+  rpIdOverride?: string,
+): Promise<void> {
+  try {
+    if (typeof window === "undefined") return;
+    const PKC: any = (window as any).PublicKeyCredential;
+    if (!PKC || typeof PKC.signalUnknownCredential !== "function") {
+      console.log(
+        "ℹ️ [Signal] signalUnknownCredential not supported in this browser",
+      );
+      return;
+    }
+
+    await PKC.signalUnknownCredential({
+      rpId: rpIdOverride || window.location.hostname,
+      credentialId: credentialIdB64Url,
+    });
+    console.log("✅ [Signal] Browser told to forget:", credentialIdB64Url);
+  } catch (e) {
+    console.warn("⚠️ [Signal] signalUnknownCredential failed:", e);
+  }
+}
+
+/**
+ * Tell the browser the complete, authoritative list of credentials this
+ * user should have. The browser hides every other passkey it stored for
+ * this rpId + userHandle.
+ */
+export async function signalAllAcceptedCredentials(
+  userIdHandleB64Url: string,
+  acceptedCredentialIdsB64Url: string[],
+  rpIdOverride?: string,
+): Promise<void> {
+  try {
+    if (typeof window === "undefined") return;
+    const PKC: any = (window as any).PublicKeyCredential;
+    if (!PKC || typeof PKC.signalAllAcceptedCredentials !== "function") {
+      console.log(
+        "ℹ️ [Signal] signalAllAcceptedCredentials not supported in this browser",
+      );
+      return;
+    }
+
+    await PKC.signalAllAcceptedCredentials({
+      rpId: rpIdOverride || window.location.hostname,
+      userId: userIdHandleB64Url,
+      allAcceptedCredentialIds: acceptedCredentialIdsB64Url,
+    });
+    console.log(
+      "✅ [Signal] Accepted credentials synced:",
+      acceptedCredentialIdsB64Url.length,
+    );
+  } catch (e) {
+    console.warn("⚠️ [Signal] signalAllAcceptedCredentials failed:", e);
+  }
+}
+
+/**
+ * Helper: encode a numeric user id the same way the backend does.
+ * Backend uses: String.valueOf(userId).getBytes(StandardCharsets.UTF_8)
+ */
+export function userHandleB64Url(userId: string | number): string {
+  const bytes = new TextEncoder().encode(String(userId));
+  return bufferToBase64url(bytes.buffer);
+}
+
+// ============================================================
 // REGISTER
 // ============================================================
 
@@ -184,7 +263,7 @@ export async function registerWebAuthn(
 }
 
 // ============================================================
-// LOGIN
+// LOGIN (username-based)
 // ============================================================
 
 export async function loginWithWebAuthn(
@@ -280,9 +359,19 @@ export async function loginWithWebAuthn(
 
     if (!verifyRes.ok) {
       const err = await verifyRes.json().catch(() => ({}));
+
+      // 🧹 401 → the browser still has a stale passkey. Tell it to forget.
+      if (verifyRes.status === 401 && credential?.id) {
+        await signalUnknownCredential(credential.id);
+      }
+
       return {
         success: false,
-        error: err.error || `Verification failed (${verifyRes.status})`,
+        error:
+          err.error ||
+          (verifyRes.status === 401
+            ? "This passkey is no longer valid. Please sign in with your password and set up biometrics again."
+            : `Verification failed (${verifyRes.status})`),
       };
     }
 
@@ -349,7 +438,6 @@ export async function removeWebAuthnCredential(
 
 // ============================================================
 // CHECK WHETHER A USERNAME HAS ANY REGISTERED PASSKEY
-// Uses a lightweight GET endpoint (no challenge POST).
 // ============================================================
 
 export async function userHasWebAuthnDevices(
@@ -376,8 +464,6 @@ export async function userHasWebAuthnDevices(
 
 // ============================================================
 // DISCOVERABLE (username-less) LOGIN
-// The browser shows a passkey picker with all passkeys for this origin.
-// No username is typed; the passkey itself identifies the user.
 // ============================================================
 
 export async function loginWithDiscoverablePasskey(): Promise<{
@@ -422,7 +508,6 @@ export async function loginWithDiscoverablePasskey(): Promise<{
       };
     }
 
-    // optionsJson is a JSON *string* — parse it, then unwrap publicKey
     const parsed = JSON.parse(optionsJson);
     const options = parsed?.publicKey ?? parsed;
 
@@ -433,11 +518,10 @@ export async function loginWithDiscoverablePasskey(): Promise<{
       };
     }
 
-    // Build request — allowCredentials omitted → browser shows all passkeys
     const publicKey: PublicKeyCredentialRequestOptions = {
       ...options,
       challenge: base64urlToBuffer(options.challenge),
-      // No allowCredentials — this is what makes it "discoverable"
+      // No allowCredentials — discoverable passkey picker
     };
 
     // 2. Prompt Windows Hello → user picks passkey from the list
@@ -484,9 +568,21 @@ export async function loginWithDiscoverablePasskey(): Promise<{
 
     if (!verifyRes.ok) {
       const err = await verifyRes.json().catch(() => ({}));
+
+      // 🧹 401 → the browser still has a stale passkey. Tell it to forget.
+      // This is the main fix: after a failed login with a deleted passkey,
+      // the browser will hide it from the picker on the next attempt.
+      if (verifyRes.status === 401 && credential?.id) {
+        await signalUnknownCredential(credential.id);
+      }
+
       return {
         success: false,
-        error: err.error || `Verification failed (${verifyRes.status})`,
+        error:
+          err.error ||
+          (verifyRes.status === 401
+            ? "This passkey is no longer valid. Please sign in with your password and set up biometrics again."
+            : `Verification failed (${verifyRes.status})`),
       };
     }
 
