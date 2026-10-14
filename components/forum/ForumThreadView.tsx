@@ -288,7 +288,11 @@ export default function ForumThreadView({
   // ---- SFU (WebRTC) ----
   const isAuditForum = useMemo(() => {
     const idStr = String(groupId);
-    return idStr.startsWith("AUDIT-") || idStr.includes("_AUDIT_");
+    return (
+      idStr.startsWith("AUDIT-") ||
+      idStr.startsWith("GRP-") ||
+      idStr.includes("_AUDIT_")
+    );
   }, [groupId]);
 
   const mockSFU = {

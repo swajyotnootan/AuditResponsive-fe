@@ -133,7 +133,7 @@ function useBiometricAvailable(opts: {
 
     (async () => {
       try {
-        const PKC: any = (globalThis as any).PublicKeyCredential;
+        const PKC: any = (globalThis as any).Credential;
         if (
           !PKC ||
           typeof PKC.isUserVerifyingPlatformAuthenticatorAvailable !==
