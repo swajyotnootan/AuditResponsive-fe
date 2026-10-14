@@ -1,5 +1,4 @@
 ﻿// src/Components/forum/ChatWindow.tsx
-import { API_BASE_URL, WS_URL } from "@/config/apiConfig";
 import { Send, Trash2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -16,6 +15,10 @@ import {
   View,
 } from "react-native";
 
+// ⚠️ UPDATE THESE URLS TO MATCH YOUR ACTUAL BACKEND
+const API_BASE = "http://10.2.0.95:8080";
+const SOCKET_URL = "ws://10.2.0.95:8080/ws"; // Must be ws:// or wss:// for native WebSocket
+
 interface Message {
   id: string;
   content: string;
@@ -26,7 +29,7 @@ interface Message {
 
 interface ChatWindowProps {
   group: { id: string; name?: string };
-  currentUsername: string;
+  currentUsername: string; // Pass the logged-in user's username
 }
 
 const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
@@ -37,12 +40,10 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
-  // 1. FETCH MESSAGES
+  // 1. FETCH MESSAGES (Replaces Axios)
   const fetchMessages = async () => {
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/forum/groups/${group.id}/messages`,
-      );
+      const res = await fetch(`${API_BASE}/forum/groups/${group.id}/messages`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setMessages(data);
@@ -57,6 +58,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
     fetchMessages();
   }, [group.id]);
 
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(
@@ -66,26 +68,13 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
     }
   }, [messages]);
 
-  // 2. WEBSOCKET CONNECTION
+  // 2. WEBSOCKET CONNECTION (Replaces stompjs)
   useEffect(() => {
-    // Safety: refuse to open ws:// from an https:// page
-    if (
-      Platform.OS === "web" &&
-      typeof window !== "undefined" &&
-      window.location.protocol === "https:" &&
-      WS_URL.startsWith("ws://")
-    ) {
-      console.warn(
-        "🚫 Refusing to open insecure ws:// from an https:// page. " +
-          "Check EXPO_PUBLIC_WS_URL.",
-      );
-      return;
-    }
-
-    const socket = new WebSocket(WS_URL);
+    const socket = new WebSocket(SOCKET_URL);
     socketRef.current = socket;
 
     socket.onopen = () => {
+      // Send STOMP CONNECT frame manually
       const connectFrame =
         "CONNECT\naccept-version:1.1,1.2\nheart-beat:10000,10000\n\n\0";
       socket.send(connectFrame);
@@ -93,8 +82,9 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
 
     socket.onmessage = (event) => {
       const rawData = typeof event.data === "string" ? event.data : "";
-      if (rawData === "\n") return;
+      if (rawData === "\n") return; // Ignore STOMP heartbeats
 
+      // Parse STOMP frames
       const frames = rawData.split("\0").filter((f) => f.trim());
       for (const frame of frames) {
         const [headerSection, ...bodyParts] = frame.split("\n\n");
@@ -103,6 +93,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
 
         if (command === "CONNECTED") {
           console.log("✅ STOMP Connected");
+          // Subscribe to the group topic
           const subFrame = `SUBSCRIBE\nid:sub-0\ndestination:/topic/group.${group.id}\n\n\0`;
           socket.send(subFrame);
         } else if (command === "MESSAGE" && body) {
@@ -126,7 +117,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
     };
   }, [group.id]);
 
-  // 3. SEND MESSAGE
+  // 3. SEND MESSAGE (Replaces stompjs + MessageInput)
   const handleSend = () => {
     if (
       !inputText.trim() ||
@@ -141,13 +132,14 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
       timestamp: new Date().toISOString(),
     };
 
+    // Send STOMP SEND frame manually
     const sendFrame = `SEND\ndestination:/app/group.${group.id}\ncontent-type:application/json\n\n${JSON.stringify(payload)}\0`;
     socketRef.current.send(sendFrame);
 
-    setInputText("");
+    setInputText(""); // Clear input
   };
 
-  // 4. DELETE MESSAGE
+  // 4. DELETE MESSAGE (Replaces Axios)
   const handleDeleteMessage = (msgId: string) => {
     Alert.alert("Delete Message", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
@@ -156,7 +148,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
         style: "destructive",
         onPress: async () => {
           try {
-            await fetch(`${API_BASE_URL}/forum/messages/${msgId}`, {
+            await fetch(`${API_BASE}/forum/messages/${msgId}`, {
               method: "DELETE",
             });
             setMessages((prev) => prev.filter((m) => m.id !== msgId));
@@ -231,6 +223,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
 
   return (
     <View style={styles.container}>
+      {/* Messages List */}
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -246,6 +239,7 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
         }
       />
 
+      {/* INLINE MESSAGE INPUT (Replaces MessageInput component) */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.inputContainer}
@@ -273,13 +267,14 @@ const ChatWindow = ({ group, currentUsername }: ChatWindowProps) => {
   );
 };
 
-// ========== STYLES (unchanged) ==========
+// ========== STYLES ==========
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 8, color: "#6b7280", fontSize: 14 },
   listContent: { padding: 16, paddingBottom: 8 },
 
+  // Message Bubbles
   messageRow: { marginBottom: 12, maxWidth: "80%" },
   rowEnd: { alignSelf: "flex-end" },
   rowStart: { alignSelf: "flex-start" },
@@ -323,6 +318,7 @@ const styles = StyleSheet.create({
   },
   emptyText: { color: "#9ca3af", fontSize: 14 },
 
+  // Inline Input Area
   inputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
