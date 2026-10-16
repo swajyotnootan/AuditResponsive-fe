@@ -53,35 +53,6 @@ const getEmojiName = (glyph: string): string | null => {
   }
 };
 
-const attachEmojiTooltipsToPicker = (root: HTMLElement) => {
-  if (Platform.OS !== "web") return () => {};
-
-  const decorate = () => {
-    // Every leaf element whose text content is a single emoji glyph.
-    const nodes = root.querySelectorAll<HTMLElement>("*");
-    nodes.forEach((node) => {
-      if (node.children.length > 0) return; // skip wrappers
-      const text = (node.textContent || "").trim();
-      if (!text) return;
-      if (text.length > 6) return; // emojis are short
-      // Skip if it's not an emoji
-      const isEmoji = /\p{Extended_Pictographic}/u.test(text);
-      if (!isEmoji) return;
-      const name = getEmojiName(text);
-      if (!name) return;
-      if (node.getAttribute("title") !== name) {
-        node.setAttribute("title", name);
-      }
-    });
-  };
-
-  decorate();
-  const observer = new MutationObserver(() => decorate());
-  observer.observe(root, { childList: true, subtree: true });
-
-  return () => observer.disconnect();
-};
-
 const isEmulator = (): boolean => {
   if (Platform.OS !== "android") return false;
 
@@ -185,6 +156,12 @@ export default function ThreadComposer({
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [hoveredEmoji, setHoveredEmoji] = useState<{
+    emoji: string;
+    name: string | null;
+    x: number; // viewport centre-x of the emoji tile
+    y: number; // viewport top-y of the emoji tile
+  } | null>(null);
 
   // Camera states
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -234,6 +211,58 @@ export default function ThreadComposer({
 
   // ========== LIFECYCLE ==========
   const typingPingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ✅ Web-only: attach hover bindings to the emoji picker so we can
+  //    show the emoji-name tooltip ABOVE the picker.
+  const attachEmojiTooltipsToPicker = (root: HTMLElement) => {
+    if (Platform.OS !== "web") return () => {};
+
+    const decorate = () => {
+      const nodes = root.querySelectorAll<HTMLElement>("*");
+      nodes.forEach((node) => {
+        if (node.dataset.emojiHoverBound === "1") return;
+
+        const text = (node.textContent || "").trim();
+        if (!text || text.length > 6) return;
+
+        const isEmoji = /\p{Extended_Pictographic}/u.test(text);
+        if (!isEmoji) return;
+
+        const name = getEmojiName(text);
+        if (!name) return;
+
+        // Kill the browser's native tooltip (that appears NE of cursor)
+        node.removeAttribute("title");
+
+        // Track hover into React state → our custom tooltip above picker
+        node.onmouseenter = (e: MouseEvent) => {
+          const tile = e.currentTarget as HTMLElement;
+          const tileRect = tile.getBoundingClientRect();
+          const rootRect = root.getBoundingClientRect();
+
+          setHoveredEmoji({
+            emoji: text,
+            name,
+            // relative to the picker wrapper, NOT the viewport
+            x: tileRect.left + tileRect.width / 2 - rootRect.left,
+            y: tileRect.top - rootRect.top,
+          });
+        };
+        node.onmouseleave = () => setHoveredEmoji(null);
+
+        node.dataset.emojiHoverBound = "1";
+      });
+    };
+
+    const timer = setTimeout(decorate, 50);
+    const observer = new MutationObserver(() => decorate());
+    observer.observe(root, { childList: true, subtree: true });
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  };
 
   // ========== LIFECYCLE ==========
   useEffect(() => {
@@ -1502,23 +1531,56 @@ export default function ThreadComposer({
         (Platform.OS === "web" ? (
           React.createElement(
             "div",
-            { ref: emojiPickerRef, style: { position: "relative" } },
-            <EmojiKeyboard
-              onEmojiSelected={(emoji) => handleEmojiSelect(emoji.emoji)}
-              enablePreview
-              enableRecentlyUsed
-              enableSearchBar
-              categoryPosition="top"
-              defaultHeight={400}
-              expandable={false}
-              styles={{ container: { maxWidth: 300, alignSelf: "center" } }}
-            />,
+            {
+              ref: emojiPickerRef,
+              style: { position: "relative" },
+            },
+            <>
+              {/* ✅ Tooltip now anchors directly ABOVE the hovered emoji tile */}
+              {hoveredEmoji?.name ? (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute", // ✅ anchor to the wrapper, not viewport
+                    left: hoveredEmoji.x, // ✅ wrapper-relative centre-x
+                    top: hoveredEmoji.y, // ✅ wrapper-relative top of tile
+                    transform: "translate(-50%, -100%)",
+                    marginTop: -2, // small gap above the emoji
+                    backgroundColor: "rgba(17,24,39,0.95)",
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    maxWidth: 240,
+                    alignItems: "center",
+                    zIndex: 99999,
+                    // @ts-ignore — web only
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#fff", fontSize: 11, fontWeight: "500" }}
+                  >
+                    {hoveredEmoji.name}
+                  </Text>
+                </View>
+              ) : null}
+
+              <EmojiKeyboard
+                onEmojiSelected={(emoji) => handleEmojiSelect(emoji.emoji)}
+                enableRecentlyUsed
+                enableSearchBar
+                categoryPosition="top"
+                defaultHeight={400}
+                expandable={false}
+                styles={{ container: { maxWidth: 300, alignSelf: "center" } }}
+              />
+            </>,
           )
         ) : (
           <View nativeID="emoji-picker-host">
             <EmojiKeyboard
               onEmojiSelected={(emoji) => handleEmojiSelect(emoji.emoji)}
-              enablePreview
+              // enablePreview
               enableRecentlyUsed
               enableSearchBar
               categoryPosition="top"

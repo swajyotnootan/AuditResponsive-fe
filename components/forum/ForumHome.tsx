@@ -670,11 +670,11 @@ export default function ForumHome({
                   </>
                 )}
 
-                <SectionHeader
+                {/* <SectionHeader
                   label="My Groups"
                   count={customGroups.filter(matches).length}
-                />
-                {customGroups.filter(matches).length === 0 ? (
+                /> */}
+                {/* {customGroups.filter(matches).length === 0 ? (
                   <TouchableOpacity
                     onPress={() => setShowCreate(true)}
                     style={styles.emptyCard}
@@ -704,7 +704,7 @@ export default function ForumHome({
                       </AnimatedRow>
                     ))}
                   </View>
-                )}
+                )} */}
               </>
             )}
           </ScrollView>
@@ -803,15 +803,15 @@ export default function ForumHome({
                 onPress={() => setShowHeaderMenu(false)}
               >
                 <View style={styles.headerMenuSheet}>
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={styles.headerMenuRow}
                     activeOpacity={0.7}
                     onPress={() => {
                       setShowHeaderMenu(false);
                       setTimeout(() => setShowCreate(true), 100);
                     }}
-                  >
-                    <View style={styles.headerMenuIcon}>
+                  > */}
+                  {/* <View style={styles.headerMenuIcon}>
                       <Ionicons name="add" size={20} color={C.brand} />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -819,13 +819,13 @@ export default function ForumHome({
                       <Text style={styles.headerMenuSub}>
                         Start a new conversation
                       </Text>
-                    </View>
-                    <Ionicons
+                    </View> */}
+                  {/* <Ionicons
                       name="chevron-forward"
                       size={16}
                       color={C.textFaint}
                     />
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
 
                   <View style={styles.headerMenuDivider} />
 

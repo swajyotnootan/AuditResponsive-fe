@@ -195,10 +195,12 @@ export async function exportGroupThreads(
   groupId: string,
   opts: {
     format: "csv" | "json" | "pdf";
-    scope: "all" | "days" | "limit";
+    scope: "all" | "days" | "limit" | "range"; // ✅ added "range"
     requester?: string;
     daysBack?: number;
     limit?: number;
+    fromDate?: string; // ✅ NEW (YYYY-MM-DD)
+    toDate?: string; // ✅ NEW (YYYY-MM-DD)
   },
 ) {
   const params = new URLSearchParams();
@@ -209,6 +211,10 @@ export async function exportGroupThreads(
   }
   if (opts.scope === "limit" && opts.limit) {
     params.append("limit", String(opts.limit));
+  }
+  if (opts.scope === "range") {
+    if (opts.fromDate) params.append("fromDate", opts.fromDate);
+    if (opts.toDate) params.append("toDate", opts.toDate);
   }
 
   let path: string;
@@ -225,7 +231,6 @@ export async function exportGroupThreads(
   const url = `${API_BASE_URL}${path}?${params.toString()}`;
 
   if (Platform.OS === "web") {
-    // ✅ Fetch with auth, then trigger browser download from blob
     const res = await fetchWithAuth(url);
     if (!res.ok) {
       throw new Error(`Export failed: ${res.status}`);

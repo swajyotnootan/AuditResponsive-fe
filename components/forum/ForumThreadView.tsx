@@ -63,6 +63,160 @@ import ThreadComposer from "./ThreadComposer";
 const groupPostsCache = new Map<string, any[]>();
 
 // ============================================================================
+// SHARED EXPORT-MODAL STYLES
+// ============================================================================
+const labelStyle = {
+  fontSize: 10,
+  fontWeight: "700" as const,
+  letterSpacing: 1,
+  color: "#6b7280",
+  marginBottom: 6,
+};
+
+const numberInputStyle = {
+  borderWidth: 1,
+  borderColor: "#d1d5db",
+  borderRadius: 8,
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  fontSize: 14,
+  color: "#111827",
+  minWidth: 100,
+  backgroundColor: "#fff",
+};
+
+// ============================================================================
+// CROSS-PLATFORM DATE FIELD
+//   - Web:     native <input type="date">
+//   - Mobile:  native picker via @react-native-community/datetimepicker
+//              (falls back to plain YYYY-MM-DD TextInput if not installed)
+// ============================================================================
+function DateField({
+  value,
+  onChange,
+  placeholder = "YYYY-MM-DD",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerPlatform, setPickerPlatform] = useState<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const mod = require("@react-native-community/datetimepicker");
+        setPickerPlatform(mod.default || mod);
+      } catch {
+        // Package not installed — fallback to TextInput
+      }
+    }
+  }, []);
+
+  // ---- WEB ----
+  if (Platform.OS === "web") {
+    return (
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: "#d1d5db",
+          borderRadius: 8,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          backgroundColor: "#fff",
+        }}
+      >
+        {/* @ts-ignore — DOM element on web */}
+        <input
+          type="date"
+          value={value || ""}
+          onChange={(e: any) => onChange(e.target.value)}
+          style={{
+            border: "none",
+            outline: "none",
+            fontSize: 14,
+            color: "#111827",
+            width: "100%",
+            background: "transparent",
+          }}
+        />
+      </View>
+    );
+  }
+
+  // ---- MOBILE with native picker ----
+  if (pickerPlatform) {
+    const DateTimePicker = pickerPlatform;
+    const currentDate = value ? new Date(value + "T00:00:00") : new Date();
+
+    return (
+      <>
+        <TouchableOpacity
+          onPress={() => setShowPicker(true)}
+          style={{
+            borderWidth: 1,
+            borderColor: "#d1d5db",
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: "#fff",
+          }}
+        >
+          <Text style={{ fontSize: 14, color: value ? "#111827" : "#9ca3af" }}>
+            {value || placeholder}
+          </Text>
+        </TouchableOpacity>
+
+        {showPicker && (
+          <DateTimePicker
+            value={currentDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(event: any, selected?: Date) => {
+              setShowPicker(Platform.OS === "ios");
+              if (event?.type === "dismissed") {
+                setShowPicker(false);
+                return;
+              }
+              if (selected) {
+                const yyyy = selected.getFullYear();
+                const mm = String(selected.getMonth() + 1).padStart(2, "0");
+                const dd = String(selected.getDate()).padStart(2, "0");
+                onChange(`${yyyy}-${mm}-${dd}`);
+              }
+              if (Platform.OS !== "ios") setShowPicker(false);
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  // ---- MOBILE FALLBACK ----
+  return (
+    <TextInput
+      value={value}
+      onChangeText={(t) => onChange(t.replace(/[^0-9-]/g, ""))}
+      placeholder={placeholder}
+      keyboardType="numbers-and-punctuation"
+      maxLength={10}
+      style={{
+        borderWidth: 1,
+        borderColor: "#d1d5db",
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 14,
+        color: "#111827",
+        backgroundColor: "#fff",
+      }}
+    />
+  );
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 interface ForumThreadViewProps {
@@ -233,17 +387,22 @@ export default function ForumThreadView({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // ---- Export State ----
+  // ---- Export State ----
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportScope, setExportScope] = useState<"all" | "days" | "limit">(
-    "days",
-  );
+  const [exportScope, setExportScope] = useState<
+    "all" | "days" | "limit" | "range"
+  >("days");
   const [exportFormat, setExportFormat] = useState<"csv" | "json" | "pdf">(
     "csv",
   );
-  const [exportLimitOption, setExportLimitOption] = useState<50 | 100 | 500>(
-    100,
-  );
-  const [exportDays, setExportDays] = useState<30 | 90 | 365>(30);
+
+  // Manual numeric inputs
+  const [exportLimitInput, setExportLimitInput] = useState("100");
+  const [exportDaysInput, setExportDaysInput] = useState("30");
+
+  // Custom date range (YYYY-MM-DD strings)
+  const [exportFromDate, setExportFromDate] = useState<string>("");
+  const [exportToDate, setExportToDate] = useState<string>("");
   // ?? ADD: manage members modal
   const [showManage, setShowManage] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
@@ -1395,32 +1554,62 @@ export default function ForumThreadView({
 
   const confirmExport = async () => {
     try {
+      // ---- Validate ----
+      if (exportScope === "days") {
+        const days = parseInt(exportDaysInput, 10);
+        if (!Number.isFinite(days) || days <= 0 || days > 3650) {
+          Alert.alert("Invalid days", "Enter a number between 1 and 3650.");
+          return;
+        }
+      }
+      if (exportScope === "limit") {
+        const lim = parseInt(exportLimitInput, 10);
+        if (!Number.isFinite(lim) || lim <= 0 || lim > 100000) {
+          Alert.alert("Invalid count", "Enter a number between 1 and 100000.");
+          return;
+        }
+      }
+      if (exportScope === "range") {
+        if (!exportFromDate || !exportToDate) {
+          Alert.alert("Missing dates", "Please pick both From and To dates.");
+          return;
+        }
+        const from = new Date(exportFromDate + "T00:00:00");
+        const to = new Date(exportToDate + "T23:59:59");
+        if (from > to) {
+          Alert.alert("Invalid range", "'From' must be before 'To'.");
+          return;
+        }
+      }
+
       setShowExportModal(false);
 
-      // ? Build the options object � matches new exportGroupThreads signature
       const opts: {
-        format: "csv" | "json" | "pdf"; // ?? add "pdf"
-        scope: "all" | "days" | "limit";
-        requester?: string; // ?? ADD to the type
+        format: "csv" | "json" | "pdf";
+        scope: "all" | "days" | "limit" | "range";
+        requester?: string;
         daysBack?: number;
         limit?: number;
+        fromDate?: string;
+        toDate?: string;
       } = {
         format: exportFormat,
         scope: exportScope,
-        requester: currentUserEmail, // ?? ADD the value � this is where it comes from
+        requester: currentUserEmail,
       };
 
       if (exportScope === "days") {
-        opts.daysBack = exportDays;
+        opts.daysBack = parseInt(exportDaysInput, 10);
       } else if (exportScope === "limit") {
-        opts.limit = exportLimitOption;
+        opts.limit = parseInt(exportLimitInput, 10);
+      } else if (exportScope === "range") {
+        opts.fromDate = exportFromDate;
+        opts.toDate = exportToDate;
       }
 
       if (Platform.OS === "web") {
-        // Web: exportGroupThreads handles the browser download internally
         await exportGroupThreads(String(groupId), opts);
       } else {
-        // Mobile: get the URL and download + share
         const url = await exportGroupThreads(String(groupId), opts);
         if (typeof url !== "string") return;
 
@@ -2694,6 +2883,7 @@ export default function ForumThreadView({
       )}
 
       {/* Export Options Modal */}
+      {/* Export Options Modal */}
       <Modal
         visible={showExportModal}
         transparent
@@ -2712,246 +2902,346 @@ export default function ForumThreadView({
           <View
             style={{
               width: "100%",
-              maxWidth: 420,
+              maxWidth: 440,
               backgroundColor: "white",
               borderRadius: 16,
               padding: 20,
+              maxHeight: "90%",
             }}
           >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "700",
-                color: "#111827",
-                marginBottom: 4,
-              }}
-            >
-              Export Chat
-            </Text>
-            <Text style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}>
-              Choose what to include and the file format.
-            </Text>
-
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: "700",
-                letterSpacing: 1,
-                color: "#6b7280",
-                marginBottom: 8,
-                marginTop: 4,
-              }}
-            >
-              WHAT TO EXPORT
-            </Text>
-
-            {[
-              {
-                key: "days",
-                label: "Last 30 days",
-                sub: "All messages from the past 30 days",
-              },
-              {
-                key: "limit",
-                label: "Last N messages",
-                sub: "Choose how many from the end",
-              },
-              {
-                key: "all",
-                label: "Entire conversation",
-                sub: "Every message ever sent",
-              },
-            ].map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => setExportScope(opt.key as any)}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text
                 style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 10,
-                  backgroundColor:
-                    exportScope === opt.key ? "#eff6ff" : "transparent",
-                  borderWidth: 1,
-                  borderColor: exportScope === opt.key ? "#00529B" : "#e5e7eb",
+                  fontSize: 18,
+                  fontWeight: "700",
+                  color: "#111827",
+                  marginBottom: 4,
+                }}
+              >
+                Export Chat
+              </Text>
+              <Text
+                style={{ fontSize: 12, color: "#6b7280", marginBottom: 16 }}
+              >
+                Choose what to include and the file format.
+              </Text>
+
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1,
+                  color: "#6b7280",
                   marginBottom: 8,
                 }}
               >
-                <View
+                WHAT TO EXPORT
+              </Text>
+
+              {[
+                {
+                  key: "days",
+                  label: "Last N days",
+                  sub: "Type any number of days",
+                },
+                {
+                  key: "limit",
+                  label: "Last N messages",
+                  sub: "Type any number of messages",
+                },
+                {
+                  key: "range",
+                  label: "Custom date range",
+                  sub: "Pick a From and To date",
+                },
+                {
+                  key: "all",
+                  label: "Entire conversation",
+                  sub: "Every message ever sent",
+                },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setExportScope(opt.key as any)}
                   style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    borderWidth: 2,
-                    borderColor:
-                      exportScope === opt.key ? "#00529B" : "#9ca3af",
+                    flexDirection: "row",
                     alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 10,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor:
+                      exportScope === opt.key ? "#eff6ff" : "transparent",
+                    borderWidth: 1,
+                    borderColor:
+                      exportScope === opt.key ? "#00529B" : "#e5e7eb",
+                    marginBottom: 8,
                   }}
                 >
-                  {exportScope === opt.key && (
-                    <View
+                  <View
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      borderWidth: 2,
+                      borderColor:
+                        exportScope === opt.key ? "#00529B" : "#9ca3af",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 10,
+                    }}
+                  >
+                    {exportScope === opt.key && (
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: "#00529B",
+                        }}
+                      />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
                       style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: "#00529B",
+                        fontSize: 14,
+                        fontWeight: "600",
+                        color: "#111827",
                       }}
+                    >
+                      {opt.label}
+                    </Text>
+                    <Text
+                      style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}
+                    >
+                      {opt.sub}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {/* ============ LAST N DAYS ============ */}
+              {exportScope === "days" && (
+                <View style={{ marginTop: 4, marginBottom: 10 }}>
+                  <Text style={labelStyle}>NUMBER OF DAYS</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <TextInput
+                      value={exportDaysInput}
+                      onChangeText={(t) =>
+                        setExportDaysInput(t.replace(/[^0-9]/g, ""))
+                      }
+                      keyboardType="number-pad"
+                      placeholder="30"
+                      style={numberInputStyle}
                     />
-                  )}
+                    <Text style={{ fontSize: 13, color: "#6b7280" }}>days</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+                    {[7, 30, 90, 365].map((d) => (
+                      <TouchableOpacity
+                        key={d}
+                        onPress={() => setExportDaysInput(String(d))}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          borderRadius: 8,
+                          backgroundColor:
+                            exportDaysInput === String(d)
+                              ? "#00529B"
+                              : "#f3f4f6",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color:
+                              exportDaysInput === String(d)
+                                ? "white"
+                                : "#374151",
+                          }}
+                        >
+                          {d === 365 ? "1 year" : `${d}d`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
+              )}
+
+              {/* ============ LAST N MESSAGES ============ */}
+              {exportScope === "limit" && (
+                <View style={{ marginTop: 4, marginBottom: 10 }}>
+                  <Text style={labelStyle}>NUMBER OF MESSAGES</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <TextInput
+                      value={exportLimitInput}
+                      onChangeText={(t) =>
+                        setExportLimitInput(t.replace(/[^0-9]/g, ""))
+                      }
+                      keyboardType="number-pad"
+                      placeholder="100"
+                      style={numberInputStyle}
+                    />
+                    <Text style={{ fontSize: 13, color: "#6b7280" }}>
+                      messages
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 6, marginTop: 8 }}>
+                    {[50, 100, 500, 1000].map((n) => (
+                      <TouchableOpacity
+                        key={n}
+                        onPress={() => setExportLimitInput(String(n))}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          borderRadius: 8,
+                          backgroundColor:
+                            exportLimitInput === String(n)
+                              ? "#00529B"
+                              : "#f3f4f6",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color:
+                              exportLimitInput === String(n)
+                                ? "white"
+                                : "#374151",
+                          }}
+                        >
+                          {n}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* ============ CUSTOM DATE RANGE ============ */}
+              {exportScope === "range" && (
+                <View style={{ marginTop: 4, marginBottom: 10 }}>
+                  <Text style={labelStyle}>FROM DATE</Text>
+                  <DateField
+                    value={exportFromDate}
+                    onChange={setExportFromDate}
+                    placeholder="YYYY-MM-DD"
+                  />
+
+                  <Text style={[labelStyle, { marginTop: 10 }]}>TO DATE</Text>
+                  <DateField
+                    value={exportToDate}
+                    onChange={setExportToDate}
+                    placeholder="YYYY-MM-DD"
+                  />
+
+                  <Text
+                    style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}
+                  >
+                    Exports every message sent between the two dates
+                    (inclusive).
+                  </Text>
+                </View>
+              )}
+
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 1,
+                  color: "#6b7280",
+                  marginBottom: 8,
+                  marginTop: 8,
+                }}
+              >
+                FORMAT
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+                {(["csv", "json", "pdf"] as const).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    onPress={() => setExportFormat(f)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      backgroundColor:
+                        exportFormat === f ? "#00529B" : "#f3f4f6",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "700",
+                        color: exportFormat === f ? "white" : "#374151",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setShowExportModal(false)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#f3f4f6",
+                    alignItems: "center",
+                  }}
+                >
                   <Text
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
-                      color: "#111827",
+                      color: "#374151",
                     }}
                   >
-                    {opt.label}
+                    Cancel
                   </Text>
-                  <Text
-                    style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}
-                  >
-                    {opt.sub}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
 
-            {exportScope === "days" && (
-              <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
-                {[30, 90, 365].map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    onPress={() => setExportDays(d as any)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      backgroundColor: exportDays === d ? "#00529B" : "#f3f4f6",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: exportDays === d ? "white" : "#374151",
-                      }}
-                    >
-                      {d === 365 ? "1 year" : `${d} days`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {exportScope === "limit" && (
-              <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
-                {[50, 100, 500].map((n) => (
-                  <TouchableOpacity
-                    key={n}
-                    onPress={() => setExportLimitOption(n as any)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 6,
-                      borderRadius: 8,
-                      backgroundColor:
-                        exportLimitOption === n ? "#00529B" : "#f3f4f6",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "600",
-                        color: exportLimitOption === n ? "white" : "#374151",
-                      }}
-                    >
-                      {n} msgs
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: "700",
-                letterSpacing: 1,
-                color: "#6b7280",
-                marginBottom: 8,
-                marginTop: 8,
-              }}
-            >
-              FORMAT
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
-              {(["csv", "json", "pdf"] as const).map((f) => (
                 <TouchableOpacity
-                  key={f}
-                  onPress={() => setExportFormat(f)}
+                  onPress={confirmExport}
                   style={{
                     flex: 1,
-                    paddingVertical: 10,
-                    borderRadius: 8,
-                    backgroundColor: exportFormat === f ? "#00529B" : "#f3f4f6",
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#00529B",
                     alignItems: "center",
                   }}
                 >
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: "700",
-                      color: exportFormat === f ? "white" : "#374151",
-                      textTransform: "uppercase",
+                      color: "white",
                     }}
                   >
-                    {f}
+                    Export
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => setShowExportModal(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  backgroundColor: "#f3f4f6",
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 14, fontWeight: "600", color: "#374151" }}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={confirmExport}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  backgroundColor: "#00529B",
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{ fontSize: 14, fontWeight: "700", color: "white" }}
-                >
-                  Export
-                </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>

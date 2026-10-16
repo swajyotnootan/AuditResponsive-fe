@@ -3,14 +3,16 @@ import { useAppMode } from "@/components/context/AppModeContext";
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { normalizeRole } from "@/utils/roleUtils";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -108,90 +110,178 @@ const ROLES: Role[] = [
   },
 ];
 
-const GRADIENT: [string, string, string] = ["#8B80B3", "#6B5A92", "#473D72"];
 const ACCENT = "#5B4E97";
 const ACCENT_DARK = "#3F3566";
 const ACCENT_TINT = "#EFEDF7";
 
-/* ============================================================ */
-/* BIOMETRIC AVAILABILITY HOOK                                  */
-/* ============================================================ */
-function useBiometricAvailable(opts: {
-  webAuthnAvailable: boolean;
-  biometricStatus: { available?: boolean; enrolled?: boolean };
-}) {
-  const { webAuthnAvailable, biometricStatus } = opts;
-  const isWebPlatform = Platform.OS === "web";
+const ABS = {
+  position: "absolute" as const,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+};
 
-  const [webPlatformAuthAvailable, setWebPlatformAuthAvailable] = useState<
-    boolean | null
-  >(isWebPlatform ? null : false);
+/* ============================================================
+   FALLING PARTICLES — start from the middle of the panel
+   ============================================================ */
+function FallingParticles({ panelHeight }: { panelHeight: number }) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 45 }).map((_, i) => {
+        // Start at 35% – 55% of the panel height (where the hands are)
+        const startY = 0.35 + Math.random() * 0.2;
+        return {
+          key: `p-${i}`,
+          size: 2 + Math.random() * 5,
+          left: Math.random() * 100,
+          duration: 6000 + Math.random() * 8000,
+          delay: Math.random() * 8000,
+          startY,
+        };
+      }),
+    [],
+  );
+
+  return (
+    <View pointerEvents="none" style={{ ...ABS, zIndex: 2 }}>
+      {particles.map((p) => (
+        <Particle
+          key={p.key}
+          size={p.size}
+          left={p.left}
+          duration={p.duration}
+          delay={p.delay}
+          panelHeight={panelHeight}
+          startY={p.startY}
+        />
+      ))}
+    </View>
+  );
+}
+
+function Particle({
+  size,
+  left,
+  duration,
+  delay,
+  panelHeight,
+  startY,
+}: {
+  size: number;
+  left: number;
+  duration: number;
+  delay: number;
+  panelHeight: number;
+  startY: number;
+}) {
+  const startPixel = panelHeight * startY;
+  const y = useRef(new Animated.Value(startPixel)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isWebPlatform) return;
-    let cancelled = false;
+    const fall = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(y, {
+            toValue: panelHeight + 40,
+            duration,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.timing(opacity, {
+              toValue: 0.85,
+              duration: duration * 0.12,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0.85,
+              duration: duration * 0.72,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0.0,
+              duration: duration * 0.16,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]),
+        // Reset back to the START position (middle), not the top
+        Animated.timing(y, {
+          toValue: startPixel,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    fall.start();
+    return () => fall.stop();
+  }, [panelHeight, duration, delay, startPixel]);
 
-    (async () => {
-      try {
-        const PKC: any = (globalThis as any).PublicKeyCredential;
-        if (
-          !PKC ||
-          typeof PKC.isUserVerifyingPlatformAuthenticatorAvailable !==
-            "function"
-        ) {
-          if (!cancelled) setWebPlatformAuthAvailable(false);
-          return;
-        }
-        const ok = await PKC.isUserVerifyingPlatformAuthenticatorAvailable();
-        if (!cancelled) setWebPlatformAuthAvailable(!!ok);
-      } catch {
-        if (!cancelled) setWebPlatformAuthAvailable(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isWebPlatform]);
-
-  if (isWebPlatform) {
-    return webAuthnAvailable && webPlatformAuthAvailable === true;
-  }
-  return !!biometricStatus.available && !!biometricStatus.enrolled;
+  return (
+    <Animated.View
+      style={{
+        position: "absolute",
+        left: `${left}%`,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: "#FFFFFF",
+        opacity,
+        transform: [{ translateY: y }],
+        shadowColor: "#FFFFFF",
+        shadowOpacity: 0.9,
+        shadowRadius: size * 2,
+        shadowOffset: { width: 0, height: 0 },
+      }}
+    />
+  );
 }
 
 /* ============================================ */
-/* MODE TOGGLE                                  */
+/* MODE TOGGLE — hidden on production domains   */
 /* ============================================ */
 function ModeToggle() {
   const { isDemo, toggleMode } = useAppMode();
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isPreview =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.includes("vercel.app");
+    if (!isPreview) return null;
+  }
+
   return (
     <TouchableOpacity
       onPress={toggleMode}
       style={{
         position: "absolute",
-        top: Platform.OS === "web" ? 16 : 56,
-        right: 16,
+        top: Platform.OS === "web" ? 24 : 56,
+        right: 24,
         zIndex: 9999,
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 999,
-        backgroundColor: isDemo ? "#FEF3C7" : "#DBEAFE",
+        backgroundColor: isDemo ? "#FEF3C7" : "#EFF6FF",
         borderWidth: 1,
-        borderColor: isDemo ? "#FDE68A" : "#93C5FD",
+        borderColor: isDemo ? "#FDE68A" : "#BFDBFE",
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
       }}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
       <Feather
         name={isDemo ? "play-circle" : "shield"}
-        size={14}
+        size={13}
         color={isDemo ? "#92400E" : "#1E40AF"}
       />
       <Text
@@ -199,18 +289,120 @@ function ModeToggle() {
           marginLeft: 6,
           fontSize: 11,
           fontWeight: "700",
-          letterSpacing: 0.5,
+          letterSpacing: 0.6,
           color: isDemo ? "#92400E" : "#1E40AF",
         }}
       >
-        {isDemo ? "DEMO" : "REAL"}
+        {isDemo ? "DEMO" : "LIVE"}
       </Text>
     </TouchableOpacity>
   );
 }
 
 /* ============================================ */
-/* ROLE SELECT — DEMO ONLY                      */
+/* GLASSMORPHIC INPUT                           */
+/* ============================================ */
+function FormInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  icon,
+  secureTextEntry,
+  onToggleSecure,
+  showToggle,
+  editable,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  icon: keyof typeof Feather.glyphMap;
+  secureTextEntry?: boolean;
+  onToggleSecure?: () => void;
+  showToggle?: boolean;
+  editable?: boolean;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View style={{ marginBottom: 22 }}>
+      <Text
+        style={{
+          marginBottom: 8,
+          fontSize: 11,
+          fontWeight: "700",
+          color: "#64748B",
+          letterSpacing: 1,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+
+      <View
+        style={{
+          minHeight: 54,
+          flexDirection: "row",
+          alignItems: "center",
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: focused ? ACCENT : "#E2E8F0",
+          backgroundColor: focused ? "#FFFFFF" : "#F8FAFC",
+          paddingHorizontal: 18,
+          shadowColor: focused ? ACCENT : "#5B4E97",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: focused ? 0.2 : 0.06,
+          shadowRadius: focused ? 14 : 8,
+          elevation: focused ? 3 : 1,
+          borderTopColor: focused ? ACCENT : "#F1F5F9",
+          borderLeftColor: focused ? ACCENT : "#F1F5F9",
+        }}
+      >
+        <Feather name={icon} size={16} color={focused ? ACCENT : "#94A3B8"} />
+        <TextInput
+          style={
+            {
+              flex: 1,
+              paddingHorizontal: 10,
+              paddingVertical: 14,
+              fontSize: 14,
+              color: "#1E293B",
+              outlineStyle: "none",
+              backgroundColor: "transparent",
+            } as any
+          }
+          placeholder={placeholder}
+          placeholderTextColor="#94A3B8"
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secureTextEntry}
+          editable={editable}
+          autoCapitalize="none"
+          autoCorrect={false}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {showToggle && (
+          <TouchableOpacity
+            onPress={onToggleSecure}
+            hitSlop={8}
+            style={{ padding: 4 }}
+          >
+            <Feather
+              name={secureTextEntry ? "eye" : "eye-off"}
+              size={16}
+              color="#94A3B8"
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/* ============================================ */
+/* ROLE SELECT                                  */
 /* ============================================ */
 function RoleSelect({
   value,
@@ -223,38 +415,62 @@ function RoleSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-
   const filteredRoles = ROLES.filter((role) =>
     role.label.toLowerCase().includes(searchTerm.toLowerCase()),
   );
   const selectedRole = ROLES.find((r) => r.label === value);
 
   return (
-    <View className="w-full">
+    <View style={{ width: "100%" }}>
       <TouchableOpacity
-        className="min-h-11 w-full flex-row items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+        style={{
+          minHeight: 46,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: "#E2E8F0",
+          backgroundColor: "#F8FAFC",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          shadowColor: "#5B4E97",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 1,
+        }}
         onPress={() => setIsOpen(true)}
         disabled={isSubmitting}
         activeOpacity={0.7}
       >
-        <View className="flex-1 flex-row items-center">
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
           {selectedRole ? (
             <>
-              <View className={`mr-2 rounded-lg p-1 ${selectedRole.bg}`}>
+              <View
+                style={{
+                  marginRight: 8,
+                  borderRadius: 8,
+                  padding: 4,
+                  backgroundColor: ACCENT_TINT,
+                }}
+              >
                 <Feather
                   name={selectedRole.icon}
                   size={14}
                   color={selectedRole.fg}
                 />
               </View>
-              <Text className="text-sm font-medium text-slate-700">
+              <Text
+                style={{ fontSize: 14, fontWeight: "500", color: "#334155" }}
+              >
                 {selectedRole.label}
               </Text>
             </>
           ) : (
             <>
               <Feather name="shield" size={16} color="#9CA3AF" />
-              <Text className="ml-2 text-sm text-slate-400">
+              <Text style={{ marginLeft: 8, fontSize: 14, color: "#94A3B8" }}>
                 Select your role...
               </Text>
             </>
@@ -292,90 +508,120 @@ function RoleSelect({
             }}
           >
             <View
-              className="flex-row items-center justify-between px-4 py-3"
-              style={{ backgroundColor: ACCENT }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                backgroundColor: ACCENT,
+              }}
             >
-              <Text className="text-base font-semibold text-white">
+              <Text style={{ fontSize: 16, fontWeight: "600", color: "#fff" }}>
                 Select role
               </Text>
               <TouchableOpacity
                 onPress={() => setIsOpen(false)}
-                className="min-h-11 min-w-11 items-center justify-center"
+                style={{ padding: 8 }}
               >
                 <Feather name="x" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
 
-            <View className="border-b border-slate-100 p-3">
-              <View className="min-h-11 flex-row items-center rounded-lg border border-slate-200 bg-slate-50 px-3">
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+                padding: 12,
+              }}
+            >
+              <View
+                style={{
+                  minHeight: 44,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  backgroundColor: "#F8FAFC",
+                  paddingHorizontal: 12,
+                }}
+              >
                 <Feather name="search" size={16} color="#9CA3AF" />
                 <TextInput
                   placeholder="Search roles..."
-                  className="flex-1 px-2 py-2 text-sm text-slate-800"
+                  style={
+                    {
+                      flex: 1,
+                      paddingHorizontal: 8,
+                      paddingVertical: 8,
+                      fontSize: 14,
+                      color: "#1E293B",
+                    } as any
+                  }
                   value={searchTerm}
                   onChangeText={setSearchTerm}
                   autoFocus={Platform.OS === "web"}
                   placeholderTextColor="#9CA3AF"
                 />
-                {searchTerm.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchTerm("")}
-                    className="min-h-8 min-w-8 items-center justify-center"
-                  >
-                    <Feather name="x" size={16} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
 
-            <ScrollView className="px-2 py-1" style={{ maxHeight: 220 }}>
-              {filteredRoles.length > 0 ? (
-                filteredRoles.map((role) => {
-                  const isSelected = selectedRole?.label === role.label;
-                  return (
-                    <TouchableOpacity
-                      key={role.label}
-                      className="min-h-11 flex-row items-center rounded-lg px-2 py-2"
+            <ScrollView
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+              contentContainerStyle={{ paddingBottom: 8 }}
+            >
+              {filteredRoles.map((role) => {
+                const isSelected = selectedRole?.label === role.label;
+                return (
+                  <TouchableOpacity
+                    key={role.label}
+                    style={{
+                      minHeight: 44,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      borderRadius: 8,
+                      paddingHorizontal: 8,
+                      paddingVertical: 8,
+                      backgroundColor: isSelected ? ACCENT_TINT : "transparent",
+                    }}
+                    onPress={() => {
+                      onChange(role);
+                      setIsOpen(false);
+                      setSearchTerm("");
+                    }}
+                  >
+                    <View
                       style={{
-                        backgroundColor: isSelected
-                          ? ACCENT_TINT
-                          : "transparent",
-                      }}
-                      onPress={() => {
-                        onChange(role);
-                        setIsOpen(false);
-                        setSearchTerm("");
+                        marginRight: 8,
+                        borderRadius: 8,
+                        padding: 4,
+                        backgroundColor: ACCENT_TINT,
                       }}
                     >
-                      <View className={`mr-2 rounded-lg p-1 ${role.bg}`}>
-                        <Feather name={role.icon} size={14} color={role.fg} />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-sm font-medium text-slate-700">
-                          {role.label}
-                        </Text>
-                        <Text className="text-xs text-slate-400">
-                          @{role.username}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Feather name="check" size={16} color={ACCENT_DARK} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })
-              ) : (
-                <View className="items-center py-6">
-                  <Text className="text-sm text-slate-400">No roles found</Text>
-                </View>
-              )}
+                      <Feather name={role.icon} size={14} color={role.fg} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "500",
+                          color: "#334155",
+                        }}
+                      >
+                        {role.label}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: "#94A3B8" }}>
+                        @{role.username}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Feather name="check" size={16} color={ACCENT_DARK} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
-
-            <View className="items-center border-t border-slate-100 bg-slate-50 px-3 py-2">
-              <Text className="text-xs text-slate-400">
-                {filteredRoles.length} roles available
-              </Text>
-            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -420,35 +666,79 @@ function WelcomePopup({
             overflow: "hidden",
           }}
         >
-          <View className="h-1" style={{ backgroundColor: ACCENT }} />
-          <View className="items-center p-6">
-            <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+          <View style={{ height: 4, backgroundColor: ACCENT }} />
+          <View style={{ alignItems: "center", padding: 24 }}>
+            <View
+              style={{
+                marginBottom: 16,
+                height: 64,
+                width: 64,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 32,
+                backgroundColor: "#ECFDF5",
+              }}
+            >
               <Feather name="check-circle" size={32} color="#10B981" />
             </View>
-            <Text className="text-center text-xl font-bold text-slate-800">
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "700",
+                color: "#0F172A",
+                textAlign: "center",
+              }}
+            >
               Welcome back!
             </Text>
-            <Text className="mt-1 text-center text-sm font-medium text-slate-500">
+            <Text
+              style={{
+                marginTop: 4,
+                fontSize: 14,
+                fontWeight: "500",
+                color: "#64748B",
+                textAlign: "center",
+              }}
+            >
               {userData?.name || userData?.username}
             </Text>
             <View
-              className="mt-2 rounded-full px-3 py-1"
-              style={{ backgroundColor: ACCENT_TINT }}
+              style={{
+                marginTop: 8,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                backgroundColor: ACCENT_TINT,
+              }}
             >
               <Text
-                className="text-xs font-medium"
-                style={{ color: ACCENT_DARK }}
+                style={{ fontSize: 12, fontWeight: "500", color: ACCENT_DARK }}
               >
                 {userData?.role || "User"}
               </Text>
             </View>
             <TouchableOpacity
-              className="mt-5 min-h-11 w-full items-center justify-center rounded-xl px-4 py-3"
-              style={{ backgroundColor: ACCENT }}
+              style={{
+                marginTop: 20,
+                minHeight: 44,
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                backgroundColor: ACCENT,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
               onPress={onClose}
               activeOpacity={0.85}
             >
-              <Text className="text-center font-medium text-white">
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontWeight: "500",
+                  color: "#fff",
+                }}
+              >
                 Continue to dashboard
               </Text>
             </TouchableOpacity>
@@ -558,153 +848,123 @@ function BiometricEnrollPrompt({
   );
 }
 
-/* ============================================ */
-/* BIOMETRIC OVERLAY — WhatsApp-style           */
-/* ============================================ */
-function BiometricOverlay({
-  visible,
-  label,
-  busy,
-  error,
-  onRetry,
-  onCancel,
-}: {
-  visible: boolean;
-  label: string;
-  busy: boolean;
-  error: string;
-  onRetry: () => void;
-  onCancel: () => void;
-}) {
-  if (!visible) return null;
+/* ============================================
+   LEFT PANEL — shifted left, 5-line text,
+   smaller rounded logo
+   ============================================ */
+function LeftPanel({ isWide }: { isWide: boolean }) {
+  const [panelHeight, setPanelHeight] = useState(800);
+  const PHOTO =
+    "https://images.unsplash.com/photo-1515378960530-7c0da6231fb1?auto=format&fit=crop&w=1200&q=80";
 
   return (
     <View
       style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(15, 12, 40, 0.55)",
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 24,
-        zIndex: 1000,
+        flex: 1,
+        position: "relative",
+        overflow: "hidden",
+        backgroundColor: "#1E1B4B",
       }}
+      onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
     >
+      <Image source={{ uri: PHOTO }} style={ABS} resizeMode="cover" />
+
+      <LinearGradient
+        colors={["rgba(30,27,75,0.90)", "rgba(49,46,129,0.82)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={ABS}
+      />
+
+      <FallingParticles panelHeight={panelHeight} />
+
+      {/* Content wrapper — centers on mobile, left-aligns on wide */}
       <View
         style={{
-          width: "100%",
-          maxWidth: 320,
-          backgroundColor: "#fff",
-          borderRadius: 20,
-          padding: 24,
-          alignItems: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 12 },
-          shadowOpacity: 0.25,
-          shadowRadius: 24,
-          elevation: 12,
+          position: "relative",
+          zIndex: 10,
+          flex: 1,
+          justifyContent: "center", // vertical center (both)
+          alignItems: isWide ? "flex-start" : "center", // ← KEY CHANGE
+          paddingLeft: isWide ? 64 : 24,
+          paddingRight: isWide ? 100 : 24,
         }}
       >
-        <View
+        {/* Logo — centered on mobile, left on wide */}
+        <Image
+          source={require("@/assets/QsutraQMS.png")}
           style={{
-            width: 72,
-            height: 72,
-            borderRadius: 36,
-            backgroundColor: ACCENT_TINT,
-            borderWidth: 1,
-            borderColor: "#D6CFEB",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 18,
+            width: isWide ? 190 : 115,
+            height: isWide ? 190 : 62,
+            borderRadius: 16,
+            marginBottom: isWide ? 24 : 16,
           }}
-        >
-          {busy ? (
-            <ActivityIndicator size="large" color={ACCENT} />
-          ) : (
-            <Feather name="lock" size={30} color={ACCENT} />
-          )}
-        </View>
+          resizeMode="contain"
+        />
 
         <Text
           style={{
-            fontSize: 17,
+            fontSize: isWide ? 20 : 14,
             fontWeight: "700",
-            color: "#1E293B",
-            textAlign: "center",
+            color: "#FFFFFF",
+            marginBottom: 8,
+            lineHeight: isWide ? 30 : 22,
+            textAlign: isWide ? "left" : "center", // ← text aligned
           }}
         >
-          {busy ? "Verify it's you" : "Sign in with biometrics"}
+          Qsutra — Quality Management System
         </Text>
 
         <Text
           style={{
-            marginTop: 6,
-            fontSize: 13,
-            color: "#64748B",
-            textAlign: "center",
-            lineHeight: 19,
+            fontSize: 12,
+            color: "rgba(255,255,255,0.75)",
+            marginBottom: isWide ? 20 : 14,
+            fontWeight: "500",
+            textAlign: isWide ? "left" : "center", // ← text aligned
           }}
         >
-          {busy
-            ? `Use ${label} to continue. Look at the camera, touch the sensor, or enter your PIN.`
-            : "We'll ask your device to verify your identity."}
+          Ver 2.0.1 (7th April, 2025)
         </Text>
 
-        {!!error && (
-          <View
+        {isWide && (
+          <Text
             style={{
-              marginTop: 14,
-              width: "100%",
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: "#FECACA",
-              backgroundColor: "#FEF2F2",
-              padding: 10,
+              fontSize: 12,
+              color: "rgba(255,255,255,0.55)",
+              lineHeight: 19,
+              marginBottom: 20,
+              fontWeight: "400",
+              maxWidth: 400,
             }}
           >
-            <Text
-              style={{ fontSize: 12, color: "#DC2626", textAlign: "center" }}
-            >
-              {error}
-            </Text>
-          </View>
+            International copyright laws and treaties for Intellectual Property,
+            govern and protect this computer program. Any form of unauthorised
+            reproduction, copying or distribution of this program in whole or
+            part, will attract severe civil and criminal prosecution for maximum
+            extent implications possible under law.
+          </Text>
         )}
 
-        {!busy && (
-          <>
-            <TouchableOpacity
-              onPress={onRetry}
-              style={{
-                marginTop: 18,
-                width: "100%",
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: ACCENT,
-                alignItems: "center",
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
-                Try again
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onCancel}
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                alignItems: "center",
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ color: "#64748B", fontSize: 14 }}>Cancel</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            alignSelf: isWide ? "flex-start" : "center", // ← badge centered on mobile
+            backgroundColor: "rgba(255,255,255,0.12)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.25)",
+            paddingHorizontal: 14,
+            paddingVertical: 7,
+            borderRadius: 999,
+          }}
+        >
+          <Feather name="shield" size={12} color="#FFFFFF" />
+          <Text style={{ color: "#FFFFFF", fontSize: 11.5, fontWeight: "500" }}>
+            Secure Access Only
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -720,11 +980,13 @@ function LoginForm({
   showPassword,
   rememberMe,
   isSubmitting,
+  isWide,
   onRoleChange,
   onChangeField,
   onTogglePassword,
   onToggleRemember,
   onSubmit,
+  onBiometric,
 }: {
   isDemo: boolean;
   formData: { selectedField: string; username: string; password: string };
@@ -732,23 +994,93 @@ function LoginForm({
   showPassword: boolean;
   rememberMe: boolean;
   isSubmitting: boolean;
+  isWide: boolean;
   onRoleChange: (role: Role) => void;
   onChangeField: (field: "username" | "password", value: string) => void;
   onTogglePassword: () => void;
   onToggleRemember: () => void;
   onSubmit: () => void;
+  onBiometric: () => void;
 }) {
   return (
-    <>
+    <View style={{ width: "100%", maxWidth: 440 }}>
+      {/* Right logo — rounded card */}
+      <View
+        style={{
+          width: isWide ? 140 : 100,
+          height: isWide ? 50 : 38,
+          borderRadius: 10,
+          overflow: "hidden",
+          backgroundColor: "#F8FAFC",
+          alignSelf: "center",
+          marginBottom: isWide ? 24 : 16,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Image
+          source={require("@/assets/Stratum.png")}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="contain"
+        />
+      </View>
+
+      {/* Softer heading */}
+      <Text
+        style={{
+          fontSize: isWide ? 24 : 18,
+          fontWeight: "600",
+          color: "#1E293B",
+          textAlign: "center",
+          marginBottom: 6,
+          letterSpacing: -0.6,
+          lineHeight: isWide ? 40 : 30,
+        }}
+      >
+        Internal Audits
+      </Text>
+
+      <Text
+        style={{
+          fontSize: isWide ? 14 : 13,
+          color: "#8996aa",
+          textAlign: "center",
+          marginBottom: isWide ? 32 : 24,
+          fontWeight: "400",
+        }}
+      >
+        Sign in to access your dashboard
+      </Text>
+
       {!!error && (
-        <View className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
-          <Text className="text-center text-sm text-red-500">{error}</Text>
+        <View
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#FECACA",
+            backgroundColor: "#FEF2F2",
+            padding: 12,
+          }}
+        >
+          <Text style={{ textAlign: "center", fontSize: 13, color: "#DC2626" }}>
+            {error}
+          </Text>
         </View>
       )}
 
       {isDemo && (
-        <View className="mb-4">
-          <Text className="mb-2 text-sm font-medium text-slate-500">
+        <View style={{ marginBottom: 22 }}>
+          <Text
+            style={{
+              marginBottom: 8,
+              fontSize: 11,
+              fontWeight: "700",
+              color: "#64748B",
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
             Select Role
           </Text>
           <RoleSelect
@@ -759,109 +1091,242 @@ function LoginForm({
         </View>
       )}
 
-      <View className="mb-4">
-        <Text className="mb-2 text-sm font-medium text-slate-500">
-          Username
-        </Text>
-        <View className="min-h-11 flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-4">
-          <Feather name="user" size={16} color="#9AA1B1" />
-          <TextInput
-            className="flex-1 px-2 py-3 text-base text-slate-800"
-            placeholder="Enter your username"
-            placeholderTextColor="#9AA1B1"
-            value={formData.username}
-            onChangeText={(text) => onChangeField("username", text)}
-            editable={!isSubmitting}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-      </View>
+      <FormInput
+        label="Username"
+        value={formData.username}
+        onChangeText={(v) => onChangeField("username", v)}
+        placeholder="Enter your username"
+        icon="user"
+        editable={!isSubmitting}
+      />
 
-      <View className="mb-4">
-        <Text className="mb-2 text-sm font-medium text-slate-500">
-          Password
-        </Text>
-        <View className="min-h-11 flex-row items-center rounded-xl border border-slate-200 bg-slate-50 px-4">
-          <Feather name="lock" size={16} color="#9AA1B1" />
-          <TextInput
-            className="flex-1 px-2 py-3 text-base text-slate-800"
-            placeholder="Enter your password"
-            placeholderTextColor="#9AA1B1"
-            value={formData.password}
-            onChangeText={(text) => onChangeField("password", text)}
-            secureTextEntry={!showPassword}
-            editable={!isSubmitting}
-          />
-          <TouchableOpacity
-            onPress={onTogglePassword}
-            hitSlop={8}
-            className="min-h-8 min-w-8 items-center justify-center"
-          >
-            <Feather
-              name={showPassword ? "eye-off" : "eye"}
-              size={16}
-              color="#9AA1B1"
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <FormInput
+        label="Password"
+        value={formData.password}
+        onChangeText={(v) => onChangeField("password", v)}
+        placeholder="Enter your password"
+        icon="lock"
+        secureTextEntry={!showPassword}
+        showToggle
+        onToggleSecure={onTogglePassword}
+        editable={!isSubmitting}
+      />
 
-      <View className="mb-5 flex-row items-center justify-between">
+      <View
+        style={{
+          marginBottom: 26,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <TouchableOpacity
-          className="min-h-11 flex-row items-center pr-2"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingRight: 8,
+          }}
           onPress={onToggleRemember}
         >
           <View
-            className="mr-2 h-4 w-4 items-center justify-center rounded border"
             style={{
+              marginRight: 8,
+              width: 18,
+              height: 18,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 5,
+              borderWidth: 2,
+              borderColor: rememberMe ? ACCENT : "#CBD5E1",
               backgroundColor: rememberMe ? ACCENT : "transparent",
-              borderColor: rememberMe ? ACCENT : "#E2E8F0",
             }}
           >
-            {rememberMe && <Feather name="check" size={10} color="white" />}
+            {rememberMe && (
+              <Text style={{ color: "#fff", fontSize: 11, fontWeight: "bold" }}>
+                ✓
+              </Text>
+            )}
           </View>
-          <Text className="text-sm text-slate-500">Remember me</Text>
+          <Text style={{ fontSize: 13, color: "#475569", fontWeight: "500" }}>
+            Remember me
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          className="min-h-11 justify-center"
           onPress={() => router.push("/auth/forgot-password" as any)}
         >
-          <Text className="text-sm font-medium" style={{ color: ACCENT }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: ACCENT }}>
             Forgot password?
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* Refined glass Sign In button — 48px tall */}
       <TouchableOpacity
-        className="min-h-11 w-full flex-row items-center justify-center rounded-xl py-3"
-        style={{ backgroundColor: ACCENT, opacity: isSubmitting ? 0.85 : 1 }}
         onPress={onSubmit}
         disabled={isSubmitting}
         activeOpacity={0.85}
+        style={{
+          borderRadius: 12,
+          overflow: "hidden",
+          opacity: isSubmitting ? 0.85 : 1,
+          shadowColor: ACCENT,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.3,
+          shadowRadius: 14,
+          elevation: 6,
+        }}
       >
-        {isSubmitting ? (
-          <>
-            <ActivityIndicator color="white" />
-            <Text className="ml-2 text-base font-medium text-white">
-              Signing in...
-            </Text>
-          </>
-        ) : (
-          <>
-            <Feather name="log-in" size={16} color="white" />
-            <Text className="ml-2 text-base font-medium text-white">
-              Sign in
-            </Text>
-          </>
-        )}
+        <LinearGradient
+          colors={["#6655A3", "#5B4E97", "#4B3E82"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            height: 48,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderTopColor: "rgba(255,255,255,0.40)",
+            borderLeftColor: "rgba(255,255,255,0.20)",
+            borderRightColor: "rgba(0,0,0,0.10)",
+            borderBottomColor: "rgba(0,0,0,0.15)",
+            overflow: "hidden",
+          }}
+        >
+          <LinearGradient
+            colors={[
+              "rgba(255,255,255,0.25)",
+              "rgba(255,255,255,0.04)",
+              "transparent",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "55%",
+              borderRadius: 12,
+            }}
+          />
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: "#fff",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Signing in…
+                </Text>
+              </>
+            ) : (
+              <>
+                <Feather name="log-in" size={15} color="#fff" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: "#fff",
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Sign In
+                </Text>
+              </>
+            )}
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
-    </>
+
+      {/* Divider */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginVertical: 20,
+        }}
+      >
+        <LinearGradient
+          colors={["transparent", "#E2E8F0", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1, height: 1 }}
+        />
+        <Text
+          style={{
+            paddingHorizontal: 16,
+            fontSize: 12,
+            fontWeight: "600",
+            color: "#CBD5E1",
+            letterSpacing: 1,
+          }}
+        >
+          OR
+        </Text>
+        <LinearGradient
+          colors={["transparent", "#E2E8F0", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1, height: 1 }}
+        />
+      </View>
+
+      {/* Biometrics */}
+      <TouchableOpacity
+        onPress={onBiometric}
+        activeOpacity={0.8}
+        style={{
+          minHeight: 50,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#E9D5FF",
+          backgroundColor: "#F5F3FF",
+          shadowColor: ACCENT,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 2,
+        }}
+      >
+        <Ionicons name="finger-print" size={20} color={ACCENT} />
+        <Text style={{ fontSize: 14, fontWeight: "600", color: ACCENT }}>
+          Sign in with Biometrics
+        </Text>
+      </TouchableOpacity>
+
+      <Text
+        style={{
+          marginTop: 28,
+          textAlign: "center",
+          fontSize: 12,
+          color: "#94A3B8",
+          fontWeight: "400",
+        }}
+      >
+        © 2025 Swajyot Technologies. All rights reserved.
+      </Text>
+    </View>
   );
 }
 
 /* ============================================ */
-/* MAIN LOGIN SCREEN                            */
+/* MAIN SCREEN                                  */
 /* ============================================ */
 export default function LoginScreen() {
   const { isDemo, ready: modeReady } = useAppMode();
@@ -871,12 +1336,11 @@ export default function LoginScreen() {
     enrollBiometric,
     unlockWithBiometric,
     webAuthnAvailable,
-    webAuthnBusy,
     loginWithDiscoverablePasskey,
   } = useAuth();
 
   const { width } = useWindowDimensions();
-  const isWide = width >= 768;
+  const isWide = width >= 900;
   const isWebPlatform = Platform.OS === "web";
 
   const [formData, setFormData] = useState({
@@ -886,29 +1350,12 @@ export default function LoginScreen() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [showEnrollPrompt, setShowEnrollPrompt] = useState(false);
-
-  // Biometric overlay states
-  const [showBioOverlay, setShowBioOverlay] = useState(false);
-  const [bioError, setBioError] = useState("");
-  const [demoBioPreview, setDemoBioPreview] = useState(false);
-  const [demoBioBusy, setDemoBioBusy] = useState(false);
-
-  // Single source of truth for "device has real biometrics"
-  const biometricActuallyAvailable = useBiometricAvailable({
-    webAuthnAvailable,
-    biometricStatus,
-  });
-
-  // Raw device capability (used for demo button gating).
-  const deviceHasBiometrics = isWebPlatform
-    ? webAuthnAvailable
-    : !!biometricStatus.available && !!biometricStatus.enrolled;
 
   const onBiometricSuccess = (restored: any) => {
     setLoggedInUser(restored);
@@ -919,115 +1366,50 @@ export default function LoginScreen() {
     }, 1500);
   };
 
-  /* ---------------------------------------------
-     The one biometric entry point (Real + Demo).
-     Real: uses the real OS sheet + real backend.
-     Demo: uses the real OS sheet, then fabricates
-           a demo user from the picked role.
-     --------------------------------------------- */
-  const runBiometric = async (opts?: { demoPreview?: boolean }) => {
-    const isDemoRun = isDemo || !!opts?.demoPreview;
-
-    setBioError("");
-    setDemoBioPreview(isDemoRun);
-    setShowBioOverlay(true);
-    setDemoBioBusy(true);
-
+  const runBiometric = async () => {
     try {
-      // WEB — real WebAuthn call (OS sheet is real in both modes)
       if (isWebPlatform && webAuthnAvailable) {
         const restored = await loginWithDiscoverablePasskey();
-
-        if (!restored && !isDemoRun) {
-          setBioError(
-            "No passkey found for this site, or prompt was cancelled.",
-          );
-          return;
-        }
-
-        // Demo user fabrication if the WebAuthn call gave us nothing
-        const user =
-          restored ||
-          ({
-            id: "demo",
-            name: formData.username || "Demo User",
-            username: formData.username || "demo",
-            role: formData.selectedField || "Demo",
-            email: `${formData.username || "demo"}@demo.local`,
-          } as any);
-
-        setShowBioOverlay(false);
-        onBiometricSuccess(user);
-        return;
-      }
-
-      // NATIVE — real biometric unlock (OS sheet is real in both modes)
-      if (
-        !isWebPlatform &&
-        biometricStatus.available &&
-        biometricStatus.enrolled
-      ) {
+        if (restored) onBiometricSuccess(restored);
+      } else if (!isWebPlatform && biometricStatus.enabled) {
         setBiometricBusy(true);
         const restored = await unlockWithBiometric();
         setBiometricBusy(false);
-
-        if (!restored && !isDemoRun) {
-          setBioError("Biometric unlock was cancelled.");
-          return;
-        }
-
-        const user =
-          restored ||
-          ({
-            id: "demo",
-            name: formData.username || "Demo User",
-            username: formData.username || "demo",
-            role: formData.selectedField || "Demo",
-            email: `${formData.username || "demo"}@demo.local`,
-          } as any);
-
-        setShowBioOverlay(false);
-        onBiometricSuccess(user);
-        return;
+        if (restored) onBiometricSuccess(restored);
       }
-
-      // No biometrics on this device
-      setBioError(
-        isWebPlatform
-          ? "This browser or device doesn't have a platform authenticator set up."
-          : "No biometrics enrolled on this device.",
-      );
     } catch (e: any) {
-      // In demo, swallow the WebAuthn "no credentials" error and succeed anyway
-      if (isDemoRun) {
-        const user = {
-          id: "demo",
-          name: formData.username || "Demo User",
-          username: formData.username || "demo",
-          role: formData.selectedField || "Demo",
-          email: `${formData.username || "demo"}@demo.local`,
-        };
-        setShowBioOverlay(false);
-        onBiometricSuccess(user);
-        return;
-      }
-      setBioError(e?.message || "Biometric sign-in failed.");
-    } finally {
-      setDemoBioBusy(false);
+      console.error("Biometric sign-in failed:", e);
     }
   };
 
-  /* Auto-open overlay on mount — Real mode only, if biometrics truly exist */
   useEffect(() => {
-    if (!modeReady) return;
-    if (isDemo) return;
-    if (!biometricActuallyAvailable) return;
-    const t = setTimeout(() => {
-      runBiometric();
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modeReady, isDemo, biometricActuallyAvailable]);
+    (async () => {
+      if (!modeReady) return;
+      if (isDemo) return;
+      if (isWebPlatform && webAuthnAvailable) {
+        try {
+          const restored = await loginWithDiscoverablePasskey();
+          if (restored) onBiometricSuccess(restored);
+        } catch {
+          /* silent */
+        }
+      } else if (!isWebPlatform && biometricStatus.enabled) {
+        setBiometricBusy(true);
+        try {
+          const restored = await unlockWithBiometric();
+          if (restored) onBiometricSuccess(restored);
+        } finally {
+          setBiometricBusy(false);
+        }
+      }
+    })();
+  }, [
+    modeReady,
+    isDemo,
+    isWebPlatform,
+    webAuthnAvailable,
+    biometricStatus.enabled,
+  ]);
 
   const handleRoleSelect = (role: Role) => {
     setFormData({
@@ -1037,7 +1419,6 @@ export default function LoginScreen() {
     });
     setError("");
   };
-
   const handleInputChange = (field: "username" | "password", value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (error) setError("");
@@ -1052,7 +1433,6 @@ export default function LoginScreen() {
     try {
       setIsSubmitting(true);
       setError("");
-
       const params = new URLSearchParams();
       params.append("username", formData.username);
       params.append("password", formData.password);
@@ -1112,7 +1492,6 @@ export default function LoginScreen() {
       await login(userData);
       setLoggedInUser(userData);
       setShowWelcomePopup(true);
-
       await AsyncStorage.setItem("@today_popup_auto_open", "true");
 
       if (
@@ -1146,212 +1525,47 @@ export default function LoginScreen() {
     showPassword,
     rememberMe,
     isSubmitting,
+    isWide,
     onRoleChange: handleRoleSelect,
     onChangeField: handleInputChange,
     onTogglePassword: () => setShowPassword((v) => !v),
     onToggleRemember: () => setRememberMe((v) => !v),
     onSubmit: handleLogin,
+    onBiometric: runBiometric,
   };
 
-  const panelContent = (
-    <>
-      {/* Real mode: switch-to-biometrics button (only if device has it) */}
-      {!isDemo && biometricActuallyAvailable && (
-        <TouchableOpacity
-          onPress={() => runBiometric()}
-          style={{
-            marginBottom: 16,
-            paddingVertical: 12,
-            borderRadius: 12,
-            backgroundColor: ACCENT_TINT,
-            borderWidth: 1,
-            borderColor: "#D6CFEB",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          activeOpacity={0.85}
-        >
-          <Feather name="smile" size={15} color={ACCENT_DARK} />
-          <Text
-            style={{
-              marginLeft: 8,
-              fontWeight: "600",
-              color: ACCENT_DARK,
-              fontSize: 13,
-            }}
-          >
-            Sign in with biometrics
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <LoginForm {...formProps} />
-
-      {/* Demo mode: same button, same real OS flow */}
-      {isDemo && deviceHasBiometrics && (
-        <TouchableOpacity
-          onPress={() => runBiometric({ demoPreview: true })}
-          style={{
-            marginTop: 16,
-            paddingVertical: 12,
-            borderRadius: 12,
-            backgroundColor: ACCENT_TINT,
-            borderWidth: 1,
-            borderColor: "#D6CFEB",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-          activeOpacity={0.85}
-        >
-          <Feather name="smile" size={15} color={ACCENT_DARK} />
-          <Text
-            style={{
-              marginLeft: 8,
-              fontWeight: "600",
-              color: ACCENT_DARK,
-              fontSize: 13,
-            }}
-          >
-            Sign in with biometrics
-          </Text>
-        </TouchableOpacity>
-      )}
-    </>
-  );
-
-  /* ============================================ */
-  /* WIDE — Split layout                          */
-  /* ============================================ */
   if (isWide) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
         <StatusBar style="dark" />
         <ModeToggle />
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, flexDirection: "row" }}
-        >
-          <View style={{ flex: 1 }}>
-            <LinearGradient
-              colors={GRADIENT}
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                paddingHorizontal: 56,
-                paddingVertical: 40,
-              }}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={{ width: "100%", maxWidth: 360 }}>
-                <Image
-                  source={require("@/assets/QsutraQMS.png")}
-                  style={{
-                    width: 200,
-                    height: 200,
-                    borderRadius: 12,
-                    marginBottom: 24,
-                  }}
-                  resizeMode="contain"
-                />
-                <Text className="text-xl font-bold text-white">
-                  Qsutra - Quality Management System
-                </Text>
-                <Text
-                  className="mt-1 text-sm text-white"
-                  style={{ opacity: 0.7 }}
-                >
-                  Ver 2.0.1 (7th April, 2025)
-                </Text>
-                <Text
-                  className="mt-8 text-xs text-white"
-                  style={{ opacity: 0.6, lineHeight: 20 }}
-                >
-                  International copyright laws and treaties for Intellectual
-                  Property, govern and protect this computer program. Any form
-                  of unauthorised reproduction, copying or distribution of this
-                  program in whole or part, will attract severe civil and
-                  criminal prosecution for maximum extent implications possible
-                  under law.
-                </Text>
-                <View
-                  className="mt-6 flex-row items-center rounded-full px-4 py-2"
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.15)",
-                    alignSelf: "flex-start",
-                  }}
-                >
-                  <Feather name="shield" size={12} color="#fff" />
-                  <Text className="ml-2 text-xs font-medium text-white">
-                    Secure Access Only
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
+
+        {/* 45 / 55 split — left narrower, right wider */}
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <View style={{ flex: 52 }}>
+            <LeftPanel isWide />
           </View>
 
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "#fff",
-              alignItems: "center",
+          <ScrollView
+            style={{ flex: 55, backgroundColor: "#FFFFFF" }}
+            contentContainerStyle={{
+              flexGrow: 1,
               justifyContent: "center",
-              paddingHorizontal: 32,
+              alignItems: "center",
+              paddingHorizontal: 60,
               paddingVertical: 40,
             }}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={{ width: "100%", maxWidth: 440 }}>
-              <View className="mb-7 items-center">
-                <Image
-                  source={require("@/assets/Stratum.png")}
-                  style={{
-                    width: 150,
-                    height: 50,
-                    borderRadius: 6,
-                    marginBottom: 24,
-                  }}
-                  resizeMode="contain"
-                />
-                <Text className="text-2xl font-bold text-slate-900">
-                  Internal Audits
-                </Text>
-                <Text className="mt-2 text-sm text-slate-400">
-                  Sign in to access your internal audit dashboard
-                </Text>
-              </View>
-
-              {panelContent}
-
-              <View className="mt-6 items-center border-t border-slate-100 pt-4">
-                <Text className="text-center text-xs text-slate-400">
-                  © 2025 Swajyot Technologies. All rights reserved.
-                </Text>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        <BiometricOverlay
-          visible={showBioOverlay}
-          label={isWebPlatform ? "Windows Hello" : biometricStatus.label}
-          busy={biometricBusy || webAuthnBusy || demoBioBusy}
-          error={bioError}
-          onRetry={() => runBiometric({ demoPreview: demoBioPreview })}
-          onCancel={() => {
-            setShowBioOverlay(false);
-            setBioError("");
-            setDemoBioPreview(false);
-            setDemoBioBusy(false);
-          }}
-        />
+            <LoginForm {...formProps} />
+          </ScrollView>
+        </View>
 
         <WelcomePopup
           isOpen={showWelcomePopup}
           onClose={() => setShowWelcomePopup(false)}
           userData={loggedInUser}
         />
-
         <BiometricEnrollPrompt
           visible={showEnrollPrompt}
           label={biometricStatus.label}
@@ -1365,11 +1579,8 @@ export default function LoginScreen() {
     );
   }
 
-  /* ============================================ */
-  /* MOBILE — Gradient hero + white card          */
-  /* ============================================ */
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: GRADIENT[2] }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#1E1B4B" }}>
       <StatusBar style="light" />
       <ModeToggle />
       <KeyboardAvoidingView
@@ -1381,113 +1592,32 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <LinearGradient
-            colors={GRADIENT}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              alignItems: "center",
-              justifyContent: "center",
-              paddingTop: 48,
-              paddingBottom: 32,
-              paddingHorizontal: 32,
-            }}
-          >
-            <Image
-              source={require("@/assets/QsutraQMS.png")}
-              style={{
-                width: 100,
-                height: 35,
-                borderRadius: 16,
-                marginBottom: 16,
-              }}
-              resizeMode="contain"
-            />
-            <Text className="text-center text-lg font-bold text-white">
-              Qsutra - Quality Management System
-            </Text>
-            <Text
-              className="mt-1 text-center text-xs text-white"
-              style={{ opacity: 0.7 }}
-            >
-              Ver 2.0.1 (7th April, 2025)
-            </Text>
-            <View
-              className="mt-4 flex-row items-center rounded-full px-3 py-2"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            >
-              <Feather name="shield" size={11} color="#fff" />
-              <Text className="ml-2 text-xs font-medium text-white">
-                Secure Access Only
-              </Text>
-            </View>
-          </LinearGradient>
+          <View style={{ height: 340 }}>
+            <LeftPanel isWide={false} />
+          </View>
 
           <View
             style={{
-              flex: 1,
               backgroundColor: "#FFFFFF",
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
-              paddingHorizontal: 20,
-              paddingTop: 28,
-              shadowColor: "#000",
-              shadowOpacity: 0.08,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: -4 },
-              elevation: 8,
+              paddingHorizontal: 24,
+              paddingTop: 32,
+              paddingBottom: 40,
+              marginTop: -24,
+              minHeight: 500,
             }}
           >
-            <View className="mb-6 items-center">
-              <Image
-                source={require("@/assets/Stratum.png")}
-                style={{
-                  width: 110,
-                  height: 38,
-                  borderRadius: 6,
-                  marginBottom: 16,
-                }}
-                resizeMode="contain"
-              />
-              <Text className="text-xl font-bold text-slate-900">
-                Internal Audits
-              </Text>
-              <Text className="mt-1 text-center text-sm text-slate-400">
-                Sign in to access your dashboard
-              </Text>
-            </View>
-
-            {panelContent}
-
-            <View className="mt-6 items-center" style={{ paddingBottom: 32 }}>
-              <Text className="text-center text-xs text-slate-400">
-                © 2025 Swajyot Technologies.{"\n"}All rights reserved.
-              </Text>
-            </View>
+            <LoginForm {...formProps} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <BiometricOverlay
-        visible={showBioOverlay}
-        label={isWebPlatform ? "Windows Hello" : biometricStatus.label}
-        busy={biometricBusy || webAuthnBusy || demoBioBusy}
-        error={bioError}
-        onRetry={() => runBiometric({ demoPreview: demoBioPreview })}
-        onCancel={() => {
-          setShowBioOverlay(false);
-          setBioError("");
-          setDemoBioPreview(false);
-          setDemoBioBusy(false);
-        }}
-      />
 
       <WelcomePopup
         isOpen={showWelcomePopup}
         onClose={() => setShowWelcomePopup(false)}
         userData={loggedInUser}
       />
-
       <BiometricEnrollPrompt
         visible={showEnrollPrompt}
         label={biometricStatus.label}
