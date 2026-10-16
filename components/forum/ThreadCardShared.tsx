@@ -166,8 +166,19 @@ export const parseBackendDate = (dateString: string): Date => {
 
   let isoString = String(dateString).trim();
 
+  // Backend format: "2026-10-16 11:20:00" → make it ISO
   if (!isoString.includes("T")) {
     isoString = isoString.replace(" ", "T");
+  }
+
+  // ✅ If the backend doesn't append Z or an offset, treat it as UTC.
+  //    Otherwise `new Date(...)` will interpret it as LOCAL time and
+  //    the deployed server (UTC environment) will show the wrong hour.
+  const hasZone =
+    isoString.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(isoString);
+
+  if (!hasZone) {
+    isoString += "Z";
   }
 
   return new Date(isoString);
