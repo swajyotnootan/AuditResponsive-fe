@@ -113,7 +113,11 @@ export const ncrService = {
    * The backend filters by the user's plant/company automatically
    * when the X-User-Id header is present.
    */
-  getAllNCRs: async (userId?: string | number) => {
+  getAllNCRs: async (
+    userId?: string | number,
+    page: number = 0,
+    size: number = 100,
+  ) => {
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -126,22 +130,29 @@ export const ncrService = {
         headers["X-User-Id"] = String(userId);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/ncr/all`, {
-        method: "GET",
-        headers,
-      });
+      // ✅ Added pagination query parameters
+      const response = await fetch(
+        `${API_BASE_URL}/api/ncr/all?page=${page}&size=${size}`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
 
       if (!response.ok) {
         return { success: false, error: `HTTP ${response.status}` };
       }
 
       const data = await response.json();
-      return { success: true, data: Array.isArray(data) ? data : [] };
+
+      // ✅ We extract the "content" array from the Spring Page object
+      return { success: true, data: data.content || [] };
     } catch (error: any) {
       console.error("❌ [ncrService.getAllNCRs]", error);
       return { success: false, error: error.message || "Network error" };
     }
   },
+
   getNCRById: async (ncrId: string | number) => {
     try {
       const data = await fetchWithAuth(`/ncr/${ncrId}`);
@@ -211,12 +222,21 @@ export const ncrService = {
 
   getNCRsByAuditId: async (auditId: string | number) => {
     try {
-      const data = await fetchWithAuth(`/ncr/audit/${auditId}`);
-      return { success: true, data };
+      const raw = await fetchWithAuth(`/ncr/audit/${auditId}`);
+      // ✅ Normalize: always return a plain array
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.content)
+          ? raw.content
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : [];
+      return { success: true, data: list };
     } catch (error: any) {
       console.error("Fetch NCRs by audit error:", error);
       return {
         success: false,
+        data: [],
         error: getErrorMessage(error, "Failed to fetch NCRs."),
       };
     }
@@ -248,10 +268,13 @@ export const ncrService = {
     }
   },
 
-  getPendingManagerReview: async () => {
+  getPendingManagerReview: async (page: number = 0, size: number = 100) => {
     try {
-      const data = await fetchWithAuth("/ncr/pending-review");
-      return { success: true, data };
+      // ✅ Extracts the list from the Page object since backend now returns Page
+      const data = await fetchWithAuth(
+        `/ncr/pending-review?page=${page}&size=${size}`,
+      );
+      return { success: true, data: data.content || [] };
     } catch (error: any) {
       console.error("Fetch pending manager review NCRs error:", error);
       return {
@@ -264,6 +287,7 @@ export const ncrService = {
   getPendingVerification: async () => {
     try {
       const data = await fetchWithAuth("/ncr/pending-verification");
+      // Note: The backend still returns a List for this specific endpoint, so no .content extraction needed.
       return { success: true, data };
     } catch (error: any) {
       console.error("Fetch pending verification NCRs error:", error);

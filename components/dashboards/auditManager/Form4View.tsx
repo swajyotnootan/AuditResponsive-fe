@@ -1,9 +1,12 @@
-import YearFilter from "@/components/common/YearFilter"; // Add this line
-import { apiClient } from "@/services/api"; // Adjust path if needed
+import PDFViewer from "@/components/audit/PDFViewer";
+import YearFilter from "@/components/common/YearFilter";
+import { apiClient } from "@/services/api";
+import { pdfService } from "@/services/pdfService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Calendar,
   Check,
   CheckCircle,
@@ -15,6 +18,7 @@ import {
   FileText,
   Filter,
   MessageSquare,
+  MoreVertical,
   Plus,
   RefreshCw,
   Repeat,
@@ -27,6 +31,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,41 +39,60 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
-  ViewStyle,
 } from "react-native";
+
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../context/ToastContext"; // Adjust path if needed
+import { useToast } from "../../context/ToastContext";
 
-// ✅ Import PDFViewer
-import PDFViewer from "@/components/audit/PDFViewer";
-import { pdfService } from "@/services/pdfService";
-
-// ══════ MNC STANDARD PALETTE ══════
+// ════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  textMain: "#0F172A",
-  textValue: "#1E293B",
-  textSub: "#64748B",
   primary: "#2563EB",
   primaryLight: "#EFF6FF",
   primaryBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  danger: "#EF4444",
-  dangerLight: "#FEF2F2",
-  dangerBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
-  purple: "#8B5CF6",
-  purpleLight: "#F5F3FF",
-  purpleBorder: "#DDD6FE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
 };
 
-// ══════ GLOBAL CONSTANTS & HELPERS ══════
+// ═════ TABLE DIMENSIONS ═════
+const AUDIT_AREA_WIDTH = 180;
+const MONTHS_TOTAL_WIDTH = 972; // 12 months × 81px
+const TABLE_TOTAL_WIDTH = AUDIT_AREA_WIDTH + MONTHS_TOTAL_WIDTH; // 1152
+const EXPANDED_CARD_WIDTH = Math.floor(
+  (TABLE_TOTAL_WIDTH - 24 - 24) / 3, // padding 12×2 + gaps 12×2 → 3 per row
+);
+
+// ═════ STYLES ═════
+const styles = StyleSheet.create({
+  expandedRow: {
+    backgroundColor: "#F8FAFC",
+  },
+  expandedMonthCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 12,
+  },
+  chip: {
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+});
+
+// ═════ GLOBAL CONSTANTS & HELPERS ═════
 const departments = [
   "HR",
   "R&D",
@@ -84,6 +108,7 @@ const departments = [
   "Maintenance",
   "Management",
 ];
+
 const months = [
   "Apr",
   "May",
@@ -98,6 +123,7 @@ const months = [
   "Feb",
   "Mar",
 ];
+
 const monthDisplay: Record<string, string> = {
   Apr: "April",
   May: "May",
@@ -167,16 +193,18 @@ const formatLocalDateTime = (utcDateStr: string | null) => {
   });
 };
 
-// ══════ TYPES ══════
+// ═════ TYPES ═════
 interface MonthData {
   month: string;
   status: string;
   selectedElements: string[];
 }
+
 interface DeptData {
   department: string;
   months: MonthData[];
 }
+
 interface PlanInfo {
   preparedBy: string;
   approvedBy: string;
@@ -188,93 +216,173 @@ interface PlanInfo {
   rejectedAt: string | null;
   rejectionReason: string;
 }
+
 interface Form4ViewProps {
   year?: number;
   onBack?: () => void;
-  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
-  allUsers?: any[]; // ✅ ADD
+  onOpenForum?: (forumId: string) => void;
+  allUsers?: any[];
 }
 
-// ══════ REUSABLE COMPONENTS ══════
-const Card = ({ children, style }: any) => (
-  <View style={[styles.card, style]}>{children}</View>
-);
-
-const ActionButton = ({
-  onPress,
-  disabled,
-  loading,
-  color,
-  bgColor,
-  borderColor,
-  icon: Icon,
-  children,
-}: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    disabled={disabled || loading}
-    style={[
-      styles.actionButton,
-      {
-        backgroundColor: disabled || loading ? "#F1F5F9" : bgColor,
-        borderColor:
-          disabled || loading ? "#E2E8F0" : borderColor || "transparent",
-      },
-    ]}
+// ═════ REUSABLE UI COMPONENTS ═════
+const Card = ({ children, className = "" }: any) => (
+  <View
+    className={`mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white ${className}`}
+    style={{
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 4,
+      elevation: 1,
+    }}
   >
-    {loading ? (
-      <ActivityIndicator size="small" color={color} />
-    ) : Icon ? (
-      <Icon size={16} color={disabled || loading ? "#94A3B8" : color} />
-    ) : null}
-    <Text
-      style={[
-        styles.actionButtonText,
-        { color: disabled || loading ? "#94A3B8" : color },
-      ]}
-    >
-      {children}
-    </Text>
-  </TouchableOpacity>
+    {children}
+  </View>
 );
 
 const AlertBanner = ({ type, title, message, footer, icon: Icon }: any) => {
   const stylesMap: any = {
     error: {
-      bg: COLORS.dangerLight,
-      border: COLORS.dangerBorder,
-      color: "#991B1B",
-      iconColor: "#DC2626",
+      bg: COLORS.stateErrorBg,
+      border: COLORS.border,
+      color: COLORS.stateErrorText,
+      iconColor: COLORS.stateErrorText,
+      iconBg: "#E2E8F0",
     },
     warning: {
-      bg: COLORS.warningLight,
-      border: COLORS.warningBorder,
-      color: "#92400E",
-      iconColor: "#D97706",
+      bg: COLORS.stateWarningBg,
+      border: COLORS.border,
+      color: COLORS.stateWarningText,
+      iconColor: COLORS.stateWarningText,
+      iconBg: "#F1F5F9",
     },
     success: {
-      bg: COLORS.successLight,
-      border: COLORS.successBorder,
-      color: "#065F46",
-      iconColor: "#059669",
+      bg: COLORS.stateSuccessBg,
+      border: COLORS.primaryBorder,
+      color: COLORS.primaryDark,
+      iconColor: COLORS.primary,
+      iconBg: "#FFFFFF",
     },
   };
   const s = stylesMap[type] || stylesMap.error;
   return (
     <View
-      style={[
-        styles.alertBanner,
-        { backgroundColor: s.bg, borderColor: s.border },
-      ]}
+      className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+      style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
-      <Icon size={20} color={s.iconColor} style={{ marginTop: 2 }} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.alertTitle, { color: s.color }]}>{title}</Text>
-        <Text style={[styles.alertMessage, { color: s.color }]}>{message}</Text>
+      <View
+        className="h-10 w-10 items-center justify-center rounded-xl"
+        style={{
+          backgroundColor: s.iconBg,
+          borderColor: s.border,
+          borderWidth: 1,
+        }}
+      >
+        <Icon size={20} color={s.iconColor} />
+      </View>
+      <View className="flex-1 justify-center">
+        <Text className="text-sm font-bold" style={{ color: s.color }}>
+          {title}
+        </Text>
+        <Text
+          className="mt-1 text-sm leading-5 opacity-90"
+          style={{ color: s.color }}
+        >
+          {message}
+        </Text>
         {footer && (
-          <Text style={[styles.alertFooter, { color: s.color }]}>{footer}</Text>
+          <Text
+            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70"
+            style={{ color: s.color }}
+          >
+            {footer}
+          </Text>
         )}
       </View>
+    </View>
+  );
+};
+
+const PlanStatusBadge = ({ status }: { status: string }) => {
+  const stylesMap: any = {
+    APPROVED: {
+      bg: COLORS.stateSuccessBg,
+      color: COLORS.primaryDark,
+      border: COLORS.primaryBorder,
+      text: "Approved",
+      icon: CheckCircle,
+    },
+    PENDING_APPROVAL: {
+      bg: COLORS.primaryLight,
+      color: COLORS.primary,
+      border: COLORS.primaryBorder,
+      text: "Pending Approval",
+      icon: Clock,
+    },
+    REJECTED: {
+      bg: COLORS.stateErrorBg,
+      color: COLORS.stateErrorText,
+      border: COLORS.border,
+      text: "Rejected",
+      icon: X,
+    },
+    CHANGE_REQUESTED: {
+      bg: COLORS.stateWarningBg,
+      color: COLORS.stateWarningText,
+      border: COLORS.border,
+      text: "Changes Requested",
+      icon: MessageSquare,
+    },
+  };
+  const s = stylesMap[status] || {
+    bg: "#F1F5F9",
+    color: "#475569",
+    border: "#E2E8F0",
+    text: "Draft",
+    icon: FileText,
+  };
+  const Icon = s.icon;
+  return (
+    <View
+      className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
+      style={{ backgroundColor: s.bg, borderColor: s.border }}
+    >
+      <Icon size={14} color={s.color} />
+      <Text
+        className="text-xs font-bold uppercase tracking-wide"
+        style={{ color: s.color }}
+      >
+        {s.text}
+      </Text>
+    </View>
+  );
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  if (status === "COMPLETED") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <Check size={14} color={COLORS.primary} />
+      </View>
+    );
+  }
+  if (status === "PLANNED") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <Clock size={14} color={COLORS.primary} />
+      </View>
+    );
+  }
+  if (status === "RESCHEDULED") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
+        <Repeat size={14} color={COLORS.textMuted} />
+      </View>
+    );
+  }
+  return (
+    <View className="h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
+      <Text className="text-[11px] font-bold text-slate-400">—</Text>
     </View>
   );
 };
@@ -287,7 +395,6 @@ const ActionModal = ({
   icon: Icon,
   iconColor,
   iconBg,
-  iconBorder,
   value,
   setValue,
   placeholder,
@@ -305,60 +412,211 @@ const ActionModal = ({
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        style={styles.modalOverlay}
+        className="flex-1 items-center justify-center bg-slate-900/30 p-6"
         activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity activeOpacity={1} style={styles.modalContent}>
-          <View style={styles.modalHeader}>
+        <TouchableOpacity
+          activeOpacity={1}
+          className="w-full max-w-md overflow-hidden rounded-3xl bg-white"
+          style={{
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.05,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+        >
+          <View className="flex-row items-center gap-4 border-b border-slate-100 p-6">
             <View
-              style={[
-                styles.modalIconBox,
-                { backgroundColor: iconBg, borderColor: iconBorder },
-              ]}
+              className="h-12 w-12 items-center justify-center rounded-2xl border border-slate-100"
+              style={{ backgroundColor: iconBg }}
             >
               <Icon size={22} color={iconColor} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modalTitle}>{title}</Text>
-              <Text style={styles.modalDesc}>{description}</Text>
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-slate-900">{title}</Text>
+              <Text className="mt-1 text-sm text-slate-500">{description}</Text>
             </View>
           </View>
-          <View style={styles.modalBody}>
+          <View className="p-6">
             <TextInput
-              style={styles.modalInput}
+              className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800"
               value={value}
               onChangeText={setValue}
               multiline
               numberOfLines={5}
               placeholder={placeholder}
-              textAlignVertical="top"
               placeholderTextColor="#94A3B8"
+              textAlignVertical="top"
             />
           </View>
-          <View style={styles.modalFooter}>
-            <ActionButton
+          <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
+            <TouchableOpacity
               onPress={onClose}
-              color={COLORS.textValue}
-              bgColor={COLORS.card}
-              borderColor={COLORS.border}
+              className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
+              activeOpacity={0.7}
             >
-              Cancel
-            </ActionButton>
-            <ActionButton
+              <Text className="text-sm font-semibold text-slate-600">
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={onSubmit}
-              disabled={!value.trim()}
-              loading={submitting}
-              color="#FFF"
-              bgColor={submitBg}
-              icon={Icon}
+              disabled={!value.trim() || submitting}
+              className="h-11 flex-row items-center justify-center gap-2 rounded-xl px-6"
+              style={{
+                backgroundColor:
+                  !value.trim() || submitting ? "#CBD5E1" : submitBg,
+                opacity: !value.trim() || submitting ? 0.7 : 1,
+              }}
+              activeOpacity={0.8}
             >
-              {submitLabel}
-            </ActionButton>
+              {submitting ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Icon size={16} color="#FFF" />
+              )}
+              <Text className="text-sm font-semibold text-white">
+                {submitLabel}
+              </Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
+  );
+};
+
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827";
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-3 py-2.5"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text className="text-sm font-semibold" style={{ color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const MarqueeText = ({ text, style }: { text: string; style?: any }) => {
+  const [offset, setOffset] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const GAP = 60;
+  const SPEED = 0.6;
+  useEffect(() => {
+    if (textWidth === 0 || containerWidth === 0) return;
+    if (textWidth <= containerWidth) {
+      setOffset(0);
+      return;
+    }
+    const cycle = textWidth + GAP;
+    const interval = setInterval(() => {
+      setOffset((prev) => {
+        const next = prev - SPEED;
+        return next <= -cycle ? 0 : next;
+      });
+    }, 16);
+    return () => clearInterval(interval);
+  }, [textWidth, containerWidth]);
+  return (
+    <View
+      style={[
+        {
+          width: "100%",
+          height: 30,
+          overflow: "hidden",
+          justifyContent: "center",
+        },
+        style,
+      ]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 1) setContainerWidth(w);
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          transform: [{ translateX: offset }],
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && Math.abs(w - textWidth) > 1) setTextWidth(w);
+          }}
+        >
+          {text}
+        </Text>
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+        >
+          {text}
+        </Text>
+      </View>
+    </View>
   );
 };
 
@@ -371,16 +629,13 @@ const ElementSelectionModal = ({
   onSave,
 }: any) => {
   const [tempSelected, setTempSelected] = useState<string[]>([]);
-
   useEffect(() => {
     setTempSelected([...(selectedElements || [])]);
   }, [selectedElements, isOpen]);
   if (!isOpen) return null;
-
   const availableNotSelected = availableElements.filter(
     (el: string) => !tempSelected.includes(el),
   );
-
   return (
     <Modal
       visible={isOpen}
@@ -388,141 +643,151 @@ const ElementSelectionModal = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { maxHeight: "85%" }]}>
-          <View style={styles.modalHeader}>
-            <View
-              style={[
-                styles.modalIconBox,
-                {
-                  backgroundColor: COLORS.purpleLight,
-                  borderColor: COLORS.purpleBorder,
-                },
-              ]}
+      <TouchableOpacity
+        className="flex-1 items-center justify-center bg-slate-900/40 p-4"
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          className="w-full max-w-md overflow-hidden rounded-3xl bg-white"
+          style={{
+            maxHeight: "85%",
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.1,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+        >
+          <View className="flex-row items-center justify-between border-b border-slate-100 p-6">
+            <View className="flex-1 flex-row items-center gap-4">
+              <View
+                className="h-12 w-12 items-center justify-center rounded-2xl border border-slate-100"
+                style={{
+                  backgroundColor: COLORS.primaryLight,
+                  borderColor: COLORS.primaryBorder,
+                }}
+              >
+                <CheckSquare size={22} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text className="text-lg font-bold text-slate-900">
+                  Select Audit Elements
+                </Text>
+                <Text className="mt-1 text-sm text-slate-500">
+                  For {monthDisplay[month]}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              className="h-9 w-9 items-center justify-center rounded-lg bg-slate-50"
             >
-              <CheckSquare size={22} color={COLORS.purple} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modalTitle}>Select Audit Elements</Text>
-              <Text style={styles.modalDesc}>For {monthDisplay[month]}</Text>
-            </View>
-            <TouchableOpacity onPress={onClose}>
-              <X size={20} color={COLORS.textSub} />
+              <X size={18} color="#475569" />
             </TouchableOpacity>
           </View>
-
           <ScrollView
-            style={styles.modalBody}
+            className="px-6 py-4"
+            style={{ maxHeight: 400 }}
             showsVerticalScrollIndicator={false}
           >
             {tempSelected.length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={styles.label}>
+              <View className="mb-6">
+                <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
                   Selected Elements ({tempSelected.length})
                 </Text>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
-                >
+                <View className="flex-row flex-wrap gap-2">
                   {tempSelected.map((el: string) => (
                     <View
                       key={el}
-                      style={[
-                        styles.chip,
-                        {
-                          backgroundColor: COLORS.successLight,
-                          borderColor: COLORS.successBorder,
-                        },
-                      ]}
+                      className="flex-row items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5"
                     >
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          color: "#065F46",
-                          fontWeight: "600",
-                        }}
-                      >
+                      <Text className="text-xs font-semibold text-blue-800">
                         {el}
                       </Text>
                       <TouchableOpacity
                         onPress={() =>
-                          setTempSelected(tempSelected.filter((e) => e !== el))
+                          setTempSelected(
+                            tempSelected.filter((e: string) => e !== el),
+                          )
                         }
                       >
-                        <X
-                          size={12}
-                          color="#065F46"
-                          style={{ marginLeft: 4 }}
-                        />
+                        <X size={12} color="#1E40AF" />
                       </TouchableOpacity>
                     </View>
                   ))}
                 </View>
               </View>
             )}
-
             {availableNotSelected.length > 0 && (
               <View>
-                <Text style={styles.label}>Add More Elements</Text>
+                <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Add More Elements
+                </Text>
                 {availableNotSelected.map((el: string) => (
                   <TouchableOpacity
                     key={el}
                     onPress={() => setTempSelected([...tempSelected, el])}
-                    style={styles.selectItem}
+                    className="mb-2 flex-row items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3"
                   >
-                    <Text style={styles.selectItemText}>{el}</Text>
+                    <Text className="text-sm font-medium text-slate-800">
+                      {el}
+                    </Text>
                     <Plus size={16} color={COLORS.primary} />
                   </TouchableOpacity>
                 ))}
               </View>
             )}
-
             {availableElements.length === 0 && (
-              <View style={{ padding: 24, alignItems: "center" }}>
+              <View className="items-center py-8">
                 <AlertCircle
                   size={32}
-                  color={COLORS.textSub}
+                  color="#94A3B8"
                   style={{ opacity: 0.5, marginBottom: 8 }}
                 />
-                <Text style={{ fontSize: 14, color: COLORS.textSub }}>
+                <Text className="text-sm text-slate-500">
                   No audit elements planned for this month
                 </Text>
               </View>
             )}
           </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <ActionButton
+          <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
+            <TouchableOpacity
               onPress={onClose}
-              color={COLORS.textValue}
-              bgColor={COLORS.card}
-              borderColor={COLORS.border}
+              className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
+              activeOpacity={0.7}
             >
-              Cancel
-            </ActionButton>
-            <ActionButton
+              <Text className="text-sm font-semibold text-slate-600">
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => {
                 onSave(tempSelected);
                 onClose();
               }}
-              color="#FFF"
-              bgColor={COLORS.purple}
-              icon={CheckSquare}
+              className="h-11 flex-row items-center justify-center gap-2 rounded-xl bg-blue-600 px-6"
+              activeOpacity={0.8}
             >
-              Save Elements
-            </ActionButton>
+              <CheckSquare size={16} color="#FFF" />
+              <Text className="text-sm font-semibold text-white">
+                Save Elements
+              </Text>
+            </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };
 
-// ══════ MAIN COMPONENT ══════
+// ═════ MAIN COMPONENT ═════
 export default function Form4View({
   year: propYear,
   onBack,
-  onOpenForum, // ✅ ADD THIS
-  allUsers = [], // ✅ ADD THIS
+  onOpenForum,
+  allUsers = [],
 }: Form4ViewProps) {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -530,30 +795,30 @@ export default function Form4View({
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const { addToast } = useToast();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // ✅ PDF Viewer State
   const [pdfViewer, setPDFViewer] = useState({
     visible: false,
     pdfData: "",
     fileName: "",
   });
-
   const [planData, setPlanData] = useState<DeptData[]>([]);
   const [planStatus, setPlanStatus] = useState("DRAFT");
   const [rejectionReason, setRejectionReason] = useState("");
-
+  const [showYearModal, setShowYearModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
-
   const [tempApprovalComment, setTempApprovalComment] = useState("");
   const [tempRejectionReason, setTempRejectionReason] = useState("");
   const [changeRequestReason, setChangeRequestReason] = useState("");
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const [auditFrequency, setAuditFrequency] = useState("Half yearly");
   const [documentRevision, setDocumentRevision] = useState("1.0");
   const [revisionDate, setRevisionDate] = useState(
@@ -562,15 +827,13 @@ export default function Form4View({
   const [revisionDetails, setRevisionDetails] = useState(
     "First Approved copy (IATF16949)",
   );
-
   const [auditElementsFromForm3, setAuditElementsFromForm3] = useState<
     Record<string, string[]>
   >({});
+
   const [expandedDept, setExpandedDept] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [showForm3Details, setShowForm3Details] = useState(true);
-  const [exporting, setExporting] = useState(false);
-
   const [selectedMonthForElements, setSelectedMonthForElements] = useState<{
     deptIndex: number;
     month: string;
@@ -598,9 +861,6 @@ export default function Form4View({
     rejectionReason: "",
   });
 
-  // ✅ Handle View PDF with Sharing
-  // In Form4View.tsx - Updated handleViewPDF
-
   const handleViewPDF = async () => {
     if (!user?.id) {
       addToast("User session not ready. Please wait.", "warning");
@@ -608,13 +868,12 @@ export default function Form4View({
     }
     try {
       setExporting(true);
-
       await pdfService.viewPDF(
         {
           auditId: String(selectedYear),
           type: "form4",
           year: selectedYear,
-          userId: user.id, // ✅ ADD
+          userId: user.id,
         },
         (result) => {
           setPDFViewer({
@@ -632,41 +891,24 @@ export default function Form4View({
     }
   };
 
-  // ✅ Handle Share Complete - Navigate to Forum
-  // In Form4View.tsx - Updated handleShareComplete
-
   const handleShareComplete = (forumId?: string) => {
-    console.log("🟡 [Form4View] onShareComplete called with forumId:", forumId);
-
-    // Close PDF viewer
     setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-
-    // Show toast
     addToast("✅ PDF shared to forum successfully!", "success");
-
-    // Navigate to forum
     if (forumId && onOpenForum) {
-      console.log("🟢 [Form4View] Calling onOpenForum with:", forumId);
       setTimeout(() => {
         onOpenForum(forumId);
       }, 300);
     }
   };
 
-  // ✅ Handle Navigate to Forum
   const handleNavigateToForum = (forumId: string) => {
-    console.log("🟣 [Form4View] onNavigateToForum called with:", forumId);
     if (onOpenForum) {
-      console.log("🟢 [Form4View] Direct navigation via onOpenForum:", forumId);
       onOpenForum(forumId);
       setPDFViewer({ visible: false, pdfData: "", fileName: "" });
     } else {
-      console.log("🔴 [Form4View] onOpenForum not available!");
       addToast("Please open the forum from the main menu", "info");
     }
   };
-
-  // ─── HANDLERS ──────────────────────────────────────────────────────────────
 
   const handleQuickPlanned = async () => {
     if (!canEdit) {
@@ -679,7 +921,6 @@ export default function Form4View({
       let totalPlannedCount = 0,
         totalElementsAdded = 0;
       const firstQuarterMonths = ["Apr", "May", "Jun"];
-
       newPlanData.forEach((dept: DeptData) => {
         dept.months.forEach((month: MonthData) => {
           if (firstQuarterMonths.includes(month.month)) {
@@ -749,7 +990,6 @@ export default function Form4View({
 
       let totalPlannedCount = 0,
         totalElementsAdded = 0;
-
       newPlanData.forEach((dept: DeptData) => {
         dept.months.forEach((month: MonthData) => {
           if (currentQuarterMonths.includes(month.month)) {
@@ -805,7 +1045,6 @@ export default function Form4View({
       const newPlanData = JSON.parse(JSON.stringify(planData));
       let totalPlannedCount = 0,
         totalElementsAdded = 0;
-
       newPlanData.forEach((dept: DeptData) => {
         dept.months.forEach((month: MonthData) => {
           const form3ElementsForMonth =
@@ -858,7 +1097,6 @@ export default function Form4View({
         `/api/audit-plan/${selectedYear}?userId=${user.id}`,
       );
       const data = response.data || response;
-      // ...
       const elementsByMonth: Record<string, string[]> = {};
       months.forEach((month) => {
         elementsByMonth[month] = [];
@@ -995,8 +1233,9 @@ export default function Form4View({
       if (
         updatedSelected.length > 0 &&
         newPlanData[deptIndex].months[monthIndex].status === ""
-      )
+      ) {
         newPlanData[deptIndex].months[monthIndex].status = "PLANNED";
+      }
       setPlanData(newPlanData);
       setSelectedMonthForElements(null);
       addToast(`Added ${elements.length} element(s) to ${monthDisplay[month]}`);
@@ -1054,7 +1293,7 @@ export default function Form4View({
         revisionDetails,
         preparedBy: planInfo.preparedBy,
       });
-      addToast("Department audit plan saved as DRAFT!");
+      addToast("Department audit plan saved as DRAFT!", "success");
       await fetchPlanData();
     } catch (error) {
       addToast("Failed to save plan", "error");
@@ -1093,7 +1332,7 @@ export default function Form4View({
         `/api/department-plan/${selectedYear}/submit?userId=${user?.id}`,
         {},
       );
-      addToast("Plan submitted for approval successfully!");
+      addToast("Plan submitted for approval successfully!", "success");
       await fetchPlanData();
     } catch (error) {
       addToast("Failed to submit plan", "error");
@@ -1122,7 +1361,7 @@ export default function Form4View({
       }));
       setShowApproveModal(false);
       setTempApprovalComment("");
-      addToast("Plan approved successfully!");
+      addToast("Plan approved successfully!", "success");
       fetchPlanData();
     } catch (error) {
       addToast("Failed to approve plan", "error");
@@ -1152,7 +1391,7 @@ export default function Form4View({
       }));
       setShowRejectModal(false);
       setTempRejectionReason("");
-      addToast("Plan rejected", "warning");
+      addToast("Plan rejected", "error");
       fetchPlanData();
     } catch (error) {
       addToast("Failed to reject plan", "error");
@@ -1182,139 +1421,6 @@ export default function Form4View({
       setSubmitting(false);
     }
   };
-
-  const handleDownloadPDF = async () => {
-    // ✅ Use the view function instead
-    await handleViewPDF();
-  };
-
-  const getMonthStatusBadge = (status: string, hasElements: boolean) => {
-    const baseStyle: ViewStyle = {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      justifyContent: "center",
-      alignItems: "center",
-      borderWidth: 1,
-    };
-
-    if (status === "COMPLETED")
-      return (
-        <View
-          style={[
-            baseStyle,
-            {
-              backgroundColor: COLORS.successLight,
-              borderColor: COLORS.successBorder,
-            },
-          ]}
-        >
-          <Check size={14} color={COLORS.success} />
-        </View>
-      );
-    if (status === "PLANNED")
-      return (
-        <View
-          style={[
-            baseStyle,
-            {
-              backgroundColor: COLORS.primaryLight,
-              borderColor: COLORS.primaryBorder,
-            },
-          ]}
-        >
-          <Clock size={14} color={COLORS.primary} />
-        </View>
-      );
-    if (status === "RESCHEDULED")
-      return (
-        <View
-          style={[
-            baseStyle,
-            {
-              backgroundColor: COLORS.warningLight,
-              borderColor: COLORS.warningBorder,
-            },
-          ]}
-        >
-          <Repeat size={14} color={COLORS.warning} />
-        </View>
-      );
-
-    return (
-      <View
-        style={[
-          baseStyle,
-          {
-            backgroundColor: "#F1F5F9",
-            borderColor: hasElements ? COLORS.warning : COLORS.border,
-            borderStyle: hasElements ? "dashed" : "solid",
-          },
-        ]}
-      >
-        <Text style={{ fontSize: 11, fontWeight: "700", color: "#94A3B8" }}>
-          —
-        </Text>
-      </View>
-    );
-  };
-
-  const getPlanStatusBadge = () => {
-    const stylesMap: any = {
-      APPROVED: {
-        bg: COLORS.successLight,
-        color: "#065F46",
-        border: COLORS.successBorder,
-        text: "Approved",
-        icon: CheckCircle,
-      },
-      PENDING_APPROVAL: {
-        bg: COLORS.warningLight,
-        color: "#92400E",
-        border: COLORS.warningBorder,
-        text: "Pending",
-        icon: Clock,
-      },
-      REJECTED: {
-        bg: COLORS.dangerLight,
-        color: "#991B1B",
-        border: COLORS.dangerBorder,
-        text: "Rejected",
-        icon: X,
-      },
-      CHANGE_REQUESTED: {
-        bg: "#FFF7ED",
-        color: "#9A3412",
-        border: "#FED7AA",
-        text: "Changes Req.",
-        icon: MessageSquare,
-      },
-    };
-    const s = stylesMap[planStatus] || {
-      bg: "#F1F5F9",
-      color: "#475569",
-      border: "#E2E8F0",
-      text: "Draft",
-      icon: FileText,
-    };
-    const Icon = s.icon;
-    return (
-      <View
-        style={[
-          styles.planStatusBadge,
-          { backgroundColor: s.bg, borderColor: s.border },
-        ]}
-      >
-        <Icon size={12} color={s.color} />
-        <Text style={[styles.planStatusText, { color: s.color }]}>
-          {s.text}
-        </Text>
-      </View>
-    );
-  };
-
-  const getAvailableElementsForMonth = (month: string) =>
-    auditElementsFromForm3[month] || getAuditElementsForMonth(month);
 
   let totalPlanned = 0,
     totalCompleted = 0,
@@ -1359,68 +1465,85 @@ export default function Form4View({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading department plan...</Text>
+        <Text className="mt-3 text-sm font-medium text-slate-500">
+          Loading department plan...
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* ✅ FIXED HEADER - Matches Form3View & UserManagement Look */}
-      <View className="border-b border-gray-200 bg-white px-4 pb-3 pt-4">
-        <View
-          style={
-            isDesktop
-              ? { maxWidth: 1400, alignSelf: "center", width: "100%" }
-              : undefined
-          }
-        >
-          {/* Top Row: Back, Icon, Title */}
-          <View className="flex-row items-center justify-between">
-            <View className="mr-4 flex-1 flex-row items-center">
-              {/* Back Button */}
+    <View className="flex-1 bg-slate-50">
+      {/* HEADER */}
+      <View className="border-b border-slate-200 bg-white px-4 py-4">
+        <View className="w-full px-4">
+          <View
+            className={`${isDesktop ? "flex-row items-center justify-between" : "flex-col gap-4"}`}
+          >
+            <View
+              className="flex-row items-center gap-3"
+              style={
+                !isDesktop
+                  ? { width: "100%", alignSelf: "stretch" }
+                  : { flex: 1 }
+              }
+            >
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
-                className="mr-2 h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
+                className="h-10 w-10 items-center justify-center rounded-xl bg-slate-100"
+                activeOpacity={0.7}
               >
-                <ArrowLeft size={20} color="#6b7280" />
+                <ArrowLeft size={20} color="#475569" />
               </TouchableOpacity>
-
-              {/* Icon Box */}
-              <View
-                className="h-10 w-10 items-center justify-center rounded-xl"
-                style={{
-                  backgroundColor: COLORS.primaryLight,
-                  borderWidth: 1,
-                  borderColor: COLORS.primaryBorder,
-                }}
-              >
-                <Calendar size={22} color={COLORS.primary} />
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <Calendar size={20} color={COLORS.primary} />
               </View>
-
-              {/* Title & Subtitle */}
-              <View className="ml-3 flex-1">
-                <Text
-                  className="text-lg font-bold text-gray-900"
-                  numberOfLines={1}
-                >
-                  Department Audit Plan
-                </Text>
-                <Text className="text-xs text-gray-500" numberOfLines={1}>
-                  Dept-wise Planning ({selectedYear}-{selectedYear + 1})
-                </Text>
+              <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                {isDesktop ? (
+                  <>
+                    <Text
+                      className="text-xl font-bold text-slate-900"
+                      numberOfLines={1}
+                    >
+                      Department Audit Plan
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-sm font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      Dept-wise Planning (Financial Year)
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <MarqueeText text="Department Audit Plan" />
+                    <Text
+                      className="mt-0.5 text-sm font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      Dept-wise Planning (Financial Year)
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
 
-            {/* Desktop Only: Right side controls in same row */}
-            {isDesktop && (
-              <View className="flex-row items-center gap-2">
-                {getPlanStatusBadge()}
+            {isDesktop ? (
+              <View className="flex-row items-center gap-3">
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-xs font-semibold text-slate-500">
+                    Status:
+                  </Text>
+                  <PlanStatusBadge status={planStatus} />
+                </View>
                 <YearFilter
                   selectedYear={selectedYear}
-                  onYearChange={setSelectedYear}
+                  onYearChange={(newYear) => {
+                    setSelectedYear(newYear);
+                    router.setParams({ year: newYear.toString() });
+                  }}
                   availableYears={availableYears}
                 />
                 <TouchableOpacity
@@ -1428,129 +1551,154 @@ export default function Form4View({
                     fetchForm3Data();
                     fetchPlanData();
                   }}
-                  className="rounded-lg bg-gray-100 p-2"
+                  className="rounded-lg bg-slate-100 p-2.5"
+                  activeOpacity={0.7}
                 >
                   <RefreshCw size={16} color="#6b7280" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleViewPDF}
-                  disabled={downloadingPdf}
-                  className="rounded-lg bg-gray-100 p-2"
-                >
-                  {downloadingPdf ? (
-                    <ActivityIndicator size="small" color={COLORS.success} />
-                  ) : (
-                    <Eye size={16} color={COLORS.success} />
-                  )}
-                </TouchableOpacity>
+              </View>
+            ) : (
+              <View className="flex-row items-center justify-between gap-3">
+                <PlanStatusBadge status={planStatus} />
+                <View style={{ zIndex: 1000 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowMobileMenu(!showMobileMenu)}
+                    className="h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white"
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={20} color="#475569" />
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
-
-          {/* Mobile Only: Controls drop to second row */}
-          {!isDesktop && (
-            <View className="mt-3 flex-row flex-wrap items-center justify-end gap-2">
-              {getPlanStatusBadge()}
-              <YearFilter
-                selectedYear={selectedYear}
-                onYearChange={setSelectedYear}
-                availableYears={availableYears}
-              />
-              <TouchableOpacity
-                onPress={() => {
-                  fetchForm3Data();
-                  fetchPlanData();
-                }}
-                className="rounded-lg bg-gray-100 p-2"
-              >
-                <RefreshCw size={16} color="#6b7280" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleViewPDF}
-                disabled={downloadingPdf}
-                className="rounded-lg bg-gray-100 p-2"
-              >
-                {downloadingPdf ? (
-                  <ActivityIndicator size="small" color={COLORS.success} />
-                ) : (
-                  <Eye size={16} color={COLORS.success} />
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
       </View>
 
-      {/* ✅ SCROLLABLE CONTENT STARTS BELOW HEADER */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          isDesktop && {
-            maxWidth: 1400,
-            alignSelf: "center",
-            width: "100%",
-            paddingHorizontal: 32,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Demo Banner */}
-        {canEdit && (
-          <Card
-            style={[
-              styles.demoCard,
-              {
-                backgroundColor: COLORS.purpleLight,
-                borderColor: COLORS.purpleBorder,
-              },
-            ]}
+      {/* Mobile Dropdown Menu */}
+      {showMobileMenu && !isDesktop && (
+        <>
+          <View
+            style={{
+              position: "absolute",
+              top: 70,
+              right: 16,
+              width: 280,
+              zIndex: 9999,
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 15,
+              elevation: 10,
+              overflow: "hidden",
+            }}
           >
-            <View style={styles.demoContent}>
-              <View style={styles.demoLeft}>
-                <View style={styles.demoIconBox}>
-                  <Star size={20} color={COLORS.purple} />
+            {/* ✅ NEW */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                setShowYearModal(true);
+              }}
+              className="flex-row items-center justify-between px-4 py-3.5"
+              style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+              activeOpacity={0.7}
+            >
+              <View className="flex-row items-center gap-3">
+                <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                  <Calendar size={18} color={COLORS.primary} />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.demoTitle}>Sync with Form3 Data</Text>
-                  <Text style={styles.demoSubtitle}>
-                    Auto-populate departments (IATF16949 & 5S only)
+                <View>
+                  <Text className="text-sm font-semibold text-slate-900">
+                    FY {selectedYear}-{selectedYear + 1}
+                  </Text>
+                  <Text className="text-[11px] text-slate-500">
+                    Change Year
                   </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                <ActionButton
-                  onPress={handlePlanCurrentQuarter}
-                  loading={demoLoading}
-                  color="#FFF"
-                  bgColor={COLORS.success}
-                  icon={Calendar}
-                >
-                  Sync Q
-                </ActionButton>
-                <ActionButton
-                  onPress={handleQuickPlanned}
-                  loading={demoLoading}
-                  color="#FFF"
-                  bgColor={COLORS.primary}
-                  icon={Clock}
-                >
-                  Sync Q1
-                </ActionButton>
-                <ActionButton
-                  onPress={handleDemoPlanned}
-                  loading={demoLoading}
-                  color="#FFF"
-                  bgColor={COLORS.purple}
-                  icon={Star}
-                >
-                  Sync All
-                </ActionButton>
+              <ArrowRight size={16} color="#94A3B8" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                handleViewPDF();
+              }}
+              disabled={exporting}
+              className="flex-row items-center gap-3 px-4 py-3.5"
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+                opacity: exporting ? 0.5 : 1,
+              }}
+              activeOpacity={0.7}
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <FileText size={18} color={COLORS.primary} />
               </View>
-            </View>
-          </Card>
-        )}
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-900">
+                  View PDF
+                </Text>
+                {exporting && (
+                  <Text className="text-[11px] text-slate-500">Loading...</Text>
+                )}
+              </View>
+              {exporting && (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                fetchForm3Data();
+                fetchPlanData();
+              }}
+              className="flex-row items-center gap-3 px-4 py-3.5"
+              style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+              activeOpacity={0.7}
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+                <RefreshCw size={18} color="#475569" />
+              </View>
+              <Text className="text-sm font-semibold text-slate-900">
+                Refresh Data
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            className="absolute inset-0 z-50"
+            activeOpacity={1}
+            onPress={() => setShowMobileMenu(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
+        </>
+      )}
 
+      {/* MAIN SCROLLVIEW */}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={
+          isDesktop
+            ? {
+                maxWidth: 1200,
+                alignSelf: "center",
+                width: "100%",
+                padding: 24,
+              }
+            : { padding: 16 }
+        }
+        showsVerticalScrollIndicator={false}
+      >
         {/* Alerts */}
         {planStatus === "APPROVED" && planInfo.approvalComments && (
           <AlertBanner
@@ -1573,137 +1721,111 @@ export default function Form4View({
         {planStatus === "REJECTED" && planInfo.rejectionReason && (
           <AlertBanner
             type="error"
-            icon={X}
+            icon={AlertCircle}
             title="Rejection Reason"
             message={planInfo.rejectionReason}
             footer={`Rejected by: ${planInfo.rejectedBy} | Date: ${formatLocalDateTime(planInfo.rejectedAt)}`}
           />
         )}
 
+        {/* Demo Banner */}
+        {canEdit && (
+          <Card className="border-blue-200 bg-blue-50 p-5">
+            <View className="flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+              <View className="min-w-0 flex-1 flex-row items-center gap-3">
+                <View className="h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white">
+                  <Star size={20} color={COLORS.primary} />
+                </View>
+                <View className="min-w-0 flex-1">
+                  <Text className="text-base font-bold text-blue-900">
+                    Sync with Form3 Data
+                  </Text>
+                  <Text className="mt-1 flex-wrap text-sm text-blue-700">
+                    Auto-populate departments (IATF16949 & 5S only)
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-row flex-wrap gap-2">
+                <OutlineButton
+                  title="Sync Q"
+                  icon={Calendar}
+                  onPress={handlePlanCurrentQuarter}
+                  loading={demoLoading}
+                />
+                <OutlineButton
+                  title="Sync Q1"
+                  icon={Clock}
+                  onPress={handleQuickPlanned}
+                  loading={demoLoading}
+                />
+                <OutlineButton
+                  title="Sync All"
+                  icon={Star}
+                  onPress={handleDemoPlanned}
+                  loading={demoLoading}
+                />
+              </View>
+            </View>
+          </Card>
+        )}
+
         {/* Form 3 Summary */}
-        <Card style={{ padding: 0, marginBottom: 24, overflow: "hidden" }}>
+        <Card className="overflow-hidden p-0">
           <TouchableOpacity
             onPress={() => setShowForm3Details(!showForm3Details)}
-            style={[
-              styles.form3Header,
-              { backgroundColor: showForm3Details ? "#F8FAFC" : COLORS.card },
-            ]}
+            className="flex-row items-center justify-between border-b border-slate-200 bg-slate-50 p-4"
           >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                flex: 1,
-              }}
-            >
-              <View
-                style={[
-                  styles.demoIconBox,
-                  {
-                    backgroundColor: COLORS.primaryLight,
-                    borderColor: COLORS.primaryBorder,
-                  },
-                ]}
-              >
-                <FileText size={16} color={COLORS.primary} />
+            <View className="flex-1 flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <FileText size={18} color={COLORS.primary} />
               </View>
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "700",
-                  color: COLORS.textMain,
-                }}
-              >
-                Planned Types
+              <Text className="text-base font-bold text-slate-900">
+                Planned Types (Form 3)
               </Text>
             </View>
-            <ChevronDown
-              size={20}
-              color={COLORS.textSub}
+            <View
               style={{
                 transform: [{ rotate: showForm3Details ? "180deg" : "0deg" }],
               }}
-            />
-          </TouchableOpacity>
-
-          {showForm3Details && (
-            <View
-              style={{
-                padding: 16,
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 12,
-              }}
             >
+              <ChevronDown size={20} color="#64748B" />
+            </View>
+          </TouchableOpacity>
+          {showForm3Details && (
+            <View className="flex-row flex-wrap gap-3 p-4">
               {months.map((month) => {
-                const elements = getAvailableElementsForMonth(month);
+                const elements =
+                  auditElementsFromForm3[month] ||
+                  getAuditElementsForMonth(month);
                 return (
-                  <View key={month} style={styles.monthCard}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: "700",
-                          color: COLORS.textValue,
-                        }}
-                      >
+                  <View
+                    key={month}
+                    className="min-w-[140px] flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <View className="mb-2 flex-row items-center justify-between">
+                      <Text className="text-sm font-bold text-slate-800">
                         {monthDisplay[month]}
                       </Text>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          color: COLORS.primary,
-                          fontWeight: "700",
-                          backgroundColor: COLORS.primaryLight,
-                          paddingHorizontal: 6,
-                          paddingVertical: 2,
-                          borderRadius: 8,
-                        }}
-                      >
-                        {getQuarter(month)}
-                      </Text>
+                      <View className="rounded-full bg-blue-100 px-2 py-0.5">
+                        <Text className="text-[10px] font-bold text-blue-800">
+                          {getQuarter(month)}
+                        </Text>
+                      </View>
                     </View>
-                    <View
-                      style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}
-                    >
+                    <View className="flex-row flex-wrap gap-1.5">
                       {elements.length > 0 ? (
                         elements.map((el) => (
                           <View
                             key={el}
-                            style={[
-                              styles.chip,
-                              {
-                                backgroundColor: COLORS.successLight,
-                                borderColor: COLORS.successBorder,
-                              },
-                            ]}
+                            className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1"
                           >
-                            <Text
-                              style={{
-                                fontSize: 10,
-                                color: "#065F46",
-                                fontWeight: "600",
-                              }}
-                            >
+                            <Text className="text-[10px] font-semibold text-blue-800">
                               {el.split("(")[0].trim()}
                             </Text>
                           </View>
                         ))
                       ) : (
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: COLORS.textSub,
-                            fontStyle: "italic",
-                          }}
-                        >
+                        <Text className="text-xs italic text-slate-400">
                           No audits
                         </Text>
                       )}
@@ -1716,60 +1838,41 @@ export default function Form4View({
         </Card>
 
         {/* Filter Bar */}
-        <Card
-          style={{
-            padding: 16,
-            marginBottom: 24,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <Filter size={16} color={COLORS.textSub} />
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "600",
-                color: COLORS.textValue,
-              }}
-            >
+        <Card className="flex-row flex-wrap items-center justify-between gap-3 p-4">
+          <View className="flex-row flex-wrap items-center gap-2">
+            <Filter size={16} color="#64748B" />
+            <Text className="text-sm font-semibold text-slate-700">
               Filter:
             </Text>
             {[
-              { id: "all", label: "All", color: COLORS.purple },
-              { id: "planned", label: "P", color: COLORS.primary },
-              { id: "completed", label: "C", color: COLORS.success },
-              { id: "rescheduled", label: "R", color: COLORS.warning },
-              { id: "pending", label: "Pending", color: "#D97706" },
+              { id: "all", label: "All", color: COLORS.primary },
+              { id: "planned", label: "Planned", color: COLORS.primary },
+              {
+                id: "completed",
+                label: "Completed",
+                color: COLORS.primaryDark,
+              },
+              {
+                id: "rescheduled",
+                label: "Rescheduled",
+                color: COLORS.textMuted,
+              },
+              { id: "pending", label: "Pending", color: COLORS.textMuted },
             ].map((f) => (
               <TouchableOpacity
                 key={f.id}
                 onPress={() => setFilterStatus(f.id)}
-                style={[
-                  styles.filterBtn,
-                  {
-                    borderColor:
-                      filterStatus === f.id ? f.color : COLORS.border,
-                    backgroundColor:
-                      filterStatus === f.id ? f.color : COLORS.card,
-                  },
-                ]}
+                className="rounded-full border px-3 py-1.5"
+                style={{
+                  borderColor: filterStatus === f.id ? f.color : "#E2E8F0",
+                  backgroundColor: filterStatus === f.id ? f.color : "#FFFFFF",
+                }}
+                activeOpacity={0.7}
               >
                 <Text
+                  className="text-xs font-semibold"
                   style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: filterStatus === f.id ? "#FFF" : COLORS.textValue,
+                    color: filterStatus === f.id ? "#FFFFFF" : "#475569",
                   }}
                 >
                   {f.label}
@@ -1777,76 +1880,55 @@ export default function Form4View({
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+          <Text className="text-xs text-slate-500">
             Showing {filteredDepartments.length} depts
           </Text>
         </Card>
 
         {/* Main Table */}
-        <Card style={{ padding: 0, marginBottom: 24, overflow: "hidden" }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={{ minWidth: 1200 }}>
-              {/* Header */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  backgroundColor: "#F8FAFC",
-                  borderBottomWidth: 1,
-                  borderColor: COLORS.border,
-                }}
-              >
+        <Card className="overflow-hidden p-0">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
+            {/* ✅ Outer wrapper: fixed total width = 180 + 972 = 1152 */}
+            <View
+              style={{
+                flexDirection: "column",
+                alignSelf: "flex-start",
+                width: TABLE_TOTAL_WIDTH,
+              }}
+            >
+              {/* Table Header */}
+              <View className="flex-row border-b border-slate-200 bg-slate-50">
+                {/* Audit Area */}
                 <View
-                  style={{
-                    width: 200,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    borderRightWidth: 1,
-                    borderColor: COLORS.border,
-                    padding: 12,
-                  }}
+                  style={{ width: AUDIT_AREA_WIDTH }}
+                  className="items-center justify-center border-r border-slate-200 p-3"
                 >
-                  <Text style={styles.tableHeaderText}>Audit Area</Text>
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                    Audit Area
+                  </Text>
                 </View>
 
-                <View style={{ flex: 1 }}>
-                  <View
-                    style={{
-                      justifyContent: "center",
-                      alignItems: "center",
-                      padding: 12,
-                      borderBottomWidth: 1,
-                      borderColor: COLORS.border,
-                    }}
-                  >
-                    <Text style={styles.tableHeaderText}>
+                {/* ✅ Months container: fixed width, columns flex-1 */}
+                <View style={{ width: MONTHS_TOTAL_WIDTH }}>
+                  <View className="items-center justify-center border-b border-slate-200 p-3">
+                    <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                       Months (Financial Year)
                     </Text>
                   </View>
-
-                  <View style={{ flexDirection: "row" }}>
+                  <View className="flex-row">
                     {months.map((month) => (
                       <View
                         key={month}
-                        style={{
-                          width: 94.5,
-                          padding: 12,
-                          justifyContent: "center",
-                          alignItems: "center",
-                          borderRightWidth: 1,
-                          borderColor: COLORS.border,
-                        }}
+                        className="flex-1 items-center justify-center border-r border-slate-200 p-3"
                       >
-                        <Text style={styles.tableHeaderText}>
+                        <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                           {monthDisplay[month]}
                         </Text>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            color: "#94A3B8",
-                            fontWeight: "500",
-                            marginTop: 2,
-                          }}
-                        >
+                        <Text className="mt-1 text-[10px] font-medium text-slate-400">
                           {getQuarter(month)}
                         </Text>
                       </View>
@@ -1855,7 +1937,7 @@ export default function Form4View({
                 </View>
               </View>
 
-              {/* Body - table rows with expanded content below each */}
+              {/* Table Body */}
               {filteredDepartments.length > 0 ? (
                 filteredDepartments.map((dept, idx) => {
                   const originalIndex = planData.findIndex(
@@ -1865,173 +1947,131 @@ export default function Form4View({
                     (m) => m.selectedElements && m.selectedElements.length > 0,
                   );
                   const isExpanded = expandedDept === originalIndex;
-
                   return (
                     <View key={dept.department}>
                       {/* Department Row */}
-                      <View style={styles.tableRow}>
+                      <View className="flex-row border-b border-slate-200 bg-white">
+                        {/* Audit Area cell */}
                         <TouchableOpacity
                           onPress={() =>
                             setExpandedDept(isExpanded ? null : originalIndex)
                           }
-                          style={[
-                            styles.tableCell,
-                            {
-                              width: 200,
-                              flexDirection: "row",
-                              justifyContent: "flex-start",
-                              gap: 10,
-                            },
-                          ]}
+                          style={{ width: AUDIT_AREA_WIDTH }}
+                          className="flex-row items-center gap-2 border-r border-slate-200 p-3"
+                          activeOpacity={0.7}
                         >
                           {isExpanded ? (
-                            <ChevronUp size={16} color={COLORS.textSub} />
+                            <ChevronUp size={16} color="#64748B" />
                           ) : (
-                            <ChevronDown size={16} color={COLORS.textSub} />
+                            <ChevronDown size={16} color="#64748B" />
                           )}
                           <Text
-                            style={[
-                              styles.tableCellText,
-                              { fontWeight: "600" },
-                            ]}
+                            className="flex-1 text-sm font-semibold text-slate-800"
                             numberOfLines={1}
                           >
                             {dept.department}
                           </Text>
                           {hasAnySelected && (
-                            <View
-                              style={[
-                                styles.chip,
-                                {
-                                  backgroundColor: COLORS.successLight,
-                                  borderColor: COLORS.successBorder,
-                                  paddingHorizontal: 4,
-                                  paddingVertical: 1,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 9,
-                                  color: "#065F46",
-                                  fontWeight: "700",
-                                }}
-                              >
+                            <View className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5">
+                              <Text className="text-[9px] font-bold text-blue-800">
                                 ✓
                               </Text>
                             </View>
                           )}
                         </TouchableOpacity>
 
-                        {dept.months &&
-                          dept.months.map((month, monthIdx) => {
-                            const selectedElementsCount =
-                              month.selectedElements?.length || 0;
-                            const availableElements =
-                              getAvailableElementsForMonth(month.month);
-                            const hasElements = selectedElementsCount > 0;
-
-                            return (
-                              <View
-                                key={monthIdx}
-                                style={[styles.tableCell, { width: 94.5 }]}
-                              >
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    canEdit &&
-                                    handleMonthStatusChange(
-                                      originalIndex,
-                                      month.month,
-                                    )
-                                  }
-                                  disabled={!canEdit}
-                                  style={{ marginBottom: 8 }}
+                        {/* ✅ Months cells: fixed-width wrapper + flex-1 cells */}
+                        <View
+                          style={{ width: MONTHS_TOTAL_WIDTH }}
+                          className="flex-row"
+                        >
+                          {dept.months &&
+                            dept.months.map((month, monthIdx) => {
+                              const selectedElementsCount =
+                                month.selectedElements?.length || 0;
+                              const availableElements =
+                                auditElementsFromForm3[month.month] ||
+                                getAuditElementsForMonth(month.month);
+                              const hasElements = selectedElementsCount > 0;
+                              return (
+                                <View
+                                  key={monthIdx}
+                                  className="flex-1 items-center justify-center border-r border-slate-200 p-3"
                                 >
-                                  {getMonthStatusBadge(
-                                    month.status,
-                                    hasElements,
-                                  )}
-                                </TouchableOpacity>
-
-                                {hasElements ? (
                                   <TouchableOpacity
                                     onPress={() =>
                                       canEdit &&
-                                      setSelectedMonthForElements({
-                                        deptIndex: originalIndex,
-                                        month: month.month,
-                                      })
+                                      handleMonthStatusChange(
+                                        originalIndex,
+                                        month.month,
+                                      )
                                     }
                                     disabled={!canEdit}
-                                    style={{
-                                      flexDirection: "row",
-                                      alignItems: "center",
-                                      gap: 2,
-                                    }}
+                                    className="mb-2"
+                                    activeOpacity={0.7}
                                   >
-                                    <CheckSquare
-                                      size={10}
-                                      color={COLORS.purple}
-                                    />
-                                    <Text
-                                      style={{
-                                        fontSize: 10,
-                                        fontWeight: "600",
-                                        color: COLORS.purple,
-                                      }}
-                                    >
-                                      {selectedElementsCount}
-                                    </Text>
+                                    <StatusBadge status={month.status} />
                                   </TouchableOpacity>
-                                ) : (
-                                  canEdit &&
-                                  availableElements.length > 0 && (
+                                  {hasElements ? (
                                     <TouchableOpacity
                                       onPress={() =>
+                                        canEdit &&
                                         setSelectedMonthForElements({
                                           deptIndex: originalIndex,
                                           month: month.month,
                                         })
                                       }
-                                      style={{
-                                        flexDirection: "row",
-                                        alignItems: "center",
-                                        gap: 2,
-                                      }}
+                                      disabled={!canEdit}
+                                      className="flex-row items-center gap-1"
+                                      activeOpacity={0.7}
                                     >
-                                      <Plus size={10} color={COLORS.textSub} />
-                                      <Text
-                                        style={{
-                                          fontSize: 10,
-                                          fontWeight: "600",
-                                          color: COLORS.textSub,
-                                        }}
-                                      >
-                                        Add
+                                      <CheckSquare
+                                        size={12}
+                                        color={COLORS.primary}
+                                      />
+                                      <Text className="text-[10px] font-bold text-blue-700">
+                                        {selectedElementsCount}
                                       </Text>
                                     </TouchableOpacity>
-                                  )
-                                )}
-                                {!hasElements &&
-                                  availableElements.length === 0 && (
-                                    <Text
-                                      style={{ fontSize: 10, color: "#CBD5E1" }}
-                                    >
-                                      —
-                                    </Text>
+                                  ) : (
+                                    canEdit &&
+                                    availableElements.length > 0 && (
+                                      <TouchableOpacity
+                                        onPress={() =>
+                                          setSelectedMonthForElements({
+                                            deptIndex: originalIndex,
+                                            month: month.month,
+                                          })
+                                        }
+                                        className="flex-row items-center gap-1"
+                                        activeOpacity={0.7}
+                                      >
+                                        <Plus size={12} color="#64748B" />
+                                        <Text className="text-[10px] font-semibold text-slate-500">
+                                          Add
+                                        </Text>
+                                      </TouchableOpacity>
+                                    )
                                   )}
-                              </View>
-                            );
-                          })}
+                                  {!hasElements &&
+                                    availableElements.length === 0 && (
+                                      <Text className="text-[10px] text-slate-300">
+                                        —
+                                      </Text>
+                                    )}
+                                </View>
+                              );
+                            })}
+                        </View>
                       </View>
 
-                      {/* EXPANDED CONTENT */}
+                      {/* ✅ EXPANDED CONTENT — same width as table total */}
                       {isExpanded && (
                         <View
                           style={[
                             styles.expandedRow,
                             {
-                              width: 1332,
+                              width: TABLE_TOTAL_WIDTH,
                               borderTopWidth: 1,
                               borderTopColor: COLORS.border,
                             },
@@ -2054,7 +2094,17 @@ export default function Form4View({
                                   key={monthIdx}
                                   style={[
                                     styles.expandedMonthCard,
-                                    { width: isDesktop ? "23%" : "23%" },
+                                    {
+                                      width: isDesktop
+                                        ? EXPANDED_CARD_WIDTH
+                                        : "47%",
+                                      minWidth: isDesktop
+                                        ? EXPANDED_CARD_WIDTH
+                                        : 140,
+                                      maxWidth: isDesktop
+                                        ? EXPANDED_CARD_WIDTH
+                                        : "47%",
+                                    },
                                   ]}
                                 >
                                   <View
@@ -2102,9 +2152,8 @@ export default function Form4View({
                                           style={[
                                             styles.chip,
                                             {
-                                              backgroundColor:
-                                                COLORS.purpleLight,
-                                              borderColor: COLORS.purpleBorder,
+                                              backgroundColor: COLORS.chipBg,
+                                              borderColor: COLORS.chipBorder,
                                               paddingHorizontal: 10,
                                               paddingVertical: 6,
                                             },
@@ -2113,7 +2162,7 @@ export default function Form4View({
                                           <Text
                                             style={{
                                               fontSize: 11,
-                                              color: "#5B21B6",
+                                              color: COLORS.chipText,
                                               fontWeight: "600",
                                             }}
                                             numberOfLines={1}
@@ -2134,13 +2183,9 @@ export default function Form4View({
                   );
                 })
               ) : (
-                <View style={{ padding: 40, alignItems: "center" }}>
-                  <FileText
-                    size={32}
-                    color={COLORS.textSub}
-                    style={{ opacity: 0.5, marginBottom: 8 }}
-                  />
-                  <Text style={{ fontSize: 14, color: COLORS.textSub }}>
+                <View className="items-center p-10">
+                  <FileText size={32} color="#CBD5E1" />
+                  <Text className="mt-3 text-sm font-medium text-slate-500">
                     No departments match the selected filter
                   </Text>
                 </View>
@@ -2150,347 +2195,242 @@ export default function Form4View({
         </Card>
 
         {/* Legend & Document Control */}
-        <Card style={{ padding: 20, marginBottom: 24 }}>
-          <View
-            style={{ flexDirection: isDesktop ? "row" : "column", gap: 32 }}
-          >
-            {/* Left Column: Legend */}
-            <View style={{ flex: 1, marginBottom: !isDesktop ? 24 : 0 }}>
-              <Text style={styles.legendTitle}>Legend</Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: COLORS.textValue,
-                  marginBottom: 8,
-                }}
-              >
-                Audit Elements:
+        <Card className="p-5">
+          <View className={`${isDesktop ? "flex-row" : "flex-col"} gap-6`}>
+            <View className="flex-1">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                Legend
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 12,
-                  marginBottom: 16,
-                }}
-              >
-                <Text style={{ fontSize: 13, color: COLORS.textSub }}>
-                  A - System (ISO)
-                </Text>
-                <Text style={{ fontSize: 13, color: COLORS.textSub }}>
-                  B - System (IATF)
-                </Text>
-                <Text style={{ fontSize: 13, color: COLORS.textSub }}>
-                  C - 5S
-                </Text>
-                <Text style={{ fontSize: 13, color: COLORS.textSub }}>
-                  D - Process
-                </Text>
-                <Text style={{ fontSize: 13, color: COLORS.textSub }}>
-                  E - Product
-                </Text>
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: COLORS.textValue,
-                  marginBottom: 8,
-                }}
-              >
+              <Text className="mb-2 text-sm font-semibold text-slate-800">
                 Status Codes:
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <View
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: COLORS.primaryLight,
-                      borderWidth: 1,
-                      borderColor: COLORS.primaryBorder,
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Clock size={8} color={COLORS.primary} />
+              <View className="flex-row flex-wrap gap-4">
+                <View className="flex-row items-center gap-2">
+                  <View className="h-4 w-4 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+                    <Clock size={10} color={COLORS.primary} />
                   </View>
-                  <Text style={{ fontSize: 12, color: COLORS.textSub }}>
-                    P - Planned
-                  </Text>
+                  <Text className="text-sm text-slate-600">P - Planned</Text>
                 </View>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <View
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: COLORS.successLight,
-                      borderWidth: 1,
-                      borderColor: COLORS.successBorder,
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Check size={8} color={COLORS.success} />
+                <View className="flex-row items-center gap-2">
+                  <View className="h-4 w-4 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+                    <Check size={10} color={COLORS.primary} />
                   </View>
-                  <Text style={{ fontSize: 12, color: COLORS.textSub }}>
-                    C - Completed
-                  </Text>
+                  <Text className="text-sm text-slate-600">C - Completed</Text>
                 </View>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <View
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: COLORS.warningLight,
-                      borderWidth: 1,
-                      borderColor: COLORS.warningBorder,
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Repeat size={8} color={COLORS.warning} />
+                <View className="flex-row items-center gap-2">
+                  <View className="h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
+                    <Repeat size={10} color={COLORS.textMuted} />
                   </View>
-                  <Text style={{ fontSize: 12, color: COLORS.textSub }}>
+                  <Text className="text-sm text-slate-600">
                     R - Rescheduled
                   </Text>
                 </View>
               </View>
             </View>
-
-            {/* Right Column: Document Control */}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.legendTitle}>Document Control</Text>
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: "row" }}>
-                  <Text
-                    style={{ width: 120, fontSize: 12, color: COLORS.textSub }}
-                  >
-                    Document Title:
-                  </Text>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: COLORS.textValue,
-                      fontWeight: "500",
-                    }}
-                  >
-                    Internal Quality Audit Schedule
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row" }}>
-                  <Text
-                    style={{ width: 120, fontSize: 12, color: COLORS.textSub }}
-                  >
+            <View className="flex-1">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                Document Control
+              </Text>
+              <View className="gap-2">
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
                     Document No.:
                   </Text>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: COLORS.textValue,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
                     IQA/F/04
                   </Text>
                 </View>
-                <View style={{ flexDirection: "row" }}>
-                  <Text
-                    style={{ width: 120, fontSize: 12, color: COLORS.textSub }}
-                  >
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
                     Revision:
                   </Text>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: COLORS.textValue,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
                     {documentRevision}
                   </Text>
                 </View>
-                <View style={{ flexDirection: "row" }}>
-                  <Text
-                    style={{ width: 120, fontSize: 12, color: COLORS.textSub }}
-                  >
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
                     Revision Date:
                   </Text>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: COLORS.textValue,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
                     {revisionDate}
                   </Text>
                 </View>
-                <View style={{ flexDirection: "row" }}>
-                  <Text
-                    style={{ width: 120, fontSize: 12, color: COLORS.textSub }}
-                  >
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
                     Frequency:
                   </Text>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      color: COLORS.textValue,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
                     {auditFrequency}
                   </Text>
                 </View>
               </View>
             </View>
           </View>
-
-          <View
-            style={{
-              marginTop: 24,
-              padding: 16,
-              backgroundColor: "#F8FAFC",
-              borderWidth: 1,
-              borderColor: COLORS.border,
-              borderRadius: 8,
-            }}
-          >
-            <Text
-              style={{ fontSize: 12, color: COLORS.textSub, lineHeight: 20 }}
-            >
-              <Text style={{ fontWeight: "700", color: COLORS.textValue }}>
-                Audit Criteria:
-              </Text>{" "}
+          <View className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <Text className="text-sm leading-5 text-slate-600">
+              <Text className="font-semibold text-slate-800">
+                Audit Criteria:{" "}
+              </Text>
               ISO9001:2015, IATF16949 Standard, QMS Manual, Procedures, WI, etc.
             </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                color: COLORS.textSub,
-                lineHeight: 20,
-                marginTop: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: COLORS.textValue }}>
-                Audit Scope:
-              </Text>{" "}
+            <Text className="mt-2 text-sm leading-5 text-slate-600">
+              <Text className="font-semibold text-slate-800">
+                Audit Scope:{" "}
+              </Text>
               Applicable process within department/function and clause No. 4, 5,
               6, 7, 8, 9 & 10.
             </Text>
-            <Text
-              style={{
-                fontSize: 12,
-                color: COLORS.textSub,
-                lineHeight: 20,
-                marginTop: 4,
-              }}
-            >
-              <Text style={{ fontWeight: "700", color: COLORS.textValue }}>
-                Audit Method:
-              </Text>{" "}
+            <Text className="mt-2 text-sm leading-5 text-slate-600">
+              <Text className="font-semibold text-slate-800">
+                Audit Method:{" "}
+              </Text>
               Interview with Auditee, Observation and verification to check
               compliance.
             </Text>
           </View>
         </Card>
 
-        {/* Action Buttons */}
-        <Card style={{ padding: 20 }}>
+        {/* Actions */}
+        <Card className="p-5">
           <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 16,
-            }}
+            className={`${isDesktop ? "flex-row" : "flex-col"} items-center justify-between gap-4`}
+            style={
+              isDesktop ? { flexDirection: "row" } : { flexDirection: "column" }
+            }
           >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
+            <View className="flex-row items-center gap-2">
               {canSubmit ? (
-                <CheckCircle color={COLORS.success} size={16} />
+                <CheckCircle size={16} color={COLORS.primary} />
               ) : (
-                <AlertCircle color={COLORS.textSub} size={16} />
+                <AlertCircle size={16} color="#64748B" />
               )}
-              <Text style={{ fontSize: 13, color: COLORS.textSub }}>
+              <Text className="text-sm text-slate-600">
                 {canSubmit ? "Ready to submit" : "Complete planning to submit"}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-              {canEdit && (
-                <ActionButton
-                  onPress={handleSave}
-                  loading={saving}
-                  color={COLORS.textValue}
-                  bgColor={COLORS.card}
-                  borderColor={COLORS.border}
-                  icon={Save}
-                >
-                  Save Draft
-                </ActionButton>
+            {(planData.length > 0 ||
+              canEdit ||
+              canSubmit ||
+              canApprove ||
+              (isTopManagement && planStatus === "APPROVED")) && (
+              <View
+                className={`${isDesktop ? "flex-row" : "flex-row"} flex-wrap ${isDesktop ? "justify-end" : "justify-center"} gap-3`}
+              >
+                {canEdit && (
+                  <OutlineButton
+                    title="Save Draft"
+                    icon={Save}
+                    onPress={handleSave}
+                    loading={saving}
+                  />
+                )}
+                {canSubmit && (
+                  <OutlineButton
+                    title={planStatus === "REJECTED" ? "Resubmit" : "Submit"}
+                    icon={Send}
+                    onPress={handleSubmitForApproval}
+                    loading={submitting}
+                  />
+                )}
+                {canApprove && (
+                  <>
+                    <OutlineButton
+                      title="Reject"
+                      icon={X}
+                      onPress={() => setShowRejectModal(true)}
+                    />
+                    <OutlineButton
+                      title="Approve"
+                      icon={Check}
+                      onPress={() => setShowApproveModal(true)}
+                    />
+                  </>
+                )}
+                {isTopManagement && planStatus === "APPROVED" && (
+                  <OutlineButton
+                    title="Request Changes"
+                    icon={MessageSquare}
+                    onPress={() => setShowChangeRequestModal(true)}
+                  />
+                )}
+                <OutlineButton
+                  title="View PDF"
+                  icon={Eye}
+                  onPress={handleViewPDF}
+                  loading={exporting}
+                />
+              </View>
+            )}
+          </View>
+        </Card>
+
+        {/* Footer */}
+        <Card className="p-6">
+          <View className="flex-row flex-wrap gap-6">
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Prepared By
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {planInfo.preparedBy}
+              </Text>
+            </View>
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Approved By
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {planInfo.approvedBy ||
+                  (planStatus === "APPROVED" ? "Pending" : "Not Approved")}
+              </Text>
+              {planInfo.approvedAt && (
+                <Text className="mt-1 text-xs text-slate-500">
+                  {new Date(planInfo.approvedAt).toLocaleDateString()}
+                </Text>
               )}
-              {canSubmit && (
-                <ActionButton
-                  onPress={handleSubmitForApproval}
-                  loading={submitting}
-                  color="#FFF"
-                  bgColor={COLORS.primary}
-                  icon={Send}
-                >
-                  {planStatus === "REJECTED" ? "Resubmit" : "Submit"}
-                </ActionButton>
-              )}
-              {canApprove && (
-                <>
-                  <ActionButton
-                    onPress={() => setShowRejectModal(true)}
-                    color="#FFF"
-                    bgColor={COLORS.danger}
-                    icon={X}
-                  >
-                    Reject
-                  </ActionButton>
-                  <ActionButton
-                    onPress={() => setShowApproveModal(true)}
-                    color="#FFF"
-                    bgColor={COLORS.success}
-                    icon={Check}
-                  >
-                    Approve
-                  </ActionButton>
-                </>
-              )}
-              {isTopManagement && planStatus === "APPROVED" && (
-                <ActionButton
-                  onPress={() => setShowChangeRequestModal(true)}
-                  color="#FFF"
-                  bgColor={COLORS.warning}
-                  icon={MessageSquare}
-                >
-                  Request Changes
-                </ActionButton>
-              )}
+            </View>
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Date
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {new Date().toLocaleDateString()}
+              </Text>
             </View>
           </View>
         </Card>
+
+        {/* PDF Viewer */}
+        <PDFViewer
+          visible={pdfViewer.visible}
+          pdfData={pdfViewer.pdfData}
+          fileName={pdfViewer.fileName}
+          auditId={String(selectedYear)}
+          auditNumber={`Form4-${selectedYear}`}
+          pdfType="form4"
+          forumGroups={[
+            {
+              id: `AUDIT-${selectedYear}`,
+              name: `📋 Audit Review ${selectedYear}`,
+              type: "Audit",
+            },
+            {
+              id: "AUDIT-general-forum",
+              name: "📢 General Discussion",
+              type: "General",
+            },
+          ]}
+          plantId={(user as any)?.plantId ?? null}
+          plantName={(user as any)?.plantName ?? null}
+          onClose={() =>
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+          }
+          onShareComplete={handleShareComplete}
+          onNavigateToForum={handleNavigateToForum}
+          currentUser={user}
+          allUsers={allUsers}
+        />
       </ScrollView>
 
       {/* Modals */}
@@ -2503,15 +2443,14 @@ export default function Form4View({
         title="Approve Plan"
         description="Please provide approval comments:"
         icon={Check}
-        iconColor={COLORS.success}
-        iconBg={COLORS.successLight}
-        iconBorder={COLORS.successBorder}
+        iconColor={COLORS.primary}
+        iconBg={COLORS.stateSuccessBg}
         value={tempApprovalComment}
         setValue={setTempApprovalComment}
         placeholder="Enter approval comments..."
         onSubmit={handleApprove}
         submitLabel="Confirm Approve"
-        submitBg={COLORS.success}
+        submitBg={COLORS.primary}
         submitting={submitting}
       />
       <ActionModal
@@ -2523,15 +2462,14 @@ export default function Form4View({
         title="Reject Plan"
         description="Please provide a reason for rejection:"
         icon={X}
-        iconColor={COLORS.danger}
-        iconBg={COLORS.dangerLight}
-        iconBorder={COLORS.dangerBorder}
+        iconColor={COLORS.stateErrorText}
+        iconBg={COLORS.stateErrorBg}
         value={tempRejectionReason}
         setValue={setTempRejectionReason}
         placeholder="Enter rejection reason..."
         onSubmit={handleReject}
         submitLabel="Confirm Reject"
-        submitBg={COLORS.danger}
+        submitBg={COLORS.stateErrorText}
         submitting={submitting}
       />
       <ActionModal
@@ -2543,15 +2481,14 @@ export default function Form4View({
         title={`Request Changes - ${selectedYear}`}
         description="Please provide details about what changes are needed:"
         icon={MessageSquare}
-        iconColor={COLORS.warning}
-        iconBg={COLORS.warningLight}
-        iconBorder={COLORS.warningBorder}
+        iconColor={COLORS.stateWarningText}
+        iconBg={COLORS.stateWarningBg}
         value={changeRequestReason}
         setValue={setChangeRequestReason}
         placeholder="Describe the changes required..."
         onSubmit={handleRequestChanges}
         submitLabel="Submit Request"
-        submitBg={COLORS.warning}
+        submitBg={COLORS.stateWarningText}
         submitting={submitting}
       />
 
@@ -2561,7 +2498,8 @@ export default function Form4View({
         month={selectedMonthForElements?.month}
         availableElements={
           selectedMonthForElements
-            ? getAvailableElementsForMonth(selectedMonthForElements.month)
+            ? auditElementsFromForm3[selectedMonthForElements.month] ||
+              getAuditElementsForMonth(selectedMonthForElements.month)
             : []
         }
         selectedElements={
@@ -2580,282 +2518,74 @@ export default function Form4View({
         }
       />
 
-      {/* ✅ PDF Viewer with Sharing */}
-      <PDFViewer
-        visible={pdfViewer.visible}
-        pdfData={pdfViewer.pdfData}
-        fileName={pdfViewer.fileName}
-        auditId={String(selectedYear)}
-        auditNumber={`Form4-${selectedYear}`}
-        pdfType="form4" // ✅ ADD THIS - tells PDFViewer it's Form4
-        forumGroups={[
-          {
-            id: `AUDIT-${selectedYear}`,
-            name: `📋 Audit Review ${selectedYear}`,
-            type: "Audit",
-          },
-          {
-            id: "AUDIT-general-forum",
-            name: "📢 General Discussion",
-            type: "General",
-          },
-        ]}
-        onClose={() =>
-          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
-        }
-        onShareComplete={handleShareComplete}
-        onNavigateToForum={handleNavigateToForum}
-        currentUser={user}
-        allUsers={allUsers}
-      />
+      {/* Year Selection Modal (Mobile) */}
+      <Modal
+        visible={showYearModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowYearModal(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 items-center justify-center bg-slate-900/30 p-6"
+          activeOpacity={1}
+          onPress={() => setShowYearModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-3xl bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.05,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            <View className="flex-row items-center justify-between border-b border-slate-100 p-6">
+              <Text className="text-lg font-bold text-slate-900">
+                Select Year
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowYearModal(false)}
+                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView className="p-4">
+              {availableYears.map((year) => (
+                <TouchableOpacity
+                  key={year}
+                  onPress={() => {
+                    setSelectedYear(year);
+                    setShowYearModal(false);
+                    router.setParams({ year: year.toString() });
+                  }}
+                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${
+                    selectedYear === year
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-slate-100 bg-white"
+                  }`}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    className={`text-sm font-semibold ${
+                      selectedYear === year
+                        ? "font-bold text-blue-700"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    {year} - {year + 1}
+                  </Text>
+                  {selectedYear === year && (
+                    <CheckCircle size={18} color={COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
-
-// ══════ STYLES ══════
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.bg,
-  },
-  loadingText: { marginTop: 12, color: COLORS.textSub, fontSize: 14 },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-
-  card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    marginBottom: 24,
-  },
-
-  planStatusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  planStatusText: { fontSize: 10, fontWeight: "600" },
-
-  alertBanner: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 24,
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  alertTitle: { fontSize: 14, fontWeight: "600", marginBottom: 4 },
-  alertMessage: { fontSize: 13, opacity: 0.9, flexWrap: "wrap" },
-  alertFooter: { fontSize: 12, opacity: 0.7, marginTop: 8 },
-
-  demoCard: { padding: 20, borderColor: COLORS.purpleBorder },
-  demoContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 16,
-  },
-  demoLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  demoIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: COLORS.purpleBorder,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  demoTitle: { fontSize: 14, fontWeight: "700", color: "#4C1D95" },
-  demoSubtitle: { fontSize: 12, color: "#6D28D9", marginTop: 2 },
-
-  form3Header: {
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-  },
-  monthCard: {
-    flex: 1,
-    minWidth: 140,
-    padding: 12,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-  },
-  chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  filterBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-
-  tableHeaderText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.textMain,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-  tableCell: {
-    padding: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRightWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tableCellText: { fontSize: 13, color: COLORS.textValue },
-
-  expandedRow: {
-    padding: 16,
-    backgroundColor: "#F8FAFC",
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-  },
-  expandedMonthCard: {
-    minWidth: 150,
-    padding: 12,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-  },
-
-  legendTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textMain,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-
-  actionButton: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  actionButtonText: { fontSize: 13, fontWeight: "600" },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 480,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-    overflow: "hidden",
-  },
-  modalHeader: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  modalIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.textMain,
-    flex: 1,
-  },
-  modalDesc: { fontSize: 12, color: COLORS.textSub, marginTop: 4 },
-  modalBody: { padding: 20 },
-  modalInput: {
-    width: "100%",
-    minHeight: 100,
-    padding: 12,
-    fontSize: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "#F8FAFC",
-    color: COLORS.textValue,
-  },
-  modalFooter: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "#F8FAFC",
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-
-  label: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.textMain,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  selectItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  selectItemText: { fontSize: 13, color: COLORS.textMain },
-});

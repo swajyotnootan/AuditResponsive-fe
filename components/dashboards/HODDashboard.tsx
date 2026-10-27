@@ -1,39 +1,64 @@
 ﻿import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   AlertCircle,
   BarChart3,
-  Calendar,
   CheckCircle,
   ChevronRight,
   Clock,
-  Eye,
   FileText,
   RefreshCw,
-  User,
   UserCheck,
   Users,
-  X, // 👈 ADD
+  X,
 } from "lucide-react-native";
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
+  Easing,
   Modal,
-  Pressable,
-  SafeAreaView, // 👈 ADD
+  Platform,
+  RefreshControl,
+  SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
+  TextStyle,
   TouchableOpacity,
+  useWindowDimensions,
   View,
+  ViewStyle,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import FinalPreview from "../eightd/steps/FinalPreview";
-// ── Root Cause Analytics imports (Deliverable 9) ──
-import { ScanSearch } from "lucide-react-native";
 
+// ── Palette (aligned with Initiator Dashboard) ──
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  white: "#ffffff",
+};
+
+// Kept for any external consumers / FinalPreview styling references
 const NAVBAR_COLORS = {
   primary1: "#005f9b",
   primary: "#00799b",
@@ -45,9 +70,9 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
-console.log("🚀 API Base URL being used:", API_BASE_URL); // <-- WATCH THIS LOG
+console.log("🚀 API Base URL being used:", API_BASE_URL);
 
-// ... [Keep your isNcrBasedEvent, isApprovalPendingStatus, StatusBadge, ActionCard, ApprovalCard exactly as they were] ...
+// ── Helpers (unchanged logic) ──
 const isNcrBasedEvent = (event: any): boolean => {
   const d0Data = Array.isArray(event?.content?.d0) ? event.content.d0[0] : null;
   const eventNo = String(event?.eventNo || "").toUpperCase();
@@ -67,7 +92,7 @@ const isApprovalPendingStatus = (status: string) => {
   return s === "approval pending" || s === "approval_pending";
 };
 
-// ... [Paste your StatusBadge, ActionCard, and ApprovalCard components here unchanged] ...
+// ── StatusBadge (logic unchanged, palette refreshed) ──
 const StatusBadge = ({ status }: { status: string }) => {
   const getStatusConfig = (status: string) => {
     const s = status?.toUpperCase();
@@ -154,84 +179,215 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const ActionCard = ({ title, description, iconName, onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    className="flex w-full flex-col items-center rounded-3xl border border-blue-100 bg-white p-6 shadow-lg active:scale-95 md:p-8"
-    activeOpacity={0.9}
-  >
-    <View className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 shadow-sm md:mb-6 md:h-20 md:w-20">
-      <View className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500 md:h-16 md:w-16">
-        {iconName === "bar-chart-2" && <BarChart3 size={24} color="#FFFFFF" />}
-        {iconName === "user-check" && <UserCheck size={24} color="#FFFFFF" />}
-      </View>
-    </View>
-    <View className="mb-6 w-full text-center">
-      <Text className="mb-2 text-center text-xl font-bold text-gray-900 md:text-2xl">
-        {title}
-      </Text>
-      <Text className="text-center text-sm leading-relaxed text-gray-600">
-        {description}
-      </Text>
-    </View>
-    <View className="mt-auto w-full flex-row items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3 font-medium">
-      <Text className="text-base font-semibold text-[#00799b]">
-        Go to Dashboard
-      </Text>
-      <ChevronRight size={20} color="#00799b" />
-    </View>
-  </TouchableOpacity>
-);
+// ── Animated Glass Card (same as Initiator) ──
+const AnimatedGlassCard: React.FC<{
+  children: React.ReactNode;
+  style?: any;
+  delay?: number;
+}> = ({ children, style, delay = 0 }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateYAnim = useRef(new Animated.Value(16)).current;
 
-const ApprovalCard = ({ report, onReview }: any) => (
-  <TouchableOpacity
-    onPress={onReview}
-    className="w-full rounded-2xl border border-amber-200 bg-white bg-gradient-to-br from-amber-50 to-white p-5 shadow-lg active:scale-95"
-    activeOpacity={0.9}
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 450,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateYAnim, {
+        toValue: 0,
+        duration: 450,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.glassCard,
+        { opacity: fadeAnim, transform: [{ translateY: translateYAnim }] },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+// ── Simplified & Unified KpiCard ──
+const KpiCard = ({
+  title,
+  value,
+  icon,
+  isDesktop,
+}: {
+  title: string;
+  value: number | string;
+  icon: React.ReactNode;
+  isDesktop: boolean;
+}) => (
+  <AnimatedGlassCard
+    style={
+      isDesktop
+        ? [styles.kpiCard, { flex: 1 }]
+        : [styles.kpiCardMobile, { width: 220 }]
+    }
   >
-    <View className="mb-3 self-start rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-3 py-1.5 shadow">
-      <Text className="text-xs font-bold text-white">
-        ⚡ Awaiting HOD Approval
-      </Text>
-    </View>
-    <View className="mb-3">
-      <StatusBadge status="Approval Pending" />
-    </View>
-    <Text className="mb-2 text-lg font-bold text-slate-800" numberOfLines={2}>
-      {report?.title || report?.eventNo || "8D Report"}
-    </Text>
-    <View className="mb-2 flex-row items-center gap-2">
-      <User size={14} color="#64748B" />
-      <Text className="flex-1 text-xs text-slate-500" numberOfLines={1}>
-        Owner: {report?.initiatorEmail || "Unassigned"}
-      </Text>
-    </View>
-    <View className="mb-4 flex-row items-center gap-2">
-      <Calendar size={14} color="#64748B" />
-      <Text className="text-xs text-slate-500">
-        Created:{" "}
-        {report?.createdAt
-          ? new Date(report.createdAt).toLocaleDateString()
-          : "N/A"}
-      </Text>
-    </View>
-    <View className="mt-auto border-t border-slate-100 pt-3">
-      <View className="flex-row items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 active:bg-amber-700">
-        <Eye size={16} color="#FFFFFF" />
-        <Text className="text-sm font-semibold text-white">
-          Review & Approve
+    <View style={styles.kpiContentRow}>
+      <View style={styles.kpiIconContainer}>{icon}</View>
+      <View style={styles.kpiTextContainer}>
+        <Text style={styles.kpiTitle} numberOfLines={1}>
+          {title}
         </Text>
-        <ChevronRight size={16} color="#FFFFFF" />
+        <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+        </Text>
       </View>
     </View>
-  </TouchableOpacity>
+  </AnimatedGlassCard>
 );
 
+// ── ActionCard (centered + animated, same look as Initiator) ──
+const ActionCard: React.FC<{
+  title: string;
+  description: string;
+  iconName?: "bar-chart-2" | "user-check";
+  icon?: React.ComponentType<{ size?: number; color?: string }>;
+  onPress: () => void;
+  delay?: number;
+  buttonLabel?: string;
+}> = ({
+  title,
+  description,
+  iconName,
+  icon: IconProp,
+  onPress,
+  delay = 0,
+  buttonLabel = "Go to Dashboard",
+}) => {
+  const Icon =
+    IconProp ||
+    (iconName === "bar-chart-2"
+      ? BarChart3
+      : iconName === "user-check"
+        ? UserCheck
+        : BarChart3);
+
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+  const arrowTranslateAnim = useRef(new Animated.Value(0)).current;
+  const iconScaleAnim = useRef(new Animated.Value(0.8)).current;
+
+  useEffect(() => {
+    Animated.spring(iconScaleAnim, {
+      toValue: 1,
+      delay: delay + 200,
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  }, [delay]);
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true }),
+      Animated.spring(buttonScaleAnim, {
+        toValue: 1.02,
+        useNativeDriver: true,
+      }),
+      Animated.timing(arrowTranslateAnim, {
+        toValue: 4,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }),
+      Animated.spring(buttonScaleAnim, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }),
+      Animated.timing(arrowTranslateAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  return (
+    <AnimatedGlassCard delay={delay} style={styles.actionCard}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <View style={styles.actionCardInner}>
+          <Animated.View
+            style={[
+              styles.actionIconOuter,
+              { transform: [{ scale: iconScaleAnim }] },
+            ]}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={styles.actionIconInner}
+            >
+              <Icon size={28} color={COLORS.white} />
+            </LinearGradient>
+          </Animated.View>
+
+          <View style={styles.actionTitleContainer}>
+            <Text style={styles.actionTitle}>{title}</Text>
+            <Text style={styles.actionDescription}>{description}</Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={onPress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            activeOpacity={0.9}
+            style={styles.actionButtonWrapper}
+          >
+            <Animated.View
+              style={[
+                styles.actionButton,
+                { transform: [{ scale: buttonScaleAnim }] },
+              ]}
+            >
+              <Text style={styles.actionButtonText}>{buttonLabel}</Text>
+              <Animated.View
+                style={{ transform: [{ translateX: arrowTranslateAnim }] }}
+              >
+                <ChevronRight size={18} color={COLORS.primary} />
+              </Animated.View>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </AnimatedGlassCard>
+  );
+};
+
+// ── Main HOD Dashboard ──
 export default function HODDashboard() {
   const router = useRouter();
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const isSmallMobile = width < 375;
 
-  // ✅ SAFE TOAST FALLBACK: Prevents crash/warning if Provider is missing
+  // Safe toast fallback (unchanged)
   let addToast = (
     message: string,
     type: "error" | "success" | "info" = "info",
@@ -240,16 +396,13 @@ export default function HODDashboard() {
   };
   try {
     const toastContext = useToast();
-    if (toastContext?.addToast) {
-      addToast = toastContext.addToast;
-    }
-  } catch (e) {
+    if (toastContext?.addToast) addToast = toastContext.addToast;
+  } catch {
     console.warn("ToastProvider is missing. Using console fallback.");
   }
 
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [previewEvent, setPreviewEvent] = useState<any | null>(null);
-  // ── Root Cause Analytics state (Deliverable 9) ──
   const [rcEvent, setRcEvent] = useState<any | null>(null);
   const rcEvents = useMemo(
     () =>
@@ -268,6 +421,7 @@ export default function HODDashboard() {
     ncrPendingApprovals: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchPendingApprovals = useCallback(async () => {
     try {
@@ -275,17 +429,18 @@ export default function HODDashboard() {
       const token = user?.token;
       const url = `${API_BASE_URL}/api/eightd/data?t=${Date.now()}`;
 
-      console.log("📡 Attempting to fetch from:", url); // ✅ DEBUG LOG
+      console.log("📡 Attempting to fetch from:", url);
 
       const response = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${token}`,
-          "X-User-Id": String((user as any)?.id ?? ""), // ✅ ADD
+          "X-User-Id": String((user as any)?.id ?? ""),
           "X-Timezone":
             Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
         },
         timeout: 10000,
       });
+
       if (response.data?.success && Array.isArray(response.data.data)) {
         const pending = response.data.data.filter((event: any) =>
           isApprovalPendingStatus(event.status),
@@ -305,13 +460,11 @@ export default function HODDashboard() {
         });
       }
     } catch (error: any) {
-      // ✅ DETAILED ERROR LOGGING
       console.error("❌ Axios Error Details:", {
         message: error.message,
         code: error.code,
         url: `${API_BASE_URL}/api/eightd/data`,
       });
-
       addToast(
         "Failed to load pending approvals. Check network connection.",
         "error",
@@ -327,300 +480,174 @@ export default function HODDashboard() {
     }, [fetchPendingApprovals]),
   );
 
-  const handleReview = (event: any) => {
-    setPreviewEvent(event); // 👈 This is all you need to open the Modal
-  };
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchPendingApprovals();
+    setRefreshing(false);
+  }, [fetchPendingApprovals]);
+
+  const handleReview = (event: any) => setPreviewEvent(event);
 
   const handleViewDashboard = (type = "all") => {
     router.push({ pathname: "/landing-page", params: { type } });
   };
 
-  const freshPendingApprovals = pendingApprovals.filter(
-    (event) => !isNcrBasedEvent(event),
-  );
-  const ncrPendingApprovals = pendingApprovals.filter((event) =>
-    isNcrBasedEvent(event),
-  );
-
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-blue-50">
-        <ActivityIndicator size="large" color={NAVBAR_COLORS.primary1} />
-        <Text className="mt-4 text-sm text-gray-500">
-          Loading HOD Dashboard...
-        </Text>
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading HOD Dashboard...</Text>
+        </View>
       </View>
     );
   }
 
-  // ... [Keep your entire return (JSX) statement exactly as it was] ...
   return (
     <>
-      <ScrollView
-        className="flex-1 bg-blue-50"
-        showsVerticalScrollIndicator={false}
-        contentContainerClassName="pb-8"
-      >
-        <View className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-12 lg:px-8">
-          <View className="mb-8 items-center md:mb-10">
-            <Text className="text-center text-2xl font-bold text-[#005f9b] md:text-4xl">
-              HOD Dashboard
-            </Text>
-            <Text className="mt-2 text-center text-base text-gray-500 md:text-lg">
-              Welcome back, {user?.name || user?.username || "User"}
-            </Text>
-            <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
-              <View className="rounded-full bg-blue-100 px-3 py-1">
-                <Text className="text-xs font-medium text-blue-700">
-                  {user?.department || "Quality Assurance"}
-                </Text>
-              </View>
-              <View className="rounded-full bg-blue-100 px-3 py-1">
-                <Text className="text-xs font-medium text-blue-700">
-                  Head of Department
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="mb-8 flex-col gap-4 md:mb-12 md:flex-row md:gap-6">
-            <View className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg md:flex-1">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-2">
-                  <Text className="text-sm font-medium text-gray-500">
-                    Pending Approvals
+      <View style={styles.container}>
+        <LinearGradient
+          colors={["#F8FAFC", "#EFF6FF", "#F8FAFC"]}
+          style={styles.background}
+        />
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+        >
+          <View style={[styles.content, isDesktop && styles.contentDesktop]}>
+            {/* ── Header ── */}
+            <View
+              style={[
+                styles.headerPlain,
+                isSmallMobile && styles.headerPlainSmall,
+              ]}
+            >
+              <View style={styles.headerInner}>
+                <View style={styles.headerGreetingSection}>
+                  <Text style={styles.greetingTitle}>HOD Dashboard</Text>
+                  <Text style={styles.greetingSubtitle}>
+                    Welcome back,{" "}
+                    <Text style={styles.greetingName}>
+                      {user?.name || user?.username || "User"}
+                    </Text>
                   </Text>
-                  <Text className="mt-1 text-2xl font-bold text-black md:text-3xl">
-                    {stats.pendingApprovals}
-                  </Text>
+                  <View style={styles.headerPillRow}>
+                    <View style={styles.headerPill}>
+                      <Text style={styles.headerPillText} numberOfLines={1}>
+                        {user?.department || "Quality Assurance"}
+                      </Text>
+                    </View>
+                    <View style={styles.headerPill}>
+                      <Text style={styles.headerPillText} numberOfLines={1}>
+                        Head of Department
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View
-                  className="h-12 w-12 items-center justify-center rounded-xl"
-                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-                >
-                  <Clock size={24} color="#FFFFFF" />
-                </View>
-              </View>
-            </View>
-            <View className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg md:flex-1">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-2">
-                  <Text className="text-sm font-medium text-gray-500">
-                    Department
-                  </Text>
-                  <Text
-                    className="mt-1 text-lg font-bold text-gray-800 md:text-xl"
-                    numberOfLines={1}
+                <View style={styles.headerActions}>
+                  <TouchableOpacity
+                    onPress={handleRefresh}
+                    disabled={refreshing}
+                    style={styles.refreshButton}
+                    activeOpacity={0.7}
                   >
-                    {user?.department || "Quality"}
-                  </Text>
-                </View>
-                <View
-                  className="h-12 w-12 items-center justify-center rounded-xl"
-                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-                >
-                  <Users size={24} color="#FFFFFF" />
+                    <RefreshCw size={18} color={COLORS.textMuted} />
+                    <Text style={styles.refreshButtonText}>Refresh</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
-            <View className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg md:flex-1">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1 pr-2">
-                  <Text className="text-sm font-medium text-gray-500">
-                    Role
-                  </Text>
-                  <Text className="mt-1 text-lg font-bold text-gray-800 md:text-xl">
-                    HOD
-                  </Text>
-                </View>
-                <View
-                  className="h-12 w-12 items-center justify-center rounded-xl"
-                  style={{ backgroundColor: NAVBAR_COLORS.primary1 }}
-                >
-                  <UserCheck size={24} color="#FFFFFF" />
-                </View>
-              </View>
-            </View>
-          </View>
 
-          <View className="mb-8 flex-col gap-6 md:mb-12 md:flex-row md:gap-8">
-            <View className="w-full md:flex-1">
-              <ActionCard
-                title="Fresh 8D Dashboard"
-                description={`${stats.freshPendingApprovals} item(s) waiting for HOD action.`}
-                iconName="bar-chart-2"
-                onPress={() => handleViewDashboard("fresh")}
-              />
-            </View>
-            <View className="w-full md:flex-1">
-              <ActionCard
-                title="NCR 8D Dashboard"
-                description={`${stats.ncrPendingApprovals} item(s) waiting for HOD action.`}
-                iconName="user-check"
-                onPress={() => handleViewDashboard("ncr")}
-              />
-            </View>
-          </View>
-
-          {freshPendingApprovals.length > 0 && (
-            <>
-              <View className="mb-6 flex-row items-center justify-center">
-                <View className="h-px flex-1 bg-gray-200" />
-                <View className="bg-blue-50 px-4">
-                  <Text className="text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                    Fresh 8D Awaiting Approval
-                  </Text>
-                </View>
-                <View className="h-px flex-1 bg-gray-200" />
-              </View>
-              <View className="mb-8 flex-col gap-4 md:flex-row md:flex-wrap md:gap-6">
-                {freshPendingApprovals.map((event) => (
-                  <View
-                    key={event.eventNo || event.id}
-                    className="w-full md:w-[48%] lg:w-[32%]"
-                  >
-                    <ApprovalCard
-                      report={event}
-                      onReview={() => handleReview(event)}
+            {/* ── Main Content ── */}
+            <View style={styles.mainContent}>
+              <View style={styles.sectionGap}>
+                {/* KPI Cards */}
+                {isDesktop ? (
+                  <View style={styles.kpiRow}>
+                    <KpiCard
+                      title="Pending Approvals"
+                      value={stats.pendingApprovals}
+                      icon={<Clock size={24} color={COLORS.primaryDark} />}
+                      isDesktop={true}
+                    />
+                    <KpiCard
+                      title="Department"
+                      value={user?.department || "Quality"}
+                      icon={<Users size={24} color={COLORS.primaryDark} />}
+                      isDesktop={true}
+                    />
+                    <KpiCard
+                      title="Role"
+                      value="HOD"
+                      icon={<UserCheck size={24} color={COLORS.primaryDark} />}
+                      isDesktop={true}
                     />
                   </View>
-                ))}
-              </View>
-            </>
-          )}
-
-          {ncrPendingApprovals.length > 0 && (
-            <>
-              <View className="mb-6 flex-row items-center justify-center">
-                <View className="h-px flex-1 bg-gray-200" />
-                <View className="bg-blue-50 px-4">
-                  <Text className="text-center text-xs font-medium uppercase tracking-wider text-gray-500">
-                    NCR 8D Awaiting Approval
-                  </Text>
-                </View>
-                <View className="h-px flex-1 bg-gray-200" />
-              </View>
-              <View className="mb-8 flex-col gap-4 md:flex-row md:flex-wrap md:gap-6">
-                {ncrPendingApprovals.map((event) => (
-                  <View
-                    key={event.eventNo || event.id}
-                    className="w-full md:w-[48%] lg:w-[32%]"
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.kpiScrollContent}
+                    style={styles.kpiScrollView}
                   >
-                    <ApprovalCard
-                      report={event}
-                      onReview={() => handleReview(event)}
+                    <KpiCard
+                      title="Pending Approvals"
+                      value={stats.pendingApprovals}
+                      icon={<Clock size={24} color={COLORS.primaryDark} />}
+                      isDesktop={false}
                     />
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
+                    <KpiCard
+                      title="Department"
+                      value={user?.department || "Quality"}
+                      icon={<Users size={24} color={COLORS.primaryDark} />}
+                      isDesktop={false}
+                    />
+                    <KpiCard
+                      title="Role"
+                      value="HOD"
+                      icon={<UserCheck size={24} color={COLORS.primaryDark} />}
+                      isDesktop={false}
+                    />
+                  </ScrollView>
+                )}
 
-          {pendingApprovals.length === 0 && (
-            <View className="mt-4 items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-white py-12">
-              <CheckCircle
-                size={48}
-                color={NAVBAR_COLORS.primary1}
-                style={{ marginBottom: 12 }}
-              />
-              <Text className="text-lg font-medium text-gray-500">
-                No pending approvals
-              </Text>
-              <Text className="mt-2 px-6 text-center text-sm text-gray-400">
-                All 8D reports are approved or in progress
-              </Text>
-              <TouchableOpacity
-                onPress={fetchPendingApprovals}
-                className="mt-6 flex-row items-center gap-2 rounded-xl bg-blue-50 px-6 py-3"
-              >
-                <RefreshCw size={16} color={NAVBAR_COLORS.primary1} />
-                <Text
-                  className="text-sm font-semibold"
-                  style={{ color: NAVBAR_COLORS.primary1 }}
+                {/* Action Cards */}
+                <View
+                  style={isDesktop ? styles.actionRow : styles.actionColumn}
                 >
-                  Refresh Dashboard
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════ */}
-          {/* ROOT CAUSE ANALYTICS — Deliverable 9                     */}
-          {/* ═══════════════════════════════════════════════════════════ */}
-          <View
-            testID="root-cause-analytics"
-            className="mt-6"
-            style={{ gap: 16 }}
-          >
-            <View className="flex-row items-center" style={{ gap: 8 }}>
-              <View className="h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                <ScanSearch size={16} color="#1E40AF" />
-              </View>
-              <Text className="text-lg font-bold text-slate-800">
-                Root Cause Analytics
-              </Text>
-            </View>
-
-            {/* Pareto across all events */}
-
-            {/* Recent 8D events with View button */}
-            <View className="rounded-2xl border border-slate-200 bg-white p-4">
-              <Text className="mb-3 text-[15px] font-semibold text-slate-800">
-                Recent 8D Reports
-              </Text>
-              {rcEvents.length === 0 ? (
-                <Text className="py-4 text-center text-sm text-slate-400">
-                  No 8D reports with root-cause data yet
-                </Text>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {rcEvents.map((ev: any) => {
-                    const d4 = ev?.content?.d4?.[0] || {};
-                    const d0 = ev?.content?.d0?.[0] || {};
-                    const nCauses =
-                      (d4.fishboneCategories || []).reduce(
-                        (s: number, c: any) => s + (c.causes?.length || 0),
-                        0,
-                      ) || 0;
-                    const nWhys = (d4.whySteps || []).length;
-                    return (
-                      <View
-                        key={ev.eventNo || ev.id}
-                        className="flex-row items-center justify-between rounded-xl border border-slate-200 p-3"
-                        style={{ gap: 12 }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            className="text-[13px] font-semibold text-slate-800"
-                            numberOfLines={1}
-                          >
-                            {d0.title || ev.eventNo || "Untitled 8D"}
-                          </Text>
-                          <Text className="mt-0.5 text-[11px] text-slate-500">
-                            {nCauses} causes · {nWhys} whys
-                            {d4.verifiedBy ? " · Verified" : ""}
-                          </Text>
-                        </View>
-                        <Pressable
-                          testID={`view-rc-${ev.eventNo || ev.id}`}
-                          onPress={() => setRcEvent(ev)}
-                          className="rounded-lg bg-blue-600 px-3 py-2"
-                        >
-                          <Text className="text-[12px] font-semibold text-white">
-                            View Root Cause
-                          </Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })}
+                  <ActionCard
+                    title="Fresh 8D Dashboard"
+                    description={`${stats.freshPendingApprovals} item(s) waiting for HOD action.`}
+                    iconName="bar-chart-2"
+                    onPress={() => handleViewDashboard("fresh")}
+                    delay={0}
+                    buttonLabel="Go to Dashboard"
+                  />
+                  <ActionCard
+                    title="NCR 8D Dashboard"
+                    description={`${stats.ncrPendingApprovals} item(s) waiting for HOD action.`}
+                    iconName="user-check"
+                    onPress={() => handleViewDashboard("ncr")}
+                    delay={150}
+                    buttonLabel="Go to Dashboard"
+                  />
                 </View>
-              )}
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
-      {/* Preview Drawer Modal (Right Side) */}
+      {/* ── Preview Drawer Modal ── */}
       <Modal
         visible={!!previewEvent}
         transparent={true}
@@ -628,50 +655,36 @@ export default function HODDashboard() {
         statusBarTranslucent={true}
         onRequestClose={() => setPreviewEvent(null)}
       >
-        <View className="flex-1 flex-row bg-black/50">
-          {/* Left Backdrop (closes the drawer when tapped) */}
+        <View style={styles.drawerBackdrop}>
           <TouchableOpacity
-            className="h-full flex-1"
+            style={styles.drawerBackdropTouch}
             onPress={() => setPreviewEvent(null)}
             activeOpacity={1}
           />
-
-          {/* Right Drawer */}
           <SafeAreaView
-            className="h-full bg-white"
-            style={{
-              // Takes 550px on desktop, 90% width on mobile
-              width:
-                Dimensions.get("window").width >= 768
-                  ? 550
-                  : Dimensions.get("window").width * 0.9,
-              maxWidth: 650,
-              shadowColor: "#000",
-              shadowOffset: { width: -4, height: 0 }, // Shadow casts to the left
-              shadowOpacity: 0.25,
-              shadowRadius: 12,
-              elevation: 20,
-            }}
+            style={[
+              styles.drawerPanel,
+              {
+                width:
+                  Dimensions.get("window").width >= 768
+                    ? 550
+                    : Dimensions.get("window").width * 0.9,
+              },
+            ]}
           >
-            {/* Drawer Header */}
-            <View className="z-10 flex-row items-center justify-between border-b border-gray-200 bg-white p-4">
-              <Text
-                className="mr-2 flex-1 text-base font-semibold text-[#005f9b]"
-                numberOfLines={1}
-              >
+            <View style={styles.drawerHeader}>
+              <Text style={styles.drawerTitle} numberOfLines={1}>
                 8D Review — {previewEvent?.eventNo || previewEvent?.id || ""}
               </Text>
               <TouchableOpacity
                 onPress={() => setPreviewEvent(null)}
-                className="rounded-full bg-gray-100 p-2 active:bg-gray-200"
+                style={styles.drawerCloseBtn}
               >
                 <X size={20} color="#4B5563" />
               </TouchableOpacity>
             </View>
-
-            {/* Scrollable Drawer Content */}
             <ScrollView
-              className="flex-1 bg-gray-50"
+              style={styles.drawerScroll}
               contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
@@ -689,30 +702,20 @@ export default function HODDashboard() {
           </SafeAreaView>
         </View>
       </Modal>
-      {/* ═══════════════════════════════════════════════════════════ */}
-      {/* ROOT CAUSE MODAL — Deliverable 9                         */}
-      {/* ═══════════════════════════════════════════════════════════ */}
+
+      {/* ── Root Cause Modal (kept unchanged) ── */}
       <Modal
         visible={!!rcEvent}
         animationType="slide"
         transparent
         onRequestClose={() => setRcEvent(null)}
       >
-        <View className="flex-1 justify-end bg-black/50">
-          <View
-            className="rounded-t-3xl bg-slate-50"
-            style={{ maxHeight: "92%" }}
-          >
-            {/* Modal header */}
-            <View className="flex-row items-center justify-between rounded-t-3xl border-b border-slate-200 bg-white px-5 py-4">
+        <View style={styles.rcBackdrop}>
+          <View style={styles.rcPanel}>
+            <View style={styles.rcHeader}>
               <View style={{ flex: 1 }}>
-                <Text className="text-[16px] font-bold text-slate-800">
-                  Root Cause Analysis
-                </Text>
-                <Text
-                  className="mt-0.5 text-[11px] text-slate-500"
-                  numberOfLines={1}
-                >
+                <Text style={styles.rcTitle}>Root Cause Analysis</Text>
+                <Text style={styles.rcSubtitle} numberOfLines={1}>
                   {rcEvent?.content?.d0?.[0]?.title ||
                     rcEvent?.eventNo ||
                     "8D Report"}
@@ -721,19 +724,325 @@ export default function HODDashboard() {
               <TouchableOpacity
                 testID="close-rc-modal"
                 onPress={() => setRcEvent(null)}
-                className="h-9 w-9 items-center justify-center rounded-full bg-slate-100"
+                style={styles.rcCloseBtn}
               >
-                <X size={18} color="#1E293B" />
+                <X size={18} color={COLORS.text} />
               </TouchableOpacity>
             </View>
-
             <ScrollView
               contentContainerStyle={{ padding: 16, gap: 16 }}
               showsVerticalScrollIndicator={false}
-            ></ScrollView>
+            />
           </View>
         </View>
       </Modal>
     </>
   );
 }
+
+// ==================== STYLES (mirrors Initiator Dashboard) ====================
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  background: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  content: { padding: 16, paddingBottom: 20 },
+  contentDesktop: {
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
+    padding: 24,
+  },
+  mainContent: { width: "100%" },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.bg,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+  },
+
+  // Glass Card
+  glassCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: { elevation: 2 },
+    }),
+  },
+
+  // Header
+  headerPlain: {
+    paddingVertical: 8,
+    marginBottom: 16,
+    backgroundColor: "transparent",
+  },
+  headerPlainSmall: { paddingVertical: 6, marginBottom: 12 },
+  headerInner: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  headerGreetingSection: { flex: 1, minWidth: 0 },
+  greetingTitle: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  greetingSubtitle: { fontSize: 14, color: COLORS.textMuted, marginTop: 4 },
+  greetingName: { fontWeight: "600", color: COLORS.textValue },
+  headerPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  headerPill: {
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  // FIX: Added explicit fontSize and lineHeight so it doesn't stretch inside the flex row
+  headerPillText: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: COLORS.primary,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexShrink: 0,
+  },
+  refreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textValue,
+  },
+
+  // Layout helpers
+  sectionGap: { gap: 16 },
+  kpiRow: { flexDirection: "row", gap: 16 },
+  kpiScrollView: { marginHorizontal: -16 },
+  kpiScrollContent: { paddingHorizontal: 16, gap: 12 },
+  actionRow: { flexDirection: "row", gap: 16 },
+  actionColumn: { flexDirection: "column", gap: 16 },
+
+  // KPI card
+  kpiCard: { padding: 20, marginBottom: 0 },
+  kpiCardMobile: { padding: 16, marginBottom: 0 },
+  kpiContentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  kpiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  kpiTextContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "flex-end",
+    marginLeft: 10,
+  },
+  // FIX: Title is now the small, muted text on top
+  kpiTitle: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    fontWeight: "600",
+    textAlign: "right",
+    marginBottom: 2,
+  },
+  // FIX: Value is now simple, small, and not overly bold
+  kpiValue: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.text,
+    lineHeight: 22,
+    textAlign: "right",
+  },
+
+  // Action card
+  actionCard: { flex: 1 },
+  actionCardInner: {
+    padding: 24,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  } as ViewStyle,
+  actionIconOuter: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    backgroundColor: COLORS.primaryLight,
+    alignSelf: "center",
+  } as ViewStyle,
+  actionIconInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  } as ViewStyle,
+  actionTitleContainer: { marginBottom: 24, alignItems: "center" } as ViewStyle,
+  actionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 8,
+    textAlign: "center",
+  } as TextStyle,
+  actionDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.textMuted,
+    textAlign: "center",
+  } as TextStyle,
+  actionButtonWrapper: { width: "100%" } as ViewStyle,
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+  } as ViewStyle,
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
+  } as TextStyle,
+
+  // Drawer
+  drawerBackdrop: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  drawerBackdropTouch: { flex: 1, height: "100%" },
+  drawerPanel: {
+    height: "100%",
+    maxWidth: 650,
+    backgroundColor: COLORS.white,
+    shadowColor: "#000",
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  drawerHeader: {
+    zIndex: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  drawerTitle: {
+    flex: 1,
+    marginRight: 8,
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.primaryDark,
+  },
+  drawerCloseBtn: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+  },
+  drawerScroll: { flex: 1, backgroundColor: COLORS.bg },
+
+  // Root cause modal
+  rcBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  rcPanel: {
+    maxHeight: "92%",
+    backgroundColor: COLORS.bg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  rcHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  rcTitle: { fontSize: 16, fontWeight: "700", color: COLORS.text },
+  rcSubtitle: { marginTop: 2, fontSize: 11, color: COLORS.textMuted },
+  rcCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

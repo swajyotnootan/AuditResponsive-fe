@@ -11,41 +11,74 @@ import {
   Clock,
   FileText,
   UserPlus,
-  X } from "lucide-react-native";
+  X,
+} from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions } from "react-native";
+  useWindowDimensions,
+} from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 
+// ════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
   bg: "#F8FAFC",
   card: "#FFFFFF",
   border: "#E2E8F0",
-  text: "#1F2937",
-  textMuted: "#6B7280",
-  accent: "#3B82F6",
-  accentLight: "#EFF6FF",
-  accentBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  error: "#EF4444",
-  errorLight: "#FEF2F2",
-  errorBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
-  purple: "#8B5CF6",
-  purpleLight: "#F5F3FF",
-  purpleBorder: "#DDD6FE" };
+  borderSubtle: "#F1F5F9",
+  headerBg: "#F8FAFC",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
+};
+
+// ═════ TABLE COLUMN CONFIG ═════
+// Desktop: flex fills container proportionally.
+// Mobile: fixed pixel widths (minWidth values) → horizontal scroll, perfect alignment.
+const COLUMN_MIN_WIDTHS = {
+  dept: 160,
+  elements: 150,
+  week: 100,
+  auditors: 180,
+  auditees: 160,
+  status: 130,
+  actions: 110,
+};
+const TABLE_MIN_WIDTH = Object.values(COLUMN_MIN_WIDTHS).reduce(
+  (a, b) => a + b,
+  0,
+); // 990
+
+// Flex weights — desktop only
+const COLUMN_FLEX = {
+  dept: 1.6,
+  elements: 1.5,
+  week: 1.0,
+  auditors: 2.0,
+  auditees: 1.7,
+  status: 1.3,
+  actions: 1.1,
+};
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -89,28 +122,21 @@ interface Props {
 
 type StatusTab = "PENDING" | "CONFIRMED" | "REJECTED";
 
-// ─── Helper: normalize name arrays (handles strings, JSON strings, nested) ─
+// ─── Helper: normalize name arrays ─────────────────────────────────────
 
 const normalizeNames = (raw: any): string[] => {
   if (!raw) return [];
-
   let value = raw;
-
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return [];
     try {
-      const parsed = JSON.parse(trimmed);
-      value = parsed;
+      value = JSON.parse(trimmed);
     } catch {
       return [trimmed];
     }
   }
-
-  if (!Array.isArray(value)) {
-    return [String(value)];
-  }
-
+  if (!Array.isArray(value)) return [String(value)];
   return value
     .flat(1)
     .map((v: any) => (typeof v === "string" ? v : String(v)))
@@ -129,40 +155,34 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ Tab state
   const [statusTab, setStatusTab] = useState<StatusTab>("PENDING");
 
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
-  // Detail modal
   const [detailSchedule, setDetailSchedule] = useState<ScheduleDto | null>(
     null,
   );
 
-  // ✅ Bulk confirm modal
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkComments, setBulkComments] = useState("");
 
-  // ✅ Bulk reject modal
   const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState("");
 
-  // Reassign modal — per-schedule scoped
   const [reassignAuditors, setReassignAuditors] = useState<ScheduleUser[]>([]);
   const [reassignAuditees, setReassignAuditees] = useState<ScheduleUser[]>([]);
   const [loadingReassignData, setLoadingReassignData] = useState(false);
 
-  // Reassign modal
   const [reassignSchedule, setReassignSchedule] = useState<ScheduleDto | null>(
     null,
   );
-  // ✅ NEW: primary auditor separated from co-auditors
   const [newPrimaryAuditorId, setNewPrimaryAuditorId] = useState<number | null>(
     null,
   );
   const [newCoAuditorIds, setNewCoAuditorIds] = useState<number[]>([]);
   const [newAuditeeIds, setNewAuditeeIds] = useState<number[]>([]);
+
   // ─── Fetch ────────────────────────────────────────────────────────
 
   const fetchPending = useCallback(async () => {
@@ -200,7 +220,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     fetchPending();
   };
 
-  // ─── Split by status for tabs ────────────────────────────────────
+  // ─── Split by status ─────────────────────────────────────────────
 
   const byStatus = useMemo(() => {
     const pending: ScheduleDto[] = [];
@@ -209,17 +229,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
 
     for (const s of schedules) {
       const st = (s.approvalStatus || "").toUpperCase();
-      if (st === "PENDING_LA_CONFIRMATION") {
-        pending.push(s);
-      } else if (
+      if (st === "PENDING_LA_CONFIRMATION") pending.push(s);
+      else if (
         st === "CONFIRMED_BY_LA" ||
         st === "APPROVED" ||
         st === "REJECTED"
-      ) {
+      )
         confirmed.push(s);
-      } else if (st === "FEASIBILITY_REJECTED") {
-        rejected.push(s);
-      }
+      else if (st === "FEASIBILITY_REJECTED") rejected.push(s);
     }
 
     return { pending, confirmed, rejected };
@@ -257,18 +274,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     });
   };
 
-  // ✅ Bulk confirm — confirms every PENDING schedule in the current tab
   const handleBulkConfirm = async () => {
     if (!user?.id) return;
     if (byStatus.pending.length === 0) {
       addToast("No pending schedules to confirm", "warning");
       return;
     }
-
     setSubmitting(true);
     try {
-      // Fire confirm-feasibility for each pending schedule sequentially
-      // (backend endpoint is per-schedule)
       const results = await Promise.allSettled(
         byStatus.pending.map((s) =>
           axios.post(
@@ -278,10 +291,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
           ),
         ),
       );
-
       const okCount = results.filter((r) => r.status === "fulfilled").length;
       const failCount = results.length - okCount;
-
       if (okCount > 0) {
         addToast(
           `Feasibility confirmed for ${okCount} schedule(s)` +
@@ -291,7 +302,6 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       } else {
         addToast("Failed to confirm schedules", "error");
       }
-
       setBulkConfirmOpen(false);
       setBulkComments("");
       fetchPending();
@@ -305,7 +315,6 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     }
   };
 
-  // ✅ Bulk reject — rejects every PENDING schedule in the current tab
   const handleBulkReject = async () => {
     if (!user?.id) return;
     if (!bulkRejectReason.trim()) {
@@ -316,7 +325,6 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       addToast("No pending schedules to reject", "warning");
       return;
     }
-
     setSubmitting(true);
     try {
       const results = await Promise.allSettled(
@@ -328,10 +336,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
           ),
         ),
       );
-
       const okCount = results.filter((r) => r.status === "fulfilled").length;
       const failCount = results.length - okCount;
-
       if (okCount > 0) {
         addToast(
           `Feasibility rejected for ${okCount} schedule(s)` +
@@ -341,7 +347,6 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       } else {
         addToast("Failed to reject schedules", "error");
       }
-
       setBulkRejectOpen(false);
       setBulkRejectReason("");
       fetchPending();
@@ -375,13 +380,9 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
         .filter((n: number) => !Number.isNaN(n));
     };
 
-    // ✅ FIX: Primary comes from auditorId — NEVER falls back to coAuditorIdList
     setNewPrimaryAuditorId(s.auditorId ?? null);
-
-    // ✅ FIX: Co-auditors come from coAuditorIdList ONLY (exclude primary to be safe)
     const coIds = toNumArray(s.coAuditorIdList);
     setNewCoAuditorIds(coIds.filter((id) => id !== s.auditorId));
-
     setNewAuditeeIds(toNumArray(s.auditeeIdList));
     setReassignAuditors([]);
     setReassignAuditees([]);
@@ -397,21 +398,19 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
 
     try {
       setLoadingReassignData(true);
-
       const auditorsParams: Record<string, any> = {
         plantId: s.plantId,
         auditElements: JSON.stringify(elements),
         planYear: s.planYear,
-        month: s.month };
+        month: s.month,
+      };
       const auditorsRes = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/fully-competent-auditors/for-schedule`,
         { params: auditorsParams },
       );
-
       const auditorsList: ScheduleUser[] = Array.isArray(auditorsRes.data)
         ? auditorsRes.data
         : [];
-
       const filteredAuditors = auditorsList.filter(
         (a) => a.role === "AUDITOR" || a.role === "LEAD_AUDITOR",
       );
@@ -425,7 +424,9 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
             {
               params: {
                 plantId: s.plantId,
-                auditElementsJson: JSON.stringify(elements) } },
+                auditElementsJson: JSON.stringify(elements),
+              },
+            },
           );
           auditeesList = Array.isArray(auditeesRes.data)
             ? auditeesRes.data
@@ -451,21 +452,19 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
 
   const handleReassign = async () => {
     if (!reassignSchedule || !user?.id) return;
-
-    // ✅ Validation — primary auditor required
     if (!newPrimaryAuditorId) {
       addToast("Please select a primary auditor", "error");
       return;
     }
-
     setSubmitting(true);
     try {
       await axios.post(
         `${API_BASE_URL}/api/audit-schedule/schedule/${reassignSchedule.id}/reassign?userId=${user.id}`,
         {
-          auditorId: newPrimaryAuditorId, // ✅ explicit primary
-          coAuditorIds: newCoAuditorIds, // ✅ explicit co-auditors
-          auditeeIds: newAuditeeIds },
+          auditorId: newPrimaryAuditorId,
+          coAuditorIds: newCoAuditorIds,
+          auditeeIds: newAuditeeIds,
+        },
         {},
       );
       addToast("Schedule reassigned successfully", "success");
@@ -478,7 +477,176 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     }
   };
 
-  // ─── Render helpers ──────────────────────────────────────────────
+  // ─── Status badge renderer (inline) ──────────────────────────────
+
+  const renderStatusBadges = (status: string) => {
+    const st = status.toUpperCase();
+    const badges: {
+      icon: any;
+      label: string;
+      bg: string;
+      bd: string;
+      tc: string;
+    }[] = [];
+
+    if (st === "PENDING_LA_CONFIRMATION") {
+      badges.push({
+        icon: Clock,
+        label: "Pending",
+        bg: COLORS.primaryLight,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+    }
+    if (st === "CONFIRMED_BY_LA") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: AlertCircle,
+        label: "Awaiting TM",
+        bg: COLORS.stateWarningBg,
+        bd: COLORS.border,
+        tc: COLORS.textMuted,
+      });
+    }
+    if (st === "APPROVED") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: Check,
+        label: "TM Approved",
+        bg: "#DBEAFE",
+        bd: "#93C5FD",
+        tc: COLORS.primaryDark,
+      });
+    }
+    if (st === "REJECTED") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: X,
+        label: "TM Rejected",
+        bg: COLORS.stateErrorBg,
+        bd: COLORS.border,
+        tc: COLORS.stateErrorText,
+      });
+    }
+    if (st === "FEASIBILITY_REJECTED") {
+      badges.push({
+        icon: X,
+        label: "Rejected",
+        bg: COLORS.stateErrorBg,
+        bd: COLORS.border,
+        tc: COLORS.stateErrorText,
+      });
+    }
+
+    return (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+        {badges.map((b, i) => {
+          const Icon = b.icon;
+          return (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: b.bd,
+                backgroundColor: b.bg,
+              }}
+            >
+              <Icon size={9} color={b.tc} />
+              <Text
+                style={{ fontSize: 9, fontWeight: "700", color: b.tc }}
+                numberOfLines={1}
+              >
+                {b.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  // ─── Table Header ────────────────────────────────────────────────
+
+  const renderTableHeader = () => (
+    <View
+      style={{
+        flexDirection: "row",
+        backgroundColor: COLORS.headerBg,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+      }}
+    >
+      <HeaderCell
+        flex={COLUMN_FLEX.dept}
+        minWidth={COLUMN_MIN_WIDTHS.dept}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.dept}
+        label="Audit Area"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.elements}
+        minWidth={COLUMN_MIN_WIDTHS.elements}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.elements}
+        label="Audit Elements"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.week}
+        minWidth={COLUMN_MIN_WIDTHS.week}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.week}
+        label="Week / Period"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.auditors}
+        minWidth={COLUMN_MIN_WIDTHS.auditors}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.auditors}
+        label="Team Auditors"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.auditees}
+        minWidth={COLUMN_MIN_WIDTHS.auditees}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.auditees}
+        label="Auditees"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.status}
+        minWidth={COLUMN_MIN_WIDTHS.status}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.status}
+        label="Status"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.actions}
+        minWidth={COLUMN_MIN_WIDTHS.actions}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.actions}
+        label="Actions"
+        last
+      />
+    </View>
+  );
+
+  // ─── Table Row ────────────────────────────────────────────────────
 
   const renderScheduleRow = (s: ScheduleDto) => {
     const status = (s.approvalStatus || "").toUpperCase();
@@ -488,177 +656,145 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       status === "APPROVED" ||
       status === "REJECTED";
 
-    // ✅ Backend now returns complete team (primary + co-auditors) in coAuditorNames
     const teamNames = normalizeNames(s.coAuditorNames);
     const auditorDisplay = teamNames.length === 0 ? "—" : teamNames.join(", ");
-
     const auditeeNames = normalizeNames(s.auditeeNames);
     const auditeeDisplay =
       auditeeNames.length === 0 ? "—" : auditeeNames.join(", ");
-
     const auditElements = normalizeNames(s.auditElements);
     const auditElementsDisplay =
       auditElements.length === 0 ? "—" : auditElements.join(", ");
+
     return (
       <View
         key={s.id}
         style={{
-          padding: 12,
-          borderTopWidth: 1,
-          borderTopColor: "#F1F5F9",
-          backgroundColor: "#FFFFFF" }}
+          flexDirection: "row",
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.borderSubtle,
+          backgroundColor: COLORS.card,
+        }}
       >
-        <View
-          style={{
-            flexDirection: isDesktop ? "row" : "column",
-            gap: isDesktop ? 12 : 8,
-            alignItems: isDesktop ? "center" : "flex-start" }}
+        <BodyCell
+          flex={COLUMN_FLEX.dept}
+          minWidth={COLUMN_MIN_WIDTHS.dept}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.dept}
         >
-          {/* Left: dept + week + status badge */}
-          <View style={{ flex: isDesktop ? 2 : undefined }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Text
-                style={{ fontSize: 13, fontWeight: "700", color: COLORS.text }}
-              >
-                {s.department}
-              </Text>
-
-              {isPending && (
-                <View style={badgeStyle(COLORS.warningBorder)}>
-                  <Clock size={10} color="#92400E" />
-                  <Text style={badgeTextStyle("#92400E")}>Pending</Text>
-                </View>
-              )}
-              {status === "CONFIRMED_BY_LA" && (
-                <View style={badgeStyle(COLORS.successBorder)}>
-                  <Check size={10} color="#065F46" />
-                  <Text style={badgeTextStyle("#065F46")}>Confirmed by LA</Text>
-                </View>
-              )}
-              {status === "CONFIRMED_BY_LA" && (
-                <View style={badgeStyle(COLORS.warningBorder)}>
-                  <AlertCircle size={10} color="#92400E" />
-                  <Text style={badgeTextStyle("#92400E")}>Awaiting TM</Text>
-                </View>
-              )}
-              {status === "APPROVED" && (
-                <>
-                  <View style={badgeStyle(COLORS.successBorder)}>
-                    <Check size={10} color="#065F46" />
-                    <Text style={badgeTextStyle("#065F46")}>
-                      Confirmed by LA
-                    </Text>
-                  </View>
-                  <View style={badgeStyle("#D1FAE5")}>
-                    <Check size={10} color="#047857" />
-                    <Text style={badgeTextStyle("#047857")}>TM Approved</Text>
-                  </View>
-                </>
-              )}
-              {status === "REJECTED" && (
-                <>
-                  <View style={badgeStyle(COLORS.successBorder)}>
-                    <Check size={10} color="#065F46" />
-                    <Text style={badgeTextStyle("#065F46")}>
-                      Confirmed by LA
-                    </Text>
-                  </View>
-                  <View style={badgeStyle("#FEE2E2")}>
-                    <X size={10} color="#B91C1C" />
-                    <Text style={badgeTextStyle("#B91C1C")}>TM Rejected</Text>
-                  </View>
-                </>
-              )}
-              {status === "FEASIBILITY_REJECTED" && (
-                <View style={badgeStyle(COLORS.errorBorder)}>
-                  <X size={10} color="#991B1B" />
-                  <Text style={badgeTextStyle("#991B1B")}>Rejected</Text>
-                </View>
-              )}
-            </View>
-
-            {/* ✅ NEW: Audit Elements */}
-            <Text
-              style={{ fontSize: 12, fontWeight: "500", color: COLORS.text }}
-            >
-              Audit Elements : {auditElementsDisplay}
-            </Text>
-
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}
-            >
-              Week: {s.week || "—"} • {s.month} {s.planYear}
-            </Text>
-          </View>
-
-          {/* Mid: auditor + auditees */}
-          <View style={{ flex: isDesktop ? 3 : undefined }}>
-            <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
-              Team Auditors
-            </Text>
-            <Text
-              style={{ fontSize: 12, color: COLORS.text, fontWeight: "500" }}
-            >
-              {auditorDisplay}
-            </Text>
-
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}
-            >
-              Auditees
-            </Text>
-            <Text style={{ fontSize: 12, color: COLORS.text }}>
-              {auditeeDisplay}
-            </Text>
-          </View>
-
-          {/* Right: actions — ✅ only View + Reassign now */}
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 6,
-              flexWrap: "wrap",
-              flex: isDesktop ? 2 : undefined,
-              justifyContent: isDesktop ? "flex-end" : "flex-start" }}
+          <Text
+            style={{ fontSize: 13, fontWeight: "700", color: COLORS.text }}
+            numberOfLines={2}
           >
-            <ActionChip
-              label="View"
-              icon={<FileText size={12} color={COLORS.accent} />}
-              borderColor={COLORS.accentBorder}
-              bgColor={COLORS.accentLight}
-              textColor={COLORS.accent}
+            {s.department}
+          </Text>
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.elements}
+          minWidth={COLUMN_MIN_WIDTHS.elements}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.elements}
+        >
+          <Text
+            style={{ fontSize: 12, color: COLORS.textValue }}
+            numberOfLines={2}
+          >
+            {auditElementsDisplay}
+          </Text>
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.week}
+          minWidth={COLUMN_MIN_WIDTHS.week}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.week}
+        >
+          <Text style={{ fontSize: 12, color: COLORS.textValue }}>
+            {s.week || "—"}
+          </Text>
+          <Text style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>
+            {s.month} {s.planYear}
+          </Text>
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.auditors}
+          minWidth={COLUMN_MIN_WIDTHS.auditors}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.auditors}
+        >
+          <Text
+            style={{ fontSize: 12, color: COLORS.text, fontWeight: "500" }}
+            numberOfLines={2}
+          >
+            {auditorDisplay}
+          </Text>
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.auditees}
+          minWidth={COLUMN_MIN_WIDTHS.auditees}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.auditees}
+        >
+          <Text
+            style={{ fontSize: 12, color: COLORS.textValue }}
+            numberOfLines={2}
+          >
+            {auditeeDisplay}
+          </Text>
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.status}
+          minWidth={COLUMN_MIN_WIDTHS.status}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.status}
+        >
+          {renderStatusBadges(status)}
+        </BodyCell>
+
+        <BodyCell
+          flex={COLUMN_FLEX.actions}
+          minWidth={COLUMN_MIN_WIDTHS.actions}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.actions}
+          last
+        >
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+            <HoverOutlineButton
+              title="View"
+              icon={FileText}
+              variant="primary"
               onPress={() => setDetailSchedule(s)}
             />
-
             {isPending && (
-              <ActionChip
-                label="Reassign"
-                icon={<UserPlus size={12} color="#7C3AED" />}
-                borderColor="#DDD6FE"
-                bgColor="#F5F3FF"
-                textColor="#7C3AED"
+              <HoverOutlineButton
+                title="Reassign"
+                icon={UserPlus}
+                variant="primary"
                 onPress={() => openReassign(s)}
               />
             )}
-
             {isConfirmed && (
               <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#065F46" }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: COLORS.primaryDark,
+                  alignSelf: "center",
+                }}
               >
                 ✓ Confirmed
               </Text>
             )}
             {status === "FEASIBILITY_REJECTED" && (
               <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#991B1B" }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: COLORS.stateErrorText,
+                  alignSelf: "center",
+                }}
               >
                 ✗ Rejected
               </Text>
             )}
           </View>
-        </View>
+        </BodyCell>
       </View>
     );
   };
@@ -668,7 +804,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
   if (loading) {
     return (
       <View style={{ padding: 40, alignItems: "center" }}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 13 }}>
           Loading feasibility queue...
         </Text>
@@ -687,7 +823,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
           justifyContent: "space-between",
           alignItems: isDesktop ? "center" : "flex-start",
           marginBottom: 20,
-          gap: 12 }}
+          gap: 12,
+        }}
       >
         <View style={{ flex: 1 }}>
           <Text
@@ -708,7 +845,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
           flexDirection: "row",
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
-          marginBottom: 16 }}
+          marginBottom: 16,
+        }}
       >
         {(
           [
@@ -716,17 +854,17 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
               key: "PENDING",
               label: "Schedules",
               count: byStatus.pending.length,
-              color: COLORS.warning },
+            },
             {
               key: "CONFIRMED",
               label: "Confirmed",
               count: byStatus.confirmed.length,
-              color: COLORS.success },
+            },
             {
               key: "REJECTED",
               label: "Rejected",
               count: byStatus.rejected.length,
-              color: COLORS.error },
+            },
           ] as const
         ).map((tab) => {
           const active = statusTab === tab.key;
@@ -741,13 +879,15 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 borderBottomWidth: active ? 2 : 0,
-                borderBottomColor: tab.color }}
+                borderBottomColor: COLORS.primary,
+              }}
             >
               <Text
                 style={{
                   fontSize: 13,
                   fontWeight: active ? "700" : "500",
-                  color: active ? tab.color : COLORS.textMuted }}
+                  color: active ? COLORS.primary : COLORS.textMuted,
+                }}
               >
                 {tab.label}
               </Text>
@@ -757,14 +897,16 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: 10,
-                  backgroundColor: active ? tab.color : "#E2E8F0" }}
+                  backgroundColor: active ? COLORS.primary : "#E2E8F0",
+                }}
               >
                 <Text
                   style={{
                     fontSize: 10,
                     fontWeight: "700",
                     color: active ? "#FFF" : COLORS.textMuted,
-                    textAlign: "center" }}
+                    textAlign: "center",
+                  }}
                 >
                   {tab.count}
                 </Text>
@@ -783,15 +925,17 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
             backgroundColor: COLORS.card,
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: COLORS.border }}
+            borderColor: COLORS.border,
+          }}
         >
-          <CheckCircle size={48} color={COLORS.success} />
+          <CheckCircle size={48} color={COLORS.primary} />
           <Text
             style={{
               fontSize: 16,
               fontWeight: "600",
               color: COLORS.text,
-              marginTop: 16 }}
+              marginTop: 16,
+            }}
           >
             {statusTab === "PENDING" && "All caught up!"}
             {statusTab === "CONFIRMED" && "No confirmed schedules yet"}
@@ -802,7 +946,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
               fontSize: 13,
               color: COLORS.textMuted,
               marginTop: 6,
-              textAlign: "center" }}
+              textAlign: "center",
+            }}
           >
             {statusTab === "PENDING" &&
               "No week schedules awaiting your feasibility confirmation."}
@@ -832,8 +977,10 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: COLORS.border,
-                    overflow: "hidden" }}
+                    overflow: "hidden",
+                  }}
                 >
+                  {/* Month group header */}
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={() => toggleExpand(group.month)}
@@ -841,36 +988,40 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       flexDirection: "row",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      padding: 16,
-                      backgroundColor: COLORS.purpleLight,
+                      padding: 14,
+                      backgroundColor: COLORS.primaryLight,
                       borderBottomWidth: expanded ? 1 : 0,
-                      borderBottomColor: COLORS.purpleBorder }}
+                      borderBottomColor: COLORS.primaryBorder,
+                    }}
                   >
                     <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 10 }}
+                        gap: 10,
+                      }}
                     >
                       <View
                         style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 10,
+                          width: 34,
+                          height: 34,
+                          borderRadius: 9,
                           backgroundColor: "#FFF",
                           borderWidth: 1,
-                          borderColor: COLORS.purpleBorder,
+                          borderColor: COLORS.primaryBorder,
                           alignItems: "center",
-                          justifyContent: "center" }}
+                          justifyContent: "center",
+                        }}
                       >
-                        <Calendar size={18} color={COLORS.purple} />
+                        <Calendar size={17} color={COLORS.primary} />
                       </View>
                       <View>
                         <Text
                           style={{
-                            fontSize: 18,
+                            fontSize: 17,
                             fontWeight: "700",
-                            color: COLORS.purple }}
+                            color: COLORS.primaryDark,
+                          }}
                         >
                           {group.month} {group.year}
                         </Text>
@@ -878,7 +1029,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                           style={{
                             fontSize: 11,
                             color: COLORS.textMuted,
-                            marginTop: 2 }}
+                            marginTop: 2,
+                          }}
                         >
                           {group.schedules.length} schedule
                           {group.schedules.length !== 1 ? "s" : ""} •{" "}
@@ -891,7 +1043,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 8 }}
+                        gap: 8,
+                      }}
                     >
                       <View
                         style={{
@@ -900,29 +1053,21 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                           gap: 4,
                           paddingHorizontal: 10,
                           paddingVertical: 4,
-                          backgroundColor:
-                            statusTab === "PENDING"
-                              ? COLORS.warningLight
-                              : statusTab === "CONFIRMED"
-                                ? COLORS.successLight
-                                : COLORS.errorLight,
+                          backgroundColor: COLORS.primaryLight,
                           borderWidth: 1,
-                          borderColor:
-                            statusTab === "PENDING"
-                              ? COLORS.warningBorder
-                              : statusTab === "CONFIRMED"
-                                ? COLORS.successBorder
-                                : COLORS.errorBorder,
-                          borderRadius: 20 }}
+                          borderColor: COLORS.primaryBorder,
+                          borderRadius: 20,
+                        }}
                       >
                         {statusTab === "PENDING" && (
                           <>
-                            <Clock size={11} color={COLORS.warning} />
+                            <Clock size={11} color={COLORS.primary} />
                             <Text
                               style={{
                                 fontSize: 11,
                                 fontWeight: "600",
-                                color: "#92400E" }}
+                                color: COLORS.primaryDark,
+                              }}
                             >
                               {group.schedules.length} pending
                             </Text>
@@ -930,12 +1075,13 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                         )}
                         {statusTab === "CONFIRMED" && (
                           <>
-                            <Check size={11} color={COLORS.success} />
+                            <Check size={11} color={COLORS.primary} />
                             <Text
                               style={{
                                 fontSize: 11,
                                 fontWeight: "600",
-                                color: "#065F46" }}
+                                color: COLORS.primaryDark,
+                              }}
                             >
                               {group.schedules.length} confirmed
                             </Text>
@@ -943,12 +1089,13 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                         )}
                         {statusTab === "REJECTED" && (
                           <>
-                            <X size={11} color={COLORS.error} />
+                            <X size={11} color={COLORS.textMuted} />
                             <Text
                               style={{
                                 fontSize: 11,
                                 fontWeight: "600",
-                                color: "#991B1B" }}
+                                color: COLORS.textMuted,
+                              }}
                             >
                               {group.schedules.length} rejected
                             </Text>
@@ -956,22 +1103,69 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                         )}
                       </View>
                       {expanded ? (
-                        <ChevronDown size={20} color={COLORS.purple} />
+                        <ChevronDown size={20} color={COLORS.primary} />
                       ) : (
-                        <ChevronRight size={20} color={COLORS.purple} />
+                        <ChevronRight size={20} color={COLORS.primary} />
                       )}
                     </View>
                   </TouchableOpacity>
 
-                  {expanded && (
-                    <View>{group.schedules.map(renderScheduleRow)}</View>
+                  {/* Mobile swipe hint */}
+                  {expanded && !isDesktop && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        paddingHorizontal: 14,
+                        paddingVertical: 6,
+                        backgroundColor: COLORS.bg,
+                        borderBottomWidth: 1,
+                        borderBottomColor: COLORS.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: COLORS.textMuted,
+                          fontWeight: "500",
+                        }}
+                      >
+                        ⇄ Swipe horizontally to see all columns
+                      </Text>
+                    </View>
                   )}
+
+                  {/* TABLE — desktop fills container, mobile scrolls */}
+                  {expanded &&
+                    (isDesktop ? (
+                      <View style={{ width: "100%" }}>
+                        {renderTableHeader()}
+                        {group.schedules.map(renderScheduleRow)}
+                      </View>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator
+                        contentContainerStyle={{ flexGrow: 0 }}
+                      >
+                        <View
+                          style={{
+                            width: TABLE_MIN_WIDTH,
+                            flexDirection: "column",
+                          }}
+                        >
+                          {renderTableHeader()}
+                          {group.schedules.map(renderScheduleRow)}
+                        </View>
+                      </ScrollView>
+                    ))}
                 </View>
               );
             })}
           </View>
 
-          {/* ✅ Bulk Confirm / Reject bar — only on the PENDING tab */}
+          {/* Bulk bar */}
           {statusTab === "PENDING" && pendingCount > 0 && (
             <View
               style={{
@@ -984,14 +1178,16 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                 flexDirection: isDesktop ? "row" : "column",
                 alignItems: isDesktop ? "center" : "stretch",
                 justifyContent: "space-between",
-                gap: 12 }}
+                gap: 12,
+              }}
             >
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     fontSize: 14,
                     fontWeight: "700",
-                    color: COLORS.text }}
+                    color: COLORS.text,
+                  }}
                 >
                   Bulk action
                 </Text>
@@ -999,72 +1195,40 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   style={{
                     fontSize: 12,
                     color: COLORS.textMuted,
-                    marginTop: 2 }}
+                    marginTop: 2,
+                  }}
                 >
                   Applies to all {pendingCount} pending schedule
                   {pendingCount !== 1 ? "s" : ""} for {selectedYear}.
                 </Text>
               </View>
-
               <View
                 style={{
                   flexDirection: "row",
                   gap: 10,
-                  justifyContent: isDesktop ? "flex-end" : "space-between" }}
+                  justifyContent: isDesktop ? "flex-end" : "space-between",
+                }}
               >
-                <TouchableOpacity
+                <HoverOutlineButton
+                  title="Reject All"
+                  icon={X}
+                  variant="danger"
+                  disabled={submitting}
                   onPress={() => {
                     setBulkRejectReason("");
                     setBulkRejectOpen(true);
                   }}
+                />
+                <HoverOutlineButton
+                  title="Confirm All"
+                  icon={Check}
+                  variant="primary"
                   disabled={submitting}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 18,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: COLORS.errorBorder,
-                    backgroundColor: COLORS.errorLight }}
-                >
-                  <X size={14} color={COLORS.error} />
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: COLORS.error }}
-                  >
-                    Reject All
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
                   onPress={() => {
                     setBulkComments("");
                     setBulkConfirmOpen(true);
                   }}
-                  disabled={submitting}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 18,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    backgroundColor: COLORS.success }}
-                >
-                  <Check size={14} color="#FFF" />
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: "#FFF" }}
-                  >
-                    Confirm All
-                  </Text>
-                </TouchableOpacity>
+                />
               </View>
             </View>
           )}
@@ -1084,7 +1248,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
               <View style={modalStyles.header}>
                 <Text style={modalStyles.headerTitle}>Schedule Detail</Text>
                 <TouchableOpacity onPress={() => setDetailSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 500 }}>
@@ -1128,16 +1292,6 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
               </ScrollView>
               <View style={modalStyles.footer}>
                 <TouchableOpacity
-                  onPress={() => {
-                    openReassign(detailSchedule);
-                    setDetailSchedule(null);
-                  }}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <UserPlus size={14} color="#7C3AED" />
-                  <Text style={modalStyles.secondaryBtnText}>Reassign</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
                   onPress={() => setDetailSchedule(null)}
                   style={modalStyles.secondaryBtn}
                 >
@@ -1164,7 +1318,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   Confirm All Feasibility
                 </Text>
                 <TouchableOpacity onPress={() => setBulkConfirmOpen(false)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -1181,7 +1335,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                     fontSize: 12,
                     color: COLORS.textMuted,
                     marginTop: 8,
-                    marginBottom: 14 }}
+                    marginBottom: 14,
+                  }}
                 >
                   This will forward every pending schedule to Top Management for
                   approval.
@@ -1191,7 +1346,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   value={bulkComments}
                   onChangeText={setBulkComments}
                   placeholder="Optional comments..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#94A3B8"
                   multiline
                   editable={!submitting}
                 />
@@ -1209,7 +1364,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   disabled={submitting}
                   style={[
                     modalStyles.primaryBtn,
-                    { backgroundColor: COLORS.success },
+                    { backgroundColor: COLORS.primary },
                   ]}
                 >
                   {submitting ? (
@@ -1242,7 +1397,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   Reject All Feasibility
                 </Text>
                 <TouchableOpacity onPress={() => setBulkRejectOpen(false)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -1251,14 +1406,21 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                     flexDirection: "row",
                     gap: 8,
                     padding: 10,
-                    backgroundColor: COLORS.errorLight,
+                    backgroundColor: COLORS.stateErrorBg,
                     borderWidth: 1,
-                    borderColor: COLORS.errorBorder,
+                    borderColor: COLORS.border,
                     borderRadius: 10,
-                    marginBottom: 14 }}
+                    marginBottom: 14,
+                  }}
                 >
-                  <AlertCircle size={16} color={COLORS.error} />
-                  <Text style={{ flex: 1, fontSize: 12, color: "#991B1B" }}>
+                  <AlertCircle size={16} color={COLORS.stateErrorText} />
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 12,
+                      color: COLORS.stateErrorText,
+                    }}
+                  >
                     Rejecting{" "}
                     <Text style={{ fontWeight: "700" }}>
                       {pendingCount} pending schedule
@@ -1272,7 +1434,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   value={bulkRejectReason}
                   onChangeText={setBulkRejectReason}
                   placeholder="Explain why these schedules are not feasible..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#94A3B8"
                   multiline
                   editable={!submitting}
                 />
@@ -1294,7 +1456,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       backgroundColor:
                         submitting || !bulkRejectReason.trim()
                           ? "#94A3B8"
-                          : COLORS.error },
+                          : COLORS.stateErrorText,
+                    },
                   ]}
                 >
                   {submitting ? (
@@ -1325,7 +1488,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
               <View style={modalStyles.header}>
                 <Text style={modalStyles.headerTitle}>Reassign Schedule</Text>
                 <TouchableOpacity onPress={() => setReassignSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 450, padding: 16 }}>
@@ -1333,19 +1496,19 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   style={{
                     fontSize: 12,
                     color: COLORS.textMuted,
-                    marginBottom: 12 }}
+                    marginBottom: 12,
+                  }}
                 >
                   {reassignSchedule.department} • {reassignSchedule.week} •{" "}
                   {reassignSchedule.month} {reassignSchedule.planYear}
                 </Text>
 
-                {/* ═══════ PRIMARY AUDITOR (radio — single select) ═══════ */}
                 <Text style={modalStyles.sectionLabel}>Primary Auditor</Text>
                 <View style={{ gap: 6, marginBottom: 16 }}>
                   {loadingReassignData ? (
                     <ActivityIndicator
                       size="small"
-                      color={COLORS.accent}
+                      color={COLORS.primary}
                       style={{ marginVertical: 20 }}
                     />
                   ) : reassignAuditors.length === 0 ? (
@@ -1353,7 +1516,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       style={{
                         fontSize: 12,
                         color: COLORS.textMuted,
-                        padding: 10 }}
+                        padding: 10,
+                      }}
                     >
                       No competent auditors found for this schedule.
                     </Text>
@@ -1370,25 +1534,28 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                             padding: 10,
                             borderWidth: 1,
                             borderColor: selected
-                              ? COLORS.accent
+                              ? COLORS.primary
                               : COLORS.border,
                             backgroundColor: selected
-                              ? COLORS.accentLight
+                              ? COLORS.primaryLight
                               : "#FFF",
-                            borderRadius: 8 }}
+                            borderRadius: 8,
+                          }}
                         >
-                          {/* Radio circle */}
                           <View
                             style={{
                               width: 18,
                               height: 18,
                               borderRadius: 9,
                               borderWidth: 2,
-                              borderColor: selected ? COLORS.accent : "#CBD5E1",
+                              borderColor: selected
+                                ? COLORS.primary
+                                : "#CBD5E1",
                               backgroundColor: "#FFF",
                               alignItems: "center",
                               justifyContent: "center",
-                              marginRight: 8 }}
+                              marginRight: 8,
+                            }}
                           >
                             {selected && (
                               <View
@@ -1396,7 +1563,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                                   width: 8,
                                   height: 8,
                                   borderRadius: 4,
-                                  backgroundColor: COLORS.accent }}
+                                  backgroundColor: COLORS.primary,
+                                }}
                               />
                             )}
                           </View>
@@ -1408,7 +1576,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                               style={{
                                 fontSize: 10,
                                 color: COLORS.textMuted,
-                                marginLeft: 6 }}
+                                marginLeft: 6,
+                              }}
                             >
                               {a.role}
                             </Text>
@@ -1419,13 +1588,12 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   )}
                 </View>
 
-                {/* ═══════ CO-AUDITORS (checkbox — multi select) ═══════ */}
                 <Text style={modalStyles.sectionLabel}>Co-Auditors (Team)</Text>
                 <View style={{ gap: 6, marginBottom: 16 }}>
                   {loadingReassignData ? (
                     <ActivityIndicator
                       size="small"
-                      color={COLORS.accent}
+                      color={COLORS.primary}
                       style={{ marginVertical: 20 }}
                     />
                   ) : reassignAuditors.filter(
@@ -1435,13 +1603,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       style={{
                         fontSize: 12,
                         color: COLORS.textMuted,
-                        padding: 10 }}
+                        padding: 10,
+                      }}
                     >
                       No other auditors available as co-auditors.
                     </Text>
                   ) : (
                     reassignAuditors
-                      .filter((a) => Number(a.id) !== newPrimaryAuditorId) // exclude primary
+                      .filter((a) => Number(a.id) !== newPrimaryAuditorId)
                       .map((a) => {
                         const checked = newCoAuditorIds.includes(Number(a.id));
                         return (
@@ -1460,14 +1629,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                               padding: 10,
                               borderWidth: 1,
                               borderColor: checked
-                                ? COLORS.accent
+                                ? COLORS.primary
                                 : COLORS.border,
                               backgroundColor: checked
-                                ? COLORS.accentLight
+                                ? COLORS.primaryLight
                                 : "#FFF",
-                              borderRadius: 8 }}
+                              borderRadius: 8,
+                            }}
                           >
-                            {/* Checkbox square */}
                             <View
                               style={{
                                 width: 18,
@@ -1475,14 +1644,15 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                                 borderRadius: 4,
                                 borderWidth: 2,
                                 borderColor: checked
-                                  ? COLORS.accent
+                                  ? COLORS.primary
                                   : "#CBD5E1",
                                 backgroundColor: checked
-                                  ? COLORS.accent
+                                  ? COLORS.primary
                                   : "#FFF",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                marginRight: 8 }}
+                                marginRight: 8,
+                              }}
                             >
                               {checked && <Check size={12} color="#FFF" />}
                             </View>
@@ -1494,7 +1664,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                                 style={{
                                   fontSize: 10,
                                   color: COLORS.textMuted,
-                                  marginLeft: 6 }}
+                                  marginLeft: 6,
+                                }}
                               >
                                 {a.role}
                               </Text>
@@ -1504,12 +1675,13 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       })
                   )}
                 </View>
+
                 <Text style={modalStyles.sectionLabel}>Auditees</Text>
                 <View style={{ gap: 6 }}>
                   {loadingReassignData ? (
                     <ActivityIndicator
                       size="small"
-                      color={COLORS.accent}
+                      color={COLORS.primary}
                       style={{ marginVertical: 20 }}
                     />
                   ) : reassignAuditees.length === 0 ? (
@@ -1517,7 +1689,8 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                       style={{
                         fontSize: 12,
                         color: COLORS.textMuted,
-                        padding: 10 }}
+                        padding: 10,
+                      }}
                     >
                       No competent auditees found for this department.
                     </Text>
@@ -1540,12 +1713,13 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                             padding: 10,
                             borderWidth: 1,
                             borderColor: checked
-                              ? COLORS.accent
+                              ? COLORS.primary
                               : COLORS.border,
                             backgroundColor: checked
-                              ? COLORS.accentLight
+                              ? COLORS.primaryLight
                               : "#FFF",
-                            borderRadius: 8 }}
+                            borderRadius: 8,
+                          }}
                         >
                           <View
                             style={{
@@ -1553,11 +1727,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                               height: 18,
                               borderRadius: 4,
                               borderWidth: 2,
-                              borderColor: checked ? COLORS.accent : "#CBD5E1",
-                              backgroundColor: checked ? COLORS.accent : "#FFF",
+                              borderColor: checked ? COLORS.primary : "#CBD5E1",
+                              backgroundColor: checked
+                                ? COLORS.primary
+                                : "#FFF",
                               alignItems: "center",
                               justifyContent: "center",
-                              marginRight: 8 }}
+                              marginRight: 8,
+                            }}
                           >
                             {checked && <Check size={12} color="#FFF" />}
                           </View>
@@ -1583,7 +1760,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
                   disabled={submitting}
                   style={[
                     modalStyles.primaryBtn,
-                    { backgroundColor: "#7C3AED" },
+                    { backgroundColor: COLORS.primaryDark },
                   ]}
                 >
                   {submitting ? (
@@ -1603,6 +1780,72 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     </View>
   );
 };
+
+// ─── Table cell helpers ────────────────────────────────────────────
+
+const HeaderCell = ({
+  flex,
+  minWidth,
+  fixedWidth,
+  label,
+  last,
+}: {
+  flex: number;
+  minWidth: number;
+  fixedWidth?: number;
+  label: string;
+  last?: boolean;
+}) => (
+  <View
+    style={{
+      ...(fixedWidth != null ? { width: fixedWidth } : { flex, minWidth }),
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRightWidth: last ? 0 : 1,
+      borderRightColor: COLORS.border,
+      justifyContent: "center",
+    }}
+  >
+    <Text
+      style={{
+        fontSize: 10,
+        fontWeight: "700",
+        color: COLORS.textMuted,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+      }}
+    >
+      {label}
+    </Text>
+  </View>
+);
+
+const BodyCell = ({
+  flex,
+  minWidth,
+  fixedWidth,
+  children,
+  last,
+}: {
+  flex: number;
+  minWidth: number;
+  fixedWidth?: number;
+  children: React.ReactNode;
+  last?: boolean;
+}) => (
+  <View
+    style={{
+      ...(fixedWidth != null ? { width: fixedWidth } : { flex, minWidth }),
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRightWidth: last ? 0 : 1,
+      borderRightColor: COLORS.borderSubtle,
+      justifyContent: "center",
+    }}
+  >
+    {children}
+  </View>
+);
 
 // ─── Small helpers ─────────────────────────────────────────────────
 
@@ -1624,39 +1867,27 @@ const monthOrder = (m: string) => {
   return order.indexOf(m);
 };
 
-const badgeStyle = (backgroundColor: string) => ({
-  flexDirection: "row" as const,
-  alignItems: "center" as const,
-  gap: 4,
-  paddingHorizontal: 8,
-  paddingVertical: 2,
-  borderRadius: 999,
-  backgroundColor });
-
-const badgeTextStyle = (color: string) => ({
-  fontSize: 10,
-  fontWeight: "700" as const,
-  color });
-
 const ActionChip = ({
   label,
   icon,
   bgColor,
   borderColor,
   textColor,
-  onPress }: any) => (
+  onPress,
+}: any) => (
   <TouchableOpacity
     onPress={onPress}
     style={{
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
       borderRadius: 6,
       borderWidth: 1,
       borderColor,
-      backgroundColor: bgColor }}
+      backgroundColor: bgColor,
+    }}
   >
     {icon}
     <Text style={{ fontSize: 11, fontWeight: "600", color: textColor }}>
@@ -1665,20 +1896,140 @@ const ActionChip = ({
   </TouchableOpacity>
 );
 
+// ─── Hover-aware Outline Button (matches Form4View OutlineButton) ───
+
+const HoverOutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+  variant = "default", // "default" | "primary" | "danger"
+}: {
+  title: string;
+  icon?: any;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  variant?: "default" | "primary" | "danger";
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled && !loading;
+
+  // Variant-based colors (matching Form4View's monochromatic palette)
+  const variantColors = {
+    default: {
+      hoverBorder: "#2563EB",
+      hoverText: "#2563EB",
+      hoverIcon: "#2563EB",
+      hoverBg: "rgba(37, 99, 235, 0.08)",
+      baseBorder: "#D1D5DB",
+      baseText: "#111827",
+      baseIcon: "#6B7280",
+    },
+    primary: {
+      hoverBorder: COLORS.primaryDark,
+      hoverText: COLORS.primaryDark,
+      hoverIcon: COLORS.primaryDark,
+      hoverBg: "rgba(30, 58, 138, 0.1)",
+      baseBorder: COLORS.primaryBorder,
+      baseText: COLORS.primaryDark,
+      baseIcon: COLORS.primary,
+    },
+    danger: {
+      hoverBorder: COLORS.stateErrorText,
+      hoverText: COLORS.stateErrorText,
+      hoverIcon: COLORS.stateErrorText,
+      hoverBg: "rgba(71, 85, 105, 0.1)",
+      baseBorder: COLORS.border,
+      baseText: COLORS.stateErrorText,
+      baseIcon: COLORS.stateErrorText,
+    },
+  };
+
+  const v = variantColors[variant] || variantColors.default;
+
+  const borderColor = isHoveredAndEnabled ? v.hoverBorder : v.baseBorder;
+  const textColor = isHoveredAndEnabled ? v.hoverText : v.baseText;
+  const iconColor = isHoveredAndEnabled ? v.hoverIcon : v.baseIcon;
+  const backgroundColor = isHoveredAndEnabled ? v.hoverBg : "transparent";
+
+  // Web-only hover props
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => !disabled && !loading && setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && !loading && setIsHovered(true)}
+      onPressOut={() => !disabled && !loading && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      activeOpacity={0.8}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor,
+        backgroundColor,
+        opacity: disabled ? 0.5 : 1,
+        // Smooth transition (web)
+        ...(Platform.OS === "web"
+          ? {
+              transitionProperty: "all",
+              transitionDuration: "150ms",
+              transitionTimingFunction: "ease-in-out",
+            }
+          : {}),
+      }}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={iconColor} />
+      ) : Icon ? (
+        <Icon size={14} color={iconColor} />
+      ) : null}
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          color: textColor,
+        }}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
 const DetailRow = ({ label, value }: { label: string; value: string }) => (
   <View
     style={{
       flexDirection: "row",
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: "#F1F5F9" }}
+      borderBottomColor: "#F1F5F9",
+    }}
   >
     <Text
-      style={{ width: 130, fontSize: 12, color: "#6B7280", fontWeight: "500" }}
+      style={{
+        width: 130,
+        fontSize: 12,
+        color: COLORS.textMuted,
+        fontWeight: "500",
+      }}
     >
       {label}
     </Text>
-    <Text style={{ flex: 1, fontSize: 13, color: "#1F2937" }}>{value}</Text>
+    <Text style={{ flex: 1, fontSize: 13, color: COLORS.text }}>{value}</Text>
   </View>
 );
 
@@ -1688,36 +2039,41 @@ const modalStyles = {
     justifyContent: "center" as const,
     alignItems: "center" as const,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
-    padding: 20 },
+    padding: 20,
+  },
   sheet: {
     width: "100%" as const,
     maxWidth: 480,
     backgroundColor: "#FFF",
     borderRadius: 20,
     padding: 10,
-    overflow: "hidden" as const },
+    overflow: "hidden" as const,
+  },
   header: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9" },
+    borderBottomColor: "#F1F5F9",
+  },
   headerTitle: {
     fontSize: 17,
     fontWeight: "700" as const,
-    color: "#1F2937" },
+    color: COLORS.text,
+  },
   textarea: {
     width: "100%" as const,
     minHeight: 100,
     padding: 12,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.border,
     borderRadius: 10,
     fontSize: 13,
     textAlignVertical: "top" as const,
-    color: "#1F2937" },
+    color: COLORS.text,
+  },
   footer: {
     flexDirection: "row" as const,
     justifyContent: "flex-end" as const,
@@ -1725,18 +2081,21 @@ const modalStyles = {
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: "#F1F5F9",
-    backgroundColor: "#F8FAFC" },
+    backgroundColor: COLORS.bg,
+  },
   primaryBtn: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 10 },
+    borderRadius: 10,
+  },
   primaryBtnText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: "#FFF" },
+    color: "#FFF",
+  },
   secondaryBtn: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -1745,18 +2104,22 @@ const modalStyles = {
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFF" },
+    borderColor: COLORS.border,
+    backgroundColor: "#FFF",
+  },
   secondaryBtnText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: "#1F2937" },
+    color: COLORS.text,
+  },
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700" as const,
-    color: "#6B7280",
+    color: COLORS.textMuted,
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
-    marginBottom: 8 } };
+    marginBottom: 8,
+  },
+};
 
 export default FeasibilityConfirmationQueue;

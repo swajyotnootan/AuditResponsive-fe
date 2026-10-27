@@ -433,17 +433,61 @@ const downloadAndSharePDF = async (blob: Blob, fileName: string) => {
   }
 };
 
+export const fetchAllPages = async (
+  endpoint: string,
+  pageSize = 100,
+  maxPages = 100,
+): Promise<any[]> => {
+  const all: any[] = [];
+  let page = 0;
+  let last = false;
+
+  while (!last && page < maxPages) {
+    const sep = endpoint.includes("?") ? "&" : "?";
+    const res = await apiClient.get<any>(
+      `${endpoint}${sep}page=${page}&size=${pageSize}`
+    );
+
+    if (Array.isArray(res)) return res;
+
+    const chunk = Array.isArray(res?.content)
+      ? res.content
+      : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+    all.push(...chunk);
+
+    last = typeof res?.last === "boolean"
+      ? res.last
+      : typeof res?.totalPages === "number"
+        ? page + 1 >= res.totalPages
+        : chunk.length < pageSize;
+
+    page++;
+  }
+
+  return all;
+};
+
 // ─── Helper to normalize user data ──────────────────────────────────────────
 
 const normalizeUser = (data: any): User => {
+  const firstName = data.firstName || data.first_name || "";
+  const lastName = data.lastName || data.last_name || "";
+  const name =
+    data.fullName || data.name || `${firstName} ${lastName}`.trim() || "User";
+
   return {
+    ...data,
     id: data.id || data.userId || "",
     email: data.email || "",
-    firstName:
-      data.firstName || data.first_name || data.name?.split(" ")[0] || "User",
-    lastName: data.lastName || data.last_name || data.name?.split(" ")[1] || "",
-    name:
-      data.name || `${data.firstName || "User"} ${data.lastName || ""}`.trim(),
+    firstName,
+    lastName,
+    name,
+    namePrefix: data.namePrefix || "",
     role: data.role || data.userRole || "USER",
     username: data.username || data.userName || data.email?.split("@")[0] || "",
     phone: data.phone || data.mobile || "",
@@ -452,9 +496,14 @@ const normalizeUser = (data: any): User => {
     createdAt: data.createdAt || data.created_at || data.createdDate,
     updatedAt: data.updatedAt || data.updated_at || data.updatedDate,
     token: data.token || data.accessToken,
-    plantId: data.plantId || data.plant_id || null, // ✅ ADD
-    plantName: data.plantName || data.plant_name || null,
-    ...data,
+
+    // ✅ EXPLICITLY MAP LOCATION IDs
+    companyId: data.companyId || data.company_id || "",
+    companyName: data.companyName || data.company_name || "",
+    plantId: data.plantId || data.plant_id || "",
+    plantName: data.plantName || data.plant_name || "",
+    siteId: data.siteId || data.site_id || "",
+    siteName: data.siteName || data.site_name || "",
   };
 };
 
@@ -534,10 +583,29 @@ export const userAPI = {
     return normalizeUser(data);
   },
 
-  getAll: async (): Promise<User[]> => {
-    const response = await apiClient.get("/api/users");
-    const users = Array.isArray(response) ? response : response?.data || [];
-    return users.map((user: any) => normalizeUser(user));
+  getAll: async (params?: {
+    page?: number;
+    size?: number;
+  }): Promise<User[]> => {
+    const page = params?.page ?? 0;
+    const size = Math.min(params?.size ?? 500, 500);
+    const response: any = await apiClient.get(
+      `/api/users?page=${page}&size=${size}`,
+    );
+
+    // ✅ Handle every possible shape
+    let items: any[] = [];
+    if (Array.isArray(response)) items = response;
+    else if (Array.isArray(response?.content))
+      items = response.content; // ← NEW (Spring Page)
+    else if (Array.isArray(response?.items))
+      items = response.items; // legacy
+    else if (Array.isArray(response?.data))
+      items = response.data; // legacy
+    else if (Array.isArray(response?.data?.content))
+      items = response.data.content;
+
+    return items.map((user: any) => normalizeUser(user));
   },
 
   getAllUsers: async (): Promise<User[]> => {
@@ -614,12 +682,18 @@ export const userAPI = {
     plantId: number | string,
     role: string,
   ): Promise<User[]> => {
-    const response = await apiClient.get(
+    const response: any = await apiClient.get(
       `/api/users/plant/${plantId}/role/${role}`,
     );
-    const users = Array.isArray(response)
+    const users: any[] = Array.isArray(response)
       ? response
-      : (response as any)?.data || [];
+      : Array.isArray(response?.content)
+        ? response.content
+        : Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.items)
+            ? response.items
+            : [];
     return users.map((user: any) => normalizeUser(user));
   },
 };
@@ -1662,4 +1736,6 @@ export default {
   eightD: eightDAPI,
   forum: forumAPI,
   eightDPdf: eightDPdfAPI,
+    fetchAllPages,   // ← ADD
+
 };

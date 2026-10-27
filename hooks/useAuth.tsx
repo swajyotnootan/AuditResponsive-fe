@@ -171,16 +171,10 @@ export const useAuth = (): UseAuthReturn => {
     }
 
     try {
-      console.log("📡 [enrich] Fetching /api/users/" + enriched.id);
+      console.log("📡 [enrich] Fetching /api/users/me");
 
-      let token: string | null = null;
-      try {
-        token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-      } catch {}
-
-      const response = await fetch(`${API_BASE_URL}/api/users/${enriched.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      // ✅ FIX: Removed manual token retrieval. Global fetchSetup handles it.
+      const response = await fetch(`${API_BASE_URL}/api/users/me`);
 
       if (response.ok) {
         const profile = await response.json();
@@ -210,6 +204,7 @@ export const useAuth = (): UseAuthReturn => {
         console.warn("⚠️ [enrich] Profile fetch failed:", response.status);
       }
     } catch (err) {
+      // If the global interceptor caught a 401, it will have already kicked the user out.
       console.warn("⚠️ [enrich] Could not fetch profile:", err);
     }
 
@@ -234,35 +229,81 @@ export const useAuth = (): UseAuthReturn => {
   const loadUser = async () => {
     try {
       const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-      const storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
+      let storedUser = await AsyncStorage.getItem(USER_STORAGE_KEY);
 
       console.log("🔍 useAuth - Token exists:", !!token);
+      console.log("🔍 useAuth - Stored user exists:", !!storedUser);
 
-      if (token && storedUser) {
+      // If NO token, we're definitely logged out.
+      if (!token) {
+        console.log("🔍 useAuth - No token → logged out");
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // If we have a token but no stored user, we MUST fetch from /me
+      if (!storedUser) {
+        console.log(
+          "🔍 useAuth - Token exists but no stored user. Fetching /me...",
+        );
         try {
-          const parsedUser: User = JSON.parse(storedUser);
-          if (parsedUser.role) {
-            parsedUser.role = normalizeRole(parsedUser.role) || "AUDITOR";
+          // ✅ FIX: Removed manual token header. Global fetchSetup handles it.
+          const res = await fetch(`${API_BASE_URL}/api/users/me`);
+
+          if (res.ok) {
+            const profile = await res.json();
+            const freshUser = {
+              ...profile,
+              token,
+              role: normalizeRole(profile.role) || "AUDITOR",
+            };
+            await AsyncStorage.setItem(
+              USER_STORAGE_KEY,
+              JSON.stringify(freshUser),
+            );
+            setUser(freshUser);
+            setIsLoading(false);
+            return;
+          } else {
+            // Token invalid
+            console.log("🔍 useAuth - /me failed. Logging out.");
+            await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, USER_STORAGE_KEY]);
+            setUser(null);
+            setIsLoading(false);
+            return;
           }
-          const enriched = await enrichUserWithPlant(parsedUser);
-          setUser(enriched);
-          await AsyncStorage.setItem(
-            USER_STORAGE_KEY,
-            JSON.stringify(enriched),
-          );
-          console.log("✅ useAuth - User loaded:", {
-            role: enriched.role,
-            companyName: enriched.companyName,
-            plantName: enriched.plantName,
-          });
         } catch (e) {
-          console.error("Failed to parse user from AsyncStorage", e);
-          await AsyncStorage.multiRemove([USER_STORAGE_KEY, AUTH_TOKEN_KEY]);
+          // If apiFetch throws a 401, it already logged them out and redirected.
+          console.warn("🔍 useAuth - /me fetch failed:", e);
+          setUser(null);
+          setIsLoading(false);
+          return;
         }
+      }
+
+      // We have token AND stored user. Load from cache instantly, then enrich.
+      try {
+        const parsedUser: User = JSON.parse(storedUser);
+        if (parsedUser.role) {
+          parsedUser.role = normalizeRole(parsedUser.role) || "AUDITOR";
+        }
+        setUser(parsedUser);
+        setIsLoading(false); // ← Set loading false immediately after user is set
+
+        // Enrich in the background
+        const enriched = await enrichUserWithPlant(parsedUser);
+        setUser(enriched);
+        await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(enriched));
+      } catch (e) {
+        console.error("Failed to parse user from AsyncStorage", e);
+        await AsyncStorage.multiRemove([USER_STORAGE_KEY, AUTH_TOKEN_KEY]);
+        setUser(null);
+        setIsLoading(false);
       }
     } catch (error) {
       console.error("Error loading user:", error);
-    } finally {
+      setUser(null);
       setIsLoading(false);
     }
   };

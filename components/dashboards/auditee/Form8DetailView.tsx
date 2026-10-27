@@ -37,30 +37,32 @@ import {
 import { API_BASE_URL } from "@/config/apiConfig";
 import { ncrService } from "@/services/ncrService";
 import { getDashboardPath } from "@/utils/roleUtils";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
-import FinalPreview from "../../eightd/steps/FinalPreview"; // 👈 Adjust path if needed
+import FinalPreview from "../../eightd/steps/FinalPreview";
 import Form7DetailView from "../auditor/view/Form7DetailView";
 
-const BackButton = ({
-  label,
-  onPress,
-  defaultTab,
-}: {
-  label: string;
-  onPress: () => void;
-  defaultTab?: string;
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    className="flex-row items-center gap-2 rounded-lg bg-gray-200 px-4 py-2"
-  >
-    <ArrowLeft size={16} color="#374151" />
-    <Text className="font-medium text-gray-800">{label}</Text>
-  </TouchableOpacity>
-);
+// ─────────────────────────────────────────────────────────────
+// MODERN ENTERPRISE COLOR PALETTE
+// ─────────────────────────────────────────────────────────────
+const COLORS = {
+  primary: "#1E40AF", // Deep Professional Blue
+  primaryHover: "#1D4ED8",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#BFDBFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  success: "#10B981",
+  danger: "#EF4444",
+  warning: "#F59E0B",
+};
 
-// =====================================================================
+// Clean Sans-Serif for professional MNC look
+const fontFamily = Platform.OS === "ios" ? "System" : "sans-serif";
 
 // ─────────────────────────────────────────────────────────────
 // TypeScript Interfaces
@@ -96,113 +98,202 @@ interface StatementCardProps {
 interface StatusConfig {
   bg: string;
   text: string;
+  border: string;
   icon: ElementType;
   label: string;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Constants & Styles
+// Helper: icon color resolver
 // ─────────────────────────────────────────────────────────────
-const fontFamily = Platform.OS === "ios" ? "Times New Roman" : "serif";
+const getIconColor = (textClass: string) => {
+  if (textClass.includes("amber")) return "#92400e";
+  if (textClass.includes("blue")) return "#1e40af";
+  if (textClass.includes("emerald")) return "#065f46";
+  if (textClass.includes("purple")) return "#581c87";
+  if (textClass.includes("green")) return "#166534";
+  if (textClass.includes("red")) return "#991b1b";
+  if (textClass.includes("cyan")) return "#0e7490";
+  return "#334155";
+};
 
-const COLORS = {
-  primary: "#00529B",
-  secondary: "#3b82f6",
-  dark: "#1e3a8a",
-  light: "#60a5fa",
-  lighter: "#93c5fd",
-  bg: "#eff6ff",
-  white: "#ffffff",
-  success: "#10b981",
-  warning: "#f59e0b",
-  danger: "#ef4444",
+// ─────────────────────────────────────────────────────────────
+// Reusable Outline Button
+// ─────────────────────────────────────────────────────────────
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? COLORS.primary : COLORS.border;
+  const textColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textValue;
+  const iconColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textMuted;
+  const backgroundColor = isHoveredAndEnabled ? COLORS.primaryLight : "#FFFFFF";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5 shadow-sm"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text
+        className="text-sm font-semibold"
+        style={{ color: textColor, fontFamily }}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
 };
 
 // ─────────────────────────────────────────────────────────────
 // Helper Components
 // ─────────────────────────────────────────────────────────────
+const BackButton = ({
+  label = "Back to NCRs",
+  onPress,
+}: {
+  label?: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm active:bg-slate-50"
+  >
+    <ArrowLeft size={16} color={COLORS.textValue} />
+    <Text className="text-sm font-medium text-slate-700" style={{ fontFamily }}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const config: Record<string, StatusConfig> = {
     AWAITING_AUDITEE: {
-      bg: "bg-amber-100",
-      text: "text-amber-800",
+      bg: "bg-amber-50",
+      text: "text-amber-700",
+      border: "border-amber-200",
       icon: Clock,
       label: "Awaiting Auditee Review",
     },
     OPEN: {
-      bg: "bg-blue-100",
-      text: "text-blue-800",
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+      border: "border-blue-200",
       icon: AlertCircle,
       label: "Pending Manager Approval",
     },
     APPROVED: {
-      bg: "bg-emerald-100",
-      text: "text-emerald-800",
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+      border: "border-emerald-200",
       icon: CheckCircle,
       label: "Approved - Ready for Corrective Action",
     },
     IN_PROGRESS: {
-      bg: "bg-purple-100",
-      text: "text-purple-800",
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
       icon: FileText,
       label: "Corrective Action Submitted",
     },
     CLOSED: {
-      bg: "bg-green-100",
-      text: "text-green-800",
+      bg: "bg-green-50",
+      text: "text-green-700",
+      border: "border-green-200",
       icon: CheckCircle,
       label: "Closed",
     },
     REJECTED: {
-      bg: "bg-red-100",
-      text: "text-red-800",
+      bg: "bg-red-50",
+      text: "text-red-700",
+      border: "border-red-200",
       icon: X,
       label: "Rejected",
     },
+    SENT_TO_8D: {
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
+      icon: FileBarChart,
+      label: "Sent to 8D",
+    },
+    IN_8D_PROCESS: {
+      bg: "bg-cyan-50",
+      text: "text-cyan-700",
+      border: "border-cyan-200",
+      icon: FileBarChart,
+      label: "In 8D Process",
+    },
     NCR2_IN_PROGRESS: {
-      bg: "bg-purple-100",
-      text: "text-purple-800",
+      bg: "bg-purple-50",
+      text: "text-purple-700",
+      border: "border-purple-200",
       icon: FileText,
-      label: "NCR2 In Progress",
+      label: "NCR2 Verification",
     },
     NCR2_COMPLETED: {
-      bg: "bg-green-100",
-      text: "text-green-800",
+      bg: "bg-green-50",
+      text: "text-green-700",
+      border: "border-green-200",
       icon: CheckCircle,
       label: "NCR2 Completed",
     },
     READY_FOR_NCR2: {
-      bg: "bg-indigo-100",
-      text: "text-indigo-800",
+      bg: "bg-indigo-50",
+      text: "text-indigo-700",
+      border: "border-indigo-200",
       icon: Target,
       label: "Ready for NCR2",
     },
   };
 
-  const { bg, text, icon: Icon, label } = config[status] || config["OPEN"];
+  const {
+    bg,
+    text,
+    border,
+    icon: Icon,
+    label,
+  } = config[status] || config["OPEN"];
 
   return (
     <View
-      className={`flex-row items-center gap-1.5 rounded-full px-3 py-1 ${bg}`}
+      className={`flex-row items-center gap-2 rounded-full border px-3 py-1.5 ${bg} ${border}`}
     >
-      <Icon
-        size={12}
-        color={
-          text.includes("amber")
-            ? "#92400e"
-            : text.includes("blue")
-              ? "#1e40af"
-              : text.includes("emerald")
-                ? "#065f46"
-                : text.includes("purple")
-                  ? "#581c87"
-                  : text.includes("green")
-                    ? "#166534"
-                    : text.includes("red")
-                      ? "#991b1b"
-                      : "#3730a3"
-        }
-      />
+      <Icon size={14} color={getIconColor(text)} />
       <Text className={`text-xs font-semibold ${text}`} style={{ fontFamily }}>
         {label}
       </Text>
@@ -210,48 +301,41 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   );
 };
 
-const InfoCard = ({
-  icon: Icon,
-  label,
-  value,
-  className,
-}: {
-  icon: ElementType;
-  label: string;
-  value?: string | null;
-  className?: string;
-}) => (
-  <View
-    className={`flex-row items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 ${className}`}
-  >
-    <View className="rounded-lg bg-white p-2 shadow-sm">
-      <Icon size={16} color="#ef4444" />
+const InfoCard = ({ icon: Icon, label, value }: InfoCardProps) => (
+  <View className="flex-row items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <View className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-100 bg-slate-50">
+      <Icon size={18} color={COLORS.primary} />
     </View>
     <View className="flex-1">
       <Text
-        className="text-xs uppercase tracking-wider text-gray-500"
+        className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-slate-500"
         style={{ fontFamily }}
       >
         {label}
       </Text>
       <Text
-        className="text-sm font-semibold text-gray-800"
+        className="text-sm font-bold text-slate-800"
         style={{ fontFamily }}
+        numberOfLines={1}
       >
         {value || "—"}
       </Text>
     </View>
   </View>
 );
+
 const FormSection: React.FC<FormSectionProps> = ({ title, children }) => (
-  <View className="border-b border-gray-100 px-6 py-5">
-    <Text
-      className="mb-4 self-start border-b-2 border-red-500 pb-2 text-base font-bold text-gray-800"
-      style={{ fontFamily }}
-    >
-      {title}
-    </Text>
-    <View className="mt-3">{children}</View>
+  <View className="border-b border-slate-100 px-6 py-6">
+    <View className="mb-5 flex-row items-center gap-2">
+      <View className="h-5 w-1 rounded-full bg-blue-600" />
+      <Text
+        className="text-sm font-bold uppercase tracking-widest text-slate-800"
+        style={{ fontFamily }}
+      >
+        {title}
+      </Text>
+    </View>
+    <View>{children}</View>
   </View>
 );
 
@@ -260,10 +344,10 @@ const DetailRow: React.FC<DetailRowProps> = ({
   value,
   multiline = false,
 }) => (
-  <View className="mb-3 border-b border-gray-50 pb-2">
+  <View className="mb-4">
     {label && (
       <Text
-        className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500"
+        className="mb-1.5 text-xs font-semibold text-slate-500"
         style={{ fontFamily }}
       >
         {label}
@@ -271,9 +355,9 @@ const DetailRow: React.FC<DetailRowProps> = ({
     )}
     <View>
       {multiline ? (
-        <View className="rounded-lg bg-gray-50 p-3">
+        <View className="rounded-lg border border-slate-100 bg-slate-50 p-4">
           <Text
-            className="text-sm leading-5 text-gray-800"
+            className="text-sm leading-relaxed text-slate-700"
             style={{ fontFamily }}
           >
             {value || "—"}
@@ -281,7 +365,7 @@ const DetailRow: React.FC<DetailRowProps> = ({
         </View>
       ) : (
         <Text
-          className="text-sm font-medium text-gray-800"
+          className="text-sm font-medium text-slate-800"
           style={{ fontFamily }}
         >
           {value || "—"}
@@ -296,7 +380,11 @@ const BulletPointEvidence: React.FC<BulletPointEvidenceProps> = ({ items }) => (
     {items.map((item, idx) => {
       const isMajor = item.type === "●";
       const isMinor = item.type === "▲";
-      const borderColor = isMajor ? "#dc2626" : isMinor ? "#d97706" : "#2563eb";
+      const borderColor = isMajor
+        ? COLORS.danger
+        : isMinor
+          ? COLORS.warning
+          : COLORS.primary;
       const bgColor = isMajor
         ? "bg-red-50"
         : isMinor
@@ -311,22 +399,30 @@ const BulletPointEvidence: React.FC<BulletPointEvidenceProps> = ({ items }) => (
       return (
         <View
           key={idx}
-          className={`flex-row items-start gap-3 rounded-lg border-l-4 p-4 ${bgColor}`}
-          style={{ borderLeftColor: borderColor }}
+          className={`flex-row items-start gap-4 rounded-xl border border-slate-100 p-4 shadow-sm ${bgColor}`}
+          style={{ borderLeftWidth: 4, borderLeftColor: borderColor }}
         >
-          <Text className="text-lg font-bold" style={{ color: borderColor }}>
+          <Text
+            className="mt-0.5 text-lg font-bold"
+            style={{ color: borderColor, fontFamily }}
+          >
             {item.type}
           </Text>
           <View className="flex-1">
             {item.status && (
               <View
-                className={`mb-1.5 inline-flex self-start rounded-full px-2 py-0.5 ${badgeColor}`}
+                className={`mb-2 self-start rounded-md px-2 py-0.5 ${badgeColor}`}
               >
-                <Text className="text-[10px] font-bold">{item.status}</Text>
+                <Text
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ fontFamily }}
+                >
+                  {item.status}
+                </Text>
               </View>
             )}
             <Text
-              className="text-sm leading-5 text-gray-800"
+              className="text-sm leading-relaxed text-slate-800"
               style={{ fontFamily }}
             >
               {item.text}
@@ -339,8 +435,14 @@ const BulletPointEvidence: React.FC<BulletPointEvidenceProps> = ({ items }) => (
 );
 
 const StatementCard: React.FC<StatementCardProps> = ({ data }) => (
-  <View className="rounded-lg border-l-4 border-red-500 bg-red-50 p-4">
-    <Text className="text-sm leading-5 text-gray-800" style={{ fontFamily }}>
+  <View
+    className="rounded-xl border border-red-100 bg-red-50 p-5 shadow-sm"
+    style={{ borderLeftWidth: 4, borderLeftColor: COLORS.danger }}
+  >
+    <Text
+      className="text-sm leading-relaxed text-slate-800"
+      style={{ fontFamily }}
+    >
       {data?.nonconformity || "—"}
     </Text>
   </View>
@@ -357,7 +459,6 @@ export default function Form8DetailView({
   const router = useRouter();
   const urlParams = useLocalSearchParams();
 
-  // ✅ Merge inline params and URL params safely
   const params = { ...urlParams, ...initialParams };
   const id = params.id as string;
   const type = params.type as string;
@@ -387,10 +488,8 @@ export default function Form8DetailView({
     pdfData: "",
     fileName: "",
   });
-  // ✅ 1. Add state for users
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  // ✅ 2. Fetch users on mount
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -434,7 +533,6 @@ export default function Form8DetailView({
   const downloadPDF = async () => {
     if (!ncr?.id) {
       Alert.alert("Error", "NCR ID not found");
-
       return;
     }
 
@@ -442,64 +540,42 @@ export default function Form8DetailView({
 
     try {
       const token = await AsyncStorage.getItem("authToken");
-
       const endpoint = isNCR2Mode
         ? `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf?type=ncr2`
         : `${API_BASE_URL}/api/ncr/${ncr.id}/form8-pdf`;
 
       if (Platform.OS === "web") {
-        // ✅ Web-specific download logic using Fetch and Blob
-
         const response = await fetch(endpoint, {
-          headers: {
-            Authorization: token ? `Bearer ${token}` : "",
-          },
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
         });
 
         if (!response.ok) throw new Error("Network response was not ok");
 
         const blob = await response.blob();
-
         const url = window.URL.createObjectURL(blob);
-
         const link = document.createElement("a");
-
         link.href = url;
-
         link.setAttribute(
           "download",
-
           `${isNCR2Mode ? "NCR2" : "Form8"}_CA_${ncr.ncrNumber || ncr.id}.pdf`,
         );
-
         document.body.appendChild(link);
-
         link.click();
-
         link.parentNode?.removeChild(link);
-
         window.URL.revokeObjectURL(url);
       } else {
-        // ✅ Native-specific download logic (iOS/Android)
-
         const fileSystem = FileSystem as any;
-
         const fileUri = `${fileSystem.documentDirectory}${
           isNCR2Mode ? "NCR2" : "Form8"
         }_CA_${ncr.ncrNumber || ncr.id}.pdf`;
-
         const downloadResumable = fileSystem.createDownloadResumable(
           endpoint,
-
           fileUri,
-
           { headers: { Authorization: token ? `Bearer ${token}` : "" } },
         );
 
         const downloadResult = await downloadResumable.downloadAsync();
-
         if (!downloadResult) throw new Error("Download failed");
-
         const { uri } = downloadResult;
 
         if (await Sharing.isAvailableAsync()) {
@@ -514,14 +590,11 @@ export default function Form8DetailView({
         : `Form 8 PDF for ${ncr.ncrNumber || ncr.id} has been downloaded successfully!`;
 
       setModalMessage(modalMsg);
-
       setShowSuccessModal(true);
     } catch (err) {
       console.error("PDF download error:", err);
-
       Alert.alert(
         "Error",
-
         "Failed to download PDF. Please check your network connection.",
       );
     } finally {
@@ -553,8 +626,6 @@ export default function Form8DetailView({
   );
 
   const resolve8DEventId = async () => {
-    // ✅ FIX: Dynamic API base URL for Web vs Mobile
-
     const directCandidates = [
       ncr?.eightDEventId,
       ncr?.eightDEventNo,
@@ -593,6 +664,7 @@ export default function Form8DetailView({
 
     return matchedEvent?.eventNo || null;
   };
+
   const open8DReport = async () => {
     try {
       setLoading8DReport(true);
@@ -606,7 +678,6 @@ export default function Form8DetailView({
         return;
       }
 
-      // ✅ SET STATE TO OPEN DRAWER (Matches Form7DetailView)
       setSelected8DEventId(eventId);
       setShow8DReportModal(true);
     } catch (err) {
@@ -616,6 +687,7 @@ export default function Form8DetailView({
       setLoading8DReport(false);
     }
   };
+
   const parseStructuredEvidence = (evidenceText: string) => {
     if (!evidenceText) return [];
     try {
@@ -693,15 +765,8 @@ export default function Form8DetailView({
 
     const handleClose = () => {
       setShowSuccessModal(false);
-      if (onClose) {
-        onClose();
-      } else {
-        router.replace(dashboardPath || ("/" as any));
-      }
-    };
-
-    const handleDownloadAgain = async () => {
-      await downloadPDF();
+      if (onClose) onClose();
+      else router.replace(dashboardPath || ("/" as any));
     };
 
     return (
@@ -710,7 +775,7 @@ export default function Form8DetailView({
           <View className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
             <View
               className="items-center px-6 pb-6 pt-8"
-              style={{ backgroundColor: COLORS.bg }}
+              style={{ backgroundColor: COLORS.primaryLight }}
             >
               <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-white shadow-lg">
                 <CheckCircle size={32} color={COLORS.success} />
@@ -738,7 +803,7 @@ export default function Form8DetailView({
                     NCR Number
                   </Text>
                   <Text
-                    className="text-sm font-semibold text-slate-800"
+                    className="text-sm font-bold text-slate-800"
                     style={{ fontFamily }}
                   >
                     {ncr?.ncrNumber || "—"}
@@ -759,36 +824,12 @@ export default function Form8DetailView({
                   </Text>
                 </View>
               </View>
-              <View
-                className="mb-4 flex-row items-start gap-2 rounded-xl border p-3"
-                style={{
-                  backgroundColor: COLORS.bg,
-                  borderColor: COLORS.lighter,
-                }}
-              >
-                <CheckCircle
-                  size={16}
-                  color={COLORS.primary}
-                  style={{ marginTop: 2 }}
-                />
-                <Text
-                  className="flex-1 text-xs"
-                  style={{ color: COLORS.dark, fontFamily }}
-                >
-                  <Text style={{ fontWeight: "bold" }}>
-                    {isNCR2Mode
-                      ? "NCR2 (Post-8D Corrective Action)"
-                      : "Form 8 (Corrective Action Report)"}
-                  </Text>{" "}
-                  has been successfully generated.
-                </Text>
-              </View>
               <View className="flex-col gap-3">
                 <TouchableOpacity
-                  onPress={handleDownloadAgain}
+                  onPress={downloadPDF}
                   disabled={pdfDownloading}
                   className="w-full flex-row items-center justify-center gap-2 rounded-xl px-5 py-3 shadow-md"
-                  style={{ backgroundColor: COLORS.secondary }}
+                  style={{ backgroundColor: COLORS.primary }}
                 >
                   {pdfDownloading ? (
                     <Loader2 size={18} color="#fff" />
@@ -804,9 +845,9 @@ export default function Form8DetailView({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleClose}
-                  className="w-full flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm"
+                  className="w-full flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm active:bg-slate-50"
                 >
-                  <ArrowLeft size={18} color="#334155" />
+                  <ArrowLeft size={18} color={COLORS.textValue} />
                   <Text
                     className="font-semibold text-slate-700"
                     style={{ fontFamily }}
@@ -864,26 +905,17 @@ export default function Form8DetailView({
     }
   };
 
-  // const renderActiveForm7Detail = () => {
-  //   if (!activeForm7Config) return null;
-  //   return (
-  //     <Form7DetailView
-  //       initialParams={activeForm7Config}
-  //       onClose={() => {
-  //         setActiveForm7Config(null); // Clears the state to go back
-  //       }}
-  //     />
-  //   );
-  // };
-
-  // if (activeForm7Config) {
-  //   return renderActiveForm7Detail();
-  // }
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
+      <View
+        className="flex-1 items-center justify-center bg-slate-50"
+        style={{ flex: 1 }}
+      >
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text className="mt-4 font-medium text-gray-500" style={{ fontFamily }}>
+        <Text
+          className="mt-4 font-medium text-slate-500"
+          style={{ fontFamily }}
+        >
           Loading NCR details...
         </Text>
       </View>
@@ -892,25 +924,32 @@ export default function Form8DetailView({
 
   if (error || !ncr) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 p-8">
-        <AlertCircle size={48} color={COLORS.danger} />
-        <Text
-          className="mb-4 mt-4 text-center text-gray-600"
-          style={{ fontFamily }}
-        >
-          {error || "NCR not found"}
-        </Text>
-        <TouchableOpacity
-          onPress={() =>
-            onClose ? onClose() : router.replace(dashboardPath || ("/" as any))
-          }
-          className="rounded-xl px-5 py-2.5"
-          style={{ backgroundColor: COLORS.danger }}
-        >
-          <Text className="font-medium text-white" style={{ fontFamily }}>
-            Back to Dashboard
+      <View
+        className="flex-1 items-center justify-center bg-slate-50"
+        style={{ flex: 1 }}
+      >
+        <View className="mx-4 max-w-md items-center rounded-2xl border border-slate-100 bg-white p-8 shadow-lg">
+          <AlertCircle size={48} color={COLORS.danger} className="mb-4" />
+          <Text
+            className="mb-4 text-center font-medium text-slate-700"
+            style={{ fontFamily }}
+          >
+            {error || "NCR not found"}
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              onClose
+                ? onClose()
+                : router.replace(dashboardPath || ("/" as any))
+            }
+            className="rounded-xl px-5 py-2.5 shadow-sm"
+            style={{ backgroundColor: COLORS.primary }}
+          >
+            <Text className="font-medium text-white" style={{ fontFamily }}>
+              Back to Dashboard
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -919,11 +958,8 @@ export default function Form8DetailView({
     return (
       <Form7DetailView
         initialParams={{ id: ncr.id }}
-        onClose={() => setShowForm7Detail(false)} // Allows going back to Form 8 Detail
-        onNavigateToForm8={() => {
-          // If they click "View NCR2" inside Form 7, just close this overlay and return here
-          setShowForm7Detail(false);
-        }}
+        onClose={() => setShowForm7Detail(false)}
+        onNavigateToForm8={() => setShowForm7Detail(false)}
       />
     );
   }
@@ -991,28 +1027,34 @@ export default function Form8DetailView({
   const hodD0RejectionMessage = isNCR2Mode ? ncr.rejectionReason : "";
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50" style={{ flex: 1 }}>
+    <View className="flex-1 bg-slate-50" style={{ flex: 1 }}>
       <ScrollView
-        className="flex-1 bg-gray-50"
+        className="flex-1 bg-slate-50"
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
       >
+        {/* Top NCR2 Banner */}
         {isNCR2Mode && (
-          <View className="mb-4 mt-4 w-full max-w-5xl self-center px-4">
+          <View className="mb-4 mt-6 w-full max-w-5xl self-center px-4">
             <View
-              className="flex-row items-center gap-3 rounded-xl p-3 shadow-sm"
-              style={{ backgroundColor: "#0ea5e9" }}
+              className="flex-row items-center gap-3 rounded-xl border p-4 shadow-sm"
+              style={{
+                backgroundColor: COLORS.primaryLight,
+                borderColor: COLORS.primaryBorder,
+              }}
             >
-              <CheckCircle size={20} color="#fff" style={{ opacity: 0.9 }} />
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm">
+                <CheckCircle size={20} color={COLORS.primary} />
+              </View>
               <View className="flex-1">
                 <Text
-                  className="text-sm font-bold text-white"
+                  className="text-sm font-bold text-blue-900"
                   style={{ fontFamily }}
                 >
                   NCR2 Mode - Corrective Action After 8D Investigation
                 </Text>
                 <Text
-                  className="text-xs text-white"
-                  style={{ fontFamily, opacity: 0.9 }}
+                  className="mt-0.5 text-xs text-blue-700"
+                  style={{ fontFamily }}
                 >
                   This corrective action was submitted after 8D investigation
                   completion
@@ -1023,71 +1065,45 @@ export default function Form8DetailView({
         )}
 
         {/* Top Action Bar */}
-        <View className="mb-5 mt-4 w-full max-w-5xl flex-row flex-wrap items-center justify-between gap-3 self-center px-4">
+        <View className="mx-auto mb-5 mt-4 w-full max-w-5xl flex-row flex-wrap items-center justify-between gap-3 px-4">
           <BackButton
-            defaultTab="ncrs"
             label="Back to NCRs"
             onPress={() => (onClose ? onClose() : router.back())}
           />
-          <View className="flex-row items-center gap-3">
+          <View className="flex-row flex-wrap items-center gap-3">
             <StatusBadge status={ncr.status} />
-            <TouchableOpacity
-              onPress={downloadPDF}
-              disabled={pdfDownloading}
-              className="flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-sm"
-              style={{
-                backgroundColor: COLORS.primary,
-                opacity: pdfDownloading ? 0.5 : 1,
-              }}
-            >
-              {pdfDownloading ? (
-                <Loader2 size={18} color="#fff" />
-              ) : (
-                <Download size={18} color="#fff" />
-              )}
-              <Text
-                className="text-sm font-medium text-white"
-                style={{ fontFamily }}
-              >
-                Download PDF
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
+            <OutlineButton
+              title="View PDF"
+              icon={FileText}
               onPress={handleViewPDF}
               disabled={pdfDownloading}
-              className="flex-row items-center gap-2 rounded-xl px-4 py-2.5 shadow-sm"
-              style={{
-                backgroundColor: "#8B5CF6",
-                opacity: pdfDownloading ? 0.5 : 1,
-              }}
-            >
-              {pdfDownloading ? (
-                <Loader2 size={18} color="#fff" />
-              ) : (
-                <FileText size={18} color="#fff" />
-              )}
-              <Text
-                className="text-sm font-medium text-white"
-                style={{ fontFamily }}
-              >
-                View PDF
-              </Text>
-            </TouchableOpacity>
+              loading={pdfDownloading}
+            />
+            <OutlineButton
+              title="Download PDF"
+              icon={Download}
+              onPress={downloadPDF}
+              disabled={pdfDownloading}
+              loading={pdfDownloading}
+            />
           </View>
         </View>
 
         {/* Main Form Card */}
-        <View className="mx-4 mb-8 w-full max-w-5xl self-center overflow-hidden rounded-2xl bg-white shadow-xl">
+        <View className="mx-4 mb-8 w-full max-w-5xl self-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
           {/* Header */}
           <View
-            className="px-6 py-5"
-            style={{ backgroundColor: COLORS.primary }}
+            className="px-8 py-8"
+            style={{
+              backgroundColor: COLORS.primaryLight,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.primaryBorder,
+            }}
           >
             <View className="flex-row flex-wrap items-start justify-between gap-4">
-              <View className="flex-1">
+              <View className="min-w-[200px] flex-1">
                 <Text
-                  className="text-xl font-bold text-white"
+                  className="text-xl font-bold tracking-tight text-blue-950"
                   style={{ fontFamily }}
                 >
                   {isNCR2Mode
@@ -1095,7 +1111,7 @@ export default function Form8DetailView({
                     : "Corrective Action Report (Form 8)"}
                 </Text>
                 <Text
-                  className="mt-1 text-sm text-gray-300"
+                  className="mt-1 text-sm font-medium text-blue-800"
                   style={{ fontFamily }}
                 >
                   Quality Management System ·{" "}
@@ -1106,14 +1122,13 @@ export default function Form8DetailView({
               </View>
               <View className="items-end">
                 <Text
-                  className="text-sm font-medium text-white/80"
+                  className="text-xs font-semibold uppercase tracking-wider text-blue-700"
                   style={{ fontFamily }}
                 >
-                  <Text style={{ opacity: 0.7 }}>Audit Report:</Text>{" "}
-                  {auditReportNumber}
+                  Audit Report: {auditReportNumber}
                 </Text>
                 <Text
-                  className="text-lg font-bold text-white"
+                  className="mt-1 text-xl font-bold text-blue-950"
                   style={{ fontFamily }}
                 >
                   {ncr.ncrNumber || "—"}
@@ -1123,9 +1138,7 @@ export default function Form8DetailView({
           </View>
 
           {/* Info Cards Row */}
-          {/* Info Cards Row */}
-          <View className="border-b border-gray-100 bg-gray-50 px-6 py-4">
-            {/* First Row - 4 cards on desktop, 2 on mobile */}
+          <View className="border-b border-slate-100 bg-slate-50 px-6 py-5">
             <View className="-mx-1.5 flex-row flex-wrap">
               <View className="mb-3 w-full px-1.5 md:w-1/2 lg:w-1/4">
                 <InfoCard
@@ -1149,8 +1162,7 @@ export default function Form8DetailView({
               </View>
             </View>
 
-            {/* Second Row - 4 cards on desktop, 2 on mobile */}
-            <View className="-mx-1.5 mt-3 flex-row flex-wrap">
+            <View className="-mx-1.5 mt-2 flex-row flex-wrap">
               <View className="mb-3 w-full px-1.5 md:w-1/2 lg:w-1/4">
                 <InfoCard
                   icon={Hash}
@@ -1189,18 +1201,17 @@ export default function Form8DetailView({
               )}
             </View>
           </View>
-          {/* Objective Evidence */}
-          <FormSection title="🔍 Objective Evidence / Observations">
+
+          {/* Sections */}
+          <FormSection title="Objective Evidence / Observations">
             <BulletPointEvidence items={evidenceItems} />
           </FormSection>
 
-          {/* Statement of Nonconformity */}
-          <FormSection title="📋 Statement of Nonconformity">
+          <FormSection title="Statement of Nonconformity">
             <StatementCard data={statementData} />
           </FormSection>
 
-          {/* Root Cause */}
-          <FormSection title="🌱 Root Cause Analysis">
+          <FormSection title="Root Cause Analysis">
             <DetailRow
               label={
                 isNCR2Mode
@@ -1212,12 +1223,11 @@ export default function Form8DetailView({
             />
           </FormSection>
 
-          {/* Correction */}
           <FormSection
             title={
               isNCR2Mode
-                ? "✨ NCR2 - Correction of Problem"
-                : "✨ Correction of Problem"
+                ? "NCR2 - Correction of Problem"
+                : "Correction of Problem"
             }
           >
             <DetailRow
@@ -1225,7 +1235,7 @@ export default function Form8DetailView({
               value={correction.action}
               multiline
             />
-            <View className="mt-3 flex-row flex-wrap gap-4">
+            <View className="mt-3 flex-row flex-wrap gap-6">
               <View className="min-w-[45%] flex-1">
                 <DetailRow
                   label="Responsible Person/Dept"
@@ -1241,12 +1251,11 @@ export default function Form8DetailView({
             </View>
           </FormSection>
 
-          {/* Corrective Action */}
           <FormSection
             title={
               isNCR2Mode
-                ? "⚙️ NCR2 - Permanent Corrective Actions"
-                : "⚙️ Corrective Actions"
+                ? "NCR2 - Permanent Corrective Actions"
+                : "Corrective Actions"
             }
           >
             <DetailRow
@@ -1254,7 +1263,7 @@ export default function Form8DetailView({
               value={correctiveAction.action}
               multiline
             />
-            <View className="mt-3 flex-row flex-wrap gap-4">
+            <View className="mt-3 flex-row flex-wrap gap-6">
               <View className="min-w-[45%] flex-1">
                 <DetailRow
                   label="Responsible Person/Dept"
@@ -1270,26 +1279,25 @@ export default function Form8DetailView({
             </View>
           </FormSection>
 
-          {/* Acceptability */}
-          <FormSection title="✅ Acceptability of Corrective Action">
-            <View className="rounded-lg border border-green-200 bg-green-50 p-4">
+          <FormSection title="Acceptability of Corrective Action">
+            <View className="rounded-xl border border-green-200 bg-green-50 p-5 shadow-sm">
               <Text
-                className="text-sm font-medium text-green-800"
+                className="text-sm font-medium leading-relaxed text-green-900"
                 style={{ fontFamily }}
               >
                 Proposed Corrective actions are adequate to prevent the
                 recurrence of the non-conformity
               </Text>
-              <View className="mt-4 flex-row justify-between border-t border-green-200 pt-3">
+              <View className="mt-4 flex-row justify-between border-t border-green-200 pt-4">
                 <View>
                   <Text
-                    className="text-xs text-gray-500"
+                    className="text-[11px] font-semibold uppercase tracking-wider text-green-700"
                     style={{ fontFamily }}
                   >
                     Date
                   </Text>
                   <Text
-                    className="text-sm font-medium text-gray-800"
+                    className="mt-0.5 text-sm font-medium text-green-900"
                     style={{ fontFamily }}
                   >
                     {closedDate}
@@ -1297,13 +1305,13 @@ export default function Form8DetailView({
                 </View>
                 <View className="items-end">
                   <Text
-                    className="text-xs text-gray-500"
+                    className="text-[11px] font-semibold uppercase tracking-wider text-green-700"
                     style={{ fontFamily }}
                   >
                     Auditor(s) / MR
                   </Text>
                   <Text
-                    className="text-sm font-medium text-gray-800"
+                    className="mt-0.5 text-sm font-medium text-green-900"
                     style={{ fontFamily }}
                   >
                     {auditorName}
@@ -1313,18 +1321,17 @@ export default function Form8DetailView({
             </View>
           </FormSection>
 
-          {/* Horizontal Deployment */}
-          <FormSection title="🔄 Horizontal Deployment">
+          <FormSection title="Horizontal Deployment">
             <DetailRow
               label="Applying corrective actions to similar processes or areas"
               value={hdData.action}
               multiline
             />
-            <View className="mt-3 items-end">
-              <View className="flex-row items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2">
-                <Calendar size={14} color="#2563eb" />
+            <View className="mt-4 items-end">
+              <View className="flex-row items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2">
+                <Calendar size={14} color={COLORS.primary} />
                 <Text
-                  className="text-xs font-semibold text-blue-700"
+                  className="text-xs font-semibold text-blue-800"
                   style={{ fontFamily }}
                 >
                   Actual Completion Date: {hdData.actual}
@@ -1333,31 +1340,36 @@ export default function Form8DetailView({
             </View>
           </FormSection>
 
-          {/* Verification */}
-          <FormSection title="📋 Verification of Effectiveness">
+          <FormSection title="Verification of Effectiveness">
             <DetailRow
               label="Objective evidence collected during follow-up audit"
               value={verificationComment}
               multiline
             />
-            <View className="mt-3 flex-row justify-between border-t border-gray-100 pt-3">
+            <View className="mt-4 flex-row justify-between border-t border-slate-100 pt-4">
               <View>
-                <Text className="text-xs text-gray-500" style={{ fontFamily }}>
+                <Text
+                  className="text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  style={{ fontFamily }}
+                >
                   Verification Date
                 </Text>
                 <Text
-                  className="text-sm font-medium text-gray-800"
+                  className="mt-0.5 text-sm font-medium text-slate-800"
                   style={{ fontFamily }}
                 >
                   {closedDate}
                 </Text>
               </View>
               <View className="items-end">
-                <Text className="text-xs text-gray-500" style={{ fontFamily }}>
+                <Text
+                  className="text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  style={{ fontFamily }}
+                >
                   Auditor(s) / MR
                 </Text>
                 <Text
-                  className="text-sm font-medium text-gray-800"
+                  className="mt-0.5 text-sm font-medium text-slate-800"
                   style={{ fontFamily }}
                 >
                   {auditorName}
@@ -1366,18 +1378,17 @@ export default function Form8DetailView({
             </View>
           </FormSection>
 
-          {/* Remarks */}
           {managerReviewComment && (
-            <FormSection title="📝 Management Remarks">
+            <FormSection title="Management Remarks">
               <DetailRow value={managerReviewComment} multiline />
             </FormSection>
           )}
 
           {hodD0RejectionMessage && (
             <FormSection title="HOD Rejection Message from 8D D0">
-              <View className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <View className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm">
                 <Text
-                  className="text-sm leading-5 text-red-800"
+                  className="text-sm leading-relaxed text-red-800"
                   style={{ fontFamily }}
                 >
                   {hodD0RejectionMessage}
@@ -1387,23 +1398,32 @@ export default function Form8DetailView({
           )}
 
           {/* Footer */}
-          <View className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-            <View className="flex-row flex-wrap justify-center gap-4">
-              <View className="flex-row items-center gap-1">
-                <View className="h-2 w-2 rounded-full bg-green-500" />
-                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+          <View className="border-t border-slate-200 bg-slate-50 px-6 py-5">
+            <View className="flex-row flex-wrap justify-center gap-6">
+              <View className="flex-row items-center gap-2">
+                <View className="h-2.5 w-2.5 rounded-full bg-green-500" />
+                <Text
+                  className="text-xs font-medium text-slate-600"
+                  style={{ fontFamily }}
+                >
                   (O+)Ve: Conformance
                 </Text>
               </View>
-              <View className="flex-row items-center gap-1">
-                <View className="h-2 w-2 rounded-full bg-red-500" />
-                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+              <View className="flex-row items-center gap-2">
+                <View className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                <Text
+                  className="text-xs font-medium text-slate-600"
+                  style={{ fontFamily }}
+                >
                   (O-)Ve: Non Conformance
                 </Text>
               </View>
-              <View className="flex-row items-center gap-1">
-                <View className="h-2 w-2 rounded-full bg-amber-500" />
-                <Text className="text-xs text-gray-600" style={{ fontFamily }}>
+              <View className="flex-row items-center gap-2">
+                <View className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <Text
+                  className="text-xs font-medium text-slate-600"
+                  style={{ fontFamily }}
+                >
                   (OI): Opportunity for Improvement
                 </Text>
               </View>
@@ -1413,52 +1433,29 @@ export default function Form8DetailView({
 
         {/* Bottom Action Buttons */}
         <View className="mb-8 w-full max-w-5xl flex-row flex-wrap justify-end gap-3 self-center px-4">
-          <TouchableOpacity
+          <OutlineButton
+            title="View NCR1"
+            icon={Eye}
             onPress={() => setShowForm7Detail(true)}
-            className="flex-row items-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
-            style={{ backgroundColor: "#0ea5e9" }}
-          >
-            <Eye size={16} color="#fff" />
-            <Text
-              className="text-sm font-medium text-white"
-              style={{ fontFamily }}
-            >
-              View NCR1
-            </Text>
-          </TouchableOpacity>
-
+          />
           {is8DRelated && (
-            <TouchableOpacity
+            <OutlineButton
+              title="View 8D Report"
+              icon={FileBarChart}
               onPress={open8DReport}
               disabled={loading8DReport}
-              className="flex-row items-center gap-2 rounded-xl px-5 py-2.5 shadow-sm"
-              style={{
-                backgroundColor: COLORS.primary,
-                opacity: loading8DReport ? 0.6 : 1,
-              }}
-            >
-              {loading8DReport ? (
-                <Loader2 size={16} color="#fff" />
-              ) : (
-                <FileBarChart size={16} color="#fff" />
-              )}
-              <Text
-                className="text-sm font-medium text-white"
-                style={{ fontFamily }}
-              >
-                View 8D Report
-              </Text>
-            </TouchableOpacity>
+              loading={loading8DReport}
+            />
           )}
         </View>
 
         <SuccessModal />
-        {/* 🗄️ RIGHT-SIDE DRAWER: 8D Report Preview (Matches Form7DetailView) */}
+
+        {/* 8D Report Preview Drawer */}
         {show8DReportModal && selected8DEventId && (
           <Modal visible={true} transparent animationType="slide">
             <View className="flex-1 bg-black/60">
               <View className="flex-1 flex-row justify-end">
-                {/* 1. Backdrop (Click outside the drawer to close) */}
                 <TouchableOpacity
                   className="flex-1"
                   activeOpacity={1}
@@ -1467,15 +1464,12 @@ export default function Form8DetailView({
                     setSelected8DEventId(null);
                   }}
                 />
-
-                {/* 2. Drawer Panel */}
-                <View className="h-full w-full border-l border-gray-200 bg-white shadow-2xl md:w-[500px] lg:w-[600px]">
-                  {/* Drawer Header */}
-                  <View className="flex-row items-center justify-between border-b border-gray-200 bg-gray-50 px-5 py-4">
+                <View className="h-full w-full border-l border-slate-200 bg-white shadow-2xl md:w-[500px] lg:w-[600px]">
+                  <View className="flex-row items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
                     <View className="flex-row items-center gap-3">
                       <FileBarChart size={20} color={COLORS.primary} />
                       <Text
-                        className="text-lg font-bold text-gray-800"
+                        className="text-lg font-bold text-slate-800"
                         style={{ fontFamily }}
                       >
                         8D Report Preview
@@ -1486,14 +1480,12 @@ export default function Form8DetailView({
                         setShow8DReportModal(false);
                         setSelected8DEventId(null);
                       }}
-                      className="rounded-full border border-gray-200 bg-white p-2 shadow-sm active:bg-gray-100"
+                      className="rounded-full border border-slate-200 bg-white p-2 shadow-sm active:bg-slate-100"
                     >
-                      <X size={20} color="#475569" />
+                      <X size={20} color={COLORS.textValue} />
                     </TouchableOpacity>
                   </View>
-
-                  {/* Drawer Content (FinalPreview Component) */}
-                  <View className="flex-1 bg-gray-50">
+                  <View className="flex-1 bg-slate-50">
                     <FinalPreview
                       eventId={selected8DEventId}
                       isHOD={
@@ -1502,7 +1494,7 @@ export default function Form8DetailView({
                       onRefresh={() => {
                         setShow8DReportModal(false);
                         setSelected8DEventId(null);
-                        fetchNcr(); // ✅ Refreshes the Form8DetailView data
+                        fetchNcr();
                       }}
                     />
                   </View>
@@ -1535,7 +1527,7 @@ export default function Form8DetailView({
           onClose={() =>
             setPDFViewer({ visible: false, pdfData: "", fileName: "" })
           }
-          onShareComplete={(forumId?: string) => {
+          onShareComplete={() => {
             Alert.alert("Success", "PDF shared to forum successfully!");
             setPDFViewer({ visible: false, pdfData: "", fileName: "" });
           }}
@@ -1543,6 +1535,6 @@ export default function Form8DetailView({
           allUsers={allUsers}
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

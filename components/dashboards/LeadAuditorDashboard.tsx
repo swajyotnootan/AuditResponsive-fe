@@ -143,6 +143,20 @@ const LeadAuditorDashboardContent: React.FC = () => {
     return "";
   };
 
+  /** Normalize any backend envelope into a plain array. */
+  const unwrapArray = <T,>(raw: any): T[] => {
+    if (Array.isArray(raw)) return raw;
+    if (raw == null) return [];
+    if (Array.isArray(raw.data)) return raw.data;
+    if (Array.isArray(raw.content)) return raw.content;
+    if (Array.isArray(raw.items)) return raw.items;
+    if (Array.isArray(raw.results)) return raw.results;
+    if (Array.isArray(raw.ncrs)) return raw.ncrs;
+    if (Array.isArray(raw.responses)) return raw.responses;
+    if (Array.isArray(raw.schedules)) return raw.schedules;
+    return [];
+  };
+
   const fetchLeadAuditorPlant = async () => {
     try {
       const response = await axios.get(
@@ -380,11 +394,11 @@ const LeadAuditorDashboardContent: React.FC = () => {
             .catch(() => ({ data: [] })),
         ]);
 
-      let schedules = schedulesRes.data || [];
-      let ncrs = ncrRes.data || [];
-      const auditors = auditorsRes.data || [];
-      const auditees = auditeesRes.data || [];
-      let responses = responsesRes.data || [];
+      let schedules = unwrapArray<Schedule>(schedulesRes.data);
+      let ncrs = unwrapArray<NCR>(ncrRes.data);
+      const auditors = unwrapArray<User>(auditorsRes.data);
+      const auditees = unwrapArray<User>(auditeesRes.data);
+      let responses = unwrapArray<Response>(responsesRes.data);
 
       // ============================================================
       // ?? DEBUG LOGS � ADD THIS BLOCK

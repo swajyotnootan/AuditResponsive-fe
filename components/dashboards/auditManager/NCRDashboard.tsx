@@ -1,11 +1,10 @@
 import { ncrService } from "@/services/ncrService";
-// ✅ CORRECT: Import the icon family, NOT individual icon names
 import { Feather } from "@expo/vector-icons";
 
 import ForumThreadView from "@/components/forum/ForumThreadView";
 import AuditCheckSheetNCRForumModal from "@/components/modals/AuditCheckSheetNCRForumModal";
 import { API_BASE_URL } from "@/config/apiConfig";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +20,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import NCRViewManager from "../auditor/view/NCRViewManager";
+
 // ═════ MNC STANDARD PALETTE ═════
 const T = {
   bg: "#F8FAFC",
@@ -115,7 +115,6 @@ const Spinner = ({
   color?: string;
 }) => <ActivityIndicator size={size as any} color={color} />;
 
-// ✅ UPDATED: Accepts iconName as a string and uses the Feather component
 const StatCard = ({
   title,
   value,
@@ -262,21 +261,17 @@ const getNcrYear = (ncr: any): number | null => {
   if (isNaN(d.getTime())) return null;
   return d.getFullYear();
 };
-// ─────────────────────────────────────────────────────────────
-// Main Dashboard Component
-// ─────────────────────────────────────────────────────────────
 
 const NCRDashboard = ({
   onBack,
   onViewNcr,
-  selectedYear, // 👈 ADD
+  selectedYear,
 }: {
   onBack?: () => void;
   onViewNcr?: (id: string) => void;
-  selectedYear?: number; // 👈 ADD
+  selectedYear?: number;
 }) => {
-  const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null); // ... rest of your code
-  // ... rest of your code
+  const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
   const { user } = useAuth();
   const { addToast } = useToast();
 
@@ -300,6 +295,91 @@ const NCRDashboard = ({
   const [eightDTeamMembers, setEightDTeamMembers] = useState<string[]>([]);
   const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
 
+  const [debouncedTerm, setDebouncedTerm] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  // 🔧 FIX #4: capture totalElements for the real "Total NCRs" stat
+  const [totalElements, setTotalElements] = useState(0);
+
+  // Debounce — wait 300ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedTerm(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // 🔧 FIX #3: extract the search fetch into a reusable callback so
+  // Refresh, sendTo8D completion, and modal close all go through it.
+  const fetchNCRs = useCallback(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+
+    fetch(`${API_BASE_URL}/api/ncr/all?page=${page}&size=20`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-User-Id": String(user.id),
+        "X-Timezone":
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
+      },
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        // Spring returns Page<NCR> — extract .content
+        let list: any[] = Array.isArray(data?.content)
+          ? data.content
+          : Array.isArray(data)
+            ? data
+            : [];
+
+        // Client-side year filter
+        if (selectedYear) {
+          list = list.filter((ncr: any) => {
+            const raw = ncr?.createdAt || ncr?.raisedDate || ncr?.dueDate;
+            if (!raw) return true;
+            const d = new Date(raw);
+            if (isNaN(d.getTime())) return true;
+            return d.getFullYear() === selectedYear;
+          });
+        }
+
+        // Client-side search
+        if (debouncedTerm) {
+          const q = debouncedTerm.toLowerCase().trim();
+          list = list.filter(
+            (ncr: any) =>
+              ncr.ncrNumber?.toLowerCase().includes(q) ||
+              ncr.department?.toLowerCase().includes(q) ||
+              ncr.auditorName?.toLowerCase().includes(q) ||
+              ncr.auditeeName?.toLowerCase().includes(q),
+          );
+        }
+
+        setNcrList(list);
+        setTotalPages(data?.totalPages ?? 1);
+        setTotalElements(data?.totalElements ?? list.length);
+      })
+      .catch((e) => {
+        console.error("❌ fetchNCRs failed:", e);
+        setNcrList([]);
+        setError(e?.message || "Failed to load NCRs");
+      })
+      .finally(() => setLoading(false));
+  }, [page, debouncedTerm, selectedYear, user?.id]);
+
+  // Single source of truth: whenever debouncedTerm / page / year / user changes
+  useEffect(() => {
+    fetchNCRs();
+  }, [fetchNCRs]);
+
+  // Reset to page 0 when search term changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedTerm]);
+
   const isAuditManager = user?.role === "AUDIT_MANAGER";
 
   const is8DRelated = (ncr: any) => {
@@ -311,31 +391,6 @@ const NCRDashboard = ({
       "NCR2_COMPLETED",
     ];
     return eightDStatuses.includes(ncr?.status) || ncr?.requires8D === true;
-  };
-
-  const loadData = async () => {
-    if (!user?.id) return; // ✅ guard against user not loaded yet
-
-    setLoading(true);
-    setError(null);
-
-    // ✅ Pass the user id so the backend can plant-scope the result
-    const allResult = await ncrService.getAllNCRs(user.id);
-
-    if (!allResult.success) {
-      setError(allResult.error);
-      setNcrList([]);
-    } else {
-      // ✅ NEW: keep only NCRs from the selected year
-      const filtered = (allResult.data ?? []).filter((ncr: any) => {
-        if (!selectedYear) return true;
-        const y = getNcrYear(ncr);
-        return y === null || y === selectedYear;
-      });
-      setNcrList(filtered);
-    }
-
-    setLoading(false);
   };
 
   const fetchAllUsers = async () => {
@@ -351,29 +406,26 @@ const NCRDashboard = ({
   };
 
   useEffect(() => {
-    if (!user?.id) return; // ✅ wait until user is loaded
-    loadData();
+    if (!user?.id) return;
     fetchAllUsers();
-  }, [user?.id, selectedYear]); // ✅ re-run if user changes (login/logout)
+    // 🔧 FIX #3: fetchNCRs already runs via the effect above — no explicit call here.
+  }, [user?.id]);
 
   const openNCRForum = (ncr: any) => {
     const auditor = allUsersList.find((u: any) => u.id === ncr.auditorId);
     const auditee = allUsersList.find((u: any) => u.id === ncr.auditeeId);
 
-    // ✅ Resolve plant from the NCR itself (if the backend sends it), else from the user
     const ncrPlantId =
       ncr.plantId ?? ncr.plant?.id ?? (user as any)?.plantId ?? null;
     const ncrPlantName =
       ncr.plantName ?? ncr.plant?.name ?? (user as any)?.plantName ?? null;
 
-    // ✅ Find an audit manager FOR THIS PLANT
     const auditManager = allUsersList.find(
       (u: any) =>
         u.role === "AUDIT_MANAGER" &&
         (!ncrPlantId || String(u.plantId) === String(ncrPlantId)),
     );
 
-    // ✅ Collect only members who belong to this plant
     const memberEmails = [
       auditor?.email,
       auditee?.email,
@@ -387,7 +439,7 @@ const NCRDashboard = ({
             (u: any) =>
               u.email === e && String(u.plantId) === String(ncrPlantId),
           ) ||
-          e === user?.email), // always include current user
+          e === user?.email),
     );
 
     setSelectedNCRForForum({
@@ -401,8 +453,8 @@ const NCRDashboard = ({
       auditeeId: ncr.auditeeId,
       auditeeName: ncr.auditeeName || auditee?.name,
       memberEmails,
-      plantId: ncrPlantId, // 👈 ADD
-      plantName: ncrPlantName, // 👈 ADD
+      plantId: ncrPlantId,
+      plantName: ncrPlantName,
     });
     setShowForumModal(true);
   };
@@ -453,7 +505,8 @@ const NCRDashboard = ({
       );
       if (result.success) {
         setShowSendTo8DModal(false);
-        await loadData();
+        // 🔧 FIX #3: use fetchNCRs (paginated) instead of old loadData
+        fetchNCRs();
         addToast(`NCR #${selectedNCR.ncrNumber} sent to 8D team!`, "success");
       } else {
         setError(result.error);
@@ -467,32 +520,20 @@ const NCRDashboard = ({
     }
   };
 
+  // 🔧 FIX #2: server already filtered by `q`, so only the type filter remains
   const filteredNCRs = useMemo(() => {
     let filtered = ncrList;
-    const term = searchTerm.trim().toLowerCase();
-    if (term) {
-      filtered = filtered.filter((ncr) =>
-        [
-          ncr.ncrNumber,
-          ncr.department,
-          ncr.auditorName,
-          ncr.auditeeName,
-          ncr.statementOfNonconformity,
-        ]
-          .filter(Boolean)
-          .some((value: any) => value.toLowerCase().includes(term)),
-      );
-    }
     if (activeFilter === FILTER_TYPES.REGULAR)
       filtered = filtered.filter((ncr: any) => !is8DRelated(ncr));
     else if (activeFilter === FILTER_TYPES.EIGHT_D)
       filtered = filtered.filter((ncr: any) => is8DRelated(ncr));
     return filtered;
-  }, [ncrList, searchTerm, activeFilter]);
+  }, [ncrList, activeFilter]);
 
+  // 🔧 FIX #4: total = server totalElements; per-status counts are page-scoped
   const stats = useMemo(
     () => ({
-      total: ncrList.length,
+      total: totalElements,
       regularCount: ncrList.filter((ncr: any) => !is8DRelated(ncr)).length,
       eightDCount: ncrList.filter((ncr: any) => is8DRelated(ncr)).length,
       awaitingAuditee: ncrList.filter(
@@ -517,10 +558,10 @@ const NCRDashboard = ({
         (ncr: any) => ncr.status === "NCR2_COMPLETED",
       ).length,
     }),
-    [ncrList],
+    [ncrList, totalElements],
   );
 
-  if (loading) {
+  if (loading && ncrList.length === 0) {
     return (
       <View className="flex-1 items-center justify-center bg-[#F8FAFC]">
         <Spinner size={40} color={T.accent} />
@@ -531,7 +572,6 @@ const NCRDashboard = ({
     );
   }
 
-  // ✅ Render function for the NCR View Manager
   const renderActiveNcrView = () => {
     if (!activeNcrViewConfig) return null;
     return (
@@ -539,14 +579,14 @@ const NCRDashboard = ({
         initialId={activeNcrViewConfig.id}
         initialType={activeNcrViewConfig.type || "form7"}
         onClose={() => {
-          setActiveNcrViewConfig(null); // Closes the view and goes back to dashboard
-          loadData(); // Refreshes the NCR list data when returning
+          setActiveNcrViewConfig(null);
+          // 🔧 FIX #3
+          fetchNCRs();
         }}
       />
     );
   };
 
-  // ✅ Early return to show the manager if an NCR is selected
   if (activeNcrViewConfig) {
     return renderActiveNcrView();
   }
@@ -558,14 +598,13 @@ const NCRDashboard = ({
         className="h-full flex-1"
         style={{ flex: 1 }}
       >
-        {/* ✅ FULL-WIDTH HEADER - Outside ScrollView */}
+        {/* HEADER */}
         <View className="w-full border-b border-[#E2E8F0] bg-white px-4 py-4 shadow-sm">
           <View style={{ maxWidth: 1400, width: "100%", alignSelf: "center" }}>
             <View
               className="flex-row flex-wrap items-center justify-between"
               style={{ gap: 16 }}
             >
-              {/* Left Side: Back Button & Title */}
               <View style={{ flex: 1, minWidth: 200 }}>
                 <View className="flex-row items-center" style={{ gap: 12 }}>
                   <Pressable
@@ -592,10 +631,9 @@ const NCRDashboard = ({
                 </View>
               </View>
 
-              {/* Right Side: Refresh Button */}
               <View className="flex-row items-center" style={{ gap: 12 }}>
                 <Pressable
-                  onPress={loadData}
+                  onPress={fetchNCRs}
                   disabled={loading}
                   className="flex-row items-center rounded-xl border border-[#E2E8F0] bg-white px-4 py-2.5 shadow-sm"
                   style={{ opacity: loading ? 0.6 : 1 }}
@@ -627,7 +665,7 @@ const NCRDashboard = ({
           </View>
         </View>
 
-        {/* ✅ SCROLLABLE CONTENT */}
+        {/* SCROLLABLE CONTENT */}
         <ScrollView
           className="flex-1"
           style={{ flex: 1 }}
@@ -635,7 +673,6 @@ const NCRDashboard = ({
           contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         >
           <View className="w-full max-w-[1400px] self-center p-6">
-            {/* Error Alert */}
             {error && (
               <View className="mb-6 flex-row gap-3 rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4">
                 <View className="h-9 w-9 items-center justify-center rounded-lg border border-[#FECACA] bg-[#FFFFFF]">
@@ -658,10 +695,7 @@ const NCRDashboard = ({
               showsHorizontalScrollIndicator={false}
               nestedScrollEnabled={true}
               className="mb-6"
-              style={{
-                overflowX: "auto",
-                overflowY: "hidden", // Prevents it from hijacking vertical scroll on web
-              }}
+              style={{ overflowX: "auto", overflowY: "hidden" }}
             >
               <View className="flex-row gap-4 px-1">
                 <StatCard
@@ -672,8 +706,9 @@ const NCRDashboard = ({
                   bg="#F1F5F9"
                   border={T.border}
                 />
+                {/* 🔧 FIX #4: labelled page-scoped to be honest about scope */}
                 <StatCard
-                  title="Awaiting Auditee"
+                  title="Awaiting Auditee (page)"
                   value={stats.awaitingAuditee}
                   iconName="clock"
                   color={T.warning}
@@ -681,7 +716,7 @@ const NCRDashboard = ({
                   border={T.warningBorder}
                 />
                 <StatCard
-                  title="Pending Approval"
+                  title="Pending Approval (page)"
                   value={stats.open}
                   iconName="clock"
                   color={T.warning}
@@ -689,7 +724,7 @@ const NCRDashboard = ({
                   border={T.warningBorder}
                 />
                 <StatCard
-                  title="Approved"
+                  title="Approved (page)"
                   value={stats.approved}
                   iconName="check-circle"
                   color={T.accent}
@@ -697,7 +732,7 @@ const NCRDashboard = ({
                   border={T.accentBorder}
                 />
                 <StatCard
-                  title="In Progress"
+                  title="In Progress (page)"
                   value={stats.inProgress}
                   iconName="alert-circle"
                   color={T.purple}
@@ -705,7 +740,7 @@ const NCRDashboard = ({
                   border={T.purpleBorder}
                 />
                 <StatCard
-                  title="Closed"
+                  title="Closed (page)"
                   value={stats.closed}
                   iconName="check-circle"
                   color={T.success}
@@ -713,7 +748,7 @@ const NCRDashboard = ({
                   border={T.successBorder}
                 />
                 <StatCard
-                  title="Rejected"
+                  title="Rejected (page)"
                   value={stats.rejected}
                   iconName="x-circle"
                   color={T.error}
@@ -721,7 +756,7 @@ const NCRDashboard = ({
                   border={T.errorBorder}
                 />
                 <StatCard
-                  title="In 8D Process"
+                  title="In 8D Process (page)"
                   value={stats.eightDCount}
                   iconName="alert-triangle"
                   color={T.purple}
@@ -731,7 +766,6 @@ const NCRDashboard = ({
               </View>
             </ScrollView>
 
-            {/* 8D Status Cards */}
             {activeFilter === FILTER_TYPES.EIGHT_D && (
               <ScrollView
                 horizontal
@@ -740,7 +774,7 @@ const NCRDashboard = ({
               >
                 <View className="flex-row gap-4 px-1">
                   <StatCard
-                    title="Sent to 8D"
+                    title="Sent to 8D (page)"
                     value={stats.sentTo8D}
                     iconName="send"
                     color={T.purple}
@@ -748,7 +782,7 @@ const NCRDashboard = ({
                     border={T.purpleBorder}
                   />
                   <StatCard
-                    title="Ready for NCR2"
+                    title="Ready for NCR2 (page)"
                     value={stats.readyForNCR2}
                     iconName="clock"
                     color="#1E40AF"
@@ -756,7 +790,7 @@ const NCRDashboard = ({
                     border={T.accentBorder}
                   />
                   <StatCard
-                    title="NCR2 Verification"
+                    title="NCR2 Verification (page)"
                     value={stats.ncr2InProgress}
                     iconName="alert-circle"
                     color="#5B21B6"
@@ -764,7 +798,7 @@ const NCRDashboard = ({
                     border="#DDD6FE"
                   />
                   <StatCard
-                    title="NCR2 Completed"
+                    title="NCR2 Completed (page)"
                     value={stats.ncr2Completed}
                     iconName="check-circle"
                     color={T.success}
@@ -1001,7 +1035,7 @@ const NCRDashboard = ({
                   </Text>
                   <Text className="mt-1 text-sm text-[#6B7280]">
                     {filteredNCRs.length} NCR
-                    {filteredNCRs.length !== 1 ? "s" : ""} found
+                    {filteredNCRs.length !== 1 ? "s" : ""} on this page
                   </Text>
                 </View>
                 <View className="relative w-full max-w-[320px]">
@@ -1045,7 +1079,6 @@ const NCRDashboard = ({
                         key={ncr.id}
                         className="flex-row items-center border-b border-[#E2E8F0] px-6 py-4"
                       >
-                        {/* NCR No. */}
                         <View className="w-[150px] px-2">
                           <Text
                             className="text-sm font-semibold text-[#1F2937]"
@@ -1054,8 +1087,6 @@ const NCRDashboard = ({
                             {ncr.ncrNumber || `NCR ${ncr.id}`}
                           </Text>
                         </View>
-
-                        {/* Department */}
                         <View className="w-[165px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1064,8 +1095,6 @@ const NCRDashboard = ({
                             {ncr.department || "-"}
                           </Text>
                         </View>
-
-                        {/* Auditor */}
                         <View className="w-[190px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1074,8 +1103,6 @@ const NCRDashboard = ({
                             {ncr.auditorName || "-"}
                           </Text>
                         </View>
-
-                        {/* Auditee */}
                         <View className="w-[190px] px-2">
                           <Text
                             className="text-sm text-[#6B7280]"
@@ -1084,8 +1111,6 @@ const NCRDashboard = ({
                             {ncr.auditeeName || "-"}
                           </Text>
                         </View>
-
-                        {/* Status */}
                         <View className="w-[190px] px-2">
                           <View className="flex-row flex-wrap items-center gap-1.5">
                             <StatusBadge status={ncr.status} />
@@ -1107,8 +1132,6 @@ const NCRDashboard = ({
                               )}
                           </View>
                         </View>
-
-                        {/* Audit Score */}
                         <View className="w-[190px] px-2">
                           {ncr.auditScore != null ? (
                             <Text
@@ -1124,11 +1147,8 @@ const NCRDashboard = ({
                             <Text className="text-sm text-[#6B7280]">-</Text>
                           )}
                         </View>
-
-                        {/* Action */}
                         <View className="w-[220px] flex-row items-center gap-2 px-2">
                           <Pressable
-                            // ✅ UPDATED: Set the state to trigger the detail view
                             onPress={() =>
                               setActiveNcrViewConfig({
                                 id: ncr.id,
@@ -1226,20 +1246,71 @@ const NCRDashboard = ({
                     <View className="items-center py-10">
                       <Text className="text-sm text-[#6B7280]">
                         {activeFilter === FILTER_TYPES.REGULAR &&
-                          "No regular NCRs found."}
+                          "No regular NCRs found on this page."}
                         {activeFilter === FILTER_TYPES.EIGHT_D &&
-                          "No NCRs in 8D process found."}
+                          "No NCRs in 8D process found on this page."}
                         {activeFilter === FILTER_TYPES.ALL && "No NCRs found."}
                       </Text>
                     </View>
                   )}
                 </View>
               </ScrollView>
+
+              {/* 🔧 FIX #1: Pager — previously page/totalPages were never rendered */}
+              {totalPages > 1 && (
+                <View className="flex-row items-center justify-between border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-3">
+                  <Pressable
+                    disabled={page === 0 || loading}
+                    onPress={() => setPage((p) => Math.max(0, p - 1))}
+                    className="h-9 flex-row items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-4"
+                    style={{ opacity: page === 0 || loading ? 0.4 : 1 }}
+                  >
+                    {({ pressed }) => (
+                      <>
+                        <Feather
+                          name="chevron-left"
+                          size={14}
+                          color={pressed ? T.accent : T.textValue}
+                        />
+                        <Text className="text-sm font-semibold text-[#334155]">
+                          Previous
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+
+                  <Text className="text-sm text-[#6B7280]">
+                    Page {page + 1} of {totalPages}
+                  </Text>
+
+                  <Pressable
+                    disabled={page + 1 >= totalPages || loading}
+                    onPress={() => setPage((p) => p + 1)}
+                    className="h-9 flex-row items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-[#FFFFFF] px-4"
+                    style={{
+                      opacity: page + 1 >= totalPages || loading ? 0.4 : 1,
+                    }}
+                  >
+                    {({ pressed }) => (
+                      <>
+                        <Text className="text-sm font-semibold text-[#334155]">
+                          Next
+                        </Text>
+                        <Feather
+                          name="chevron-right"
+                          size={14}
+                          color={pressed ? T.accent : T.textValue}
+                        />
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              )}
             </Card>
           </View>
         </ScrollView>
 
-        {/* Send to 8D Confirmation Modal */}
+        {/* Send to 8D Modal */}
         <Modal visible={showSendTo8DModal} transparent animationType="fade">
           <Pressable
             className="flex-1 items-center justify-center bg-black/30 p-5"
@@ -1330,8 +1401,6 @@ const NCRDashboard = ({
         </Modal>
 
         {/* NCR Forum Modal */}
-        {/* NCR Forum Modal */}
-        {/* NCR Forum Modal */}
         {selectedNCRForForum && (
           <AuditCheckSheetNCRForumModal
             auditId={selectedNCRForForum.id}
@@ -1347,8 +1416,8 @@ const NCRDashboard = ({
             hodEmail={null}
             hodName={null}
             memberEmails={selectedNCRForForum.memberEmails || []}
-            plantId={selectedNCRForForum.plantId ?? null} // 👈 ADD
-            plantName={selectedNCRForForum.plantName ?? null} // 👈 ADD
+            plantId={selectedNCRForForum.plantId ?? null}
+            plantName={selectedNCRForForum.plantName ?? null}
             isOpen={showForumModal}
             onClose={() => {
               setShowForumModal(false);
@@ -1358,6 +1427,7 @@ const NCRDashboard = ({
             allUsers={allUsersList}
           />
         )}
+
         {/* 8D Forum Drawer */}
         <Modal visible={show8DForumDrawer} transparent animationType="slide">
           <View className="flex-1 bg-black/30">
@@ -1370,7 +1440,6 @@ const NCRDashboard = ({
               }}
             />
             <View className="absolute right-0 top-0 h-full w-full border-l border-[#E2E8F0] bg-[#F8FAFC] shadow-2xl sm:w-1/2">
-              {" "}
               {selected8DNCR && (
                 <View className="flex-1">
                   {loadingTeamMembers ? (

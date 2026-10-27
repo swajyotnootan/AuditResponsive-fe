@@ -95,10 +95,14 @@ function DateField({
   value,
   onChange,
   placeholder = "YYYY-MM-DD",
+  maxDate,
+  minDate,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  maxDate?: Date;
+  minDate?: Date;
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerPlatform, setPickerPlatform] = useState<any>(null);
@@ -114,6 +118,13 @@ function DateField({
       }
     }
   }, []);
+
+  const toYMD = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
 
   // ---- WEB ----
   if (Platform.OS === "web") {
@@ -132,6 +143,8 @@ function DateField({
         <input
           type="date"
           value={value || ""}
+          min={minDate ? toYMD(minDate) : undefined} // 👈 ADD
+          max={maxDate ? toYMD(maxDate) : undefined}
           onChange={(e: any) => onChange(e.target.value)}
           style={{
             border: "none",
@@ -174,6 +187,8 @@ function DateField({
             value={currentDate}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
+            maximumDate={maxDate} // 👈 ADD
+            minimumDate={minDate}
             onChange={(event: any, selected?: Date) => {
               setShowPicker(Platform.OS === "ios");
               if (event?.type === "dismissed") {
@@ -392,6 +407,9 @@ export default function ForumThreadView({
   const [exportScope, setExportScope] = useState<
     "all" | "days" | "limit" | "range"
   >("days");
+
+  // 👇 NEW: stable "today" so the picker bound doesn't shift between renders
+  const todayDate = useMemo(() => new Date(), [showExportModal]);
   const [exportFormat, setExportFormat] = useState<"csv" | "json" | "pdf">(
     "csv",
   );
@@ -682,7 +700,7 @@ export default function ForumThreadView({
     const cacheKey = String(groupId);
     const cached = groupPostsCache.get(cacheKey);
 
-    // ? Seed from cache instantly � no spinner, no blank screen
+    // ? Seed from cache instantly   no spinner, no blank screen
     if (cached && cached.length > 0) {
       setPosts(cached);
       setInitialLoaded(true);
@@ -779,7 +797,7 @@ export default function ForumThreadView({
       }
     } catch (err) {
       console.error("? Initial load failed:", err);
-      // If we seeded from cache, don't show an error � the user already sees content
+      // If we seeded from cache, don't show an error   the user already sees content
       if (mountedRef.current && (!cached || cached.length === 0)) {
         setError("Failed to load messages");
         setLoading(false);
@@ -790,7 +808,7 @@ export default function ForumThreadView({
   // ========== 2. POLLING (only NEW messages) ==========
   // ========== 2. POLLING (only NEW messages) ==========
   const pollNewMessages = useCallback(async () => {
-    // ? Use refs � no stale closures, no `posts` dependency
+    // ? Use refs   no stale closures, no `posts` dependency
     if (!groupId || !mountedRef.current) return;
     if (!initialLoadedRef.current) return;
     if (!isActiveRef.current) return; // ? stop polling when drawer closed
@@ -1022,7 +1040,7 @@ export default function ForumThreadView({
   }, []);
 
   // ? NEW: Auto-load older messages when user scrolls near the top
-  // ? PASSIVE: only track scroll direction � no auto-load
+  // ? PASSIVE: only track scroll direction   no auto-load
   const handleScroll = useCallback((event: any) => {
     const { contentOffset } = event.nativeEvent;
     const isMovingUp = contentOffset.y < (prevScrollYRef.current || 0);
@@ -1047,7 +1065,7 @@ export default function ForumThreadView({
     };
   }, [loadInitialPosts]);
 
-  // ? NEW: restart interval when pollNewMessages changes (rare � only when groupId/enrichPosts change)
+  // ? NEW: restart interval when pollNewMessages changes (rare   only when groupId/enrichPosts change)
   useEffect(() => {
     if (!initialLoaded) return;
     if (!isActiveRef.current) return;
@@ -1425,11 +1443,11 @@ export default function ForumThreadView({
         const isWithin5Seconds = Date.now() - createdAtTime <= 5000;
 
         if (isWithin5Seconds) {
-          // ?? HARD DELETE � remove from UI immediately
+          // ?? HARD DELETE   remove from UI immediately
           setPosts((prev) => prev.filter((p) => String(p.id) !== idStr));
           hardDeletedIdsRef.current.add(idStr);
         } else {
-          // ?? SOFT DELETE � tombstone (keep content in memory)
+          // ?? SOFT DELETE   tombstone (keep content in memory)
           deletedPostIdsRef.current.add(idStr);
           setPosts((prev) =>
             prev.map((p) =>
@@ -1471,14 +1489,14 @@ export default function ForumThreadView({
     [groupId, currentUserEmail, posts, loadInitialPosts],
   );
 
-  // ? Undo delete � restores the message
-  // ? Undo delete � restores the message (WhatsApp-style)
+  // ? Undo delete   restores the message
+  // ? Undo delete   restores the message (WhatsApp-style)
   const handleUndoDelete = async (postId: string | number) => {
     const idStr = String(postId);
     console.log("?? Undo requested for:", idStr);
 
     try {
-      // 1. Optimistic � flip isDeleted OFF (content is still in memory)
+      // 1. Optimistic   flip isDeleted OFF (content is still in memory)
       setPosts((prev) =>
         prev.map((p) =>
           String(p.id) === idStr ? { ...p, isDeleted: false } : p,
@@ -1521,7 +1539,7 @@ export default function ForumThreadView({
       }
 
       console.log("? Undo successful for:", idStr);
-      // ? No loadInitialPosts() � content is already restored in memory
+      // ? No loadInitialPosts()   content is already restored in memory
     } catch (err) {
       console.error("? Undo exception:", err);
       setPosts((prev) =>
@@ -1549,8 +1567,14 @@ export default function ForumThreadView({
   // ========== EXPORT ==========
   // ========== EXPORT ==========
   const handleExport = () => {
+    resetExportDates();
     setShowExportModal(true);
   };
+
+  const resetExportDates = useCallback(() => {
+    setExportFromDate("");
+    setExportToDate("");
+  }, []);
 
   const confirmExport = async () => {
     try {
@@ -1576,8 +1600,19 @@ export default function ForumThreadView({
         }
         const from = new Date(exportFromDate + "T00:00:00");
         const to = new Date(exportToDate + "T23:59:59");
+        const now = new Date();
+
         if (from > to) {
           Alert.alert("Invalid range", "'From' must be before 'To'.");
+          return;
+        }
+
+        // 👇 NEW: block future end dates
+        if (to.getTime() > now.getTime()) {
+          Alert.alert(
+            "Invalid range",
+            "'To' date cannot be in the future. Please pick today or earlier.",
+          );
           return;
         }
       }
@@ -2039,13 +2074,13 @@ export default function ForumThreadView({
   // ========== RENDER HELPERS ==========
   const displayPosts = isSearching && searchQuery ? filteredPosts : posts;
 
-  // ? NEW: memoized filter � only recomputes when posts / search change
+  // ? NEW: memoized filter   only recomputes when posts / search change
   const visiblePosts = useMemo(
     () => displayPosts.filter((p) => p.messageType !== "REACTION"),
     [displayPosts],
   );
 
-  // ? NEW: memoized reactions map � O(1) lookup per thread instead of O(n)
+  // ? NEW: memoized reactions map   O(1) lookup per thread instead of O(n)
   const reactionsByParent = useMemo(() => {
     const map = new Map<string, any[]>();
     for (const p of posts) {
@@ -2089,7 +2124,7 @@ export default function ForumThreadView({
         return i;
       }
     }
-    return -1; // all messages are unread � divider goes at top
+    return -1; // all messages are unread   divider goes at top
   }, [visiblePosts, firstUnreadIndex, currentUserEmail]);
   // ? NEW CODE (Always treat backend as UTC)
   // ? REPLACE with consistent UTC parser
@@ -2200,7 +2235,7 @@ export default function ForumThreadView({
     </View>
   );
 
-  // ? Member row � shows real avatar with image-error fallback
+  // ? Member row   shows real avatar with image-error fallback
   const MemberRow = ({ m }: { m: any }) => {
     const [imgError, setImgError] = useState(false);
     const url = getProfileImageUrl(m?.id, m?.profilePhoto || m?.profileImage);
@@ -2493,7 +2528,7 @@ export default function ForumThreadView({
               keyExtractor={(item, index) => item?.id || String(index)}
               ListHeaderComponent={
                 <>
-                  {/* ? Button � only shows when older messages exist */}
+                  {/* ? Button   only shows when older messages exist */}
                   {hasMore && !isSearching && visiblePosts.length > 0 && (
                     <View style={{ alignItems: "center", paddingVertical: 12 }}>
                       <TouchableOpacity
@@ -2521,7 +2556,7 @@ export default function ForumThreadView({
                                 fontWeight: "600",
                               }}
                             >
-                              Loading�
+                              Loading
                             </Text>
                           </>
                         ) : (
@@ -2552,7 +2587,7 @@ export default function ForumThreadView({
                           fontWeight: "500",
                         }}
                       >
-                        � Beginning of conversation �
+                        Beginning of conversation
                       </Text>
                     </View>
                   )}
@@ -2602,7 +2637,7 @@ export default function ForumThreadView({
                       </View>
                     )}
 
-                    {/* ? "New messages" divider � shown once, right after the last seen message */}
+                    {/* ? "New messages" divider   shown once, right after the last seen message */}
                     {firstUnreadIndex !== -1 &&
                       index === lastSeenIndex + 1 &&
                       !isSearching && (
@@ -2738,7 +2773,7 @@ export default function ForumThreadView({
                       console.log("Anchor scroll failed:", err);
                     }
                   });
-                  return; // ?? important � skip everything else this cycle
+                  return; // ?? important   skip everything else this cycle
                 }
 
                 if (scrollToBottomAfterSendRef.current) {
@@ -2888,7 +2923,10 @@ export default function ForumThreadView({
         visible={showExportModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowExportModal(false)}
+        onRequestClose={() => {
+          setShowExportModal(false);
+          resetExportDates(); // 👈 NEW
+        }}
       >
         <View
           style={{
@@ -3140,6 +3178,7 @@ export default function ForumThreadView({
                     value={exportFromDate}
                     onChange={setExportFromDate}
                     placeholder="YYYY-MM-DD"
+                    maxDate={todayDate}
                   />
 
                   <Text style={[labelStyle, { marginTop: 10 }]}>TO DATE</Text>
@@ -3147,6 +3186,12 @@ export default function ForumThreadView({
                     value={exportToDate}
                     onChange={setExportToDate}
                     placeholder="YYYY-MM-DD"
+                    maxDate={todayDate} // 👈 ADD — no future dates
+                    minDate={
+                      exportFromDate
+                        ? new Date(exportFromDate + "T00:00:00")
+                        : undefined
+                    }
                   />
 
                   <Text
@@ -3200,7 +3245,10 @@ export default function ForumThreadView({
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  onPress={() => setShowExportModal(false)}
+                  onPress={() => {
+                    setShowExportModal(false);
+                    resetExportDates(); // 👈 NEW
+                  }}
                   style={{
                     flex: 1,
                     paddingVertical: 12,

@@ -397,7 +397,7 @@ const AuditCard = ({
               />
               <Text className="text-[11px] text-slate-500" numberOfLines={2}>
                 {isDateRange
-                  ? `${audit.fromDate} ? ${audit.toDate}`
+                  ? `${audit.fromDate} - ${audit.toDate}`
                   : audit.scheduledDate}
               </Text>
             </View>
@@ -684,7 +684,7 @@ const AuditListItem = ({
               <CalendarIcon size={10} color="#94a3b8" />
               <Text className="text-xs text-slate-600">
                 {isDateRange
-                  ? `${audit.fromDate} ? ${audit.toDate}`
+                  ? `${audit.fromDate} - ${audit.toDate}`
                   : audit.scheduledDate}
               </Text>
             </View>
@@ -884,7 +884,7 @@ const NcrPendingList = ({
                 NCR #{item.ncrNumber || item.id}
               </Text>
               <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-                {item.department || "General"} � Due:{" "}
+                {item.department || "General"} � Due:{" "}
                 {item.dueDate
                   ? new Date(item.dueDate).toLocaleDateString()
                   : "Not set"}
@@ -1003,7 +1003,7 @@ const NcrListTab = ({
                 <Text className="mt-1 text-sm text-slate-600">
                   {item.dueDate
                     ? new Date(item.dueDate).toLocaleDateString("en-GB")
-                    : "�"}
+                    : "�"}
                 </Text>
               </View>
               <NcrStatusBadge status={item.status} />
@@ -1092,10 +1092,23 @@ export default function AuditeeDashboard() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const users = await apiFetch("/users");
-        setAllUsers(users || []);
+        const usersRes = await apiFetch("/users");
+
+        const list: any[] = Array.isArray(usersRes)
+          ? usersRes
+          : Array.isArray(usersRes?.content)
+            ? usersRes.content
+            : Array.isArray(usersRes?.data)
+              ? usersRes.data
+              : Array.isArray(usersRes?.items)
+                ? usersRes.items
+                : [];
+
+        console.log("[auditee users] normalized:", list.length);
+        setAllUsers(list);
       } catch (error) {
         console.error("Failed to fetch users for forum:", error);
+        setAllUsers([]);
       }
     };
     fetchUsers();
@@ -1231,14 +1244,36 @@ export default function AuditeeDashboard() {
 
       const [schedulesRes, responsesRes, ncrsRes] = await Promise.all([
         apiFetch(`/audit-schedule/year/${year}`).catch(() => []),
-        apiFetch("/templates/responses/all").catch(() => []),
+
+        // ✅ CHANGED: fetch ONLY this auditee's checksheets for the year
+        //    (was: /templates/responses/all → 12,000 rows)
+        apiFetch(`/templates/responses/auditee/${user?.id}/year/${year}`).catch(
+          () => [],
+        ),
+
         apiFetch("/ncr/all").catch(() => []),
       ]);
 
-      const mySchedules = (schedulesRes || []).filter(
+      // ✅ Normalize all three — endpoints may return Page or array
+      const toArray = (res: any): any[] =>
+        Array.isArray(res)
+          ? res
+          : Array.isArray(res?.content)
+            ? res.content
+            : Array.isArray(res?.data)
+              ? res.data
+              : Array.isArray(res?.items)
+                ? res.items
+                : [];
+
+      const schedulesList = toArray(schedulesRes);
+      const responsesList = toArray(responsesRes);
+      const ncrsList = toArray(ncrsRes);
+
+      const mySchedules = schedulesList.filter(
         (s: any) => s.auditeeId === user?.id || s.auditeeName === user?.name,
       );
-      const myResponses = (responsesRes || []).filter(
+      const myResponses = responsesList.filter(
         (r: any) => r.auditeeId === user?.id || r.auditeeName === user?.name,
       );
       const myResponsesByYear = myResponses.filter(
@@ -1298,7 +1333,7 @@ export default function AuditeeDashboard() {
       setCompletedAuditsForReview(auditsArray);
 
       // NCR Data
-      let myNCRs = (ncrsRes || [])
+      let myNCRs = ncrsList
         .filter(
           (ncr: any) =>
             String(ncr.assigneeId) === String(user?.id) ||

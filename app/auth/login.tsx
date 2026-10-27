@@ -3,12 +3,19 @@ import { useAppMode } from "@/components/context/AppModeContext";
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { normalizeRole } from "@/utils/roleUtils";
+import { consumeIntentionalLogout } from "@/utils/sessionFlags";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -16,6 +23,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  PanResponder, // 👈 ADDED
   Platform,
   SafeAreaView,
   ScrollView,
@@ -122,14 +130,11 @@ const ABS = {
   bottom: 0,
 };
 
-/* ============================================================
-   FALLING PARTICLES — start from the middle of the panel
-   ============================================================ */
+/* ───────────── Falling particles (unchanged) ───────────── */
 function FallingParticles({ panelHeight }: { panelHeight: number }) {
   const particles = useMemo(
     () =>
       Array.from({ length: 45 }).map((_, i) => {
-        // Start at 35% – 55% of the panel height (where the hands are)
         const startY = 0.35 + Math.random() * 0.2;
         return {
           key: `p-${i}`,
@@ -145,16 +150,8 @@ function FallingParticles({ panelHeight }: { panelHeight: number }) {
 
   return (
     <View pointerEvents="none" style={{ ...ABS, zIndex: 2 }}>
-      {particles.map((p) => (
-        <Particle
-          key={p.key}
-          size={p.size}
-          left={p.left}
-          duration={p.duration}
-          delay={p.delay}
-          panelHeight={panelHeight}
-          startY={p.startY}
-        />
+      {particles.map(({ key, ...rest }) => (
+        <Particle key={key} {...rest} panelHeight={panelHeight} />
       ))}
     </View>
   );
@@ -208,7 +205,6 @@ function Particle({
             }),
           ]),
         ]),
-        // Reset back to the START position (middle), not the top
         Animated.timing(y, {
           toValue: startPixel,
           duration: 0,
@@ -240,12 +236,9 @@ function Particle({
   );
 }
 
-/* ============================================ */
-/* MODE TOGGLE — hidden on production domains   */
-/* ============================================ */
+/* ───────────── Mode toggle (unchanged) ───────────── */
 function ModeToggle() {
   const { isDemo, toggleMode } = useAppMode();
-
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const host = window.location.hostname;
     const isPreview =
@@ -254,7 +247,6 @@ function ModeToggle() {
       host.includes("vercel.app");
     if (!isPreview) return null;
   }
-
   return (
     <TouchableOpacity
       onPress={toggleMode}
@@ -299,9 +291,7 @@ function ModeToggle() {
   );
 }
 
-/* ============================================ */
-/* GLASSMORPHIC INPUT                           */
-/* ============================================ */
+/* ───────────── Form input (unchanged) ───────────── */
 function FormInput({
   label,
   value,
@@ -324,7 +314,6 @@ function FormInput({
   editable?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
-
   return (
     <View style={{ marginBottom: 22 }}>
       <Text
@@ -339,7 +328,6 @@ function FormInput({
       >
         {label}
       </Text>
-
       <View
         style={{
           minHeight: 54,
@@ -355,8 +343,6 @@ function FormInput({
           shadowOpacity: focused ? 0.2 : 0.06,
           shadowRadius: focused ? 14 : 8,
           elevation: focused ? 3 : 1,
-          borderTopColor: focused ? ACCENT : "#F1F5F9",
-          borderLeftColor: focused ? ACCENT : "#F1F5F9",
         }}
       >
         <Feather name={icon} size={16} color={focused ? ACCENT : "#94A3B8"} />
@@ -401,9 +387,7 @@ function FormInput({
   );
 }
 
-/* ============================================ */
-/* ROLE SELECT                                  */
-/* ============================================ */
+/* ───────────── Role select (unchanged) ───────────── */
 function RoleSelect({
   value,
   onChange,
@@ -434,11 +418,6 @@ function RoleSelect({
           backgroundColor: "#F8FAFC",
           paddingHorizontal: 16,
           paddingVertical: 12,
-          shadowColor: "#5B4E97",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          elevation: 1,
         }}
         onPress={() => setIsOpen(true)}
         disabled={isSubmitting}
@@ -527,7 +506,6 @@ function RoleSelect({
                 <Feather name="x" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
-
             <View
               style={{
                 borderBottomWidth: 1,
@@ -566,7 +544,6 @@ function RoleSelect({
                 />
               </View>
             </View>
-
             <ScrollView
               style={{ paddingHorizontal: 8, paddingVertical: 4 }}
               contentContainerStyle={{ paddingBottom: 8 }}
@@ -629,129 +606,7 @@ function RoleSelect({
   );
 }
 
-/* ============================================ */
-/* WELCOME POPUP                                */
-/* ============================================ */
-function WelcomePopup({
-  isOpen,
-  onClose,
-  userData,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  userData: any;
-}) {
-  return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(0,0,0,0.4)",
-          paddingHorizontal: 24,
-        }}
-      >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 360,
-            backgroundColor: "#fff",
-            borderRadius: 16,
-            overflow: "hidden",
-          }}
-        >
-          <View style={{ height: 4, backgroundColor: ACCENT }} />
-          <View style={{ alignItems: "center", padding: 24 }}>
-            <View
-              style={{
-                marginBottom: 16,
-                height: 64,
-                width: 64,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 32,
-                backgroundColor: "#ECFDF5",
-              }}
-            >
-              <Feather name="check-circle" size={32} color="#10B981" />
-            </View>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                color: "#0F172A",
-                textAlign: "center",
-              }}
-            >
-              Welcome back!
-            </Text>
-            <Text
-              style={{
-                marginTop: 4,
-                fontSize: 14,
-                fontWeight: "500",
-                color: "#64748B",
-                textAlign: "center",
-              }}
-            >
-              {userData?.name || userData?.username}
-            </Text>
-            <View
-              style={{
-                marginTop: 8,
-                borderRadius: 999,
-                paddingHorizontal: 12,
-                paddingVertical: 4,
-                backgroundColor: ACCENT_TINT,
-              }}
-            >
-              <Text
-                style={{ fontSize: 12, fontWeight: "500", color: ACCENT_DARK }}
-              >
-                {userData?.role || "User"}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={{
-                marginTop: 20,
-                minHeight: 44,
-                width: "100%",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 12,
-                backgroundColor: ACCENT,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-              }}
-              onPress={onClose}
-              activeOpacity={0.85}
-            >
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontWeight: "500",
-                  color: "#fff",
-                }}
-              >
-                Continue to dashboard
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-/* ============================================ */
-/* BIOMETRIC ENROLL PROMPT                      */
-/* ============================================ */
+/* ───────────── Biometric enroll (unchanged) ───────────── */
 function BiometricEnrollPrompt({
   visible,
   label,
@@ -848,15 +703,254 @@ function BiometricEnrollPrompt({
   );
 }
 
-/* ============================================
-   LEFT PANEL — shifted left, 5-line text,
-   smaller rounded logo
-   ============================================ */
+/* ───────────── Logout notice modal (extracted) ───────────── */
+function LogoutNoticeModal({
+  message,
+  onClose,
+}: {
+  message: string | null;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      visible={!!message}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(15,23,42,0.55)",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            backgroundColor: "#fff",
+            borderRadius: 20,
+            padding: 24,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: 16 }}>
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: "#FEF3C7",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather name="alert-triangle" size={30} color="#D97706" />
+            </View>
+          </View>
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "700",
+              textAlign: "center",
+              color: "#1E293B",
+              marginBottom: 8,
+            }}
+          >
+            Signed out
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              textAlign: "center",
+              color: "#64748B",
+              lineHeight: 20,
+            }}
+          >
+            {message || "Your session has ended."}
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            activeOpacity={0.85}
+            style={{
+              marginTop: 20,
+              paddingVertical: 14,
+              borderRadius: 12,
+              backgroundColor: ACCENT,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
+              Sign in again
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/* ───────────── Conflict modal — "already signed in" ───────────── */
+function ConflictModal({
+  conflict,
+  onForce,
+  onCancel,
+  isSubmitting,
+}: {
+  conflict: {
+    devices: {
+      sessionId: string;
+      deviceName: string;
+      ipAddress: string;
+      loginAt: string | null;
+    }[];
+  } | null;
+  onForce: () => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}) {
+  return (
+    <Modal
+      visible={!!conflict}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(15,23,42,0.55)",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            backgroundColor: "#fff",
+            borderRadius: 20,
+            padding: 24,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: 16 }}>
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: "#FEF3C7",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather name="alert-triangle" size={30} color="#D97706" />
+            </View>
+          </View>
+
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "700",
+              textAlign: "center",
+              color: "#1E293B",
+              marginBottom: 8,
+            }}
+          >
+            Already signed in
+          </Text>
+
+          <Text
+            style={{
+              fontSize: 14,
+              textAlign: "center",
+              color: "#64748B",
+              lineHeight: 20,
+              marginBottom: 16,
+            }}
+          >
+            Your account is active on another device. If you continue here, that
+            session will be signed out.
+          </Text>
+
+          {conflict?.devices?.map((d, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                backgroundColor: "#F8FAFC",
+                borderRadius: 10,
+                padding: 12,
+                marginBottom: 8,
+              }}
+            >
+              <Feather name="monitor" size={16} color="#64748B" />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: "#0F172A",
+                  }}
+                >
+                  {d.deviceName || "Unknown device"}
+                </Text>
+                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                  {d.ipAddress || "—"}
+                  {d.loginAt
+                    ? ` · ${new Date(d.loginAt).toLocaleString()}`
+                    : ""}
+                </Text>
+              </View>
+            </View>
+          ))}
+
+          <TouchableOpacity
+            onPress={onForce}
+            disabled={isSubmitting}
+            activeOpacity={0.85}
+            style={{
+              marginTop: 16,
+              paddingVertical: 14,
+              borderRadius: 12,
+              backgroundColor: isSubmitting ? "#CBD5E1" : ACCENT,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
+              {isSubmitting
+                ? "Signing in…"
+                : "Sign out other device & continue"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onCancel}
+            disabled={isSubmitting}
+            style={{
+              marginTop: 10,
+              paddingVertical: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#64748B", fontSize: 14 }}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/* ───────────── Left panel (unchanged) ───────────── */
 function LeftPanel({ isWide }: { isWide: boolean }) {
   const [panelHeight, setPanelHeight] = useState(800);
   const PHOTO =
     "https://images.unsplash.com/photo-1515378960530-7c0da6231fb1?auto=format&fit=crop&w=1200&q=80";
-
   return (
     <View
       style={{
@@ -868,29 +962,24 @@ function LeftPanel({ isWide }: { isWide: boolean }) {
       onLayout={(e) => setPanelHeight(e.nativeEvent.layout.height)}
     >
       <Image source={{ uri: PHOTO }} style={ABS} resizeMode="cover" />
-
       <LinearGradient
         colors={["rgba(30,27,75,0.90)", "rgba(49,46,129,0.82)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={ABS}
       />
-
       <FallingParticles panelHeight={panelHeight} />
-
-      {/* Content wrapper — centers on mobile, left-aligns on wide */}
       <View
         style={{
           position: "relative",
           zIndex: 10,
           flex: 1,
-          justifyContent: "center", // vertical center (both)
-          alignItems: isWide ? "flex-start" : "center", // ← KEY CHANGE
+          justifyContent: "center",
+          alignItems: isWide ? "flex-start" : "center",
           paddingLeft: isWide ? 64 : 24,
           paddingRight: isWide ? 100 : 24,
         }}
       >
-        {/* Logo — centered on mobile, left on wide */}
         <Image
           source={require("@/assets/QsutraQMS.png")}
           style={{
@@ -901,7 +990,6 @@ function LeftPanel({ isWide }: { isWide: boolean }) {
           }}
           resizeMode="contain"
         />
-
         <Text
           style={{
             fontSize: isWide ? 20 : 14,
@@ -909,24 +997,22 @@ function LeftPanel({ isWide }: { isWide: boolean }) {
             color: "#FFFFFF",
             marginBottom: 8,
             lineHeight: isWide ? 30 : 22,
-            textAlign: isWide ? "left" : "center", // ← text aligned
+            textAlign: isWide ? "left" : "center",
           }}
         >
           Qsutra — Quality Management System
         </Text>
-
         <Text
           style={{
             fontSize: 12,
             color: "rgba(255,255,255,0.75)",
             marginBottom: isWide ? 20 : 14,
             fontWeight: "500",
-            textAlign: isWide ? "left" : "center", // ← text aligned
+            textAlign: isWide ? "left" : "center",
           }}
         >
           Ver 2.0.1 (7th April, 2025)
         </Text>
-
         {isWide && (
           <Text
             style={{
@@ -945,13 +1031,12 @@ function LeftPanel({ isWide }: { isWide: boolean }) {
             extent implications possible under law.
           </Text>
         )}
-
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             gap: 8,
-            alignSelf: isWide ? "flex-start" : "center", // ← badge centered on mobile
+            alignSelf: isWide ? "flex-start" : "center",
             backgroundColor: "rgba(255,255,255,0.12)",
             borderWidth: 1,
             borderColor: "rgba(255,255,255,0.25)",
@@ -970,24 +1055,8 @@ function LeftPanel({ isWide }: { isWide: boolean }) {
   );
 }
 
-/* ============================================ */
-/* LOGIN FORM                                   */
-/* ============================================ */
-function LoginForm({
-  isDemo,
-  formData,
-  error,
-  showPassword,
-  rememberMe,
-  isSubmitting,
-  isWide,
-  onRoleChange,
-  onChangeField,
-  onTogglePassword,
-  onToggleRemember,
-  onSubmit,
-  onBiometric,
-}: {
+/* ───────────── Login form (unchanged) ───────────── */
+function LoginForm(props: {
   isDemo: boolean;
   formData: { selectedField: string; username: string; password: string };
   error: string;
@@ -1002,9 +1071,24 @@ function LoginForm({
   onSubmit: () => void;
   onBiometric: () => void;
 }) {
+  const {
+    isDemo,
+    formData,
+    error,
+    showPassword,
+    rememberMe,
+    isSubmitting,
+    isWide,
+    onRoleChange,
+    onChangeField,
+    onTogglePassword,
+    onToggleRemember,
+    onSubmit,
+    onBiometric,
+  } = props;
+
   return (
-    <View style={{ width: "100%", maxWidth: 440 }}>
-      {/* Right logo — rounded card */}
+    <View style={{ width: "100%", maxWidth: 440, alignSelf: "center" }}>
       <View
         style={{
           width: isWide ? 140 : 100,
@@ -1025,7 +1109,6 @@ function LoginForm({
         />
       </View>
 
-      {/* Softer heading */}
       <Text
         style={{
           fontSize: isWide ? 24 : 18,
@@ -1039,7 +1122,6 @@ function LoginForm({
       >
         Internal Audits
       </Text>
-
       <Text
         style={{
           fontSize: isWide ? 14 : 13,
@@ -1099,7 +1181,6 @@ function LoginForm({
         icon="user"
         editable={!isSubmitting}
       />
-
       <FormInput
         label="Password"
         value={formData.password}
@@ -1160,7 +1241,6 @@ function LoginForm({
         </TouchableOpacity>
       </View>
 
-      {/* Refined glass Sign In button — 48px tall */}
       <TouchableOpacity
         onPress={onSubmit}
         disabled={isSubmitting}
@@ -1180,34 +1260,8 @@ function LoginForm({
           colors={["#6655A3", "#5B4E97", "#4B3E82"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{
-            height: 48,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderTopColor: "rgba(255,255,255,0.40)",
-            borderLeftColor: "rgba(255,255,255,0.20)",
-            borderRightColor: "rgba(0,0,0,0.10)",
-            borderBottomColor: "rgba(0,0,0,0.15)",
-            overflow: "hidden",
-          }}
+          style={{ height: 48, borderRadius: 12, overflow: "hidden" }}
         >
-          <LinearGradient
-            colors={[
-              "rgba(255,255,255,0.25)",
-              "rgba(255,255,255,0.04)",
-              "transparent",
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: "55%",
-              borderRadius: 12,
-            }}
-          />
           <View
             style={{
               flex: 1,
@@ -1250,7 +1304,6 @@ function LoginForm({
         </LinearGradient>
       </TouchableOpacity>
 
-      {/* Divider */}
       <View
         style={{
           flexDirection: "row",
@@ -1283,7 +1336,6 @@ function LoginForm({
         />
       </View>
 
-      {/* Biometrics */}
       <TouchableOpacity
         onPress={onBiometric}
         activeOpacity={0.8}
@@ -1325,11 +1377,9 @@ function LoginForm({
   );
 }
 
-/* ============================================ */
-/* MAIN SCREEN                                  */
-/* ============================================ */
+/* ───────────── MAIN SCREEN ───────────── */
 export default function LoginScreen() {
-  const { isDemo, ready: modeReady } = useAppMode();
+  const { isDemo } = useAppMode();
   const {
     login,
     biometricStatus,
@@ -1339,8 +1389,9 @@ export default function LoginScreen() {
     loginWithDiscoverablePasskey,
   } = useAuth();
 
-  const { width } = useWindowDimensions();
-  const isWide = width >= 900;
+  const { width, height } = useWindowDimensions();
+  const isWide =
+    Platform.OS === "web" ? width >= 900 : width >= 1100 && height >= 700;
   const isWebPlatform = Platform.OS === "web";
 
   const [formData, setFormData] = useState({
@@ -1348,68 +1399,105 @@ export default function LoginScreen() {
     username: "",
     password: "",
   });
+
+  // --- 15 MINUTE AUTO-LOGOUT LOGIC ---
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleAutoLogout = useCallback(async () => {
+    await AsyncStorage.multiRemove([
+      "authToken",
+      "userRole",
+      "userName",
+      "userEmail",
+      "@welcome_pending",
+      "@welcome_user",
+    ]);
+    await AsyncStorage.setItem(
+      "@logout_reason",
+      "You have been automatically logged out due to 15 minutes of inactivity.",
+    );
+    router.replace("/(auth)/login" as any);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(
+      () => {
+        handleAutoLogout();
+      },
+      15 * 60 * 1000,
+    ); // 15 minutes
+  }, [handleAutoLogout]);
+
+  useEffect(() => {
+    resetTimer();
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, [resetTimer]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        resetTimer();
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: () => {
+        resetTimer();
+        return false;
+      },
+    }),
+  ).current;
+  // -----------------------------------
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
-  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
-  const [loggedInUser, setLoggedInUser] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [showEnrollPrompt, setShowEnrollPrompt] = useState(false);
+  const [logoutNotice, setLogoutNotice] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<{
+    devices: {
+      sessionId: string;
+      deviceName: string;
+      ipAddress: string;
+      loginAt: string | null;
+    }[];
+    username: string;
+    password: string;
+  } | null>(null);
 
-  const onBiometricSuccess = (restored: any) => {
-    setLoggedInUser(restored);
-    setShowWelcomePopup(true);
-    setTimeout(() => {
-      setShowWelcomePopup(false);
-      router.replace("/(app)/(tabs)" as any);
-    }, 1500);
+  // ✅ FIX — read @logout_reason at the TOP of LoginScreen, before any early returns.
+  //    Also skip if this was an intentional logout (manual sign-out).
+  useEffect(() => {
+    (async () => {
+      const wasIntentional = await consumeIntentionalLogout();
+      const reason = await AsyncStorage.getItem("@logout_reason");
+      if (reason) await AsyncStorage.removeItem("@logout_reason");
+      if (reason && !wasIntentional) {
+        setLogoutNotice(reason);
+      }
+    })();
+  }, []);
+
+  const onBiometricSuccess = () => {
+    router.replace("/(app)/(tabs)" as any);
   };
 
   const runBiometric = async () => {
     try {
       if (isWebPlatform && webAuthnAvailable) {
         const restored = await loginWithDiscoverablePasskey();
-        if (restored) onBiometricSuccess(restored);
+        if (restored) onBiometricSuccess();
       } else if (!isWebPlatform && biometricStatus.enabled) {
         setBiometricBusy(true);
         const restored = await unlockWithBiometric();
         setBiometricBusy(false);
-        if (restored) onBiometricSuccess(restored);
+        if (restored) onBiometricSuccess();
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error("Biometric sign-in failed:", e);
     }
   };
-
-  useEffect(() => {
-    (async () => {
-      if (!modeReady) return;
-      if (isDemo) return;
-      if (isWebPlatform && webAuthnAvailable) {
-        try {
-          const restored = await loginWithDiscoverablePasskey();
-          if (restored) onBiometricSuccess(restored);
-        } catch {
-          /* silent */
-        }
-      } else if (!isWebPlatform && biometricStatus.enabled) {
-        setBiometricBusy(true);
-        try {
-          const restored = await unlockWithBiometric();
-          if (restored) onBiometricSuccess(restored);
-        } finally {
-          setBiometricBusy(false);
-        }
-      }
-    })();
-  }, [
-    modeReady,
-    isDemo,
-    isWebPlatform,
-    webAuthnAvailable,
-    biometricStatus.enabled,
-  ]);
 
   const handleRoleSelect = (role: Role) => {
     setFormData({
@@ -1437,21 +1525,25 @@ export default function LoginScreen() {
       params.append("username", formData.username);
       params.append("password", formData.password);
 
-      let response = await fetch(`${API_BASE_URL}/api/users/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: params.toString(),
       });
 
-      if (!response.ok) {
-        response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      // ✅ 409 = "already signed in elsewhere" → show conflict modal
+      // No fallback to /api/auth/login (that endpoint doesn't exist)
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null);
+        if (body?.code === "ACTIVE_SESSION_EXISTS") {
+          setConflict({
+            devices: body.activeDevices || [],
             username: formData.username,
             password: formData.password,
-          }),
-        });
+          });
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       if (!response.ok) {
@@ -1476,7 +1568,7 @@ export default function LoginScreen() {
         (user.id ? `${API_BASE_URL}/api/users/${user.id}/profile-photo` : "");
 
       const userData = {
-        id: user.id || "1",
+        id: user.id || user.email || "unknown",
         role: normalizedRole,
         name: user.name || user.username || formData.username,
         email: user.email || `${formData.username}@example.com`,
@@ -1490,9 +1582,8 @@ export default function LoginScreen() {
       };
 
       await login(userData);
-      setLoggedInUser(userData);
-      setShowWelcomePopup(true);
-      await AsyncStorage.setItem("@today_popup_auto_open", "true");
+      await AsyncStorage.setItem("@welcome_pending", "true");
+      await AsyncStorage.setItem("@welcome_user", JSON.stringify(userData));
 
       if (
         !isDemo &&
@@ -1502,17 +1593,81 @@ export default function LoginScreen() {
         !biometricStatus.enabled
       ) {
         setShowEnrollPrompt(true);
-      }
-
-      setTimeout(() => {
-        setShowWelcomePopup(false);
+      } else {
         router.replace("/(app)/(tabs)" as any);
-      }, 2500);
+      }
     } catch (err: any) {
       console.error("Login error:", err);
       setError(
         err.message || "Invalid username or password. Please try again.",
       );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ✅ NEW — retry with force=true after user confirms
+  const handleForceLogin = async () => {
+    if (!conflict) return;
+    try {
+      setIsSubmitting(true);
+      setError("");
+
+      const params = new URLSearchParams();
+      params.append("username", conflict.username);
+      params.append("password", conflict.password);
+      params.append("force", "true");
+
+      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.message || "Login failed");
+      }
+
+      const data = await response.json();
+      const user = data.user || data;
+      const normalizedRole = normalizeRole(user.role) || "AUDITOR";
+      const token = data.token || data.accessToken || "dummy_token";
+
+      await AsyncStorage.multiSet([
+        ["authToken", token],
+        ["userRole", normalizedRole],
+        ["userName", user.name || user.username || conflict.username],
+        ["userEmail", user.email || `${conflict.username}@example.com`],
+      ]);
+
+      const profilePhotoUrl =
+        user.profilePhoto ||
+        (user.id ? `${API_BASE_URL}/api/users/${user.id}/profile-photo` : "");
+
+      const userData = {
+        id: user.id || user.email || "unknown",
+        role: normalizedRole,
+        name: user.name || user.username || conflict.username,
+        email: user.email || `${conflict.username}@example.com`,
+        username: user.username || conflict.username,
+        department: user.department || "Quality Assurance",
+        field: formData.selectedField,
+        profilePhoto: profilePhotoUrl,
+        firstName: user.firstName || user.name?.split(" ")[0] || "",
+        lastName: user.lastName || user.name?.split(" ")[1] || "",
+        token,
+      };
+
+      setConflict(null);
+      await login(userData);
+      await AsyncStorage.setItem("@welcome_pending", "true");
+      await AsyncStorage.setItem("@welcome_user", JSON.stringify(userData));
+      router.replace("/(app)/(tabs)" as any);
+    } catch (err: any) {
+      console.error("Force login error:", err);
+      setError(err.message || "Login failed");
+      setConflict(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -1534,25 +1689,57 @@ export default function LoginScreen() {
     onBiometric: runBiometric,
   };
 
+  const enrollPrompt = (
+    <BiometricEnrollPrompt
+      visible={showEnrollPrompt}
+      label={biometricStatus.label}
+      onEnable={async () => {
+        await enrollBiometric();
+        setShowEnrollPrompt(false);
+        router.replace("/(app)/(tabs)" as any);
+      }}
+      onSkip={() => {
+        setShowEnrollPrompt(false);
+        router.replace("/(app)/(tabs)" as any);
+      }}
+    />
+  );
+
+  const noticeModal = (
+    <LogoutNoticeModal
+      message={logoutNotice}
+      onClose={() => setLogoutNotice(null)}
+    />
+  );
+
+  const conflictModal = (
+    <ConflictModal
+      conflict={conflict}
+      onForce={handleForceLogin}
+      onCancel={() => setConflict(null)}
+      isSubmitting={isSubmitting}
+    />
+  );
+
   if (isWide) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: "#fff" }}
+        {...panResponder.panHandlers}
+      >
         <StatusBar style="dark" />
         <ModeToggle />
-
-        {/* 45 / 55 split — left narrower, right wider */}
         <View style={{ flex: 1, flexDirection: "row" }}>
           <View style={{ flex: 52 }}>
             <LeftPanel isWide />
           </View>
-
           <ScrollView
             style={{ flex: 55, backgroundColor: "#FFFFFF" }}
             contentContainerStyle={{
               flexGrow: 1,
               justifyContent: "center",
               alignItems: "center",
-              paddingHorizontal: 60,
+              paddingHorizontal: width >= 1200 ? 60 : 32,
               paddingVertical: 40,
             }}
             showsVerticalScrollIndicator={false}
@@ -1560,27 +1747,18 @@ export default function LoginScreen() {
             <LoginForm {...formProps} />
           </ScrollView>
         </View>
-
-        <WelcomePopup
-          isOpen={showWelcomePopup}
-          onClose={() => setShowWelcomePopup(false)}
-          userData={loggedInUser}
-        />
-        <BiometricEnrollPrompt
-          visible={showEnrollPrompt}
-          label={biometricStatus.label}
-          onEnable={async () => {
-            await enrollBiometric();
-            setShowEnrollPrompt(false);
-          }}
-          onSkip={() => setShowEnrollPrompt(false)}
-        />
+        {enrollPrompt}
+        {noticeModal}
+        {conflictModal}
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#1E1B4B" }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "#1E1B4B" }}
+      {...panResponder.panHandlers}
+    >
       <StatusBar style="light" />
       <ModeToggle />
       <KeyboardAvoidingView
@@ -1595,7 +1773,6 @@ export default function LoginScreen() {
           <View style={{ height: 340 }}>
             <LeftPanel isWide={false} />
           </View>
-
           <View
             style={{
               backgroundColor: "#FFFFFF",
@@ -1612,21 +1789,9 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <WelcomePopup
-        isOpen={showWelcomePopup}
-        onClose={() => setShowWelcomePopup(false)}
-        userData={loggedInUser}
-      />
-      <BiometricEnrollPrompt
-        visible={showEnrollPrompt}
-        label={biometricStatus.label}
-        onEnable={async () => {
-          await enrollBiometric();
-          setShowEnrollPrompt(false);
-        }}
-        onSkip={() => setShowEnrollPrompt(false)}
-      />
+      {enrollPrompt}
+      {noticeModal}
+      {conflictModal}
     </SafeAreaView>
   );
 }

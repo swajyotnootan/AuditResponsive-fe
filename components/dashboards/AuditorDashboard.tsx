@@ -634,7 +634,7 @@ const AuditListItem = ({
             <Calendar size={12} color="#94a3b8" />
             <Text className="text-xs text-slate-600">
               {audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate
-                ? `${audit.fromDate} ? ${audit.toDate}`
+                ? `${audit.fromDate} - ${audit.toDate}`
                 : audit.scheduledDate}
             </Text>
             {audit.originalScheduledDate && (
@@ -872,7 +872,7 @@ const AuditCard = ({
         {/* ? ROW 1: Status badges at the TOP (full width, wrap safely) */}
         {/* ? HEADER: Status badges (LEFT) + Date (RIGHT) on the SAME line */}
         <View className="mb-3 flex-row items-center justify-between gap-2">
-          {/* LEFT: badges — can wrap/shrink, so they never collide with the date */}
+          {/* LEFT: badges ï¿½ can wrap/shrink, so they never collide with the date */}
           <View
             className="flex-row flex-wrap items-center gap-2"
             style={{ flexShrink: 1 }}
@@ -894,7 +894,7 @@ const AuditCard = ({
             )}
           </View>
 
-          {/* RIGHT: date chip — same line, capped at 55% so it can't overlap the badges */}
+          {/* RIGHT: date chip ï¿½ same line, capped at 55% so it can't overlap the badges */}
           <View
             className={`flex-row items-center gap-1.5 rounded-lg border px-2 py-1.5 ${
               audit.originalScheduledDate
@@ -916,7 +916,7 @@ const AuditCard = ({
               numberOfLines={1}
             >
               {audit.fromDate && audit.toDate && audit.fromDate !== audit.toDate
-                ? `${audit.fromDate} ? ${audit.toDate}`
+                ? `${audit.fromDate} - ${audit.toDate}`
                 : audit.scheduledDate}
             </Text>
           </View>
@@ -937,7 +937,7 @@ const AuditCard = ({
           {audit.auditType || "Audit"} - {audit.department || "General"}
         </Text>
 
-        {/* ? ROW 3: ALL meta chips together — Date + Time + Auditee (wrap naturally, overlap impossible) */}
+        {/* ? ROW 3: ALL meta chips together ï¿½ Date + Time + Auditee (wrap naturally, overlap impossible) */}
         <View className="mb-3 flex-row flex-wrap gap-2">
           {/* ?? Time chip */}
           <View className="flex-row items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
@@ -1223,7 +1223,7 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
                 {item.auditReportNumber}
               </Text>
               <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-                {item.formName} · {item.department}
+                {item.formName} ï¿½ {item.department}
               </Text>
               <View className="mt-2 flex-row flex-wrap gap-1.5">
                 {item.findings.slice(0, 3).map((f: any, i: number) => (
@@ -1242,7 +1242,7 @@ const NcrPendingList = ({ pendingNcrAudits, onRaise, onOpenForum }: any) => {
                           : "text-amber-700"
                       }`}
                     >
-                      {f.severity} · {f.clause}
+                      {f.severity} ï¿½ {f.clause}
                     </Text>
                   </View>
                 ))}
@@ -1337,7 +1337,7 @@ const NcrListTab = ({
                   <Text className="mt-1 text-sm text-slate-600">
                     {item.dueDate
                       ? new Date(item.dueDate).toLocaleDateString("en-GB")
-                      : "—"}
+                      : "ï¿½"}
                   </Text>
                 </View>
                 <View
@@ -1479,10 +1479,18 @@ export default function AuditorDashboard() {
     try {
       setNcrLoading(true);
 
-      const allNcrs = await apiFetch("/ncr/all").catch(() => []);
+      const raw = await apiFetch("/ncr/all").catch(() => []);
 
-      // Filter only the NCRs raised by the currently logged-in Auditor
-      const myRaisedNcrs = (Array.isArray(allNcrs) ? allNcrs : []).filter(
+      // âœ… Handle Page<NCR> AND plain arrays
+      const allNcrs: any[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.content)
+          ? raw.content
+          : Array.isArray(raw?.data)
+            ? raw.data
+            : [];
+
+      const myRaisedNcrs = allNcrs.filter(
         (ncr: any) => String(ncr.auditorId) === String(user?.id),
       );
 
@@ -1704,7 +1712,12 @@ export default function AuditorDashboard() {
         extensionData,
         schedulesData,
       ] = await Promise.all([
-        apiFetch("/templates/responses/all").catch(() => []),
+        // âœ… CHANGED: fetch ONLY this auditor's checksheets for the year
+        //    (was: /templates/responses/all â†’ 12,000 rows)
+        apiFetch(`/templates/responses/auditor/${user?.id}/year/${year}`).catch(
+          () => [],
+        ),
+
         apiFetch("/ncr/all").catch(() => []),
         apiFetch(
           `/audit-schedule/reschedule-requests/auditor/${user?.id}`,
@@ -1732,7 +1745,16 @@ export default function AuditorDashboard() {
 
       const allResponses: any[] = responsesData || [];
       const existingNcrAuditIds = new Set(
-        (ncrData || []).map((n: any) => Number(n.auditId)).filter(Boolean),
+        (Array.isArray(ncrData)
+          ? ncrData
+          : Array.isArray(ncrData?.data)
+            ? ncrData.data
+            : Array.isArray(ncrData?.content)
+              ? ncrData.content
+              : []
+        )
+          .map((n: any) => Number(n.auditId))
+          .filter(Boolean),
       );
 
       const pendingNcrItems = allResponses
@@ -1995,7 +2017,7 @@ export default function AuditorDashboard() {
               pendingForms: allFormsCompleted ? 0 : totalForms - completedForms,
               allFormsCompleted,
               formDetails,
-              // ? Trust the backend — it already has rescheduleRequested: true on row 23
+              // ? Trust the backend ï¿½ it already has rescheduleRequested: true on row 23
               rescheduleRequested:
                 schedule.rescheduleRequested === true ||
                 pendingRescheduleIds.has(Number(scheduleId)),
@@ -2486,7 +2508,7 @@ export default function AuditorDashboard() {
   );
 
   // ? NEW: how many columns the grid currently shows (must match the flex layout)
-  // 3 cols need: 3×300 (minWidth) + 2×16 (gap-4) = 932px | 2 cols need: 616px
+  // 3 cols need: 3ï¿½300 (minWidth) + 2ï¿½16 (gap-4) = 932px | 2 cols need: 616px
   const containerWidth = Math.min(width - 32, 1200);
   const cols = containerWidth >= 932 ? 3 : containerWidth >= 616 ? 2 : 1;
 

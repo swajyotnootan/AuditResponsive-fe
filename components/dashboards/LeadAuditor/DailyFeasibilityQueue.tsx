@@ -8,12 +8,14 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronRight,
+  Clock,
   FileText,
   Search,
   User,
   UserPlus,
   Users,
-  X } from "lucide-react-native";
+  X,
+} from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,35 +27,59 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions } from "react-native";
+  useWindowDimensions,
+} from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { OutlineButton } from "./OverdueModals";
 import OverdueScheduleQueue from "./OverdueScheduleQueue";
 
-// ─────────────────────────────────────────────────────────────
-// COLORS
-// ─────────────────────────────────────────────────────────────
+// ════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
   bg: "#F8FAFC",
   card: "#FFFFFF",
   border: "#E2E8F0",
-  text: "#1F2937",
-  textMuted: "#6B7280",
-  accent: "#3B82F6",
-  accentLight: "#EFF6FF",
-  accentBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  error: "#EF4444",
-  errorLight: "#FEF2F2",
-  errorBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
-  purple: "#8B5CF6",
-  purpleLight: "#F5F3FF",
-  purpleBorder: "#DDD6FE" };
+  borderSubtle: "#F1F5F9",
+  headerBg: "#F8FAFC",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
+};
+
+// ═════ TABLE COLUMN CONFIG ═════
+const COLUMN_MIN_WIDTHS = {
+  date: 150,
+  dept: 150,
+  elements: 180,
+  team: 220,
+  status: 140,
+  actions: 200,
+};
+const TABLE_MIN_WIDTH = Object.values(COLUMN_MIN_WIDTHS).reduce(
+  (a, b) => a + b,
+  0,
+);
+
+const COLUMN_FLEX = {
+  date: 1.1,
+  dept: 1.2,
+  elements: 1.6,
+  team: 2.0,
+  status: 1.1,
+  actions: 1.8,
+};
 
 // ─────────────────────────────────────────────────────────────
 // DTOs & TYPES
@@ -266,15 +292,15 @@ const departmentDisplayToEnum: Record<string, string> = {
   Management: "UNIT_HEAD",
   "Plant Maintenance": "PLANT_MAINTENANCE",
   "Tool Maintenance": "TOOL_MAINTENANCE",
-  "Stores & Despatch": "STORES_DESPATCH" };
+  "Stores & Despatch": "STORES_DESPATCH",
+};
 
 // ─────────────────────────────────────────────────────────────
-// OVERDUE CHECK — same rule as OverdueScheduleQueue
+// OVERDUE CHECK
 // ─────────────────────────────────────────────────────────────
 const hasEnded = (s: any): boolean => {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
   const scheduled = String(s.scheduledDate || "").slice(0, 10);
 
   if (s.toDate) {
@@ -289,16 +315,13 @@ const hasEnded = (s: any): boolean => {
   if (scheduled === todayStr) {
     const raw = String(s.endTime || "").trim();
     if (!raw) return false;
-
     const m = raw.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/);
     if (!m) return false;
-
     let h = parseInt(m[1], 10);
     const mi = parseInt(m[2], 10);
     const mod = (m[3] || "").toUpperCase();
     if (mod === "PM" && h !== 12) h += 12;
     if (mod === "AM" && h === 12) h = 0;
-
     const nowM = now.getHours() * 60 + now.getMinutes();
     return nowM >= h * 60 + mi + 1;
   }
@@ -319,7 +342,8 @@ const MultiSelectModal = ({
   onClearAll,
   emptyMsg,
   title,
-  loading }: any) => {
+  loading,
+}: any) => {
   const [search, setSearch] = useState("");
   const safeOptions = options || [];
   const filteredOptions = safeOptions.filter((opt: any) =>
@@ -339,77 +363,144 @@ const MultiSelectModal = ({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
         <TouchableOpacity
-          className="flex-1 items-center justify-center bg-black/40 p-4"
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            padding: 16,
+          }}
           activeOpacity={1}
           onPress={onClose}
         >
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            className="w-[95%] max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
-            style={{ maxHeight: "85%" }}
+            style={{
+              width: "95%",
+              maxWidth: 440,
+              backgroundColor: COLORS.card,
+              borderRadius: 16,
+              overflow: "hidden",
+              maxHeight: "85%",
+            }}
           >
-            <View className="flex-row items-center justify-between border-b border-gray-200 p-4">
-              <View className="flex-1">
-                <Text className="text-base font-bold text-gray-900">
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.borderSubtle,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: COLORS.text,
+                  }}
+                >
                   {title}
                 </Text>
-                <Text className="mt-1 text-xs text-gray-500">
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 11,
+                    color: COLORS.textMuted,
+                  }}
+                >
                   {selectedIds.length} selected
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose} className="p-1">
-                <X size={20} color="#6B7280" />
+              <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
+                <X size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <View className="flex-row items-center gap-2 border-b border-gray-200 bg-gray-50 p-3">
-              <Search size={16} color="#9CA3AF" />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: COLORS.borderSubtle,
+                backgroundColor: COLORS.headerBg,
+              }}
+            >
+              <Search size={16} color={COLORS.textMuted} />
               <TextInput
-                className="h-10 flex-1 text-[13px] text-gray-900"
+                style={{
+                  flex: 1,
+                  height: 44,
+                  fontSize: 13,
+                  color: COLORS.text,
+                }}
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#94A3B8"
                 autoFocus
               />
             </View>
 
             {safeOptions.length > 0 && (
-              <View className="flex-row gap-2 border-b border-gray-200 p-2">
-                <TouchableOpacity
-                  onPress={onSelectAll}
-                  className="flex-1 items-center rounded-md bg-blue-50 py-2"
-                >
-                  <Text className="text-xs font-semibold text-blue-600">
-                    Select All
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={onClearAll}
-                  className="flex-1 items-center rounded-md bg-blue-50 py-2"
-                >
-                  <Text className="text-xs font-semibold text-blue-600">
-                    Clear All
-                  </Text>
-                </TouchableOpacity>
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 8,
+                  padding: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: COLORS.borderSubtle,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <OutlineButton
+                    title="Select All"
+                    onPress={onSelectAll}
+                    variant="primary"
+                    size="sm"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <OutlineButton
+                    title="Clear All"
+                    onPress={onClearAll}
+                    variant="primary"
+                    size="sm"
+                  />
+                </View>
               </View>
             )}
 
-            <ScrollView className="w-full" showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ width: "100%" }}
+              showsVerticalScrollIndicator={false}
+            >
               {loading ? (
-                <View className="items-center p-6">
-                  <ActivityIndicator size="small" color={COLORS.accent} />
-                  <Text className="mt-2 text-[13px] text-gray-500">
+                <View style={{ alignItems: "center", padding: 24 }}>
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      color: COLORS.textMuted,
+                    }}
+                  >
                     Loading...
                   </Text>
                 </View>
               ) : filteredOptions.length === 0 ? (
-                <View className="items-center p-6">
-                  <Text className="text-[13px] text-gray-500">{emptyMsg}</Text>
+                <View style={{ alignItems: "center", padding: 24 }}>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
+                    {emptyMsg}
+                  </Text>
                 </View>
               ) : (
                 filteredOptions.map((item: any) => {
@@ -419,25 +510,38 @@ const MultiSelectModal = ({
                     <TouchableOpacity
                       key={id}
                       onPress={() => onToggle(item)}
-                      className={`mb-1 flex-row items-center gap-3 rounded-lg p-3 ${
-                        checked ? "bg-blue-50" : ""
-                      }`}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: COLORS.borderSubtle,
+                        backgroundColor: checked ? COLORS.primaryLight : "#FFF",
+                      }}
                     >
                       <View
-                        className={`h-5 w-5 items-center justify-center rounded border-[1.5px] ${
-                          checked
-                            ? "border-blue-500 bg-blue-500"
-                            : "border-gray-300 bg-white"
-                        }`}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 4,
+                          borderWidth: 2,
+                          borderColor: checked ? COLORS.primary : "#CBD5E1",
+                          backgroundColor: checked ? COLORS.primary : "#FFF",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
                       >
-                        {checked && <Check size={14} color="#FFF" />}
+                        {checked && <Check size={12} color="#FFF" />}
                       </View>
                       <Text
-                        className={`flex-1 text-[13px] ${
-                          checked
-                            ? "font-semibold text-blue-600"
-                            : "text-gray-900"
-                        }`}
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          fontWeight: checked ? "600" : "500",
+                          color: checked ? COLORS.primaryDark : COLORS.text,
+                        }}
                         numberOfLines={1}
                       >
                         {item.firstName} {item.lastName}
@@ -449,15 +553,21 @@ const MultiSelectModal = ({
               )}
             </ScrollView>
 
-            <View className="flex-row justify-end border-t border-gray-200 bg-gray-50 p-4">
-              <TouchableOpacity
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                padding: 12,
+                borderTopWidth: 1,
+                borderTopColor: COLORS.borderSubtle,
+                backgroundColor: COLORS.headerBg,
+              }}
+            >
+              <OutlineButton
+                title="Close"
                 onPress={onClose}
-                className="rounded-lg border border-gray-200 bg-white px-6 py-2.5"
-              >
-                <Text className="text-sm font-semibold text-gray-900">
-                  Close
-                </Text>
-              </TouchableOpacity>
+                variant="primary"
+              />
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -471,7 +581,8 @@ const MultiSelectModal = ({
 // ═════════════════════════════════════════════════════════════
 const DailyFeasibilityQueue: React.FC<Props> = ({
   selectedYear,
-  initialStatusTab }) => {
+  initialStatusTab,
+}) => {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
@@ -506,10 +617,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
   );
   const [bulkRejectReason, setBulkRejectReason] = useState("");
 
-  // Overdue count (fetched from the child component via callback)
   const [overdueCount, setOverdueCount] = useState(0);
 
-  // ─── Reassign state (normal PENDING tab) ───
   const [reassignSchedule, setReassignSchedule] =
     useState<DailyScheduleDto | null>(null);
   const [newPrimaryAuditorId, setNewPrimaryAuditorId] = useState<number | null>(
@@ -539,26 +648,21 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showAuditeeModal, setShowAuditeeModal] = useState(false);
 
-  // ─────────── Fetch overdue count (for the tab badge on mount) ───────────
   const fetchOverdueCount = useCallback(async () => {
     if (!user?.id) return;
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/overdue-schedules/${selectedYear}`,
-        {
-          params: { userId: user.id } },
+        { params: { userId: user.id } },
       );
-
       const raw = Array.isArray(res.data) ? res.data : [];
       const ended = raw.filter((s: any) => hasEnded(s));
       setOverdueCount(ended.length);
     } catch (err) {
       console.error("Failed to fetch overdue count:", err);
-      // silently ignore — this is only for the badge
     }
   }, [selectedYear, user?.id]);
 
-  // ─────────── Fetch pending queue ───────────
   const fetchPending = useCallback(async () => {
     if (!user?.id) {
       setLoading(false);
@@ -567,10 +671,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/daily-feasibility-queue/${selectedYear}`,
-        {
-          params: { userId: user.id } },
+        { params: { userId: user.id } },
       );
-
       const raw = Array.isArray(res.data) ? res.data : [];
 
       const data: DailyScheduleDto[] = raw.map((row: any) => {
@@ -585,7 +687,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           coAuditorNames: coNames,
           auditeeIdList: audIds,
           auditeeNames: audNames,
-          plantId: row.plantId ?? (user as any)?.plantId } as DailyScheduleDto;
+          plantId: row.plantId ?? (user as any)?.plantId,
+        } as DailyScheduleDto;
       });
 
       setSchedules(data);
@@ -605,7 +708,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
   useEffect(() => {
     setLoading(true);
     fetchPending();
-    fetchOverdueCount(); // ✅ populate badge on mount
+    fetchOverdueCount();
   }, [fetchPending, fetchOverdueCount]);
 
   useEffect(() => {
@@ -660,7 +763,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
         month,
         year: days[0]?.schedules[0]?.planYear || selectedYear,
         days,
-        total });
+        total,
+      });
     }
     return groups.sort((a, b) => monthOrder(a.month) - monthOrder(b.month));
   }, [visibleSchedules, selectedYear]);
@@ -674,7 +778,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     });
   };
 
-  // ─────────── Confirm/Reject (Pending tab) ───────────
+  // ─────────── Confirm/Reject ───────────
   const handleConfirmSingle = async () => {
     if (!confirmSchedule || !user?.id) return;
     setSubmitting(true);
@@ -778,15 +882,14 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     }
   };
 
-  // ─────────── Fetch week team ───────────
   const fetchWeekTeamForDailySchedule = useCallback(
     async (schedule: DailyScheduleDto): Promise<WeekTeamInfo> => {
       const empty: WeekTeamInfo = {
         teamAuditorIds: [],
         teamAuditorNames: [],
         auditeeIds: [],
-        auditeeNames: [] };
-
+        auditeeNames: [],
+      };
       if (!user?.id) return empty;
 
       const weekNum = getWeekNumber(schedule.scheduledDate || "");
@@ -797,7 +900,6 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           `${API_BASE_URL}/api/audit-schedule/year/${selectedYear}/month/${month}`,
           { params: { userId: user.id } },
         );
-
         const raw = extractData(res);
         const weekSchedules: any[] = Array.isArray(raw) ? raw : [];
 
@@ -807,7 +909,6 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
             (s.week || "") === weekNum &&
             s.approvalStatus === "APPROVED",
         );
-
         if (!matched) return empty;
 
         let teamIds: number[] = [];
@@ -851,7 +952,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           teamAuditorIds: teamIds,
           teamAuditorNames: teamNames,
           auditeeIds: audIds,
-          auditeeNames: audNames };
+          auditeeNames: audNames,
+        };
       } catch (err) {
         console.error("❌ [fetchWeekTeam] failed:", err);
         return empty;
@@ -860,72 +962,12 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     [user, selectedYear],
   );
 
-  // ─────────── Fetch team + auditors for approve modal ───────────
-  const fetchDepartmentTeamForRequest = useCallback(
-    async (target: DailyScheduleDto) => {
-      setLoadingCompetent(true);
-      setFullyCompetentAuditors([]);
-
-      try {
-        const dept = target.department;
-        const enumDept = departmentDisplayToEnum[dept] || dept;
-
-        const weekTeam = await fetchWeekTeamForDailySchedule(target);
-        let pool: ScheduleUser[] = [];
-
-        if (weekTeam.teamAuditorIds.length > 0) {
-          const usersRes = await axios.get(
-            `${API_BASE_URL}/api/audit-schedule/users/by-ids`,
-            {
-              params: { ids: weekTeam.teamAuditorIds },
-              paramsSerializer: { indexes: null } },
-          );
-          const users = extractData(usersRes) || [];
-          const byId = new Map<number, ScheduleUser>();
-          for (const u of users) byId.set(Number((u as any).id), u);
-          for (const id of weekTeam.teamAuditorIds) {
-            const u = byId.get(id);
-            if (u) pool.push(u);
-            else {
-              const name =
-                weekTeam.teamAuditorNames[
-                  weekTeam.teamAuditorIds.indexOf(id)
-                ] || `Auditor ${id}`;
-              const parts = name.trim().split(/\s+/);
-              pool.push({
-                id,
-                firstName: parts[0] || "Auditor",
-                lastName: parts.slice(1).join(" ") || String(id),
-                role: "AUDITOR" });
-            }
-          }
-        } else {
-          const res = await axios.get(
-            `${API_BASE_URL}/api/audit-schedule/regular-auditors/by-department/${encodeURIComponent(enumDept)}`,
-            {},
-          );
-          const raw = extractData(res);
-          pool = Array.isArray(raw) ? raw : [];
-        }
-
-        setFullyCompetentAuditors(pool);
-      } catch (err) {
-        console.error("❌ [fetchDepartmentTeamForRequest] failed:", err);
-      } finally {
-        setLoadingCompetent(false);
-      }
-    },
-    [user, fetchWeekTeamForDailySchedule],
-  );
-
-  // ─────────── Fetch day schedules (for conflict detection) ───────────
   const fetchDaySchedules = useCallback(
     async (dateStr: string, month: string) => {
       if (!dateStr || !month || !user?.id) {
         setDaySchedulesCache([]);
         return;
       }
-
       setLoadingDaySchedules(true);
       try {
         const url = `${API_BASE_URL}/api/audit-schedule/date-schedules/${selectedYear}/${month}?userId=${user.id}`;
@@ -938,7 +980,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           coAuditorIdList: toNumArray(row.coAuditorIdList ?? row.coAuditorIds),
           coAuditorNames: normalizeNames(row.coAuditorNames),
           auditeeIdList: toNumArray(row.auditeeIdList ?? row.auditeeIds),
-          auditeeNames: normalizeNames(row.auditeeNames) }));
+          auditeeNames: normalizeNames(row.auditeeNames),
+        }));
 
         const sameDay = normalized.filter(
           (s: any) => s.scheduledDate === dateStr,
@@ -955,7 +998,6 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     [user, selectedYear, schedules],
   );
 
-  // ─────────── Compute local conflicts ───────────
   const computeLocalConflicts = useCallback(
     (
       primaryAuditorId: number | null,
@@ -1013,7 +1055,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               name,
               department: other.department,
               startTime: other.startTime,
-              endTime: other.endTime });
+              endTime: other.endTime,
+            });
           }
         }
 
@@ -1037,7 +1080,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               name,
               department: other.department,
               startTime: other.startTime,
-              endTime: other.endTime });
+              endTime: other.endTime,
+            });
           }
         }
       }
@@ -1075,7 +1119,6 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     computeLocalConflicts,
   ]);
 
-  // ─────────── Open reassign modal ───────────
   const openReassign = async (s: DailyScheduleDto) => {
     setReassignSchedule(s);
     setReassignConflictMsg(null);
@@ -1125,7 +1168,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
             `${API_BASE_URL}/api/audit-schedule/users/by-ids`,
             {
               params: { ids: weekTeam.teamAuditorIds },
-              paramsSerializer: { indexes: null } },
+              paramsSerializer: { indexes: null },
+            },
           );
           const users = extractData(usersRes) || [];
           const byId = new Map<number, ScheduleUser>();
@@ -1145,7 +1189,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 id,
                 firstName: parts[0] || "Auditor",
                 lastName: parts.slice(1).join(" ") || String(id),
-                role: "AUDITOR" });
+                role: "AUDITOR",
+              });
             }
           }
           setFullyCompetentAuditors(ordered);
@@ -1158,8 +1203,10 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 auditElements: elements,
                 planYear: selectedYear,
                 month: s.month,
-                plantId: plantId },
-              paramsSerializer: { indexes: null } },
+                plantId: plantId,
+              },
+              paramsSerializer: { indexes: null },
+            },
           );
           const raw = extractData(res);
           const list = (Array.isArray(raw) ? raw : []).filter(
@@ -1181,7 +1228,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
             `${API_BASE_URL}/api/audit-schedule/users/by-ids`,
             {
               params: { ids: weekTeam.auditeeIds },
-              paramsSerializer: { indexes: null } },
+              paramsSerializer: { indexes: null },
+            },
           );
           const users = extractData(usersRes) || [];
           const byId = new Map<number, ScheduleUser>();
@@ -1200,7 +1248,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 id,
                 firstName: parts[0] || "Auditee",
                 lastName: parts.slice(1).join(" ") || String(id),
-                role: "AUDITEE" });
+                role: "AUDITEE",
+              });
             }
           }
           setDepartmentAuditees(ordered);
@@ -1212,7 +1261,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               {
                 params: {
                   plantId: plantId,
-                  auditElementsJson: JSON.stringify(elements) } },
+                  auditElementsJson: JSON.stringify(elements),
+                },
+              },
             );
           } else {
             auditeesRes = await axios.get(
@@ -1282,7 +1333,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
         `${API_BASE_URL}/api/audit-schedule/schedule/${reassignSchedule.id}/check-reassign-conflicts`,
         {
           auditorId: newPrimaryAuditorId,
-          auditeeIds: newAuditeeIds },
+          auditeeIds: newAuditeeIds,
+        },
         {},
       );
 
@@ -1302,7 +1354,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
         {
           auditorId: newPrimaryAuditorId,
           coAuditorIds: newCoAuditorIds,
-          auditeeIds: newAuditeeIds },
+          auditeeIds: newAuditeeIds,
+        },
         {},
       );
 
@@ -1326,7 +1379,169 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     }
   };
 
-  // ─────────── Render row ───────────
+  // ─── Status badge renderer ──────────────────────────────────
+  const renderStatusBadges = (status: string) => {
+    const st = status.toUpperCase();
+    const badges: {
+      icon: any;
+      label: string;
+      bg: string;
+      bd: string;
+      tc: string;
+    }[] = [];
+
+    if (st === "PENDING_LA_CONFIRMATION") {
+      badges.push({
+        icon: Clock,
+        label: "Pending",
+        bg: COLORS.primaryLight,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+    }
+    if (st === "CONFIRMED_BY_LA") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: AlertCircle,
+        label: "Awaiting TM",
+        bg: COLORS.stateWarningBg,
+        bd: COLORS.border,
+        tc: COLORS.textMuted,
+      });
+    }
+    if (st === "APPROVED") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: Check,
+        label: "TM Approved",
+        bg: "#DBEAFE",
+        bd: "#93C5FD",
+        tc: COLORS.primaryDark,
+      });
+    }
+    if (st === "REJECTED") {
+      badges.push({
+        icon: Check,
+        label: "Confirmed by LA",
+        bg: COLORS.stateSuccessBg,
+        bd: COLORS.primaryBorder,
+        tc: COLORS.primaryDark,
+      });
+      badges.push({
+        icon: X,
+        label: "TM Rejected",
+        bg: COLORS.stateErrorBg,
+        bd: COLORS.border,
+        tc: COLORS.stateErrorText,
+      });
+    }
+    if (st === "FEASIBILITY_REJECTED") {
+      badges.push({
+        icon: X,
+        label: "Rejected",
+        bg: COLORS.stateErrorBg,
+        bd: COLORS.border,
+        tc: COLORS.stateErrorText,
+      });
+    }
+
+    return (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+        {badges.map((b, i) => {
+          const Icon = b.icon;
+          return (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 7,
+                paddingVertical: 2,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: b.bd,
+                backgroundColor: b.bg,
+              }}
+            >
+              <Icon size={9} color={b.tc} />
+              <Text
+                style={{ fontSize: 9, fontWeight: "700", color: b.tc }}
+                numberOfLines={1}
+              >
+                {b.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  // ─── Table Header ───────────────────────────────────────────
+  const renderTableHeader = () => (
+    <View
+      style={{
+        flexDirection: "row",
+        width: "100%",
+        backgroundColor: COLORS.headerBg,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+      }}
+    >
+      <HeaderCell
+        flex={COLUMN_FLEX.date}
+        minWidth={COLUMN_MIN_WIDTHS.date}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.date}
+        label="Date / Time"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.dept}
+        minWidth={COLUMN_MIN_WIDTHS.dept}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.dept}
+        label="Audit Area"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.elements}
+        minWidth={COLUMN_MIN_WIDTHS.elements}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.elements}
+        label="Audit Elements"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.team}
+        minWidth={COLUMN_MIN_WIDTHS.team}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.team}
+        label="Team & Auditees"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.status}
+        minWidth={COLUMN_MIN_WIDTHS.status}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.status}
+        label="Status"
+      />
+      <HeaderCell
+        flex={COLUMN_FLEX.actions}
+        minWidth={COLUMN_MIN_WIDTHS.actions}
+        fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.actions}
+        label="Actions"
+        last
+      />
+    </View>
+  );
+
+  // ─── Table Row ──────────────────────────────────────────────
   const renderScheduleRow = (s: DailyScheduleDto) => {
     const status = (s.detailedApprovalStatus || "").toUpperCase();
     const isPending = status === "PENDING_LA_CONFIRMATION";
@@ -1336,251 +1551,163 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
       status === "REJECTED";
     const isRejected = status === "FEASIBILITY_REJECTED";
 
+    const teamNames = normalizeNames(s.coAuditorNames);
+    const primary = s.auditorName ? [s.auditorName] : [];
+    const auditorDisplay = [...primary, ...teamNames].join(", ") || "—";
+    const auditeeDisplay =
+      normalizeNames(s.auditeeNames).join(", ") || s.auditeeName || "—";
+    const auditElementsDisplay =
+      normalizeNames(s.auditElements).join(", ") || "—";
+
     return (
       <View
         key={s.id}
         style={{
-          padding: 12,
-          borderTopWidth: 1,
-          borderTopColor: "#F1F5F9",
-          backgroundColor: "#FFFFFF" }}
+          flexDirection: "row",
+          width: "100%",
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.borderSubtle,
+          backgroundColor: COLORS.card,
+        }}
       >
-        <View
-          style={{
-            flexDirection: isDesktop ? "row" : "column",
-            gap: isDesktop ? 12 : 8,
-            alignItems: isDesktop ? "center" : "flex-start" }}
+        {/* Date / Time */}
+        <BodyCell
+          flex={COLUMN_FLEX.date}
+          minWidth={COLUMN_MIN_WIDTHS.date}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.date}
         >
-          <View style={{ flex: isDesktop ? 2 : undefined }}>
-            <Text
-              style={{ fontSize: 12, fontWeight: "700", color: COLORS.text }}
-            >
-              {s.scheduledDate || "—"}
-            </Text>
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}
-            >
-              {s.startTime || "—"} – {s.endTime || "—"}
-            </Text>
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}
-            >
-              {s.auditType || "—"}
-            </Text>
-          </View>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: COLORS.text }}>
+            {s.scheduledDate || "—"}
+          </Text>
+          <Text style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>
+            {s.startTime || "—"} – {s.endTime || "—"}
+          </Text>
+          <Text style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>
+            {s.auditType || "—"}
+          </Text>
+        </BodyCell>
 
-          <View style={{ flex: isDesktop ? 3 : undefined }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap" }}
-            >
-              <Text
-                style={{ fontSize: 13, fontWeight: "700", color: COLORS.text }}
-              >
-                {s.department}
-              </Text>
-
-              {isPending && statusTab === "PENDING" && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    borderRadius: 999,
-                    backgroundColor: COLORS.warningBorder }}
-                >
-                  <AlertCircle size={10} color={COLORS.warning} />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "700",
-                      color: "#92400E" }}
-                  >
-                    Pending
-                  </Text>
-                </View>
-              )}
-
-              {isConfirmed && (
-                <>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      borderRadius: 999,
-                      backgroundColor: COLORS.successBorder }}
-                  >
-                    <Check size={10} color="#065F46" />
-                    <Text
-                      style={{
-                        fontSize: 10,
-                        fontWeight: "700",
-                        color: "#065F46" }}
-                    >
-                      Confirmed by LA
-                    </Text>
-                  </View>
-                  {status === "APPROVED" && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        borderRadius: 999,
-                        backgroundColor: "#D1FAE5" }}
-                    >
-                      <Check size={10} color="#047857" />
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: "#047857" }}
-                      >
-                        TM Approved
-                      </Text>
-                    </View>
-                  )}
-                  {status === "REJECTED" && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        borderRadius: 999,
-                        backgroundColor: "#FEE2E2" }}
-                    >
-                      <X size={10} color="#B91C1C" />
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: "#B91C1C" }}
-                      >
-                        TM Rejected
-                      </Text>
-                    </View>
-                  )}
-                  {status === "CONFIRMED_BY_LA" && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        borderRadius: 999,
-                        backgroundColor: COLORS.warningBorder }}
-                    >
-                      <AlertCircle size={10} color="#92400E" />
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: "700",
-                          color: "#92400E" }}
-                      >
-                        Awaiting TM
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {isRejected && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    borderRadius: 999,
-                    backgroundColor: COLORS.errorBorder }}
-                >
-                  <X size={10} color="#991B1B" />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      fontWeight: "700",
-                      color: "#991B1B" }}
-                  >
-                    Rejected
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}
-            >
-              Auditor: {s.auditorName || "—"}
-            </Text>
-            <Text
-              style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}
-            >
-              Auditees:{" "}
-              {s.auditeeNames?.join(", ") ||
-                s.auditeeName ||
-                s.auditees?.join(", ") ||
-                "—"}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 6,
-              flexWrap: "wrap",
-              flex: isDesktop ? 2 : undefined,
-              justifyContent: isDesktop ? "flex-end" : "flex-start" }}
+        {/* Audit Area */}
+        <BodyCell
+          flex={COLUMN_FLEX.dept}
+          minWidth={COLUMN_MIN_WIDTHS.dept}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.dept}
+        >
+          <Text
+            style={{ fontSize: 13, fontWeight: "700", color: COLORS.text }}
+            numberOfLines={2}
           >
-            <ActionChip
-              label="View"
-              icon={<FileText size={12} color={COLORS.accent} />}
-              borderColor={COLORS.accentBorder}
-              bgColor={COLORS.accentLight}
-              textColor={COLORS.accent}
+            {s.department}
+          </Text>
+        </BodyCell>
+
+        {/* Audit Elements */}
+        <BodyCell
+          flex={COLUMN_FLEX.elements}
+          minWidth={COLUMN_MIN_WIDTHS.elements}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.elements}
+        >
+          <Text
+            style={{ fontSize: 12, color: COLORS.textValue }}
+            numberOfLines={3}
+          >
+            {auditElementsDisplay}
+          </Text>
+        </BodyCell>
+
+        {/* Team & Auditees */}
+        <BodyCell
+          flex={COLUMN_FLEX.team}
+          minWidth={COLUMN_MIN_WIDTHS.team}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.team}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              color: COLORS.textMuted,
+              fontWeight: "600",
+            }}
+          >
+            Auditor
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: COLORS.text,
+              marginTop: 1,
+              fontWeight: "500",
+            }}
+            numberOfLines={2}
+          >
+            {auditorDisplay}
+          </Text>
+          <Text
+            style={{
+              fontSize: 11,
+              color: COLORS.textMuted,
+              fontWeight: "600",
+              marginTop: 6,
+            }}
+          >
+            Auditees
+          </Text>
+          <Text
+            style={{ fontSize: 12, color: COLORS.textValue, marginTop: 1 }}
+            numberOfLines={2}
+          >
+            {auditeeDisplay}
+          </Text>
+        </BodyCell>
+
+        {/* Status */}
+        <BodyCell
+          flex={COLUMN_FLEX.status}
+          minWidth={COLUMN_MIN_WIDTHS.status}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.status}
+        >
+          {renderStatusBadges(status)}
+        </BodyCell>
+
+        {/* Actions */}
+        <BodyCell
+          flex={COLUMN_FLEX.actions}
+          minWidth={COLUMN_MIN_WIDTHS.actions}
+          fixedWidth={isDesktop ? undefined : COLUMN_MIN_WIDTHS.actions}
+          last
+        >
+          <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+            <OutlineButton
+              title="View"
+              icon={FileText}
+              variant="primary"
+              size="sm"
               onPress={() => setDetailSchedule(s)}
             />
 
             {isPending && statusTab === "PENDING" && (
               <>
-                <ActionChip
-                  label="Reassign"
-                  icon={<UserPlus size={12} color="#7C3AED" />}
-                  borderColor="#DDD6FE"
-                  bgColor="#F5F3FF"
-                  textColor="#7C3AED"
+                <OutlineButton
+                  title="Reassign"
+                  icon={UserPlus}
+                  variant="primary"
+                  size="sm"
                   onPress={() => openReassign(s)}
                 />
-                <ActionChip
-                  label="Reject"
-                  icon={<X size={12} color={COLORS.error} />}
-                  borderColor={COLORS.errorBorder}
-                  bgColor={COLORS.errorLight}
-                  textColor={COLORS.error}
+                <OutlineButton
+                  title="Reject"
+                  icon={X}
+                  variant="danger"
+                  size="sm"
                   onPress={() => {
                     setRejectSchedule(s);
                     setRejectReason("");
                   }}
                 />
-                <ActionChip
-                  label="Confirm"
-                  icon={<Check size={12} color="#FFF" />}
-                  borderColor={COLORS.success}
-                  bgColor={COLORS.success}
-                  textColor="#FFF"
+                <OutlineButton
+                  title="Confirm"
+                  icon={Check}
+                  variant="primary"
+                  size="sm"
                   onPress={() => {
                     setConfirmSchedule(s);
                     setComments("");
@@ -1589,36 +1716,30 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               </>
             )}
 
-            {status === "CONFIRMED_BY_LA" && (
+            {isConfirmed && !isRejected && (
               <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#92400E" }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: COLORS.primaryDark,
+                }}
               >
-                ⏳ Awaiting TM approval
-              </Text>
-            )}
-            {status === "APPROVED" && (
-              <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#047857" }}
-              >
-                ✓ TM Approved
-              </Text>
-            )}
-            {status === "REJECTED" && (
-              <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#B91C1C" }}
-              >
-                ✗ TM Rejected
+                ✓ Confirmed
               </Text>
             )}
             {isRejected && (
               <Text
-                style={{ fontSize: 11, fontWeight: "600", color: "#991B1B" }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: COLORS.stateErrorText,
+                }}
               >
                 ✗ Rejected
               </Text>
             )}
           </View>
-        </View>
+        </BodyCell>
       </View>
     );
   };
@@ -1626,7 +1747,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
   if (loading && statusTab !== "OVERDUE") {
     return (
       <View style={{ padding: 40, alignItems: "center" }}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={{ marginTop: 12, color: COLORS.textMuted, fontSize: 13 }}>
           Loading daily feasibility queue...
         </Text>
@@ -1643,7 +1764,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           justifyContent: "space-between",
           alignItems: isDesktop ? "center" : "flex-start",
           marginBottom: 20,
-          gap: 12 }}
+          gap: 12,
+        }}
       >
         <View style={{ flex: 1 }}>
           <Text
@@ -1666,7 +1788,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
           marginBottom: 16,
-          flexWrap: "wrap" }}
+          flexWrap: "wrap",
+        }}
       >
         {(
           [
@@ -1674,22 +1797,22 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               key: "PENDING",
               label: "Schedules",
               count: byStatus.pending.length,
-              color: COLORS.warning },
+            },
             {
               key: "CONFIRMED",
               label: "Confirmed",
               count: byStatus.confirmed.length,
-              color: COLORS.success },
+            },
             {
               key: "REJECTED",
               label: "Rejected",
               count: byStatus.rejected.length,
-              color: COLORS.error },
+            },
             {
               key: "OVERDUE",
               label: "Overdue",
               count: overdueCount,
-              color: "#DC2626" },
+            },
           ] as const
         ).map((tab) => {
           const active = statusTab === tab.key;
@@ -1704,13 +1827,15 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 paddingHorizontal: 16,
                 paddingVertical: 12,
                 borderBottomWidth: active ? 2 : 0,
-                borderBottomColor: tab.color }}
+                borderBottomColor: COLORS.primary,
+              }}
             >
               <Text
                 style={{
                   fontSize: 13,
                   fontWeight: active ? "700" : "500",
-                  color: active ? tab.color : COLORS.textMuted }}
+                  color: active ? COLORS.primary : COLORS.textMuted,
+                }}
               >
                 {tab.label}
               </Text>
@@ -1720,14 +1845,16 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: 10,
-                  backgroundColor: active ? tab.color : "#E2E8F0" }}
+                  backgroundColor: active ? COLORS.primary : "#E2E8F0",
+                }}
               >
                 <Text
                   style={{
                     fontSize: 10,
                     fontWeight: "700",
                     color: active ? "#FFF" : COLORS.textMuted,
-                    textAlign: "center" }}
+                    textAlign: "center",
+                  }}
                 >
                   {tab.count}
                 </Text>
@@ -1751,23 +1878,40 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
             backgroundColor: COLORS.card,
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: COLORS.border }}
+            borderColor: COLORS.border,
+          }}
         >
-          <CheckCircle size={48} color={COLORS.success} />
+          <CheckCircle size={48} color={COLORS.primary} />
           <Text
             style={{
               fontSize: 16,
               fontWeight: "600",
               color: COLORS.text,
-              marginTop: 16 }}
+              marginTop: 16,
+            }}
           >
             {statusTab === "PENDING" && "All caught up!"}
             {statusTab === "CONFIRMED" && "No confirmed schedules yet"}
             {statusTab === "REJECTED" && "No rejected schedules yet"}
           </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              color: COLORS.textMuted,
+              marginTop: 6,
+              textAlign: "center",
+            }}
+          >
+            {statusTab === "PENDING" &&
+              "No day schedules awaiting your feasibility confirmation."}
+            {statusTab === "CONFIRMED" &&
+              "Schedules you confirm will appear here."}
+            {statusTab === "REJECTED" &&
+              "Schedules you reject will appear here."}
+          </Text>
         </View>
       ) : (
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: 16, width: "100%" }}>
           {groupedByMonth.map((group) => {
             const expanded = expandedMonths.has(group.month);
             const allDepts = new Set(
@@ -1782,8 +1926,11 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   borderRadius: 14,
                   borderWidth: 1,
                   borderColor: COLORS.border,
-                  overflow: "hidden" }}
+                  overflow: "hidden",
+                  width: "100%",
+                }}
               >
+                {/* Month header */}
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => toggleMonth(group.month)}
@@ -1791,36 +1938,40 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: 16,
-                    backgroundColor: COLORS.purpleLight,
+                    padding: 14,
+                    backgroundColor: COLORS.primaryLight,
                     borderBottomWidth: expanded ? 1 : 0,
-                    borderBottomColor: COLORS.purpleBorder }}
+                    borderBottomColor: COLORS.primaryBorder,
+                  }}
                 >
                   <View
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 10 }}
+                      gap: 10,
+                    }}
                   >
                     <View
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
+                        width: 34,
+                        height: 34,
+                        borderRadius: 9,
                         backgroundColor: "#FFF",
                         borderWidth: 1,
-                        borderColor: COLORS.purpleBorder,
+                        borderColor: COLORS.primaryBorder,
                         alignItems: "center",
-                        justifyContent: "center" }}
+                        justifyContent: "center",
+                      }}
                     >
-                      <Calendar size={18} color={COLORS.purple} />
+                      <Calendar size={17} color={COLORS.primary} />
                     </View>
                     <View>
                       <Text
                         style={{
-                          fontSize: 18,
+                          fontSize: 17,
                           fontWeight: "700",
-                          color: COLORS.purple }}
+                          color: COLORS.primaryDark,
+                        }}
                       >
                         {group.month} {group.year}
                       </Text>
@@ -1828,7 +1979,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                         style={{
                           fontSize: 11,
                           color: COLORS.textMuted,
-                          marginTop: 2 }}
+                          marginTop: 2,
+                        }}
                       >
                         {group.total} schedule{group.total !== 1 ? "s" : ""} •{" "}
                         {group.days.length} day
@@ -1842,102 +1994,210 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      gap: 8 }}
+                      gap: 8,
+                    }}
                   >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        backgroundColor: COLORS.primaryLight,
+                        borderWidth: 1,
+                        borderColor: COLORS.primaryBorder,
+                        borderRadius: 20,
+                      }}
+                    >
+                      {statusTab === "PENDING" && (
+                        <>
+                          <Clock size={11} color={COLORS.primary} />
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: COLORS.primaryDark,
+                            }}
+                          >
+                            {group.total} pending
+                          </Text>
+                        </>
+                      )}
+                      {statusTab === "CONFIRMED" && (
+                        <>
+                          <Check size={11} color={COLORS.primary} />
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: COLORS.primaryDark,
+                            }}
+                          >
+                            {group.total} confirmed
+                          </Text>
+                        </>
+                      )}
+                      {statusTab === "REJECTED" && (
+                        <>
+                          <X size={11} color={COLORS.textMuted} />
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: COLORS.textMuted,
+                            }}
+                          >
+                            {group.total} rejected
+                          </Text>
+                        </>
+                      )}
+                    </View>
                     {expanded ? (
-                      <ChevronDown size={20} color={COLORS.purple} />
+                      <ChevronDown size={20} color={COLORS.primary} />
                     ) : (
-                      <ChevronRight size={20} color={COLORS.purple} />
+                      <ChevronRight size={20} color={COLORS.primary} />
                     )}
                   </View>
                 </TouchableOpacity>
 
+                {/* Bulk action bar (PENDING only) */}
                 {expanded && statusTab === "PENDING" && (
                   <View
                     style={{
                       flexDirection: "row",
                       gap: 8,
                       padding: 12,
-                      backgroundColor: "#FAFBFC",
+                      backgroundColor: COLORS.headerBg,
                       borderBottomWidth: 1,
-                      borderBottomColor: "#F1F5F9",
-                      flexWrap: "wrap" }}
+                      borderBottomColor: COLORS.borderSubtle,
+                      flexWrap: "wrap",
+                    }}
                   >
-                    <TouchableOpacity
+                    <OutlineButton
+                      title={`Confirm All in ${group.month}`}
+                      icon={Check}
+                      variant="primary"
+                      size="sm"
                       onPress={() => setBulkConfirmMonth(group)}
                       disabled={submitting}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                        backgroundColor: COLORS.success }}
-                    >
-                      <Check size={13} color="#FFF" />
-                      <Text
-                        style={{
-                          color: "#FFF",
-                          fontSize: 12,
-                          fontWeight: "600" }}
-                      >
-                        Confirm All in {group.month}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
+                    />
+                    <OutlineButton
+                      title={`Reject All in ${group.month}`}
+                      icon={X}
+                      variant="danger"
+                      size="sm"
                       onPress={() => {
                         setBulkRejectMonth(group);
                         setBulkRejectReason("");
                       }}
                       disabled={submitting}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                        backgroundColor: COLORS.error }}
-                    >
-                      <X size={13} color="#FFF" />
-                      <Text
-                        style={{
-                          color: "#FFF",
-                          fontSize: 12,
-                          fontWeight: "600" }}
-                      >
-                        Reject All in {group.month}
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   </View>
                 )}
 
+                {/* Mobile swipe hint */}
+                {expanded && !isDesktop && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingHorizontal: 14,
+                      paddingVertical: 6,
+                      backgroundColor: COLORS.bg,
+                      borderBottomWidth: 1,
+                      borderBottomColor: COLORS.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: COLORS.textMuted,
+                        fontWeight: "500",
+                      }}
+                    >
+                      ⇄ Swipe horizontally to see all columns
+                    </Text>
+                  </View>
+                )}
+
+                {/* TABLE — desktop fills container, mobile scrolls */}
                 {expanded &&
-                  group.days.map((day) => (
-                    <View key={day.date}>
+                  (isDesktop ? (
+                    <View style={{ width: "100%", alignSelf: "stretch" }}>
+                      {renderTableHeader()}
+                      {group.days.map((day) => (
+                        <View key={day.date} style={{ width: "100%" }}>
+                          <View
+                            style={{
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                              backgroundColor: COLORS.headerBg,
+                              borderBottomWidth: 1,
+                              borderBottomColor: COLORS.borderSubtle,
+                              width: "100%",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                color: COLORS.textMuted,
+                                textTransform: "uppercase",
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              {day.date} • {day.schedules.length} schedule
+                              {day.schedules.length !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                          {day.schedules.map(renderScheduleRow)}
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator
+                      contentContainerStyle={{ flexGrow: 0 }}
+                    >
                       <View
                         style={{
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          backgroundColor: "#F8FAFC",
-                          borderTopWidth: 1,
-                          borderTopColor: "#F1F5F9" }}
+                          width: TABLE_MIN_WIDTH,
+                          flexDirection: "column",
+                        }}
                       >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            color: COLORS.textMuted,
-                            textTransform: "uppercase" }}
-                        >
-                          {day.date} • {day.schedules.length} schedule
-                          {day.schedules.length !== 1 ? "s" : ""}
-                        </Text>
+                        {renderTableHeader()}
+                        {group.days.map((day) => (
+                          <View key={day.date}>
+                            <View
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                backgroundColor: COLORS.headerBg,
+                                borderBottomWidth: 1,
+                                borderBottomColor: COLORS.borderSubtle,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: "700",
+                                  color: COLORS.textMuted,
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.5,
+                                }}
+                              >
+                                {day.date} • {day.schedules.length} schedule
+                                {day.schedules.length !== 1 ? "s" : ""}
+                              </Text>
+                            </View>
+                            {day.schedules.map(renderScheduleRow)}
+                          </View>
+                        ))}
                       </View>
-                      {day.schedules.map(renderScheduleRow)}
-                    </View>
+                    </ScrollView>
                   ))}
               </View>
             );
@@ -1960,7 +2220,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   Daily Schedule Detail
                 </Text>
                 <TouchableOpacity onPress={() => setDetailSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 500 }}>
@@ -2008,12 +2268,11 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 />
               </ScrollView>
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Close"
                   onPress={() => setDetailSchedule(null)}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Close</Text>
-                </TouchableOpacity>
+                  variant="primary"
+                />
               </View>
             </View>
           </View>
@@ -2033,7 +2292,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               <View style={modalStyles.header}>
                 <Text style={modalStyles.headerTitle}>Confirm Feasibility</Text>
                 <TouchableOpacity onPress={() => setConfirmSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -2050,36 +2309,25 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   value={comments}
                   onChangeText={setComments}
                   placeholder="Optional comments..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#94A3B8"
                   multiline
                   editable={!submitting}
                 />
               </View>
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Cancel"
                   onPress={() => setConfirmSchedule(null)}
                   disabled={submitting}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                  variant="primary"
+                />
+                <OutlineButton
+                  title={submitting ? "Confirming..." : "Confirm"}
+                  icon={Check}
                   onPress={handleConfirmSingle}
-                  disabled={submitting}
-                  style={[
-                    modalStyles.primaryBtn,
-                    { backgroundColor: COLORS.success },
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Check size={14} color="#FFF" />
-                  )}
-                  <Text style={modalStyles.primaryBtnText}>
-                    {submitting ? "Confirming..." : "Confirm"}
-                  </Text>
-                </TouchableOpacity>
+                  loading={submitting}
+                  variant="primary"
+                />
               </View>
             </View>
           </View>
@@ -2099,7 +2347,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
               <View style={modalStyles.header}>
                 <Text style={modalStyles.headerTitle}>Reject Feasibility</Text>
                 <TouchableOpacity onPress={() => setRejectSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -2108,40 +2356,26 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   value={rejectReason}
                   onChangeText={setRejectReason}
                   placeholder="Explain why this schedule is not feasible..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#94A3B8"
                   multiline
                   editable={!submitting}
                 />
               </View>
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Cancel"
                   onPress={() => setRejectSchedule(null)}
                   disabled={submitting}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                  variant="primary"
+                />
+                <OutlineButton
+                  title={submitting ? "Rejecting..." : "Reject"}
+                  icon={X}
                   onPress={handleRejectSingle}
+                  loading={submitting}
                   disabled={submitting || !rejectReason.trim()}
-                  style={[
-                    modalStyles.primaryBtn,
-                    {
-                      backgroundColor:
-                        submitting || !rejectReason.trim()
-                          ? "#94A3B8"
-                          : COLORS.error },
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <X size={14} color="#FFF" />
-                  )}
-                  <Text style={modalStyles.primaryBtnText}>
-                    {submitting ? "Rejecting..." : "Reject"}
-                  </Text>
-                </TouchableOpacity>
+                  variant="danger"
+                />
               </View>
             </View>
           </View>
@@ -2163,7 +2397,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   Confirm All — {bulkConfirmMonth.month} {bulkConfirmMonth.year}
                 </Text>
                 <TouchableOpacity onPress={() => setBulkConfirmMonth(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -2177,30 +2411,19 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                 </Text>
               </View>
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Cancel"
                   onPress={() => setBulkConfirmMonth(null)}
                   disabled={submitting}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                  variant="primary"
+                />
+                <OutlineButton
+                  title={submitting ? "Confirming..." : "Confirm All"}
+                  icon={Check}
                   onPress={handleBulkConfirmMonth}
-                  disabled={submitting}
-                  style={[
-                    modalStyles.primaryBtn,
-                    { backgroundColor: COLORS.success },
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Check size={14} color="#FFF" />
-                  )}
-                  <Text style={modalStyles.primaryBtnText}>
-                    {submitting ? "Confirming..." : "Confirm All"}
-                  </Text>
-                </TouchableOpacity>
+                  loading={submitting}
+                  variant="primary"
+                />
               </View>
             </View>
           </View>
@@ -2222,7 +2445,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   Reject All — {bulkRejectMonth.month} {bulkRejectMonth.year}
                 </Text>
                 <TouchableOpacity onPress={() => setBulkRejectMonth(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={{ padding: 20 }}>
@@ -2231,40 +2454,26 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   value={bulkRejectReason}
                   onChangeText={setBulkRejectReason}
                   placeholder="Reason for rejection..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#94A3B8"
                   multiline
                   editable={!submitting}
                 />
               </View>
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Cancel"
                   onPress={() => setBulkRejectMonth(null)}
                   disabled={submitting}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                  variant="primary"
+                />
+                <OutlineButton
+                  title={submitting ? "Rejecting..." : "Reject All"}
+                  icon={X}
                   onPress={handleBulkRejectMonth}
+                  loading={submitting}
                   disabled={submitting || !bulkRejectReason.trim()}
-                  style={[
-                    modalStyles.primaryBtn,
-                    {
-                      backgroundColor:
-                        submitting || !bulkRejectReason.trim()
-                          ? "#94A3B8"
-                          : COLORS.error },
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <X size={14} color="#FFF" />
-                  )}
-                  <Text style={modalStyles.primaryBtnText}>
-                    {submitting ? "Rejecting..." : "Reject All"}
-                  </Text>
-                </TouchableOpacity>
+                  variant="danger"
+                />
               </View>
             </View>
           </View>
@@ -2286,7 +2495,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   Reassign Daily Schedule
                 </Text>
                 <TouchableOpacity onPress={() => setReassignSchedule(null)}>
-                  <X size={20} color="#6B7280" />
+                  <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </View>
 
@@ -2295,7 +2504,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   style={{
                     fontSize: 12,
                     color: COLORS.textMuted,
-                    marginBottom: 12 }}
+                    marginBottom: 12,
+                  }}
                 >
                   {reassignSchedule.department} •{" "}
                   {reassignSchedule.scheduledDate} •{" "}
@@ -2308,14 +2518,21 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                       flexDirection: "row",
                       gap: 8,
                       padding: 10,
-                      backgroundColor: COLORS.errorLight,
+                      backgroundColor: COLORS.stateErrorBg,
                       borderWidth: 1,
-                      borderColor: COLORS.errorBorder,
+                      borderColor: COLORS.border,
                       borderRadius: 10,
-                      marginBottom: 12 }}
+                      marginBottom: 12,
+                    }}
                   >
-                    <AlertCircle size={16} color={COLORS.error} />
-                    <Text style={{ flex: 1, fontSize: 12, color: "#991B1B" }}>
+                    <AlertCircle size={16} color={COLORS.stateErrorText} />
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 12,
+                        color: COLORS.stateErrorText,
+                      }}
+                    >
                       {reassignConflictMsg}
                     </Text>
                   </View>
@@ -2325,25 +2542,28 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   <View
                     style={{
                       padding: 12,
-                      backgroundColor: COLORS.errorLight,
+                      backgroundColor: COLORS.stateErrorBg,
                       borderWidth: 1,
-                      borderColor: COLORS.errorBorder,
+                      borderColor: COLORS.border,
                       borderRadius: 10,
-                      marginBottom: 12 }}
+                      marginBottom: 12,
+                    }}
                   >
                     <View
                       style={{
                         flexDirection: "row",
                         gap: 8,
                         alignItems: "center",
-                        marginBottom: 6 }}
+                        marginBottom: 6,
+                      }}
                     >
-                      <AlertCircle size={16} color={COLORS.error} />
+                      <AlertCircle size={16} color={COLORS.stateErrorText} />
                       <Text
                         style={{
                           fontSize: 12,
                           fontWeight: "700",
-                          color: "#991B1B" }}
+                          color: COLORS.stateErrorText,
+                        }}
                       >
                         Schedule Conflict Detected
                       </Text>
@@ -2353,8 +2573,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                         key={idx}
                         style={{
                           fontSize: 11,
-                          color: "#991B1B",
-                          marginTop: 2 }}
+                          color: COLORS.stateErrorText,
+                          marginTop: 2,
+                        }}
                       >
                         • {c.type === "AUDITOR" ? "Auditor" : "Auditee"}{" "}
                         <Text style={{ fontWeight: "700" }}>{c.name}</Text>{" "}
@@ -2373,7 +2594,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                   {loadingCompetent ? (
                     <ActivityIndicator
                       size="small"
-                      color={COLORS.accent}
+                      color={COLORS.primary}
                       style={{ marginVertical: 20 }}
                     />
                   ) : fullyCompetentAuditors.length === 0 ? (
@@ -2381,7 +2602,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                       style={{
                         fontSize: 12,
                         color: COLORS.textMuted,
-                        padding: 10 }}
+                        padding: 10,
+                      }}
                     >
                       No auditors available.
                     </Text>
@@ -2406,16 +2628,17 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                             padding: 10,
                             borderWidth: 1,
                             borderColor: hasConflict
-                              ? COLORS.error
+                              ? COLORS.stateErrorText
                               : selected
-                                ? COLORS.accent
+                                ? COLORS.primary
                                 : COLORS.border,
                             backgroundColor: hasConflict
-                              ? COLORS.errorLight
+                              ? COLORS.stateErrorBg
                               : selected
-                                ? COLORS.accentLight
+                                ? COLORS.primaryLight
                                 : "#FFF",
-                            borderRadius: 8 }}
+                            borderRadius: 8,
+                          }}
                         >
                           <View
                             style={{
@@ -2424,14 +2647,15 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                               borderRadius: 9,
                               borderWidth: 2,
                               borderColor: hasConflict
-                                ? COLORS.error
+                                ? COLORS.stateErrorText
                                 : selected
-                                  ? COLORS.accent
+                                  ? COLORS.primary
                                   : "#CBD5E1",
                               backgroundColor: "#FFF",
                               alignItems: "center",
                               justifyContent: "center",
-                              marginRight: 8 }}
+                              marginRight: 8,
+                            }}
                           >
                             {selected && (
                               <View
@@ -2440,8 +2664,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                                   height: 8,
                                   borderRadius: 4,
                                   backgroundColor: hasConflict
-                                    ? COLORS.error
-                                    : COLORS.accent }}
+                                    ? COLORS.stateErrorText
+                                    : COLORS.primary,
+                                }}
                               />
                             )}
                           </View>
@@ -2453,8 +2678,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                               style={{
                                 fontSize: 10,
                                 fontWeight: "700",
-                                color: COLORS.error,
-                                marginLeft: 6 }}
+                                color: COLORS.stateErrorText,
+                                marginLeft: 6,
+                              }}
                             >
                               CONFLICT
                             </Text>
@@ -2464,7 +2690,8 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                               style={{
                                 fontSize: 10,
                                 color: COLORS.textMuted,
-                                marginLeft: 6 }}
+                                marginLeft: 6,
+                              }}
                             >
                               {a.role}
                             </Text>
@@ -2487,9 +2714,10 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                     borderColor: COLORS.border,
                     borderRadius: 8,
                     backgroundColor: "#FFF",
-                    marginBottom: 16 }}
+                    marginBottom: 16,
+                  }}
                 >
-                  <Users size={16} color="#475569" />
+                  <Users size={16} color={COLORS.textMuted} />
                   <Text
                     style={{
                       flex: 1,
@@ -2498,13 +2726,14 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                       color:
                         newCoAuditorIds.length === 0
                           ? COLORS.textMuted
-                          : COLORS.text }}
+                          : COLORS.text,
+                    }}
                   >
                     {newCoAuditorIds.length === 0
                       ? "Select co-auditors..."
                       : `${newCoAuditorIds.length} selected`}
                   </Text>
-                  <ChevronDown size={16} color="#6B7280" />
+                  <ChevronDown size={16} color={COLORS.textMuted} />
                 </TouchableOpacity>
 
                 <Text style={modalStyles.sectionLabel}>Auditees</Text>
@@ -2518,9 +2747,10 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                     borderWidth: 1,
                     borderColor: COLORS.border,
                     borderRadius: 8,
-                    backgroundColor: "#FFF" }}
+                    backgroundColor: "#FFF",
+                  }}
                 >
-                  <User size={16} color="#475569" />
+                  <User size={16} color={COLORS.textMuted} />
                   <Text
                     style={{
                       flex: 1,
@@ -2529,49 +2759,38 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
                       color:
                         newAuditeeIds.length === 0
                           ? COLORS.textMuted
-                          : COLORS.text }}
+                          : COLORS.text,
+                    }}
                   >
                     {newAuditeeIds.length === 0
                       ? "Select auditees..."
                       : `${newAuditeeIds.length} selected`}
                   </Text>
-                  <ChevronDown size={16} color="#6B7280" />
+                  <ChevronDown size={16} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </ScrollView>
 
               <View style={modalStyles.footer}>
-                <TouchableOpacity
+                <OutlineButton
+                  title="Cancel"
                   onPress={() => setReassignSchedule(null)}
                   disabled={submitting}
-                  style={modalStyles.secondaryBtn}
-                >
-                  <Text style={modalStyles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleReassign}
-                  disabled={submitting || localConflicts.length > 0}
-                  style={[
-                    modalStyles.primaryBtn,
-                    {
-                      backgroundColor:
-                        submitting || localConflicts.length > 0
-                          ? "#94A3B8"
-                          : "#7C3AED" },
-                  ]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <UserPlus size={14} color="#FFF" />
-                  )}
-                  <Text style={modalStyles.primaryBtnText}>
-                    {submitting
+                  variant="primary"
+                />
+                <OutlineButton
+                  title={
+                    submitting
                       ? "Saving..."
                       : localConflicts.length > 0
                         ? "Resolve Conflicts First"
-                        : "Save Reassignment"}
-                  </Text>
-                </TouchableOpacity>
+                        : "Save Reassignment"
+                  }
+                  icon={UserPlus}
+                  onPress={handleReassign}
+                  loading={submitting}
+                  disabled={submitting || localConflicts.length > 0}
+                  variant="primary"
+                />
               </View>
             </View>
           </View>
@@ -2610,32 +2829,73 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
   );
 };
 
-// ─── Helpers ───
-const ActionChip = ({
+// ─── Table cell helpers ────────────────────────────────────────────
+const HeaderCell = ({
+  flex,
+  minWidth,
+  fixedWidth,
   label,
-  icon,
-  bgColor,
-  borderColor,
-  textColor,
-  onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
+  last,
+}: {
+  flex: number;
+  minWidth: number;
+  fixedWidth?: number;
+  label: string;
+  last?: boolean;
+}) => (
+  <View
     style={{
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor,
-      backgroundColor: bgColor }}
+      ...(fixedWidth != null
+        ? { width: fixedWidth }
+        : { flex, minWidth, flexShrink: 1 }),
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRightWidth: last ? 0 : 1,
+      borderRightColor: COLORS.border,
+      justifyContent: "center",
+    }}
   >
-    {icon}
-    <Text style={{ fontSize: 11, fontWeight: "600", color: textColor }}>
+    <Text
+      style={{
+        fontSize: 10,
+        fontWeight: "700",
+        color: COLORS.textMuted,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+      }}
+    >
       {label}
     </Text>
-  </TouchableOpacity>
+  </View>
+);
+
+const BodyCell = ({
+  flex,
+  minWidth,
+  fixedWidth,
+  children,
+  last,
+}: {
+  flex: number;
+  minWidth: number;
+  fixedWidth?: number;
+  children: React.ReactNode;
+  last?: boolean;
+}) => (
+  <View
+    style={{
+      ...(fixedWidth != null
+        ? { width: fixedWidth }
+        : { flex, flexShrink: 1, minWidth: 0 }),
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRightWidth: last ? 0 : 1,
+      borderRightColor: COLORS.borderSubtle,
+      justifyContent: "center",
+    }}
+  >
+    {children}
+  </View>
 );
 
 const DetailRow = ({ label, value }: { label: string; value: string }) => (
@@ -2645,96 +2905,82 @@ const DetailRow = ({ label, value }: { label: string; value: string }) => (
       paddingVertical: 8,
       paddingHorizontal: 16,
       borderBottomWidth: 1,
-      borderBottomColor: "#F1F5F9" }}
+      borderBottomColor: COLORS.borderSubtle,
+    }}
   >
     <Text
       style={{
         width: 130,
         fontSize: 12,
-        color: "#6B7280",
-        fontWeight: "500" }}
+        color: COLORS.textMuted,
+        fontWeight: "500",
+      }}
     >
       {label}
     </Text>
-    <Text style={{ flex: 1, fontSize: 13, color: "#1F2937" }}>{value}</Text>
+    <Text style={{ flex: 1, fontSize: 13, color: COLORS.text }}>{value}</Text>
   </View>
 );
 
-export const modalStyles = {
+const modalStyles = {
   backdrop: {
     flex: 1,
     justifyContent: "center" as const,
     alignItems: "center" as const,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
-    padding: 20 },
+    padding: 20,
+  },
   sheet: {
     width: "100%" as const,
     maxWidth: 480,
     backgroundColor: "#FFF",
     borderRadius: 20,
-    overflow: "hidden" as const },
+    overflow: "hidden" as const,
+  },
   header: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9" },
+    borderBottomColor: COLORS.borderSubtle,
+  },
   headerTitle: {
     fontSize: 17,
     fontWeight: "700" as const,
-    color: "#1F2937" },
+    color: COLORS.text,
+  },
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700" as const,
-    color: "#6B7280",
+    color: COLORS.textMuted,
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
-    marginBottom: 8 },
+    marginBottom: 8,
+  },
   textarea: {
     width: "100%" as const,
     minHeight: 100,
+    marginTop: 12,
     padding: 12,
     backgroundColor: "#FFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.border,
     borderRadius: 10,
     fontSize: 13,
     textAlignVertical: "top" as const,
-    color: "#1F2937" },
+    color: COLORS.text,
+  },
   footer: {
     flexDirection: "row" as const,
     justifyContent: "flex-end" as const,
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    backgroundColor: "#F8FAFC" },
-  primaryBtn: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10 },
-  primaryBtnText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: "#FFF" },
-  secondaryBtn: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFF" },
-  secondaryBtnText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: "#1F2937" } };
+    borderTopColor: COLORS.borderSubtle,
+    backgroundColor: COLORS.bg,
+  },
+};
 
 export const COLORS_EXPORT = COLORS;
 

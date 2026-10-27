@@ -433,13 +433,17 @@ export default function CalendarView() {
       };
 
       let url: string;
-      const currentYear = new Date().getFullYear();
 
       if (userRoleForAPI === "AUDITOR") {
         url = `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`;
       } else {
-        // ✅ FIX: Pass userId so backend can filter by plant
-        url = `${API_BASE_URL}/api/audit-schedule/year/${currentYear}?userId=${user.id}`;
+        // ✅ WINDOWED FETCH — only the month the user is viewing.
+        // Server returns only schedules whose date falls inside this range.
+        const fromDate = moment(currentDate)
+          .startOf("month")
+          .format("YYYY-MM-DD");
+        const toDate = moment(currentDate).endOf("month").format("YYYY-MM-DD");
+        url = `${API_BASE_URL}/api/audit-schedule/window?userId=${user.id}&from=${fromDate}&to=${toDate}`;
       }
 
       console.log("📡 Fetching schedules from:", url);
@@ -758,7 +762,7 @@ export default function CalendarView() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, getApiRole, leadAuditorDepartment]);
+  }, [user, getApiRole, leadAuditorDepartment, currentDate]);
 
   // Initial load
   useEffect(() => {

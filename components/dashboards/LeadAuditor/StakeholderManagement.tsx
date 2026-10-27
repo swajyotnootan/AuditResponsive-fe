@@ -1,11 +1,13 @@
 // app/components/dashboards/LeadAuditor/StakeholderManagement.tsx
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useTransition } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,20 +37,101 @@ interface StakeholderManagementProps {
 
 const { width, height } = Dimensions.get("window");
 const isMobile = width < 768;
+const NUM_COLUMNS = isMobile ? 1 : 3;
+const GAP = 16;
 
-const NAVBAR_COLORS = {
-  primary: "#00529B",
-  secondary: "#3b82f6",
-  dark: "#1e3a8a",
-  light: "#60a5fa",
-  lighter: "#93c5fd",
-  bg: "#eff6ff",
-  white: "#ffffff",
+// ════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  borderLight: "#F1F5F9",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  textSubtle: "#94A3B8",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
 };
 
-const Card: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <View style={styles.card}>{children}</View>
-);
+// ═════ REUSABLE OUTLINE BUTTON ═════
+const OutlineButton = ({
+  title,
+  icon: IconProp,
+  onPress,
+  disabled = false,
+  loading = false,
+  active = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isHoveredAndEnabled = (isHovered || active) && !disabled;
+  const borderColor = isHoveredAndEnabled ? COLORS.primary : COLORS.border;
+  const textColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textValue;
+  const iconColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textMuted;
+  const backgroundColor = isHoveredAndEnabled
+    ? COLORS.primaryLight
+    : COLORS.card;
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      style={{
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor,
+        backgroundColor,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        opacity: disabled ? 0.5 : 1,
+      }}
+      activeOpacity={0.7}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : IconProp ? (
+        <IconProp size={16} color={iconColor} />
+      ) : null}
+      {title ? (
+        <Text style={{ fontSize: 13, fontWeight: "600", color: textColor }}>
+          {title}
+        </Text>
+      ) : null}
+    </TouchableOpacity>
+  );
+};
+
+const Card: React.FC<{ children: React.ReactNode; style?: any }> = ({
+  children,
+  style,
+}) => <View style={[styles.card, style]}>{children}</View>;
 
 // ✅ Helper: get department string from User (handles both string and object)
 const getDepartmentString = (dept: any): string => {
@@ -60,6 +143,158 @@ const getDepartmentString = (dept: any): string => {
   return "";
 };
 
+// ═════════════════════════════════════════════════════════════════
+// StakeholderCard — fully implemented, memoized
+// ═════════════════════════════════════════════════════════════════
+interface StakeholderCardProps {
+  item: User;
+  subTab: "auditors" | "auditees";
+  responses: Response[];
+  ncrs: NCR[];
+  assignedAudits: number;
+  onViewResponses: (u: User) => void;
+  onViewNCRs: (u: User) => void;
+}
+
+const StakeholderCard = React.memo<StakeholderCardProps>(
+  ({
+    item,
+    subTab,
+    responses,
+    ncrs,
+    assignedAudits,
+    onViewResponses,
+    onViewNCRs,
+  }) => {
+    const approvedResponses = responses.filter(
+      (r) => r.status === "APPROVED",
+    ).length;
+    const submittedResponses = responses.filter(
+      (r) => r.status === "SUBMITTED",
+    ).length;
+    const openNCRs = ncrs.filter(
+      (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
+    ).length;
+    const closedNCRs = ncrs.filter((n) => n.status === "CLOSED").length;
+
+    const deptDisplay = getDepartmentString(item.department);
+    const initial = (
+      item.firstName?.[0] ||
+      item.username?.[0] ||
+      "A"
+    ).toUpperCase();
+
+    return (
+      <View style={styles.stakeholderCard}>
+        {/* Header */}
+        <View style={styles.stakeholderHeader}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={styles.stakeholderInfo}>
+            <Text style={styles.stakeholderName} numberOfLines={1}>
+              {item.firstName} {item.lastName}
+            </Text>
+            <Text style={styles.stakeholderRole} numberOfLines={1}>
+              {item.role || "User"}
+            </Text>
+            <Text style={styles.stakeholderEmail} numberOfLines={1}>
+              {item.email || "No email"}
+            </Text>
+            {subTab === "auditees" && deptDisplay ? (
+              <View style={styles.deptBadge}>
+                <Icon name="briefcase" size={10} color={COLORS.chipText} />
+                <Text style={styles.deptBadgeText} numberOfLines={1}>
+                  {deptDisplay}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statBoxValue}>{assignedAudits}</Text>
+            <Text style={styles.statBoxLabel} numberOfLines={1}>
+              Assigned
+            </Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statBoxValue}>{responses.length}</Text>
+            <Text style={styles.statBoxLabel} numberOfLines={1}>
+              Responses
+            </Text>
+          </View>
+        </View>
+
+        {/* Status Row */}
+        <View style={styles.statusRow}>
+          <View style={styles.statusBoxSuccess}>
+            <Text style={styles.statusBoxValueSuccess}>
+              {approvedResponses}
+            </Text>
+            <Text style={styles.statusBoxLabel}>Approved</Text>
+          </View>
+          <View style={styles.statusBoxWarning}>
+            <Text style={styles.statusBoxValueWarning}>
+              {submittedResponses}
+            </Text>
+            <Text style={styles.statusBoxLabel}>Pending</Text>
+          </View>
+        </View>
+
+        {/* NCR Summary */}
+        {ncrs.length > 0 && (
+          <View style={styles.ncrSummary}>
+            <View style={styles.ncrSummaryHeader}>
+              <Icon name="alert-triangle" size={12} color={COLORS.primary} />
+              <Text style={styles.ncrSummaryText}>
+                {ncrs.length} Total NCRs
+              </Text>
+            </View>
+            <View style={styles.ncrSummaryRow}>
+              <View style={styles.ncrChip}>
+                <Text style={styles.ncrChipText}>Open {openNCRs}</Text>
+              </View>
+              <View style={[styles.ncrChip, styles.ncrChipClosed]}>
+                <Text style={[styles.ncrChipText, styles.ncrChipClosedText]}>
+                  Closed {closedNCRs}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Actions */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onViewResponses(item)}
+            activeOpacity={0.7}
+          >
+            <Icon name="file-text" size={14} color={COLORS.primary} />
+            <Text style={styles.actionButtonText}>Responses</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => onViewNCRs(item)}
+            activeOpacity={0.7}
+          >
+            <Icon name="alert-triangle" size={14} color={COLORS.primary} />
+            <Text style={styles.actionButtonText}>NCRs</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  },
+);
+
+StakeholderCard.displayName = "StakeholderCard";
+
+// ═════════════════════════════════════════════════════════════════
+// Main component
+// ═════════════════════════════════════════════════════════════════
 const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   activeTab,
   allAuditors,
@@ -72,10 +307,10 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   onViewResponseDetail,
   leadAuditorDepartment,
 }) => {
-  // ✅ SUB-TAB STATE for Auditors / Auditees
+  // ── State ────────────────────────────────────────────────────
   const [subTab, setSubTab] = useState<"auditors" | "auditees">("auditors");
+  const [isPending, startTransition] = useTransition();
 
-  // ✅ Department filter for Auditees
   const [selectedDepartment, setSelectedDepartment] = useState<string>("ALL");
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
 
@@ -97,6 +332,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     id: string | number;
   } | null>(null);
 
+  // ── Helpers ──────────────────────────────────────────────────
   const safeParseAnswers = (answers: any): any => {
     if (!answers) return {};
     if (typeof answers === "object") return answers;
@@ -134,202 +370,262 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     return "5S";
   };
 
-  const getAuditorResponses = (auditorId: string | number) =>
-    allResponses.filter((r) => r.auditorId === auditorId);
-
-  const getAuditorNCRs = (auditorId: string | number) =>
-    allNCRs.filter((n) => n.auditorId === auditorId);
-
-  const getAuditeeResponses = (auditeeId: string | number) =>
-    allResponses.filter((r) => r.auditeeId === auditeeId);
-
-  const getAuditeeNCRs = (auditeeId: string | number) =>
-    allNCRs.filter((n) => n.auditeeId === auditeeId);
-
   const getSeverityBadge = (severity?: string) => {
     const colors: Record<string, any> = {
-      CRITICAL: { bg: "#FEE2E2", text: "#DC2626" },
-      MAJOR: { bg: "#FFEDD5", text: "#EA580C" },
-      MINOR: { bg: "#FEF3C7", text: "#D97706" },
+      CRITICAL: {
+        bg: COLORS.primaryLight,
+        text: COLORS.primaryDark,
+        border: COLORS.primary,
+      },
+      MAJOR: {
+        bg: COLORS.primaryLight,
+        text: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
+      MINOR: {
+        bg: COLORS.stateWarningBg,
+        text: COLORS.textMuted,
+        border: COLORS.border,
+      },
     };
-    return colors[severity || ""] || { bg: "#F3F4F6", text: "#6B7280" };
+    return (
+      colors[severity || ""] || {
+        bg: COLORS.borderLight,
+        text: COLORS.textMuted,
+        border: COLORS.border,
+      }
+    );
   };
 
   const getStatusBadge = (status?: string) => {
     const colors: Record<string, any> = {
-      APPROVED: { bg: "#D1FAE5", text: "#059669" },
-      REJECTED: { bg: "#FEE2E2", text: "#DC2626" },
-      SUBMITTED: { bg: "#DBEAFE", text: "#2563EB" },
-      DRAFT: { bg: "#F3F4F6", text: "#6B7280" },
-      OPEN: { bg: "#DBEAFE", text: "#2563EB" },
-      IN_PROGRESS: { bg: "#EDE9FE", text: "#7C3AED" },
-      CLOSED: { bg: "#D1FAE5", text: "#059669" },
+      APPROVED: {
+        bg: COLORS.stateSuccessBg,
+        text: COLORS.primaryDark,
+        border: COLORS.primaryBorder,
+      },
+      REJECTED: {
+        bg: COLORS.stateErrorBg,
+        text: COLORS.stateErrorText,
+        border: COLORS.border,
+      },
+      SUBMITTED: {
+        bg: COLORS.primaryLight,
+        text: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
+      DRAFT: {
+        bg: COLORS.borderLight,
+        text: COLORS.textMuted,
+        border: COLORS.border,
+      },
+      OPEN: {
+        bg: COLORS.primaryLight,
+        text: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
+      IN_PROGRESS: {
+        bg: COLORS.primaryLight,
+        text: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
+      CLOSED: {
+        bg: COLORS.stateSuccessBg,
+        text: COLORS.primaryDark,
+        border: COLORS.primaryBorder,
+      },
     };
-    return colors[status || ""] || { bg: "#F3F4F6", text: "#6B7280" };
-  };
-
-  const handleViewResponses = (stakeholder: User) => {
-    setSelectedStakeholder(stakeholder);
-    setModalType("responses");
-    setShowResponsesModal(true);
-  };
-
-  const handleViewNCRs = (stakeholder: User) => {
-    setSelectedStakeholder(stakeholder);
-    setModalType("ncrs");
-    setShowNCRsModal(true);
-  };
-
-  const getResponses = (id: string | number) => {
-    if (subTab === "auditors") {
-      return getAuditorResponses(id);
-    }
-    return getAuditeeResponses(id);
-  };
-
-  const getNCRs = (id: string | number) => {
-    if (subTab === "auditors") {
-      return getAuditorNCRs(id);
-    }
-    return getAuditeeNCRs(id);
-  };
-
-  const getSummary = (id: string | number) => {
-    const responses = getResponses(id);
-    const total = responses.length;
-    const approved = responses.filter((r) => r.status === "APPROVED").length;
-    const rejected = responses.filter((r) => r.status === "REJECTED").length;
-    const submitted = responses.filter((r) => r.status === "SUBMITTED").length;
-    const avgScore =
-      total > 0
-        ? responses.reduce((sum, r) => sum + (r.percentageScore || 0), 0) /
-          total
-        : 0;
-    return {
-      total,
-      approved,
-      rejected,
-      pending: submitted,
-      approvalRate: total > 0 ? (approved * 100) / total : 0,
-      avgScore: avgScore.toFixed(1),
-    };
-  };
-
-  const renderStakeholderCard = (item: User) => {
-    const responses = getResponses(item.id);
-    const ncrs = getNCRs(item.id);
-    const assignedAudits = allSchedules.filter((s) =>
-      subTab === "auditors" ? s.auditorId === item.id : s.auditeeId === item.id,
-    ).length;
-
-    const approvedResponses = responses.filter(
-      (r) => r.status === "APPROVED",
-    ).length;
-    const submittedResponses = responses.filter(
-      (r) => r.status === "SUBMITTED",
-    ).length;
-    const openNCRs = ncrs.filter(
-      (n) => n.status === "OPEN" || n.status === "IN_PROGRESS",
-    ).length;
-    const closedNCRs = ncrs.filter((n) => n.status === "CLOSED").length;
-
-    const deptDisplay = getDepartmentString(item.department);
-
     return (
-      <View key={String(item.id)} style={styles.stakeholderCard}>
-        <View style={styles.stakeholderHeader}>
-          <View
-            style={[styles.avatar, { backgroundColor: NAVBAR_COLORS.primary }]}
-          >
-            <Text style={styles.avatarText}>
-              {(item.firstName?.[0] || item.username?.[0] || "A").toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.stakeholderInfo}>
-            <Text style={styles.stakeholderName}>
-              {item.firstName} {item.lastName}
-            </Text>
-            <Text style={styles.stakeholderRole}>
-              {item.role || "User"} • {item.email || "No email"}
-            </Text>
-            {subTab === "auditees" && deptDisplay ? (
-              <View style={styles.deptBadge}>
-                <Icon
-                  name="briefcase"
-                  size={10}
-                  color={NAVBAR_COLORS.primary}
-                />
-                <Text style={styles.deptBadgeText}>{deptDisplay}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statBoxValue}>{assignedAudits}</Text>
-            <Text style={styles.statBoxLabel}>Assigned Audits</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text
-              style={[styles.statBoxValue, { color: NAVBAR_COLORS.primary }]}
-            >
-              {responses.length}
-            </Text>
-            <Text style={styles.statBoxLabel}>Responses</Text>
-          </View>
-        </View>
-
-        <View style={styles.statusRow}>
-          <View style={[styles.statusBox, { backgroundColor: "#D1FAE5" }]}>
-            <Text style={[styles.statusBoxValue, { color: "#059669" }]}>
-              {approvedResponses}
-            </Text>
-            <Text style={styles.statusBoxLabel}>Approved</Text>
-          </View>
-          <View style={[styles.statusBox, { backgroundColor: "#FEF3C7" }]}>
-            <Text style={[styles.statusBoxValue, { color: "#D97706" }]}>
-              {submittedResponses}
-            </Text>
-            <Text style={styles.statusBoxLabel}>Pending</Text>
-          </View>
-        </View>
-
-        {ncrs.length > 0 && (
-          <View style={styles.ncrSummary}>
-            <Text style={styles.ncrSummaryText}>{ncrs.length} Total NCRs</Text>
-            <View style={styles.ncrSummaryRow}>
-              <Text style={styles.ncrOpenText}>Open: {openNCRs}</Text>
-              <Text style={styles.ncrClosedText}>Closed: {closedNCRs}</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleViewResponses(item)}
-          >
-            <Icon name="file-text" size={14} color="#6B7280" />
-            <Text style={styles.actionButtonText}>Responses</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleViewNCRs(item)}
-          >
-            <Icon name="alert-triangle" size={14} color="#6B7280" />
-            <Text style={styles.actionButtonText}>NCRs</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      colors[status || ""] || {
+        bg: COLORS.borderLight,
+        text: COLORS.textMuted,
+        border: COLORS.border,
+      }
     );
   };
 
+  const handleViewResponses = useCallback((stakeholder: User) => {
+    setSelectedStakeholder(stakeholder);
+    setModalType("responses");
+    setShowResponsesModal(true);
+  }, []);
+
+  const handleViewNCRs = useCallback((stakeholder: User) => {
+    setSelectedStakeholder(stakeholder);
+    setModalType("ncrs");
+    setShowNCRsModal(true);
+  }, []);
+
+  // ── LOOKUP MAPS ─────────────────────────────────────────────
+  const responsesByAuditor = useMemo(() => {
+    const m = new Map<string | number, Response[]>();
+    allResponses.forEach((r) => {
+      if (r.auditorId == null) return;
+      const arr = m.get(r.auditorId) ?? [];
+      arr.push(r);
+      m.set(r.auditorId, arr);
+    });
+    return m;
+  }, [allResponses]);
+
+  const responsesByAuditee = useMemo(() => {
+    const m = new Map<string | number, Response[]>();
+    allResponses.forEach((r) => {
+      if (r.auditeeId == null) return;
+      const arr = m.get(r.auditeeId) ?? [];
+      arr.push(r);
+      m.set(r.auditeeId, arr);
+    });
+    return m;
+  }, [allResponses]);
+
+  const ncrsByAuditor = useMemo(() => {
+    const m = new Map<string | number, NCR[]>();
+    allNCRs.forEach((n) => {
+      if (n.auditorId == null) return;
+      const arr = m.get(n.auditorId) ?? [];
+      arr.push(n);
+      m.set(n.auditorId, arr);
+    });
+    return m;
+  }, [allNCRs]);
+
+  const ncrsByAuditee = useMemo(() => {
+    const m = new Map<string | number, NCR[]>();
+    allNCRs.forEach((n) => {
+      if (n.auditeeId == null) return;
+      const arr = m.get(n.auditeeId) ?? [];
+      arr.push(n);
+      m.set(n.auditeeId, arr);
+    });
+    return m;
+  }, [allNCRs]);
+
+  const schedulesByAuditor = useMemo(() => {
+    const m = new Map<string | number, Schedule[]>();
+    allSchedules.forEach((s) => {
+      if (s.auditorId == null) return;
+      const arr = m.get(s.auditorId) ?? [];
+      arr.push(s);
+      m.set(s.auditorId, arr);
+    });
+    return m;
+  }, [allSchedules]);
+
+  const schedulesByAuditee = useMemo(() => {
+    const m = new Map<string | number, Schedule[]>();
+    allSchedules.forEach((s) => {
+      if (s.auditeeId == null) return;
+      const arr = m.get(s.auditeeId) ?? [];
+      arr.push(s);
+      m.set(s.auditeeId, arr);
+    });
+    return m;
+  }, [allSchedules]);
+
+  // ── Shared "auditees without HOD" — computed once ───────────
+  const auditeesWithoutHOD = useMemo(
+    () =>
+      allAuditees.filter((a) => {
+        const role = (a.role || "").toUpperCase();
+        return role !== "HOD" && !role.includes("HOD");
+      }),
+    [allAuditees],
+  );
+
+  // ── O(1) lookups ────────────────────────────────────────────
+  const getResponses = useCallback(
+    (id: string | number) =>
+      (subTab === "auditors" ? responsesByAuditor : responsesByAuditee).get(
+        id,
+      ) ?? [],
+    [subTab, responsesByAuditor, responsesByAuditee],
+  );
+
+  const getNCRs = useCallback(
+    (id: string | number) =>
+      (subTab === "auditors" ? ncrsByAuditor : ncrsByAuditee).get(id) ?? [],
+    [subTab, ncrsByAuditor, ncrsByAuditee],
+  );
+
+  // ── Derived lists ───────────────────────────────────────────
+  const departmentOptions = useMemo(() => {
+    const map = new Map<string, number>();
+
+    auditeesWithoutHOD.forEach((a) => {
+      const dept = getDepartmentString(a.department);
+      if (dept) map.set(dept, (map.get(dept) || 0) + 1);
+    });
+
+    const sorted = Array.from(map.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([name, count]) => ({ name, count }));
+
+    return [
+      {
+        name: "ALL",
+        label: "All Departments",
+        count: auditeesWithoutHOD.length,
+      },
+      ...sorted.map((d) => ({ name: d.name, label: d.name, count: d.count })),
+    ];
+  }, [auditeesWithoutHOD]);
+
+  const stakeholders = useMemo(() => {
+    if (subTab === "auditors") {
+      return allAuditors.filter(
+        (a) =>
+          a.role !== "LEAD_AUDITOR" && !a.role?.toLowerCase().includes("lead"),
+      );
+    }
+    if (selectedDepartment === "ALL") return auditeesWithoutHOD;
+    return auditeesWithoutHOD.filter(
+      (a) => getDepartmentString(a.department) === selectedDepartment,
+    );
+  }, [subTab, allAuditors, auditeesWithoutHOD, selectedDepartment]);
+
+  const getSummary = useCallback(
+    (id: string | number) => {
+      const responses = getResponses(id);
+      const total = responses.length;
+      const approved = responses.filter((r) => r.status === "APPROVED").length;
+      const rejected = responses.filter((r) => r.status === "REJECTED").length;
+      const submitted = responses.filter(
+        (r) => r.status === "SUBMITTED",
+      ).length;
+      const avgScore =
+        total > 0
+          ? responses.reduce((sum, r) => sum + (r.percentageScore || 0), 0) /
+            total
+          : 0;
+      return {
+        total,
+        approved,
+        rejected,
+        pending: submitted,
+        approvalRate: total > 0 ? (approved * 100) / total : 0,
+        avgScore: avgScore.toFixed(1),
+      };
+    },
+    [getResponses],
+  );
+
+  const selectedResponses = selectedStakeholder
+    ? getResponses(selectedStakeholder.id)
+    : [];
+  const selectedNCRs = selectedStakeholder
+    ? getNCRs(selectedStakeholder.id)
+    : [];
+
+  const currentDeptLabel =
+    departmentOptions.find((d) => d.name === selectedDepartment)?.label ||
+    "All Departments";
+
+  // ── Modal list item renderer ────────────────────────────────
   const renderModalItem = ({ item }: { item: Response | NCR }) => {
     if (modalType === "responses") {
       const r = item as Response;
-      const answers =
-        typeof r.answers === "string" ? JSON.parse(r.answers) : r.answers;
+      const answers = safeParseAnswers(r.answers);
       const statusColors = getStatusBadge(r.status);
       return (
         <View style={styles.modalItem}>
@@ -339,16 +635,14 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
             </Text>
             <View
               style={[
-                styles.modalItemBadge,
-                { backgroundColor: statusColors.bg },
+                styles.badge,
+                {
+                  backgroundColor: statusColors.bg,
+                  borderColor: statusColors.border,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: statusColors.text },
-                ]}
-              >
+              <Text style={[styles.badgeText, { color: statusColors.text }]}>
                 {r.status || "DRAFT"}
               </Text>
             </View>
@@ -370,8 +664,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                 setShowResponsesModal(false);
                 setReportView({ type: detectReportType(r), id: r.id });
               }}
+              activeOpacity={0.7}
             >
-              <Icon name="eye" size={12} color="#6B7280" />
+              <Icon name="eye" size={12} color={COLORS.primary} />
               <Text style={styles.modalItemViewText}>View Report</Text>
             </TouchableOpacity>
           </View>
@@ -386,31 +681,28 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
           <View style={styles.modalItemHeader}>
             <View
               style={[
-                styles.modalItemBadge,
-                { backgroundColor: severityColors.bg },
+                styles.badge,
+                {
+                  backgroundColor: severityColors.bg,
+                  borderColor: severityColors.border,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: severityColors.text },
-                ]}
-              >
+              <Icon name="alert-circle" size={8} color={severityColors.text} />
+              <Text style={[styles.badgeText, { color: severityColors.text }]}>
                 {n.severity || "NCR"}
               </Text>
             </View>
             <View
               style={[
-                styles.modalItemBadge,
-                { backgroundColor: statusColors.bg },
+                styles.badge,
+                {
+                  backgroundColor: statusColors.bg,
+                  borderColor: statusColors.border,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.modalItemBadgeText,
-                  { color: statusColors.text },
-                ]}
-              >
+              <Text style={[styles.badgeText, { color: statusColors.text }]}>
                 {n.status || "OPEN"}
               </Text>
             </View>
@@ -428,8 +720,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                 setShowNCRsModal(false);
                 setSelectedNcrId(n.id);
               }}
+              activeOpacity={0.7}
             >
-              <Icon name="eye" size={12} color="#6B7280" />
+              <Icon name="eye" size={12} color={COLORS.primary} />
               <Text style={styles.modalItemViewText}>View Details</Text>
             </TouchableOpacity>
           </View>
@@ -438,60 +731,10 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     }
   };
 
-  // ✅ Compute available departments + counts
-  const departmentOptions = useMemo(() => {
-    const map = new Map<string, number>();
-    allAuditees.forEach((a) => {
-      const dept = getDepartmentString(a.department);
-      if (dept) map.set(dept, (map.get(dept) || 0) + 1);
-    });
-    const sorted = Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([name, count]) => ({ name, count }));
-    return [
-      { name: "ALL", label: "All Departments", count: allAuditees.length },
-      ...sorted.map((d) => ({
-        name: d.name,
-        label: d.name,
-        count: d.count,
-      })),
-    ];
-  }, [allAuditees]);
-
-  // ✅ Filter stakeholders based on subTab + department
-  const stakeholders = useMemo(() => {
-    if (subTab === "auditors") {
-      return allAuditors.filter(
-        (a) =>
-          a.role !== "LEAD_AUDITOR" && !a.role?.toLowerCase().includes("lead"),
-      );
-    }
-
-    if (selectedDepartment === "ALL") {
-      return allAuditees;
-    }
-
-    return allAuditees.filter(
-      (a) => getDepartmentString(a.department) === selectedDepartment,
-    );
-  }, [subTab, allAuditors, allAuditees, selectedDepartment]);
-
-  const selectedResponses = selectedStakeholder
-    ? getResponses(selectedStakeholder.id)
-    : [];
-  const selectedNCRs = selectedStakeholder
-    ? getNCRs(selectedStakeholder.id)
-    : [];
-
-  // Current label for the dropdown trigger
-  const currentDeptLabel =
-    departmentOptions.find((d) => d.name === selectedDepartment)?.label ||
-    "All Departments";
-
-  // ✅ NCR PREVIEW
+  // ── NCR preview ─────────────────────────────────────────────
   if (selectedNcrId) {
     return (
-      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+      <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
         <NCRViewManager
           initialId={String(selectedNcrId)}
           initialType="form7"
@@ -501,10 +744,10 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     );
   }
 
-  // ✅ CHECK SHEET REPORT PREVIEW
+  // ── Report preview ──────────────────────────────────────────
   if (reportView) {
     return (
-      <View style={{ flex: 1, backgroundColor: NAVBAR_COLORS.bg }}>
+      <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
         {reportView.type === "5S" && (
           <FiveSView
             initialId={String(reportView.id)}
@@ -527,62 +770,51 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
     );
   }
 
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* ✅ SUB-TAB SWITCHER */}
+  // ── Header (sub-tabs + filter) — extracted for FlatList header
+  const listHeader = (
+    <View style={{ paddingBottom: 16 }}>
+      {/* Sub-tab switcher */}
       <View style={styles.subTabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.subTabButton,
-            subTab === "auditors" && styles.subTabActive,
-          ]}
+        <OutlineButton
+          title={`Auditors (${allAuditors.length})`}
+          icon={() => (
+            <Icon
+              name="users"
+              size={16}
+              color={subTab === "auditors" ? COLORS.primary : COLORS.textMuted}
+            />
+          )}
+          active={subTab === "auditors"}
           onPress={() => {
-            setSubTab("auditors");
-            setSelectedDepartment("ALL");
+            startTransition(() => {
+              setSubTab("auditors");
+              setSelectedDepartment("ALL");
+            });
           }}
-        >
-          <Icon
-            name="users"
-            size={16}
-            color={subTab === "auditors" ? "#FFFFFF" : "#6B7280"}
-          />
-          <Text
-            style={[
-              styles.subTabText,
-              subTab === "auditors" && styles.subTabTextActive,
-            ]}
-          >
-            Auditors ({allAuditors.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.subTabButton,
-            subTab === "auditees" && styles.subTabActive,
-          ]}
-          onPress={() => setSubTab("auditees")}
-        >
-          <Icon
-            name="user-check"
-            size={16}
-            color={subTab === "auditees" ? "#FFFFFF" : "#6B7280"}
-          />
-          <Text
-            style={[
-              styles.subTabText,
-              subTab === "auditees" && styles.subTabTextActive,
-            ]}
-          >
-            Auditees ({allAuditees.length})
-          </Text>
-        </TouchableOpacity>
+        />
+        <OutlineButton
+          title={`Auditees (${allAuditees.length})`}
+          icon={() => (
+            <Icon
+              name="user-check"
+              size={16}
+              color={subTab === "auditees" ? COLORS.primary : COLORS.textMuted}
+            />
+          )}
+          active={subTab === "auditees"}
+          onPress={() => {
+            startTransition(() => {
+              setSubTab("auditees");
+            });
+          }}
+        />
       </View>
 
-      {/* ✅ DEPARTMENT DROPDOWN — only visible on Auditees sub-tab */}
+      {/* Department dropdown — only on Auditees */}
       {subTab === "auditees" && (
-        <View style={styles.filterSection}>
+        <Card style={styles.filterSection}>
           <View style={styles.filterHeader}>
-            <Icon name="filter" size={14} color={NAVBAR_COLORS.primary} />
+            <Icon name="filter" size={14} color={COLORS.primary} />
             <Text style={styles.filterLabel}>Filter by Department</Text>
             <Text style={styles.filterCount}>{stakeholders.length} shown</Text>
           </View>
@@ -593,26 +825,78 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
             activeOpacity={0.7}
           >
             <View style={styles.dropdownTriggerLeft}>
-              <Icon name="briefcase" size={14} color={NAVBAR_COLORS.primary} />
+              <Icon name="briefcase" size={14} color={COLORS.primary} />
               <Text style={styles.dropdownTriggerText}>{currentDeptLabel}</Text>
             </View>
-            <Icon name="chevron-down" size={18} color={NAVBAR_COLORS.primary} />
+            <Icon name="chevron-down" size={18} color={COLORS.primary} />
           </TouchableOpacity>
-        </View>
+        </Card>
       )}
 
-      <View style={styles.grid}>
-        {stakeholders.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon
-              name={subTab === "auditors" ? "users" : "user-check"}
-              size={40}
-              color="#CBD5E1"
+      {/* Pending indicator */}
+      {isPending && (
+        <View style={{ paddingVertical: 8, alignItems: "center" }}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      )}
+    </View>
+  );
+
+  // ── Main render ─────────────────────────────────────────────
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={stakeholders}
+        key={`grid-${NUM_COLUMNS}`}
+        numColumns={NUM_COLUMNS}
+        keyExtractor={(item) => String(item.id)}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={styles.containerContent}
+        columnWrapperStyle={!isMobile ? styles.columnWrapper : undefined}
+        initialNumToRender={isMobile ? 4 : 9}
+        maxToRenderPerBatch={isMobile ? 4 : 9}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS !== "web"}
+        renderItem={({ item }) => (
+          <View
+            style={[
+              styles.gridItem,
+              // Apply margin left to second and third items in a row for spacing
+              !isMobile && {
+                marginLeft: 0,
+                marginRight: 0, // managed by inner card margin
+              },
+            ]}
+          >
+            <StakeholderCard
+              item={item}
+              subTab={subTab}
+              responses={getResponses(item.id)}
+              ncrs={getNCRs(item.id)}
+              assignedAudits={
+                (subTab === "auditors"
+                  ? schedulesByAuditor.get(item.id)
+                  : schedulesByAuditee.get(item.id)
+                )?.length ?? 0
+              }
+              onViewResponses={handleViewResponses}
+              onViewNCRs={handleViewNCRs}
             />
+          </View>
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIconWrap}>
+              <Icon
+                name={subTab === "auditors" ? "users" : "user-check"}
+                size={28}
+                color={COLORS.primary}
+              />
+            </View>
             <Text style={styles.emptyStateTitle}>
               No {subTab === "auditors" ? "Auditors" : "Auditees"} Found
             </Text>
-            <Text style={styles.emptyStateSubtext}>
+            <Text style={styles.emptyStateText}>
               {subTab === "auditees" && selectedDepartment !== "ALL"
                 ? `No auditees found in ${selectedDepartment} department`
                 : leadAuditorDepartment
@@ -620,12 +904,10 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                   : `No ${subTab === "auditors" ? "auditors" : "auditees"} are currently registered`}
             </Text>
           </View>
-        ) : (
-          stakeholders.map((item) => renderStakeholderCard(item))
-        )}
-      </View>
+        }
+      />
 
-      {/* ✅ DEPARTMENT DROPDOWN MODAL */}
+      {/* ── Department dropdown modal ─────────────────────────── */}
       <Modal
         visible={showDeptDropdown}
         animationType="fade"
@@ -640,14 +922,13 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
           <View
             style={[styles.dropdownMenu, isMobile && styles.dropdownMenuMobile]}
           >
-            {/* Header */}
             <View style={styles.dropdownHeader}>
               <Text style={styles.dropdownHeaderTitle}>Select Department</Text>
               <TouchableOpacity
                 onPress={() => setShowDeptDropdown(false)}
                 style={styles.dropdownCloseButton}
               >
-                <Icon name="x" size={20} color="#64748B" />
+                <Icon name="x" size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -668,9 +949,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                       setSelectedDepartment(option.name);
                       setShowDeptDropdown(false);
                     }}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.dropdownItemLeft}>
-                      {/* ✅ Checkbox-style indicator */}
                       <View
                         style={[
                           styles.checkbox,
@@ -678,7 +959,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                         ]}
                       >
                         {isActive && (
-                          <Icon name="check" size={12} color="#FFFFFF" />
+                          <Icon name="check" size={12} color={COLORS.card} />
                         )}
                       </View>
                       <Text
@@ -686,6 +967,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                           styles.dropdownItemText,
                           isActive && styles.dropdownItemTextActive,
                         ]}
+                        numberOfLines={1}
                       >
                         {option.label}
                       </Text>
@@ -713,7 +995,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
         </TouchableOpacity>
       </Modal>
 
-      {/* Responses Modal */}
+      {/* ── Responses modal ───────────────────────────────────── */}
       <Modal
         visible={showResponsesModal}
         animationType="slide"
@@ -724,14 +1006,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
           <View
             style={[styles.modalContent, isMobile && styles.modalContentMobile]}
           >
-            <View
-              style={[
-                styles.modalHeader,
-                { backgroundColor: NAVBAR_COLORS.primary },
-              ]}
-            >
-              <View>
-                <Text style={styles.modalHeaderTitle}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                   Responses by {selectedStakeholder?.firstName}{" "}
                   {selectedStakeholder?.lastName}
                 </Text>
@@ -743,7 +1020,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                 onPress={() => setShowResponsesModal(false)}
                 style={styles.modalCloseButton}
               >
-                <Icon name="x" size={24} color="#FFFFFF" />
+                <Icon name="x" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
 
@@ -755,23 +1032,53 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                   </Text>
                   <Text style={styles.modalStatLabel}>Total</Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#059669" }]}>
+                <View style={[styles.modalStat, styles.modalStatSuccess]}>
+                  <Text
+                    style={[
+                      styles.modalStatValue,
+                      { color: COLORS.primaryDark },
+                    ]}
+                  >
                     {getSummary(selectedStakeholder.id).approved}
                   </Text>
-                  <Text style={styles.modalStatLabel}>APPROVED</Text>
+                  <Text
+                    style={[
+                      styles.modalStatLabel,
+                      { color: COLORS.primaryDark },
+                    ]}
+                  >
+                    APPROVED
+                  </Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#DC2626" }]}>
+                <View style={[styles.modalStat, styles.modalStatError]}>
+                  <Text
+                    style={[
+                      styles.modalStatValue,
+                      { color: COLORS.stateErrorText },
+                    ]}
+                  >
                     {getSummary(selectedStakeholder.id).rejected}
                   </Text>
-                  <Text style={styles.modalStatLabel}>REJECTED</Text>
+                  <Text
+                    style={[
+                      styles.modalStatLabel,
+                      { color: COLORS.stateErrorText },
+                    ]}
+                  >
+                    REJECTED
+                  </Text>
                 </View>
-                <View style={styles.modalStat}>
-                  <Text style={[styles.modalStatValue, { color: "#D97706" }]}>
+                <View style={[styles.modalStat, styles.modalStatPending]}>
+                  <Text
+                    style={[styles.modalStatValue, { color: COLORS.primary }]}
+                  >
                     {getSummary(selectedStakeholder.id).pending}
                   </Text>
-                  <Text style={styles.modalStatLabel}>SUBMITTED</Text>
+                  <Text
+                    style={[styles.modalStatLabel, { color: COLORS.primary }]}
+                  >
+                    SUBMITTED
+                  </Text>
                 </View>
               </View>
             )}
@@ -783,8 +1090,13 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               contentContainerStyle={styles.modalListContent}
               ListEmptyComponent={
                 <View style={styles.modalEmpty}>
-                  <Icon name="file-text" size={40} color="#CBD5E1" />
-                  <Text style={styles.modalEmptyText}>No responses found</Text>
+                  <View style={styles.emptyStateIconWrap}>
+                    <Icon name="file-text" size={28} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.modalEmptyTitle}>No responses found</Text>
+                  <Text style={styles.modalEmptyText}>
+                    This stakeholder has no check sheet responses yet
+                  </Text>
                 </View>
               }
             />
@@ -792,7 +1104,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
         </View>
       </Modal>
 
-      {/* NCRs Modal */}
+      {/* ── NCRs modal ────────────────────────────────────────── */}
       <Modal
         visible={showNCRsModal}
         animationType="slide"
@@ -803,14 +1115,9 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
           <View
             style={[styles.modalContent, isMobile && styles.modalContentMobile]}
           >
-            <View
-              style={[
-                styles.modalHeader,
-                { backgroundColor: NAVBAR_COLORS.primary },
-              ]}
-            >
-              <View>
-                <Text style={styles.modalHeaderTitle}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                   NCRs by {selectedStakeholder?.firstName}{" "}
                   {selectedStakeholder?.lastName}
                 </Text>
@@ -822,7 +1129,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
                 onPress={() => setShowNCRsModal(false)}
                 style={styles.modalCloseButton}
               >
-                <Icon name="x" size={24} color="#FFFFFF" />
+                <Icon name="x" size={22} color={COLORS.text} />
               </TouchableOpacity>
             </View>
 
@@ -833,61 +1140,77 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
               contentContainerStyle={styles.modalListContent}
               ListEmptyComponent={
                 <View style={styles.modalEmpty}>
-                  <Icon name="alert-triangle" size={40} color="#CBD5E1" />
-                  <Text style={styles.modalEmptyText}>No NCRs found</Text>
+                  <View style={styles.emptyStateIconWrap}>
+                    <Icon
+                      name="alert-triangle"
+                      size={28}
+                      color={COLORS.primary}
+                    />
+                  </View>
+                  <Text style={styles.modalEmptyTitle}>No NCRs found</Text>
+                  <Text style={styles.modalEmptyText}>
+                    This stakeholder has no non-conformity reports
+                  </Text>
                 </View>
               }
             />
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 };
 
+// ═════════════════════════════════════════════════════════════════
+// Styles
+// ═════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  containerContent: {
+    paddingBottom: 24,
+    // gap: 16,  <-- REMOVED gap here to prevent side gaps on web
   },
 
-  // ✅ SUB-TAB STYLES
+  // ── GRID LAYOUT ─────────────────────────────────────────────
+  columnWrapper: {
+    alignItems: "stretch",
+    justifyContent: "flex-start",
+    width: "100%",
+    // Remove gap here too
+  },
+  gridItem: {
+    flex: 1,
+    maxWidth: isMobile ? "100%" : "33.3333%", // Prevents last row items from stretching
+    marginBottom: 16,
+    // Spacing trick: pad the outer wrapper, and let inner card fill the space.
+    // This ensures perfect math without exceeding 100% width.
+    paddingHorizontal: isMobile ? 0 : 8,
+  },
+
+  card: {
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+
   subTabContainer: {
     flexDirection: "row",
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 4,
+    gap: 12,
     marginBottom: 16,
-    gap: 4,
-  },
-  subTabButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  subTabActive: {
-    backgroundColor: NAVBAR_COLORS.primary,
-  },
-  subTabText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  subTabTextActive: {
-    color: "#FFFFFF",
   },
 
-  // ✅ DEPARTMENT FILTER — dropdown styles
   filterSection: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    padding: 12,
+    padding: 14,
     marginBottom: 16,
   },
   filterHeader: {
@@ -898,22 +1221,22 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#334155",
+    fontWeight: "700",
+    color: COLORS.textValue,
     flex: 1,
   },
   filterCount: {
     fontSize: 11,
-    color: "#64748B",
-    fontWeight: "500",
+    color: COLORS.textMuted,
+    fontWeight: "600",
   },
   dropdownTrigger: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: COLORS.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -927,10 +1250,9 @@ const styles = StyleSheet.create({
   dropdownTriggerText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1E293B",
+    color: COLORS.text,
   },
 
-  // ✅ DROPDOWN MODAL
   dropdownOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.5)",
@@ -941,7 +1263,7 @@ const styles = StyleSheet.create({
   dropdownMenu: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     overflow: "hidden",
     shadowColor: "#000",
@@ -949,6 +1271,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   dropdownMenuMobile: {
     maxWidth: "100%",
@@ -960,12 +1284,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: COLORS.borderLight,
   },
   dropdownHeaderTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1E293B",
+    color: COLORS.text,
   },
   dropdownCloseButton: {
     padding: 4,
@@ -977,10 +1301,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#F8FAFC",
+    borderBottomColor: COLORS.borderLight,
   },
   dropdownItemActive: {
-    backgroundColor: NAVBAR_COLORS.bg,
+    backgroundColor: COLORS.primaryLight,
   },
   dropdownItemLeft: {
     flexDirection: "row",
@@ -993,23 +1317,23 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 5,
     borderWidth: 2,
-    borderColor: "#CBD5E1",
+    borderColor: COLORS.border,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
   },
   checkboxActive: {
-    backgroundColor: NAVBAR_COLORS.primary,
-    borderColor: NAVBAR_COLORS.primary,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   dropdownItemText: {
     fontSize: 13,
     fontWeight: "500",
-    color: "#334155",
+    color: COLORS.textValue,
     flex: 1,
   },
   dropdownItemTextActive: {
-    color: NAVBAR_COLORS.primary,
+    color: COLORS.primary,
     fontWeight: "700",
   },
   dropdownBadge: {
@@ -1017,91 +1341,104 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: COLORS.borderLight,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   dropdownBadgeActive: {
-    backgroundColor: NAVBAR_COLORS.primary,
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   dropdownBadgeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#64748B",
+    color: COLORS.textMuted,
   },
   dropdownBadgeTextActive: {
-    color: "#FFFFFF",
+    color: COLORS.card,
   },
 
-  // ✅ DEPARTMENT BADGE (on card)
   deptBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     alignSelf: "flex-start",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: NAVBAR_COLORS.bg,
-    borderRadius: 4,
-    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: COLORS.chipBg,
+    borderWidth: 1,
+    borderColor: COLORS.chipBorder,
+    borderRadius: 8,
+    marginTop: 6,
+    maxWidth: "100%",
   },
   deptBadgeText: {
     fontSize: 10,
-    fontWeight: "600",
-    color: NAVBAR_COLORS.primary,
+    fontWeight: "700",
+    color: COLORS.chipText,
+    letterSpacing: 0.2,
   },
 
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 20,
-  },
+  // ── CARD ────────────────────────────────────────────────────
   stakeholderCard: {
-    width: isMobile ? "100%" : "32%",
-    backgroundColor: "#FFFFFF",
+    flex: 1,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: COLORS.border,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   stakeholderHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 14,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
   },
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
   },
   avatarText: {
-    color: "#FFFFFF",
+    color: COLORS.primary,
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "700",
   },
   stakeholderInfo: {
     flex: 1,
+    minWidth: 0,
   },
   stakeholderName: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#1F2937",
+    fontWeight: "700",
+    color: COLORS.text,
   },
   stakeholderRole: {
     fontSize: 11,
-    color: "#6B7280",
+    fontWeight: "600",
+    color: COLORS.textMuted,
     marginTop: 2,
   },
+  stakeholderEmail: {
+    fontSize: 11,
+    color: COLORS.textSubtle,
+    marginTop: 1,
+  },
+
   statsRow: {
     flexDirection: "row",
     gap: 8,
@@ -1109,124 +1446,197 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: COLORS.bg,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
   statBoxValue: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontWeight: "700",
+    color: COLORS.text,
   },
   statBoxLabel: {
     fontSize: 10,
-    color: "#6B7280",
+    fontWeight: "600",
+    color: COLORS.textMuted,
     marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
+
   statusRow: {
     flexDirection: "row",
     gap: 8,
     marginBottom: 8,
   },
-  statusBox: {
+  statusBoxSuccess: {
     flex: 1,
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: "center",
+    backgroundColor: COLORS.stateSuccessBg,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
   },
-  statusBoxValue: {
-    fontSize: 14,
-    fontWeight: "bold",
+  statusBoxWarning: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+  },
+  statusBoxValueSuccess: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  statusBoxValueWarning: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.primary,
   },
   statusBoxLabel: {
-    fontSize: 9,
-    color: "#6B7280",
+    fontSize: 10,
+    fontWeight: "600",
+    color: COLORS.textMuted,
     marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
+
   ncrSummary: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: 8,
-    padding: 8,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginBottom: 8,
+  },
+  ncrSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
   },
   ncrSummaryText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#DC2626",
+    fontWeight: "700",
+    color: COLORS.primaryDark,
   },
   ncrSummaryRow: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 2,
+    gap: 6,
+    flexWrap: "wrap",
   },
-  ncrOpenText: {
+  ncrChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+  },
+  ncrChipClosed: {
+    backgroundColor: COLORS.stateSuccessBg,
+  },
+  ncrChipText: {
     fontSize: 10,
-    color: "#DC2626",
+    fontWeight: "700",
+    color: COLORS.primary,
   },
-  ncrClosedText: {
-    fontSize: 10,
-    color: "#059669",
+  ncrChipClosedText: {
+    color: COLORS.primaryDark,
   },
+
   actionRow: {
     flexDirection: "row",
     gap: 8,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: COLORS.borderLight,
+    marginTop: 4,
   },
   actionButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 6,
     paddingVertical: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: COLORS.primaryBorder,
     borderRadius: 8,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.primaryLight,
   },
   actionButtonText: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
+
   emptyState: {
-    flex: 1,
-    paddingVertical: 40,
+    width: "100%",
+    paddingVertical: 48,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    minWidth: "100%",
+    borderColor: COLORS.border,
+  },
+  emptyStateIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   emptyStateTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    marginTop: 12,
+    fontWeight: "700",
+    color: COLORS.text,
   },
-  emptyStateSubtext: {
+  emptyStateText: {
     fontSize: 13,
-    color: "#6B7280",
+    color: COLORS.textMuted,
     marginTop: 4,
     textAlign: "center",
+    paddingHorizontal: 24,
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
   },
   modalContent: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 16,
     width: width * 0.9,
     maxHeight: height * 0.85,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
   },
   modalContentMobile: {
     width: width * 0.95,
@@ -1236,127 +1646,178 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    backgroundColor: COLORS.card,
   },
   modalHeaderTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
+    fontWeight: "700",
+    color: COLORS.text,
   },
   modalHeaderSubtext: {
     fontSize: 12,
-    color: "#C7D2FE",
+    color: COLORS.textMuted,
     marginTop: 2,
   },
   modalCloseButton: {
-    padding: 4,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
+
   modalStatsGrid: {
     flexDirection: "row",
     gap: 8,
     padding: 12,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: COLORS.bg,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+    borderBottomColor: COLORS.borderLight,
   },
   modalStat: {
     flex: 1,
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: COLORS.border,
+  },
+  modalStatSuccess: {
+    backgroundColor: COLORS.stateSuccessBg,
+    borderColor: COLORS.primaryBorder,
+  },
+  modalStatError: {
+    backgroundColor: COLORS.stateErrorBg,
+    borderColor: COLORS.border,
+  },
+  modalStatPending: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primaryBorder,
   },
   modalStatValue: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontWeight: "700",
+    color: COLORS.text,
   },
   modalStatLabel: {
     fontSize: 9,
-    color: "#6B7280",
+    fontWeight: "700",
+    color: COLORS.textMuted,
     marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
+
   modalListContent: {
     padding: 12,
   },
   modalItem: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 8,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   modalItemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
+    gap: 8,
   },
   modalItemId: {
     fontSize: 11,
-    color: "#6B7280",
+    color: COLORS.textMuted,
     fontFamily: "monospace",
-  },
-  modalItemBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  modalItemBadgeText: {
-    fontSize: 10,
-    fontWeight: "500",
+    flex: 1,
   },
   modalItemTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1F2937",
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
   },
   modalItemSubtext: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textMuted,
     marginTop: 2,
   },
   modalItemFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: COLORS.borderLight,
+    gap: 8,
   },
   modalItemScore: {
     fontSize: 12,
-    color: "#6B7280",
+    color: COLORS.textMuted,
   },
   modalItemScoreValue: {
-    fontWeight: "600",
-    color: "#1F2937",
+    fontWeight: "700",
+    color: COLORS.primary,
   },
   modalItemViewButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 4,
+    borderColor: COLORS.primaryBorder,
+    borderRadius: 8,
+    backgroundColor: COLORS.primaryLight,
   },
   modalItemViewText: {
     fontSize: 11,
-    color: "#6B7280",
+    fontWeight: "600",
+    color: COLORS.primary,
   },
+
   modalEmpty: {
     paddingVertical: 40,
     alignItems: "center",
   },
-  modalEmptyText: {
+  modalEmptyTitle: {
     fontSize: 14,
-    color: "#6B7280",
-    marginTop: 8,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginTop: 12,
+  },
+  modalEmptyText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+    gap: 3,
+  },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
   },
 });
 

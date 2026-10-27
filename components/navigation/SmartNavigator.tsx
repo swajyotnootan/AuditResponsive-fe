@@ -1,5 +1,6 @@
 import { useAuth } from "@/components/context/AuthContext";
 import { getNavigationByRole } from "@/config/navigation.config";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   useGlobalSearchParams,
   useLocalSearchParams,
@@ -18,8 +19,6 @@ import {
 } from "react-native";
 import { useTodayWorkPopup } from "../context/TodayWorkPopupContext";
 
-// In your component:
-
 interface SmartNavigatorProps {
   type: "drawer" | "tabs";
   onClose?: () => void;
@@ -35,18 +34,14 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
   const { open: openTodayWork } = useTodayWorkPopup();
 
   if (!user) return null;
-
   const navigationItems = getNavigationByRole(user.role);
 
   const handleNavigation = (item: any) => {
     onClose?.();
-
-    // ✅ Today's Work opens the popup instead of routing
     if (item.route?.includes("today-work")) {
-      openTodayWork(0); // 0 = stays open until user closes
+      openTodayWork(0);
       return;
     }
-
     router.push(item.route as any);
   };
 
@@ -60,66 +55,34 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     }
   };
 
-  // ✅ Extract the base route from URL
   const getBaseRoute = (route: string) => {
     const base = route.split("?")[0];
     const clean = base.replace(/\([^)]*\)\//g, "");
     return clean;
   };
 
-  // ✅ Extract tab/section from URL
-
   const getParam = (key: string) => {
-    console.log(`🔍 Looking for param: ${key}`);
-
-    // 1. Try local params first
     const p = params as any;
-    console.log("Local params:", JSON.stringify(p));
-
-    if (p[key]) {
-      console.log(`✅ Found in local params: ${p[key]}`);
-      return Array.isArray(p[key]) ? p[key][0] : p[key];
-    }
-
-    // 2. Try global params (works better for nested navigators)
+    if (p[key]) return Array.isArray(p[key]) ? p[key][0] : p[key];
     const gp = globalParams as any;
-    console.log("Global params:", JSON.stringify(gp));
-
-    if (gp[key]) {
-      console.log(`✅ Found in global params: ${gp[key]}`);
-      return Array.isArray(gp[key]) ? gp[key][0] : gp[key];
-    }
-
-    // 3. Try nested params
+    if (gp[key]) return Array.isArray(gp[key]) ? gp[key][0] : gp[key];
     if (p.params && typeof p.params === "object") {
-      if (p.params[key]) {
-        console.log(`✅ Found in nested params: ${p.params[key]}`);
+      if (p.params[key])
         return Array.isArray(p.params[key]) ? p.params[key][0] : p.params[key];
-      }
-      if (p.params.params && typeof p.params.params === "object") {
-        if (p.params.params[key]) {
-          console.log(
-            `✅ Found in double-nested params: ${p.params.params[key]}`,
-          );
-          return Array.isArray(p.params.params[key])
-            ? p.params.params[key][0]
-            : p.params.params[key];
-        }
+      if (
+        p.params.params &&
+        typeof p.params.params === "object" &&
+        p.params.params[key]
+      ) {
+        return Array.isArray(p.params.params[key])
+          ? p.params.params[key][0]
+          : p.params.params[key];
       }
     }
-
-    // 4. Try extracting from pathname
     if (pathname) {
-      console.log("Pathname:", pathname);
       const match = pathname.match(new RegExp(`[?&]${key}=([^&]+)`));
-      if (match && match[1]) {
-        const value = decodeURIComponent(match[1]);
-        console.log(`✅ Found in pathname: ${value}`);
-        return value;
-      }
+      if (match && match[1]) return decodeURIComponent(match[1]);
     }
-
-    // 5. Web-specific
     if (
       Platform.OS === "web" &&
       typeof window !== "undefined" &&
@@ -127,66 +90,42 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     ) {
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has(key)) {
-          const value = urlParams.get(key);
-          console.log(`✅ Found in web URL: ${value}`);
-          return value;
-        }
-      } catch (e) {
-        console.log("❌ Error parsing web URL:", e);
-      }
+        if (urlParams.has(key)) return urlParams.get(key);
+      } catch (e) {}
     }
-
-    console.log(`❌ Param "${key}" not found`);
     return undefined;
   };
-  // ✅ Helper to check if this is a "first tab" (should be active when no tab is selected)
-  const isFirstTab = (tab: string): boolean => {
-    const firstTabs = ["dashboard", "overview", "my-audits", "audits"];
-    return firstTabs.includes(tab);
-  };
 
-  // ✅ FIXED: Robust isActive function that works on both web and Android
+  const isFirstTab = (tab: string): boolean =>
+    ["dashboard", "overview", "my-audits", "audits"].includes(tab);
+
   const isActive = (item: any): boolean => {
     const currentPath = "/" + segments.filter(Boolean).join("/");
     const itemBaseRoute = getBaseRoute(item.route);
     const currentTab = getParam("tab");
     const currentSection = getParam("section");
 
-    // ✅ For Master role with section param
     if (item.action) {
       const routeMatches =
         currentPath === itemBaseRoute || currentPath.includes(itemBaseRoute);
       const sectionMatches = String(currentSection) === String(item.action);
       return routeMatches && sectionMatches;
     }
-
-    // ✅ For roles with tab param (Auditor, Lead Auditor, Audit Manager, etc.)
     if (item.tab) {
       const routeMatches =
         currentPath === itemBaseRoute || currentPath.includes(itemBaseRoute);
       const tabMatches = String(currentTab) === String(item.tab);
-
-      // ✅ FIX: On Android, when there's no tab param, the first tab should be active
-      // This preserves web behavior while fixing Android
       if (
         routeMatches &&
         !currentTab &&
         !currentSection &&
         isFirstTab(item.tab)
-      ) {
+      )
         return true;
-      }
-
       return routeMatches && tabMatches;
     }
-
-    // ✅ For Calendar and other simple routes
-    if (item.route === "/(app)/(tabs)/calendar") {
+    if (item.route === "/(app)/(tabs)/calendar")
       return currentPath === "/calendar" || currentPath.includes("/calendar");
-    }
-
-    // ✅ For Dashboard (Home) - preserves existing logic
     if (
       item.route === "/(app)/(tabs)" ||
       item.route === "/(app)/(tabs)/" ||
@@ -196,34 +135,21 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
         currentPath === "/" ||
         currentPath === "" ||
         currentPath === "/(app)/(tabs)";
-      if (isHomeRoute) {
-        return true;
-      }
+      if (isHomeRoute) return true;
       if (currentPath !== "/" && !currentTab && !currentSection) {
         const otherItemsMatch = navigationItems.some((otherItem: any) => {
           if (otherItem.route === item.route) return false;
           const otherBaseRoute = getBaseRoute(otherItem.route);
           return currentPath.includes(otherBaseRoute) && otherBaseRoute !== "/";
         });
-        if (!otherItemsMatch) {
-          return true;
-        }
+        if (!otherItemsMatch) return true;
       }
       return false;
     }
-
-    // ✅ Default: exact path match
-    if (currentPath === itemBaseRoute) {
-      return true;
-    }
-
-    // ✅ Partial match for nested routes
+    if (currentPath === itemBaseRoute) return true;
     if (currentPath.includes(itemBaseRoute) && itemBaseRoute !== "/") {
-      if (!currentTab && !currentSection) {
-        return true;
-      }
+      if (!currentTab && !currentSection) return true;
     }
-
     return false;
   };
 
@@ -267,12 +193,6 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
     return iconMap[iconName] || Icons.Circle;
   };
 
-  // ✅ Debug logs (remove in production)
-  console.log("📍 Current path:", "/" + segments.filter(Boolean).join("/"));
-  console.log("📍 Current tab:", getParam("tab"));
-  console.log("📍 Current section:", getParam("section"));
-  console.log("📍 User role:", user.role);
-
   return (
     <View
       style={{
@@ -280,7 +200,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
         backgroundColor: "#FFFFFF",
         borderRightWidth: 1,
         borderRightColor: "#E2E8F0",
-        width: 256,
+        width: 260,
       }}
     >
       {/* Header */}
@@ -294,30 +214,28 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View
+          <LinearGradient
+            colors={["#1E3A8A", "#1D4ED8"]} // Dark Navy to Blue
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{
               alignItems: "center",
               justifyContent: "center",
               width: 40,
               height: 40,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 4,
-              elevation: 4,
               borderRadius: 12,
-              backgroundColor: "#2563EB",
             }}
           >
             <Icons.LayoutGrid size={20} color="#FFFFFF" />
-          </View>
+          </LinearGradient>
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontSize: 16,
-                fontWeight: "bold",
-                color: "#1E293B",
+                fontSize: 15,
+                fontWeight: "700",
+                color: "#0F172A",
                 lineHeight: 20,
+                letterSpacing: -0.3,
               }}
             >
               {user.role
@@ -330,6 +248,7 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
                 fontSize: 12,
                 color: "#64748B",
                 marginTop: 2,
+                fontWeight: "500",
               }}
             >
               Management Console
@@ -340,16 +259,12 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
 
       {/* Navigation Items */}
       <ScrollView
-        style={{ flex: 1, paddingTop: 8 }}
+        style={{ flex: 1, paddingTop: 12 }}
         showsVerticalScrollIndicator={false}
       >
         {navigationItems.map((item: any, index: number) => {
           const IconComponent = getIcon(item.icon);
           const active = isActive(item);
-
-          console.log(
-            `📌 ${item.title}: active=${active}, tab=${item.tab || "none"}, action=${item.action || "none"}`,
-          );
 
           return (
             <TouchableOpacity
@@ -360,57 +275,45 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
                 flexDirection: "row",
                 alignItems: "center",
                 paddingHorizontal: 16,
-                paddingVertical: 12,
+                paddingVertical: 10,
                 marginHorizontal: 12,
-                marginBottom: 8,
-                borderRadius: 12,
-                backgroundColor: active ? "#2563EB" : "transparent",
-                shadowColor: active ? "#2563EB" : "transparent",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: active ? 0.3 : 0,
-                shadowRadius: 6,
-                elevation: active ? 4 : 0,
+                marginBottom: 4,
+                borderRadius: 10,
+                backgroundColor: active ? "#EFF6FF" : "transparent",
+                borderLeftWidth: active ? 3 : 0,
+                borderLeftColor: active ? "#2563EB" : "transparent",
               }}
             >
-              {/* Icon Container */}
               <View
                 style={{
-                  padding: 8,
+                  padding: 6,
                   borderRadius: 8,
-                  backgroundColor: active
-                    ? "rgba(255,255,255,0.2)"
-                    : "transparent",
+                  backgroundColor: active ? "transparent" : "transparent",
                 }}
               >
                 <IconComponent
-                  size={20}
-                  color={active ? "#FFFFFF" : "#64748b"}
+                  size={18}
+                  color={active ? "#1D4ED8" : "#64748B"}
                   strokeWidth={active ? 2.5 : 1.5}
                 />
               </View>
-
-              {/* Title */}
               <Text
                 style={{
                   marginLeft: 12,
                   fontSize: 14,
                   flex: 1,
-                  color: active ? "#FFFFFF" : "#64748b",
-                  fontWeight: active ? "600" : "400",
+                  color: active ? "#1D4ED8" : "#475569",
+                  fontWeight: active ? "600" : "500",
                 }}
               >
                 {item.title}
               </Text>
-
-              {/* Badge */}
               {item.badge && (
                 <View
                   style={{
                     width: 20,
                     height: 20,
-                    backgroundColor: active
-                      ? "rgba(255,255,255,0.3)"
-                      : "#EF4444",
+                    backgroundColor: active ? "#2563EB" : "#EF4444",
                     borderRadius: 10,
                     alignItems: "center",
                     justifyContent: "center",
@@ -428,19 +331,19 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
                   </Text>
                 </View>
               )}
-
-              {/* Active Chevron */}
               {active && (
-                <View style={{ marginLeft: 8 }}>
-                  <Icons.ChevronRight size={16} color="#FFFFFF" />
-                </View>
+                <Icons.ChevronRight
+                  size={16}
+                  color="#1D4ED8"
+                  style={{ marginLeft: 8 }}
+                />
               )}
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* ✅ Security — always visible, navigates to biometric settings */}
+      {/* Security */}
       <TouchableOpacity
         onPress={() => {
           onClose?.();
@@ -453,13 +356,13 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
           paddingVertical: 12,
           marginHorizontal: 12,
           marginBottom: 4,
-          borderRadius: 12,
+          borderRadius: 10,
           backgroundColor: "transparent",
         }}
         activeOpacity={0.7}
       >
-        <View style={{ padding: 8, borderRadius: 8 }}>
-          <Icons.Shield size={20} color="#64748b" strokeWidth={1.5} />
+        <View style={{ padding: 6, borderRadius: 8 }}>
+          <Icons.Shield size={18} color="#64748B" strokeWidth={1.5} />
         </View>
         <Text
           style={{
@@ -483,20 +386,20 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
           paddingVertical: 12,
           marginHorizontal: 12,
           marginBottom: 16,
-          borderRadius: 12,
+          borderRadius: 10,
           backgroundColor: "transparent",
         }}
         activeOpacity={0.7}
       >
-        <View style={{ padding: 8, borderRadius: 8 }}>
-          <Icons.LogOut size={20} color="#ef4444" strokeWidth={1.5} />
+        <View style={{ padding: 6, borderRadius: 8 }}>
+          <Icons.LogOut size={18} color="#EF4444" strokeWidth={1.5} />
         </View>
         <Text
           style={{
             marginLeft: 12,
             fontSize: 14,
             fontWeight: "600",
-            color: "#ef4444",
+            color: "#EF4444",
           }}
         >
           Logout
@@ -508,9 +411,10 @@ export default function SmartNavigator({ type, onClose }: SmartNavigatorProps) {
       >
         <Text
           style={{
-            fontSize: 12,
+            fontSize: 11,
             textAlign: "center",
-            color: "#D1D5DB",
+            color: "#CBD5E1",
+            fontWeight: "500",
           }}
         >
           v2.0.1

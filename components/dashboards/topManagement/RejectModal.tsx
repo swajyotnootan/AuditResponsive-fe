@@ -1,6 +1,6 @@
 // src/components/modals/RejectModalEnhanced.tsx
 import { X } from "lucide-react-native";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,6 +11,125 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+// ═══ MONOCHROMATIC BLUE PALETTE ═══
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  blue50: "#EFF6FF",
+  blue100: "#DBEAFE",
+  blue200: "#BFDBFE",
+  blue800: "#1E40AF",
+  blue900: "#1E3A8A",
+  gray100: "#F1F5F9",
+  gray200: "#E2E8F0",
+  gray300: "#CBD5E1",
+  gray400: "#94A3B8",
+  white: "#FFFFFF",
+};
+
+// ═══ REUSABLE OUTLINE BUTTON (same as DeptPlanDetailsModal / Form4View) ═══
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+  variant = "default", // "default" | "danger"
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  // Danger variant uses primaryDark for its normal state
+  const isDanger = variant === "danger";
+
+  const borderColor = isHoveredAndEnabled
+    ? isDanger
+      ? "#1E3A8A"
+      : "#2563EB"
+    : isDanger
+      ? "#1E3A8A"
+      : "#D1D5DB";
+  const textColor = isHoveredAndEnabled
+    ? isDanger
+      ? "#FFFFFF"
+      : "#2563EB"
+    : isDanger
+      ? "#FFFFFF"
+      : "#111827";
+  const iconColor = isHoveredAndEnabled
+    ? isDanger
+      ? "#FFFFFF"
+      : "#2563EB"
+    : isDanger
+      ? "#FFFFFF"
+      : "#6B7280";
+  const backgroundColor = isDanger
+    ? isHoveredAndEnabled
+      ? "#1E40AF"
+      : "#1E3A8A"
+    : isHoveredAndEnabled
+      ? "rgba(37, 99, 235, 0.1)"
+      : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderColor,
+        backgroundColor,
+        opacity: disabled ? 0.5 : 1,
+        // @ts-ignore
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator
+          size="small"
+          color={isDanger ? "#FFFFFF" : "#2563EB"}
+        />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text style={{ fontSize: 14, fontWeight: "600", color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 interface RejectModalProps {
   isOpen: boolean;
@@ -35,7 +154,6 @@ const RejectModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Auto-focus the input when modal opens
       setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
@@ -53,69 +171,59 @@ const RejectModal = ({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
+        style={{ flex: 1 }}
       >
-        <View className="flex-1 items-center justify-center bg-black/50 p-4">
-          <View className="w-full max-w-md rounded-xl bg-white p-6">
-            {/* Header */}
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-xl font-semibold text-gray-800">
-                Reject Plan
-              </Text>
+        <View style={styles.overlay}>
+          <View style={styles.modalContainer}>
+            {/* ═══ HEADER ═══ */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Reject Plan</Text>
               <TouchableOpacity
                 onPress={onClose}
-                className="rounded-lg bg-gray-100 p-2"
+                style={styles.closeIconButton}
+                activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <X size={20} color="#64748b" />
+                <X size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
-            {/* Description */}
-            <Text className="mb-4 text-sm text-gray-600">
-              Please provide a reason for rejecting the {year} audit plan:
+            {/* ═══ DESCRIPTION ═══ */}
+            <Text style={styles.description}>
+              Please provide a reason for rejecting the{" "}
+              <Text style={styles.descriptionHighlight}>{year}</Text> audit
+              plan:
             </Text>
 
-            {/* Text Input */}
+            {/* ═══ TEXT INPUT ═══ */}
             <TextInput
               ref={inputRef}
-              className="min-h-[120px] w-full rounded-lg border border-gray-200 p-3 text-gray-900"
+              style={styles.textInput}
               multiline
               numberOfLines={4}
               value={rejectionReason}
               onChangeText={setRejectionReason}
               placeholder="Enter rejection reason..."
-              placeholderTextColor="#94a3b8"
-              textAlignVertical="top"
+              placeholderTextColor={COLORS.gray400}
               editable={!submitting}
+              textAlignVertical="top"
             />
 
-            {/* Action Buttons */}
-            <View className="mt-6 flex-row justify-end gap-3">
-              <TouchableOpacity
+            {/* ═══ ACTION BUTTONS ═══ */}
+            <View style={styles.buttonRow}>
+              <OutlineButton
+                title="Cancel"
                 onPress={onClose}
                 disabled={submitting}
-                className="rounded-lg border border-gray-200 bg-white px-5 py-3"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text className="text-base font-medium text-gray-700">
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              />
+              <OutlineButton
+                title="Confirm Reject"
+                icon={X}
                 onPress={onConfirm}
                 disabled={submitting}
-                className="flex-row items-center gap-2 rounded-lg bg-red-600 px-5 py-3 disabled:opacity-50"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text className="text-base font-medium text-white">
-                    Confirm Reject
-                  </Text>
-                )}
-              </TouchableOpacity>
+                loading={submitting}
+                variant="danger"
+              />
             </View>
           </View>
         </View>
@@ -125,3 +233,82 @@ const RejectModal = ({
 };
 
 export default RejectModal;
+
+// ═══ STYLES — Monochromatic Blue ═══
+const styles: any = {
+  overlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    padding: 16,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 480,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    // MNC professional shadow
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+
+  // ═══ Header ═══
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+  closeIconButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.bg,
+    flexShrink: 0,
+  },
+
+  // ═══ Description ═══
+  description: {
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textMuted,
+  },
+  descriptionHighlight: {
+    color: COLORS.primaryDark,
+    fontWeight: "700",
+  },
+
+  // ═══ Text input ═══
+  textInput: {
+    minHeight: 120,
+    width: "100%",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 12,
+    color: COLORS.text,
+    fontSize: 14,
+    backgroundColor: COLORS.bg,
+  },
+
+  // ═══ Button row ═══
+  buttonRow: {
+    marginTop: 24,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+};

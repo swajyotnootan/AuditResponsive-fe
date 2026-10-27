@@ -15,6 +15,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,12 +33,14 @@ import {
   AlertCircle,
   BarChart3,
   CalendarDays,
+  Check,
   CheckCircle,
   CheckSquare,
   Clock,
   FileText,
   Grid,
   ListChecks,
+  Plus,
   Search,
   Target,
   Trash2,
@@ -54,6 +57,26 @@ import ForumThreadView from "../forum/ForumThreadView";
 console.log("🚀 LandingPage API Base URL being used:", API_BASE_URL);
 
 const steps = ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"];
+
+// ═══════════ LEAD AUDITOR DASHBOARD PALETTE (matched) ═══════════
+const COLORS = {
+  primary: "#00529B", // NAVBAR_COLORS.primary
+  primaryLight: "#eff6ff", // NAVBAR_COLORS.bg
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1e3a8a", // NAVBAR_COLORS.dark
+  secondary: "#3b82f6", // NAVBAR_COLORS.secondary
+  light: "#60a5fa", // NAVBAR_COLORS.light
+  lighter: "#93c5fd", // NAVBAR_COLORS.lighter
+
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  borderStrong: "#CBD5E1",
+  text: "#1E293B", // slate-800 (Lead Auditor body text)
+  textValue: "#334155", // slate-700
+  textMuted: "#64748B", // slate-500
+  textFaint: "#94A3B8", // slate-400
+};
 
 // --- TypeScript Interfaces ---
 interface StepSummaryItem {
@@ -114,7 +137,6 @@ interface ParsedEvent {
   d6_id?: string | null;
   d7_id?: string | null;
   d8_id?: string | null;
-  // ✅ NEW: plant/company info from backend
   plantId?: number | null;
   plantCode?: string | null;
   plantName?: string | null;
@@ -253,19 +275,216 @@ function determineFunctionalStatus(
   return currentStatus;
 }
 
+// Status colors — semantic dots only, aligned to Lead Auditor palette
 const statusColors: Record<string, string> = {
-  Open: "#7aa6eeff",
-  Closed: "#7973ebff",
-  Initiated: "#f59e0b",
-  Draft: "#6b7280",
-  Submitted: "#8b5cf6",
-  "Approval Pending": "#f59e0b",
-  "In Progress": "#3b82f6",
-  Rejected: "#ef4444",
-  "D0 Approved": "#10b981",
+  Open: "#3b82f6",
+  Closed: "#1e3a8a",
+  Initiated: "#F59E0B",
+  Draft: "#64748B",
+  Submitted: "#6366F1",
+  "Approval Pending": "#F59E0B",
+  "In Progress": "#00529B",
+  Rejected: "#DC2626",
+  "D0 Approved": "#059669",
 };
 
-// --- Sub-Components ---
+// ═══════════════ REUSABLE UI PRIMITIVES (Lead Auditor Card style) ═══════════════
+const Card = ({ children, className = "", style }: any) => (
+  <View
+    className={`overflow-hidden rounded-2xl border ${className}`}
+    style={[
+      {
+        backgroundColor: COLORS.card,
+        borderColor: COLORS.border,
+        borderWidth: 1,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+      },
+      style,
+    ]}
+  >
+    {children}
+  </View>
+);
+
+const SectionHeader = ({
+  title,
+  subtitle,
+  icon: Icon,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: any;
+  right?: React.ReactNode;
+}) => (
+  <View className="mb-5 flex-row items-center justify-between">
+    <View className="flex-row items-center gap-3">
+      {Icon && (
+        <View
+          className="h-8 w-8 items-center justify-center rounded-lg"
+          style={{ backgroundColor: COLORS.primaryLight }}
+        >
+          <Icon size={16} color={COLORS.primary} />
+        </View>
+      )}
+      <View>
+        <Text className="text-base font-bold" style={{ color: COLORS.text }}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text
+            className="mt-0.5 text-xs font-medium"
+            style={{ color: COLORS.textMuted }}
+          >
+            {subtitle}
+          </Text>
+        )}
+      </View>
+    </View>
+    {right}
+  </View>
+);
+
+const OutlineActionButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+}: {
+  title: string;
+  icon?: any;
+  onPress: () => void;
+  disabled?: boolean;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled}
+      className="w-full flex-row items-center justify-center gap-1.5 rounded-lg border px-3 py-2.5"
+      style={{
+        borderColor: isHoveredAndEnabled ? COLORS.primary : "#D1D5DB",
+        backgroundColor: isHoveredAndEnabled
+          ? "rgba(0, 82, 155, 0.08)"
+          : "#FFFFFF",
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+      }}
+      activeOpacity={0.8}
+    >
+      {Icon && (
+        <Icon
+          size={14}
+          color={isHoveredAndEnabled ? COLORS.primary : COLORS.textMuted}
+        />
+      )}
+      <Text
+        className="text-xs font-semibold"
+        style={{ color: isHoveredAndEnabled ? COLORS.primary : COLORS.text }}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// ✅ OUTLINE BUTTON WITH HOVER EFFECT (kept intact)
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+  compact = false,
+}: {
+  title: string;
+  icon?: any;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  compact?: boolean;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isHoveredAndEnabled = isHovered && !disabled && !loading;
+
+  const borderColor = isHoveredAndEnabled ? COLORS.primary : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? COLORS.primary : COLORS.text;
+  const iconColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textMuted;
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(0, 82, 155, 0.08)"
+    : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && !loading && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && !loading && setIsHovered(true)}
+      onPressOut={() => !disabled && !loading && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className={`flex-row items-center gap-2 rounded-lg border ${
+        compact ? "px-3 py-2" : "px-4 py-2.5"
+      }`}
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : Icon ? (
+        <Icon size={compact ? 14 : 16} color={iconColor} />
+      ) : null}
+
+      <Text
+        className={`${compact ? "text-xs" : "text-sm"} font-semibold`}
+        style={{ color: textColor }}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
 const StatusProgress = ({
   status,
   count,
@@ -276,41 +495,88 @@ const StatusProgress = ({
   count: number;
   color: string;
   percentage: number;
-}) => (
-  <View className="flex-row items-center justify-between px-1 py-2.5">
-    <View className="flex-1 flex-row items-center gap-2">
-      <View
-        className="h-2.5 w-2.5 rounded-full"
-        style={{ backgroundColor: color }}
-      />
-      <Text
-        className="text-xs font-semibold text-slate-700"
-        style={{ minWidth: 95 }}
-        numberOfLines={1}
-      >
-        {status}
-      </Text>
-      <View className="max-w-[140px] flex-1">
-        <View className="h-2 w-full rounded-full bg-slate-100">
-          <View
-            className="h-2 rounded-full"
-            style={{
-              width: `${percentage}%`,
-              backgroundColor: color,
-            }}
-          />
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <View className="flex-row items-center justify-between py-2.5">
+      <View className="flex-1 flex-row items-center gap-2.5">
+        <View
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+        <Text
+          className="text-xs font-semibold"
+          style={{ color: COLORS.textValue, minWidth: 96 }}
+          numberOfLines={1}
+        >
+          {status}
+        </Text>
+        <View className="relative max-w-[140px] flex-1 justify-center">
+          {/* Tooltip for Progress Bar */}
+          {isHovered && (
+            <View
+              style={{
+                position: "absolute",
+                top: -24,
+                left: `${percentage}%`,
+                transform: [{ translateX: -16 }],
+                backgroundColor: color,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 4,
+                zIndex: 10,
+              }}
+            >
+              <Text
+                style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "bold" }}
+              >
+                {count}
+              </Text>
+            </View>
+          )}
+          <Pressable
+            onPressIn={() => setIsHovered(true)}
+            onPressOut={() => setIsHovered(false)}
+            {...webHoverProps}
+            className="h-1.5 w-full overflow-hidden rounded-full"
+            style={{ backgroundColor: "#E2E8F0" }}
+          >
+            <View
+              className="h-1.5 rounded-full"
+              style={{
+                width: `${percentage}%`,
+                backgroundColor: color,
+                opacity: isHovered ? 0.85 : 1,
+              }}
+            />
+          </Pressable>
         </View>
       </View>
+      <View className="min-w-[52px] items-end pl-2">
+        <Text className="text-sm font-bold" style={{ color: COLORS.text }}>
+          {count}
+        </Text>
+        <Text
+          className="text-[10px] font-medium"
+          style={{ color: COLORS.textFaint }}
+        >
+          {percentage}%
+        </Text>
+      </View>
     </View>
-    <View className="min-w-[60px] items-end pl-2">
-      <Text className="text-sm font-bold text-slate-800">{count}</Text>
-      <Text className="text-[10px] font-medium text-slate-500">
-        {percentage}%
-      </Text>
-    </View>
-  </View>
-);
-
+  );
+};
 const StepProgress = ({
   data,
   completionRate,
@@ -320,106 +586,173 @@ const StepProgress = ({
 }) => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const isDesktop = width >= 768;
-
-  // 1. Dynamic chart height based on screen size
-  const chartHeight = isMobile ? 150 : 180;
-
-  // 2. Prevent division by zero if all counts are 0
+  const chartHeight = isMobile ? 150 : 230;
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
-  return (
-    <View
-      className="rounded-2xl border border-slate-100 bg-white shadow-sm"
-      style={{
-        padding: isMobile ? 16 : 24,
-        flex: isDesktop ? 1 : undefined,
-        width: isDesktop ? "50%" : "100%",
-        maxWidth: isDesktop ? undefined : width - 32, // Prevents overflow on small mobile screens
-      }}
-    >
-      {/* Header */}
-      <View className="mb-6 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <View className="rounded-lg bg-emerald-50 p-2">
-            <BarChart3 size={20} color="#10b981" />
-          </View>
-          <Text className="text-base font-bold text-slate-800">
-            Step Progress
-          </Text>
-        </View>
-        <View className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5">
-          <Text className="text-xs font-bold text-emerald-600">
-            {completionRate}% Done
-          </Text>
-        </View>
-      </View>
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-      {/* Chart Area */}
-      <View style={{ width: "100%" }}>
+  const webHoverProps = (index: number) =>
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => setHoveredIndex(index),
+          // @ts-ignore
+          onMouseLeave: () => setHoveredIndex(null),
+        }
+      : {};
+
+  return (
+    <Card className="p-5" style={{ flex: 1 }}>
+      <SectionHeader
+        title="Step Progress"
+        subtitle="Events currently in each step"
+        icon={BarChart3}
+        right={
+          <View
+            className="rounded-lg border px-3 py-1.5"
+            style={{
+              backgroundColor: COLORS.primaryLight,
+              borderColor: COLORS.primaryBorder,
+            }}
+          >
+            <Text
+              className="text-xs font-bold"
+              style={{ color: COLORS.primaryDark }}
+            >
+              {completionRate}% Done
+            </Text>
+          </View>
+        }
+      />
+
+      {/* ✅ FIX: Flex column container that pushes the chart to the very bottom */}
+      <View
+        style={{ flex: 1, flexDirection: "column", justifyContent: "flex-end" }}
+      >
         <View
           style={{
             flexDirection: "row",
             justifyContent: "space-between",
             alignItems: "flex-end",
             height: chartHeight,
-            paddingBottom: 28, // Reserved space at the bottom for the text labels
+            paddingBottom: 28, // Space for the text at the very bottom
           }}
         >
           {data.map((item, index) => {
-            // 3. CRITICAL FIX: Calculate height in PIXELS, not percentages
             const maxBarHeight = chartHeight - 28;
             const barHeight = Math.max(
               (item.count / maxCount) * maxBarHeight,
-              4, // Minimum 4px height so empty steps still show a tiny baseline
+              4,
             );
+            const isHovered = hoveredIndex === index;
+
+            const barColor =
+              isHovered || item.count > 0 ? COLORS.primary : "#E2E8F0";
+            const tooltipTextColor = "#FFFFFF";
+
+            // If the bar is taller than 14px, the text sits on the blue background.
+            const isTextOverlappingBar =
+              barHeight > 14 && (isHovered || item.count > 0);
+
+            // Text is white if overlapping, otherwise dark gray/primary on hover.
+            const labelColor = isTextOverlappingBar
+              ? "#FFFFFF"
+              : isHovered
+                ? COLORS.primary
+                : COLORS.text;
 
             return (
-              <View
+              <Pressable
                 key={index}
-                style={{
-                  flex: 1,
-                  marginHorizontal: isMobile ? 2 : 4,
-                  alignItems: "center",
-                  height: "100%",
-                  justifyContent: "flex-end",
-                }}
+                onPressIn={() => setHoveredIndex(index)}
+                onPressOut={() => setHoveredIndex(null)}
+                {...webHoverProps(index)}
+                style={
+                  {
+                    flex: 1,
+                    marginHorizontal: isMobile ? 2 : 4,
+                    alignItems: "center",
+                    height: "100%",
+                    justifyContent: "flex-end",
+                    cursor: Platform.OS === "web" ? "pointer" : "default",
+                  } as any
+                }
               >
-                {/* The Bar */}
+                {/* Tooltip */}
+                {isHovered && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      bottom: barHeight + 4,
+                      backgroundColor: barColor,
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      zIndex: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: tooltipTextColor,
+                        fontSize: 10,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {item.count}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Bar Container */}
                 <View
                   style={{
                     height: barHeight,
-                    width: isMobile ? "65%" : "50%", // Thinner bars on desktop for a cleaner look
-                    backgroundColor: item.count > 0 ? "#6366F1" : "#E0E7FF",
-                    borderTopLeftRadius: 6,
-                    borderTopRightRadius: 6,
-                  }}
-                />
-
-                {/* The Label (D0, D1, etc.) */}
-                <Text
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    textAlign: "center",
-                    color: "#64748B",
-                    fontWeight: "600",
-                    fontSize: isMobile ? 10 : 12,
-                    width: "100%",
+                    width: isMobile
+                      ? isHovered
+                        ? "75%"
+                        : "65%"
+                      : isHovered
+                        ? "60%"
+                        : "50%",
+                    backgroundColor: barColor,
+                    opacity: isHovered ? 1 : hoveredIndex !== null ? 0.3 : 1,
+                    borderTopLeftRadius: 4,
+                    borderTopRightRadius: 4,
+                    transitionProperty: "all",
+                    transitionDuration: "150ms",
+                    justifyContent: "flex-end",
+                    alignItems: "center",
                   }}
                 >
-                  {item.step}
-                </Text>
-              </View>
+                  <Text
+                    style={{
+                      position: "absolute",
+                      bottom: 4,
+                      color: labelColor,
+                      fontWeight: isHovered ? "bold" : "600",
+                      fontSize: isMobile ? 10 : 11,
+                      width: "100%",
+                      textAlign: "center",
+                      transitionProperty: "all",
+                      transitionDuration: "150ms",
+                      overflow: "visible",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {item.step}
+                  </Text>
+                </View>
+              </Pressable>
             );
           })}
         </View>
       </View>
-    </View>
+    </Card>
   );
 };
 
-// ── MiniFishbone (Deliverable 10) ──
+// ── Mini Fishbone (kept intact) ──
 type MiniCategory = {
   id: string;
   label: string;
@@ -446,8 +779,12 @@ function MiniFishbone({
     <Pressable
       testID="mini-fishbone-preview"
       onPress={onPress}
-      className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-      style={{ height: H }}
+      className="overflow-hidden rounded-lg border"
+      style={{
+        height: H,
+        borderColor: COLORS.border,
+        backgroundColor: COLORS.bg,
+      }}
     >
       <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
         <Line
@@ -455,14 +792,12 @@ function MiniFishbone({
           y1={spineY}
           x2={endX}
           y2={spineY}
-          stroke="#1E40AF"
+          stroke={COLORS.primary}
           strokeWidth={2}
         />
         <Path
-          d={`M ${endX} ${spineY} L ${endX - 8} ${spineY - 5} L ${endX - 8} ${
-            spineY + 5
-          } Z`}
-          fill="#1E40AF"
+          d={`M ${endX} ${spineY} L ${endX - 8} ${spineY - 5} L ${endX - 8} ${spineY + 5} Z`}
+          fill={COLORS.primary}
         />
         {categories.slice(0, 6).map((cat, i) => {
           const step = usable / (count + 1);
@@ -477,7 +812,7 @@ function MiniFishbone({
                 y1={spineY}
                 x2={boneEndX}
                 y2={boneEndY}
-                stroke="#3B82F6"
+                stroke={COLORS.lighter}
                 strokeWidth={1.5}
               />
               <Rect
@@ -486,7 +821,7 @@ function MiniFishbone({
                 width={24}
                 height={10}
                 rx={2}
-                fill="#DBEAFE"
+                fill={COLORS.primaryBorder}
               />
               {cat.causes.slice(0, 3).map((c, ci) => {
                 const t = (ci + 1) / (cat.causes.length + 1);
@@ -500,7 +835,7 @@ function MiniFishbone({
                     width={4}
                     height={4}
                     rx={1}
-                    fill="#3B82F6"
+                    fill={COLORS.lighter}
                   />
                 );
               })}
@@ -509,7 +844,10 @@ function MiniFishbone({
         })}
       </Svg>
       <View className="absolute right-2 top-1.5 rounded bg-white/90 px-1.5 py-0.5">
-        <Text className="text-[9px] font-bold text-blue-700">
+        <Text
+          className="text-[9px] font-bold"
+          style={{ color: COLORS.primaryDark }}
+        >
           RCA · Tap to open
         </Text>
       </View>
@@ -525,7 +863,7 @@ export default function LandingPage({ type }: LandingPageProps) {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { isInitiator, isHOD, user, isAdmin } = useAuth();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
 
   const isDesktop = width >= 768;
   const isLargeDesktop = width >= 1024;
@@ -551,28 +889,15 @@ export default function LandingPage({ type }: LandingPageProps) {
     Record<string, string[]>
   >({});
 
-  // 🔍 DEBUG — inspect the auth user
   useEffect(() => {
-    console.log("═══════════════════════════════════════");
-    console.log("🔍 [LandingPage] user object:", JSON.stringify(user, null, 2));
-    console.log("🔍 [LandingPage] user?.id:", user?.id);
-    console.log("🔍 [LandingPage] user?.userId:", (user as any)?.userId);
-    console.log("🔍 [LandingPage] user?.plantId:", (user as any)?.plantId);
-    console.log("🔍 [LandingPage] user?.plantName:", (user as any)?.plantName);
-    console.log("🔍 [LandingPage] user?.companyId:", (user as any)?.companyId);
-    console.log("═══════════════════════════════════════");
+    console.log("🔍 [LandingPage] user:", user);
   }, [user]);
 
-  // ✅ Dynamic Padding & Math for perfect responsive grids
   const horizontalPadding = isLargeDesktop ? 96 : isDesktop ? 64 : 16;
 
   const kpiCardWidth = isDesktop
     ? (width - horizontalPadding * 2 - 36) / 4
     : (width - horizontalPadding * 2 - 12) / 2;
-
-  const chartWidth = isDesktop
-    ? (width - horizontalPadding * 2) / 2 - 48
-    : width - horizontalPadding * 2 - 32;
 
   const dashboardType = type || route.params?.type || "all";
   const dashboardTitle =
@@ -589,17 +914,15 @@ export default function LandingPage({ type }: LandingPageProps) {
         : "Showing all 8D forms";
 
   const createNew8D = () => {
-    console.log("🆕 [LANDING] Creating new 8D with resetKey:", Date.now());
-
     router.push({
       pathname: "/eightdflow",
       params: {
-        eventId: null, // ✅ Must be actual null, not string "null"
+        eventId: null,
         step: "D0",
         type: dashboardType,
         isNcrBased: String(dashboardType === "ncr"),
         isHOD: String(isHOD),
-        resetKey: Date.now(), // ✅ Unique key every time
+        resetKey: Date.now(),
       },
     });
   };
@@ -625,12 +948,6 @@ export default function LandingPage({ type }: LandingPageProps) {
   };
 
   const continueForm = async (ev: ParsedEvent) => {
-    // ✅ NEW: Log the exact event being clicked
-    console.log(
-      "🚀 [LandingPage] User clicked to continue form for Event ID:",
-      ev.eventNo,
-    );
-
     if (ev.status === "Rejected") {
       Alert.alert(
         "Error",
@@ -659,15 +976,10 @@ export default function LandingPage({ type }: LandingPageProps) {
     const shouldStartFromD0 = ev.isNcrBased && isDraftLikeStatus(ev.status);
     const nextStep = shouldStartFromD0 ? "D0" : getNextStep(ev);
 
-    console.log("🚀 [LandingPage] Routing to /eightdflow with params:", {
-      eventId: ev.eventNo,
-      step: nextStep,
-    });
-
     router.push({
       pathname: "/eightdflow",
       params: {
-        eventId: ev.eventNo, // This is correctly using ev.eventNo
+        eventId: ev.eventNo,
         step: nextStep,
         isNcrBased: String(ev.isNcrBased),
         type: ev.isNcrBased ? "ncr" : "fresh",
@@ -677,14 +989,6 @@ export default function LandingPage({ type }: LandingPageProps) {
   };
 
   const fetchEvents = async () => {
-    console.log(
-      "🚀 [LandingPage] fetchEvents → X-User-Id:",
-      (user as any)?.id,
-      "plant:",
-      (user as any)?.plantId,
-      "dashboardType:",
-      dashboardType,
-    );
     setLoading(true);
     try {
       const res = await axios.get<{ success: boolean; data: RawEventData[] }>(
@@ -824,14 +1128,14 @@ export default function LandingPage({ type }: LandingPageProps) {
 
   useEffect(() => {
     fetchEvents();
-  }, [route.params?.refreshToken]); // Triggers when EightDFlow sends the new token
+  }, [route.params?.refreshToken]);
 
-  // Optional: Also refresh when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       fetchEvents();
     }, []),
   );
+
   const showRejectionDetails = async (ev: ParsedEvent) => {
     if (!ev.rejectionReason) {
       try {
@@ -883,24 +1187,19 @@ export default function LandingPage({ type }: LandingPageProps) {
 
   const scopedEvents = useMemo(() => {
     let result = events;
-
-    // 1. Filter by dashboard type (fresh vs ncr)
     if (dashboardType === "fresh") {
       result = result.filter((e) => !e.isNcrBased);
     } else if (dashboardType === "ncr") {
       result = result.filter((e) => e.isNcrBased);
     }
-
-    // 2. ✅ HOD FILTER: Hide unsubmitted (Draft/Open/Initiated) events from HOD view
-    // HODs should only see events that have been submitted for their attention or are already in progress
     if (isHOD) {
       result = result.filter(
         (e) => !["Draft", "Open", "Initiated"].includes(e.status),
       );
     }
-
     return result;
-  }, [dashboardType, events, isHOD]); // ✅ Added isHOD to dependencies
+  }, [dashboardType, events, isHOD]);
+
   const filtered = useMemo(() => {
     let list = [...scopedEvents];
     if (statusFilter !== "All")
@@ -919,7 +1218,6 @@ export default function LandingPage({ type }: LandingPageProps) {
     } else if (steps.includes(stepSort)) {
       list = list.filter((e) => e.currentStep === stepSort);
     }
-
     return list;
   }, [scopedEvents, search, statusFilter, stepSort]);
 
@@ -965,38 +1263,155 @@ export default function LandingPage({ type }: LandingPageProps) {
     return Math.round((completedStepsTotal / totalStepsPossible) * 100);
   }, [scopedEvents]);
 
+  // ═══════════ EVENT CARD (Lead Auditor-styled card) ═══════════
   const renderEventCard = (ev: ParsedEvent) => {
     const isApprovalPending = ev.status === "Approval Pending";
+    const progressPct = (ev.completedSteps / ev.totalSteps) * 100;
+
+    const primaryAction: {
+      label: string;
+      onPress: () => void;
+      variant: "primary" | "outline" | "ghost" | "danger";
+      icon: any;
+      disabled?: boolean;
+    } = (() => {
+      if (ev.status === "Rejected") {
+        return {
+          label: "Reason",
+          onPress: () => showRejectionDetails(ev),
+          variant: "danger",
+          icon: AlertCircle,
+        };
+      }
+      if (ev.status === "Approval Pending") {
+        if (isHOD) {
+          return {
+            label: "Review",
+            onPress: () => continueForm(ev),
+            variant: "primary",
+            icon: Check,
+          };
+        }
+        if (isInitiator || isAdmin) {
+          return {
+            label: "Pending",
+            onPress: () => {},
+            variant: "ghost",
+            icon: Clock,
+            disabled: true,
+          };
+        }
+        return {
+          label: "View",
+          onPress: () => showPreviewWithLatestData(ev),
+          variant: "primary",
+          icon: FileText,
+        };
+      }
+      if (ev.status === "Submitted" || ev.status === "Closed") {
+        return {
+          label: "Open",
+          onPress: () => showPreviewWithLatestData(ev),
+          variant: "primary",
+          icon: FileText,
+        };
+      }
+      if (ev.status === "D0 Approved") {
+        if (isInitiator || isAdmin) {
+          return {
+            label: "Continue",
+            onPress: () => continueForm(ev),
+            variant: "primary",
+            icon: Zap,
+          };
+        }
+        return {
+          label: "View",
+          onPress: () => showPreviewWithLatestData(ev),
+          variant: "primary",
+          icon: FileText,
+        };
+      }
+      if (ev.isNcrBased && isDraftLikeStatus(ev.status)) {
+        if (isInitiator || isAdmin) {
+          return {
+            label: "Start",
+            onPress: () => continueForm(ev),
+            variant: "primary",
+            icon: Zap,
+          };
+        }
+        return {
+          label: "View",
+          onPress: () => showPreviewWithLatestData(ev),
+          variant: "primary",
+          icon: FileText,
+        };
+      }
+      if (isInitiator || isAdmin) {
+        return {
+          label: "Continue",
+          onPress: () => continueForm(ev),
+          variant: "primary",
+          icon: Zap,
+        };
+      }
+      return {
+        label: "View",
+        onPress: () => showPreviewWithLatestData(ev),
+        variant: "primary",
+        icon: FileText,
+      };
+    })();
 
     return (
       <View
-        className={`overflow-hidden rounded-xl border bg-white shadow-md ${
-          isApprovalPending ? "border-2 border-amber-400" : "border-slate-100"
-        }`}
+        className="overflow-hidden rounded-2xl border"
         style={{
-          backgroundColor: isApprovalPending ? "#fffbeb" : "#ffffff",
+          backgroundColor: COLORS.card,
+          borderColor: isApprovalPending ? "#FCD34D" : COLORS.border,
+          borderWidth: isApprovalPending ? 1.5 : 1,
+          borderRadius: 16,
           marginBottom: 16,
-          // ✅ FIXED: Use exact 33.333% width - NO flex expansion
-          width: isDesktop ? "32.5%" : "100%",
-          // ✅ Add spacing between cards
+          width: isDesktop ? "32.2%" : "100%",
           marginHorizontal: isDesktop ? 4 : 0,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 2,
+          elevation: 2,
         }}
       >
         {isApprovalPending && (
-          <View className="bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2.5">
-            <Text className="text-center text-xs font-bold tracking-wide text-white">
-              ⚡ AWAITING HOD APPROVAL
+          <View
+            className="flex-row items-center justify-center gap-1.5 px-4 py-2"
+            style={{ backgroundColor: "#FFFBEB" }}
+          >
+            <Clock size={12} color="#B45309" />
+            <Text
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: "#B45309" }}
+            >
+              Awaiting HOD Approval
             </Text>
           </View>
         )}
 
-        <View className={isDesktop ? "p-3" : "p-4"}>
-          {/* ... rest of the card content remains exactly the same ... */}
+        <View style={{ padding: isDesktop ? 16 : 18 }}>
           <View className="mb-3 flex-row items-start justify-between">
-            <View className="rounded-full bg-slate-100 px-3 py-1.5">
+            <View
+              className="flex-row items-center gap-1.5 rounded-full border px-2.5 py-1"
+              style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg }}
+            >
+              <View
+                className="h-1.5 w-1.5 rounded-full"
+                style={{
+                  backgroundColor: statusColors[ev.status] || "#94A3B8",
+                }}
+              />
               <Text
-                className="text-xs font-bold"
-                style={{ color: statusColors[ev.status] || "#64748b" }}
+                className="text-[10px] font-bold uppercase tracking-wide"
+                style={{ color: COLORS.textValue }}
               >
                 {ev.status}
               </Text>
@@ -1008,244 +1423,107 @@ export default function LandingPage({ type }: LandingPageProps) {
                   setEventToDelete(ev);
                   setShowDeleteConfirm(true);
                 }}
-                className="rounded-lg bg-red-50 p-2 active:bg-red-100"
+                className="rounded-lg p-1.5"
+                style={{ backgroundColor: "#FEF2F2" }}
+                activeOpacity={0.7}
               >
-                <Trash2 size={16} color="#ef4444" />
+                <Trash2 size={14} color="#DC2626" />
               </TouchableOpacity>
             )}
           </View>
 
           <Text
-            className={`mb-2 font-bold text-slate-800 ${
-              isDesktop ? "text-base" : "text-lg"
-            }`}
+            className="mb-1 font-bold"
+            style={{ color: COLORS.text, fontSize: isDesktop ? 14 : 16 }}
             numberOfLines={1}
           >
             {ev.title}
           </Text>
-
           <Text
-            className={`font-medium text-slate-600 ${
-              isDesktop ? "text-[10px]" : "text-xs"
-            }`}
+            className="mb-3 font-medium"
+            style={{ color: COLORS.textMuted, fontSize: isDesktop ? 11 : 12 }}
             numberOfLines={1}
           >
-            Owner: {ev.owner}
+            {ev.owner}
           </Text>
 
-          <View className="mb-4 flex-row items-center gap-2">
-            <Clock size={isDesktop ? 12 : 14} color="#64748b" />
-            <Text className="text-xs font-medium text-slate-600">
-              Created: {ev.created}
-            </Text>
-          </View>
-
-          <View className="mb-2 flex-row items-center justify-between">
-            <View
-              className={`rounded-lg border border-indigo-100 bg-indigo-50 ${
-                isDesktop ? "px-2 py-1" : "px-3 py-1.5"
-              }`}
-            >
+          <View className="mb-3 flex-row items-center gap-3">
+            <View className="flex-row items-center gap-1">
+              <Clock size={11} color={COLORS.textFaint} />
               <Text
-                className={`font-bold text-indigo-700 ${
-                  isDesktop ? "text-[10px]" : "text-xs"
-                }`}
+                className="text-[10px] font-medium"
+                style={{ color: COLORS.textMuted }}
               >
-                Current Step: {ev.currentStep}
+                {ev.created}
               </Text>
             </View>
-            <Text className="text-xs font-bold text-slate-600">
-              {ev.completedSteps}/{ev.totalSteps} Steps
-            </Text>
           </View>
 
           <View
-            className={`w-full overflow-hidden rounded-full bg-slate-100 ${
-              isDesktop ? "mb-3 h-2" : "mb-5 h-2.5"
-            }`}
+            className="mb-4 rounded-xl border p-3"
+            style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg }}
           >
+            <View className="mb-2 flex-row items-center justify-between">
+              <View
+                className="rounded-md px-2 py-0.5"
+                style={{ backgroundColor: COLORS.primaryLight }}
+              >
+                <Text
+                  className="text-[10px] font-bold"
+                  style={{ color: COLORS.primaryDark }}
+                >
+                  Step {ev.currentStep}
+                </Text>
+              </View>
+              <Text
+                className="text-[10px] font-bold"
+                style={{ color: COLORS.textValue }}
+              >
+                {ev.completedSteps}/{ev.totalSteps} completed
+              </Text>
+            </View>
             <View
-              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"
-              style={{ width: `${(ev.completedSteps / ev.totalSteps) * 100}%` }}
-            />
+              className="h-1.5 w-full overflow-hidden rounded-full"
+              style={{ backgroundColor: "#E2E8F0" }}
+            >
+              <View
+                className="h-1.5 rounded-full"
+                style={{
+                  width: `${progressPct}%`,
+                  backgroundColor: COLORS.primary,
+                }}
+              />
+            </View>
           </View>
 
-          {/* ✅ STRICT SINGLE ROW: flex-row (no wrap), flex-1 for equal sharing */}
-          <View className="mt-2 flex-row gap-2">
-            {/* 1. View Details Button (Conditionally shown) */}
+          <View className="flex-row gap-2">
             {(ev.status !== "Approval Pending" || isHOD) && (
-              <TouchableOpacity
-                onPress={() => showPreviewWithLatestData(ev)}
-                className={`flex-1 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 active:bg-slate-100 ${
-                  isDesktop ? "px-1 py-1.5" : "px-1 py-2"
-                }`}
-              >
-                <Text
-                  className={`font-semibold text-slate-700 ${
-                    isDesktop ? "text-[10px]" : "text-[11px]"
-                  }`}
-                  numberOfLines={1}
-                >
-                  Details
-                </Text>
-              </TouchableOpacity>
+              <View className="flex-1">
+                <OutlineActionButton
+                  title="Details"
+                  icon={FileText}
+                  onPress={() => showPreviewWithLatestData(ev)}
+                />
+              </View>
             )}
-
-            {/* 2. Dynamic Action Button based on Status and Role */}
-            {ev.status === "Rejected" ? (
-              <TouchableOpacity
-                onPress={() => showRejectionDetails(ev)}
-                className="flex-1 flex-row items-center justify-center gap-1 rounded-lg border border-red-200 bg-red-50 px-1 py-2 active:bg-red-100"
-              >
-                <AlertCircle size={12} color="#dc2626" />
-                <Text
-                  className="text-[11px] font-semibold text-red-700"
-                  numberOfLines={1}
-                >
-                  Reason
-                </Text>
-              </TouchableOpacity>
-            ) : ev.status === "Approval Pending" ? (
-              isHOD ? (
-                <TouchableOpacity
-                  onPress={() => continueForm(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-blue-600 px-1 py-2 active:bg-blue-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    Review
-                  </Text>
-                </TouchableOpacity>
-              ) : isInitiator || isAdmin ? (
-                <View className="flex-1 items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 px-1 py-2">
-                  <Text
-                    className="text-[11px] font-semibold text-yellow-700"
-                    numberOfLines={1}
-                  >
-                    Pending
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => showPreviewWithLatestData(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-blue-600 px-1 py-2 active:bg-blue-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    View
-                  </Text>
-                </TouchableOpacity>
-              )
-            ) : ev.status === "Submitted" || ev.status === "Closed" ? (
-              <TouchableOpacity
-                onPress={() => showPreviewWithLatestData(ev)}
-                className="flex-1 items-center justify-center rounded-lg bg-purple-600 px-1 py-2 active:bg-purple-700"
-              >
-                <Text
-                  className="text-[11px] font-semibold text-white"
-                  numberOfLines={1}
-                >
-                  View Details
-                </Text>
-              </TouchableOpacity>
-            ) : ev.status === "D0 Approved" ? (
-              isInitiator || isAdmin ? (
-                <TouchableOpacity
-                  onPress={() => continueForm(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-green-600 px-1 py-2 active:bg-green-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    Continue
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => showPreviewWithLatestData(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-blue-600 px-1 py-2 active:bg-blue-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    View
-                  </Text>
-                </TouchableOpacity>
-              )
-            ) : ev.isNcrBased && isDraftLikeStatus(ev.status) ? (
-              isInitiator || isAdmin ? (
-                <TouchableOpacity
-                  onPress={() => continueForm(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-green-600 px-1 py-2 active:bg-green-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    Start
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => showPreviewWithLatestData(ev)}
-                  className="flex-1 items-center justify-center rounded-lg bg-blue-600 px-1 py-2 active:bg-blue-700"
-                >
-                  <Text
-                    className="text-[11px] font-semibold text-white"
-                    numberOfLines={1}
-                  >
-                    View
-                  </Text>
-                </TouchableOpacity>
-              )
-            ) : isInitiator || isAdmin ? (
-              <TouchableOpacity
-                onPress={() => continueForm(ev)}
-                className="flex-1 items-center justify-center rounded-lg bg-green-600 px-1 py-2 active:bg-green-700"
-              >
-                <Text
-                  className="text-[11px] font-semibold text-white"
-                  numberOfLines={1}
-                >
-                  Continue
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={() => showPreviewWithLatestData(ev)}
-                className="flex-1 items-center justify-center rounded-lg bg-blue-600 px-1 py-2 active:bg-blue-700"
-              >
-                <Text
-                  className="text-[11px] font-semibold text-white"
-                  numberOfLines={1}
-                >
-                  View
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* 3. Forum Button */}
-            <TouchableOpacity
-              onPress={() => {
-                setSelectedGroupId(ev.eventNo);
-                setForumDrawerOpen(true);
-              }}
-              className="flex-1 flex-row items-center justify-center gap-1 rounded-lg bg-indigo-600 px-1 py-2 active:bg-indigo-700"
-            >
-              <Users size={12} color="#ffffff" />
-              <Text
-                className="text-[11px] font-semibold text-white"
-                numberOfLines={1}
-              >
-                Forum
-              </Text>
-            </TouchableOpacity>
+            <View className="flex-1">
+              <OutlineActionButton
+                title={primaryAction.label}
+                icon={primaryAction.icon}
+                onPress={primaryAction.onPress}
+                disabled={primaryAction.disabled}
+              />
+            </View>
+            <View className="flex-1">
+              <OutlineActionButton
+                title="Forum"
+                icon={Users}
+                onPress={() => {
+                  setSelectedGroupId(ev.eventNo);
+                  setForumDrawerOpen(true);
+                }}
+              />
+            </View>
           </View>
         </View>
       </View>
@@ -1253,101 +1531,121 @@ export default function LandingPage({ type }: LandingPageProps) {
   };
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-slate-50"
-      edges={["top", "left", "right"]}
-    >
+    <View className="flex-1" style={{ backgroundColor: COLORS.bg }}>
       <ScrollView
         className="flex-1"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#3b82f6"]}
-            tintColor="#3b82f6"
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
           />
         }
         contentContainerStyle={{
-          paddingBottom: 40,
+          paddingBottom: 48,
           paddingHorizontal: horizontalPadding,
         }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* ✅ RESPONSIVE HEADER */}
+        {/* ═══════════ HEADER ═══════════ */}
         {isDesktop ? (
-          // DESKTOP HEADER (Original Layout Restored)
-          <View className="mb-6 flex-row items-start justify-between gap-4">
+          <View className="mb-6 mt-4 flex-row items-start justify-between gap-4">
             <View className="flex-1 flex-row items-center gap-4">
-              <View className="rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-3 shadow-lg">
-                <Grid size={28} color="#ffffff" />
+              <View
+                className="h-14 w-14 items-center justify-center rounded-2xl"
+                style={{ backgroundColor: COLORS.primaryLight }}
+              >
+                <Grid size={26} color={COLORS.primary} />
               </View>
               <View className="flex-1">
-                <Text className="text-2xl font-extrabold text-slate-800">
+                <Text
+                  className="text-xl font-bold tracking-tight"
+                  style={{ color: COLORS.text }}
+                >
                   {dashboardTitle}
                 </Text>
-                <View className="mt-1.5 flex-row items-center gap-1.5">
-                  <CalendarDays size={16} color="#64748b" />
-                  <Text className="text-sm font-medium text-slate-600">
+                <View className="mt-1 flex-row items-center gap-1.5">
+                  <CalendarDays size={13} color={COLORS.textMuted} />
+                  <Text
+                    className="text-xs font-medium"
+                    style={{ color: COLORS.textMuted }}
+                  >
                     {format(new Date(), "EEEE, MMMM d, yyyy")}
                   </Text>
                 </View>
-                <Text className="mt-1 text-sm text-slate-500">
+                <Text
+                  className="mt-1 text-xs font-medium"
+                  style={{ color: COLORS.textFaint }}
+                >
                   {dashboardSubtitle}
                 </Text>
               </View>
             </View>
-            <View className="flex-row items-center justify-between gap-3">
-              <View className="flex-1 flex-row items-center gap-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 px-4 py-3.5 shadow-md">
-                {/* ✅ FIXED: Inline rgba guarantees translucent blue on mobile, bypassing NativeWind opacity bugs */}
+
+            <View className="flex-row items-center gap-3">
+              {/* ✅ Compact Total 8D card — matches OutlineButton height */}
+              <View
+                className="flex-row items-center gap-2.5 rounded-xl border px-3.5 py-1.5"
+                style={{
+                  backgroundColor: COLORS.card,
+                  borderColor: COLORS.border,
+                  height: 44,
+                }}
+              >
                 <View
-                  className="rounded-lg p-2"
-                  style={{ backgroundColor: "rgba(255, 255, 255, 0.25)" }}
+                  className="h-9 w-9 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: COLORS.primaryLight }}
                 >
-                  <FileText size={20} color="#ffffff" />
+                  <FileText size={20} color={COLORS.primary} />
                 </View>
                 <View>
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+                  <Text
+                    className="text-[9px] font-bold uppercase leading-none tracking-wider"
+                    style={{ color: COLORS.textMuted }}
+                  >
                     Total 8D
                   </Text>
-                  <Text className="text-xl font-extrabold leading-tight text-white">
+                  <Text
+                    className="mt-0.5 text-base font-extrabold leading-tight"
+                    style={{ color: COLORS.text }}
+                  >
                     {totalEvents}
                   </Text>
                 </View>
               </View>
 
               {(isInitiator || isAdmin) && dashboardType !== "ncr" && (
-                <TouchableOpacity
+                <OutlineButton
+                  title="New 8D"
+                  icon={Zap}
                   onPress={createNew8D}
-                  className="flex-row items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 shadow-md active:opacity-90"
-                >
-                  <Zap size={16} color="#ffffff" />
-                  <Text className="text-sm font-bold text-white">
-                    New 8D Event
-                  </Text>
-                </TouchableOpacity>
+                />
               )}
             </View>
           </View>
         ) : (
-          // MOBILE HEADER (Optimized Stacked Layout)
-          <View className="mb-6">
+          <View className="mb-6 mt-3">
             <View className="mb-4 flex-row items-center gap-3">
               <View
-                className="rounded-xl p-3 shadow-lg"
-                style={{ backgroundColor: "#2563eb" }} // Solid blue-600
+                className="h-11 w-11 items-center justify-center rounded-2xl"
+                style={{ backgroundColor: COLORS.primaryLight }}
               >
-                <Grid size={24} color="#ffffff" />
+                <Grid size={22} color={COLORS.primary} />
               </View>
               <View className="flex-1">
                 <Text
-                  className="text-xl font-extrabold text-slate-800"
+                  className="text-lg font-extrabold tracking-tight"
+                  style={{ color: COLORS.text }}
                   numberOfLines={1}
                 >
                   {dashboardTitle}
                 </Text>
-                <View className="mt-1 flex-row items-center gap-1.5">
-                  <CalendarDays size={14} color="#64748b" />
+                <View className="mt-0.5 flex-row items-center gap-1.5">
+                  <CalendarDays size={12} color={COLORS.textMuted} />
                   <Text
-                    className="text-xs font-medium text-slate-600"
+                    className="text-[11px] font-medium"
+                    style={{ color: COLORS.textMuted }}
                     numberOfLines={1}
                   >
                     {format(new Date(), "EEEE, MMMM d, yyyy")}
@@ -1356,43 +1654,48 @@ export default function LandingPage({ type }: LandingPageProps) {
               </View>
             </View>
 
-            <View className="flex-row items-center justify-between gap-3">
-              {/* Outer Card with guaranteed blue background */}
+            <View className="flex-row items-center justify-between gap-2.5">
               <View
-                className="flex-1 flex-row items-center gap-3 rounded-xl px-4 py-3.5 shadow-md"
-                style={{ backgroundColor: "#2563eb" }} // Solid blue-600
+                className="flex-row items-center gap-2 rounded-xl border px-3 py-1.5"
+                style={{
+                  backgroundColor: COLORS.card,
+                  borderColor: COLORS.border,
+                  height: 40,
+                }}
               >
-                {/* Icon background - lighter blue */}
                 <View
-                  className="rounded-lg p-2"
-                  style={{ backgroundColor: "rgba(255, 255, 255, 0.2)" }}
+                  className="h-9 w-9 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: COLORS.primaryLight }}
                 >
-                  <FileText size={20} color="#ffffff" />
+                  <FileText size={20} color={COLORS.primary} />
                 </View>
-
                 <View>
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-white/80">
+                  <Text
+                    className="text-[8px] font-bold uppercase leading-none tracking-wider"
+                    style={{ color: COLORS.textMuted }}
+                  >
                     Total 8D
                   </Text>
-                  <Text className="text-xl font-extrabold leading-tight text-white">
+                  <Text
+                    className="mt-0.5 text-sm font-extrabold leading-tight"
+                    style={{ color: COLORS.text }}
+                  >
                     {totalEvents}
                   </Text>
                 </View>
               </View>
-
               {(isInitiator || isAdmin) && dashboardType !== "ncr" && (
-                <TouchableOpacity
+                <OutlineButton
+                  title="New"
+                  icon={Zap}
                   onPress={createNew8D}
-                  style={{ backgroundColor: "#6366f1" }} // Solid indigo-500
-                  className="flex-row items-center gap-2 rounded-xl px-4 py-3.5 shadow-md active:opacity-90"
-                >
-                  <Zap size={18} color="#ffffff" />
-                  <Text className="text-sm font-bold text-white">New 8D</Text>
-                </TouchableOpacity>
+                  compact
+                />
               )}
             </View>
             <Text
-              className="mt-3 text-xs font-medium text-slate-500"
+              className="mt-2.5 text-[11px] font-medium"
+              style={{ color: COLORS.textFaint }}
               numberOfLines={2}
             >
               {dashboardSubtitle}
@@ -1402,186 +1705,254 @@ export default function LandingPage({ type }: LandingPageProps) {
 
         {loading && (
           <View className="items-center py-8">
-            <View className="flex-row items-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3 shadow-sm">
-              <ActivityIndicator size="small" color="#3b82f6" />
-              <Text className="text-base font-medium text-slate-700">
-                Loading dashboard data...
+            <View
+              className="flex-row items-center gap-2 rounded-2xl border px-6 py-3"
+              style={{
+                backgroundColor: COLORS.card,
+                borderColor: COLORS.border,
+              }}
+            >
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text
+                className="text-sm font-medium"
+                style={{ color: COLORS.textValue }}
+              >
+                Loading dashboard...
               </Text>
             </View>
           </View>
         )}
 
-        {/* Analytics Dashboard */}
-        {/* Analytics Dashboard */}
-        <View className="mb-6">
-          {/* ✅ FIXED: Use flex-row for desktop (equal columns), flex-wrap for mobile */}
-          <View
-            className={`mb-6 ${isDesktop ? "flex-row" : "flex-row flex-wrap"}`}
-            style={{ gap: isDesktop ? 24 : 12 }}
-          >
-            {[
-              {
-                title: "Total 8D",
-                value: totalEvents,
-                icon: FileText,
-                color: "#3b82f6",
-                subtitle: "All 8D processes",
-              },
-              {
-                title: "Completion Rate",
-                value: `${completionRate}%`,
-                icon: CheckSquare,
-                color: "#10b981",
-                subtitle: "Overall progress",
-              },
-              {
-                title: "Avg. Time",
-                value: "5.2 days",
-                icon: Clock,
-                color: "#8b5cf6",
-                subtitle: "Resolution time",
-              },
-              {
-                title: "Efficiency",
-                value: "78%",
-                icon: Target,
-                color: "#f97316",
-                subtitle: "Process efficiency",
-              },
-            ].map((card, index) => (
-              <View
-                key={index}
-                className={`rounded-xl border border-slate-100 bg-white shadow-sm ${
-                  isDesktop ? "flex-1 p-6" : "p-4" // ✅ More padding and flex-1 for desktop
-                }`}
-                style={{
-                  width: isDesktop ? undefined : kpiCardWidth, // ✅ Let flexbox handle desktop width
-                }}
-              >
-                <View className="mb-4 flex-row items-center justify-between">
-                  <View
-                    className="rounded-xl p-3" // ✅ Larger icon container on desktop
-                    style={{ backgroundColor: `${card.color}15` }}
-                  >
-                    <card.icon size={isDesktop ? 28 : 20} color={card.color} />
-                  </View>
-                </View>
-                <Text
-                  className={`mb-1 font-extrabold text-slate-800 ${
-                    isDesktop ? "text-3xl" : "text-2xl" // ✅ Larger value text on desktop
-                  }`}
-                  numberOfLines={1}
-                >
-                  {card.value}
-                </Text>
-                <Text
-                  className={`mb-1 font-bold text-slate-600 ${
-                    isDesktop ? "text-sm" : "text-xs" // ✅ Larger title text on desktop
-                  }`}
-                  numberOfLines={1}
-                >
-                  {card.title}
-                </Text>
-                <Text
-                  className={`font-medium text-slate-400 ${
-                    isDesktop ? "text-xs" : "text-[10px]" // ✅ Larger subtitle text on desktop
-                  }`}
-                  numberOfLines={1}
-                >
-                  {card.subtitle}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          {/* ... Keep the rest of your Step Progress and Status Breakdown charts exactly as they were ... */}
-
-          <View className={`mb-6 gap-4 ${isDesktop ? "flex-row" : "flex-col"}`}>
-            {/* Step Progress Chart */}
-            <StepProgress data={stepCounts} completionRate={completionRate} />
-
-            {/* Status Breakdown Chart - Keep as is */}
-            <View
-              className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
+        {/* ═══════════ KPI CARDS (Lead Auditor MetricCard style) ═══════════ */}
+        <View
+          className={`mb-4 ${isDesktop ? "flex-row" : "flex-row flex-wrap"}`}
+          style={{ gap: isDesktop ? 16 : 12 }}
+        >
+          {[
+            {
+              title: "Total 8D",
+              value: totalEvents,
+              icon: FileText,
+              subtitle: "All processes",
+            },
+            {
+              title: "Completion Rate",
+              value: `${completionRate}%`,
+              icon: CheckSquare,
+              subtitle: "Overall progress",
+            },
+            {
+              title: "Avg. Time",
+              value: "5.2 days",
+              icon: Clock,
+              subtitle: "Resolution time",
+            },
+            {
+              title: "Efficiency",
+              value: "78%",
+              icon: Target,
+              subtitle: "Process efficiency",
+            },
+          ].map((card, index) => (
+            <Card
+              key={index}
+              className={isDesktop ? "flex-1 p-4" : "p-3"}
               style={{
-                flex: isDesktop ? 1 : undefined,
-                width: isDesktop ? "50%" : "100%",
-                maxWidth: isDesktop ? undefined : width - 32,
+                width: isDesktop ? undefined : kpiCardWidth,
               }}
             >
-              <View className="mb-4 flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <View className="rounded-lg bg-orange-50 p-1.5">
-                    <ListChecks size={18} color="#f97316" />
-                  </View>
-                  <Text className="text-sm font-bold text-slate-800">
-                    Status Breakdown
+              {/* ✅ HORIZONTAL LAYOUT: Icon left, right-aligned text */}
+              <View className="flex-row items-center justify-between">
+                <View
+                  className={`items-center justify-center rounded-xl ${
+                    isDesktop ? "h-12 w-12" : "h-14 w-14"
+                  }`}
+                  style={{ backgroundColor: COLORS.primaryLight }}
+                >
+                  <card.icon
+                    size={isDesktop ? 24 : 24}
+                    color={COLORS.primary}
+                  />
+                </View>
+
+                <View className="flex-1 items-end justify-center pl-2">
+                  <Text
+                    className={`text-right font-extrabold tracking-tight ${
+                      isDesktop ? "text-xl" : "text-lg"
+                    }`}
+                    style={{ color: COLORS.text }}
+                    numberOfLines={1}
+                  >
+                    {card.value}
+                  </Text>
+                  <Text
+                    className={`text-right font-bold ${
+                      isDesktop ? "text-xs" : "text-[11px]"
+                    }`}
+                    style={{ color: COLORS.textValue }}
+                    numberOfLines={1}
+                  >
+                    {card.title}
+                  </Text>
+                  <Text
+                    className={`text-right font-medium ${
+                      isDesktop ? "text-[11px]" : "text-[10px]"
+                    }`}
+                    style={{ color: COLORS.textFaint }}
+                    numberOfLines={1}
+                  >
+                    {card.subtitle}
                   </Text>
                 </View>
               </View>
-              <View className="gap-1">
-                {statusCounts.map((item, index) => (
-                  <View key={item.label}>
-                    <StatusProgress
-                      status={item.label}
-                      count={item.count}
-                      color={item.color}
-                      percentage={item.percentage}
-                    />
-                    {index < statusCounts.length - 1 && (
-                      <View className="ml-8 h-px bg-slate-100" />
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
+            </Card>
+          ))}
         </View>
 
-        {/* Event Management & Filters */}
-        <View className="mb-6 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-          <View className="border-b border-slate-100 bg-slate-50/50 p-4">
-            <Text className="mb-3 text-lg font-extrabold text-slate-800">
-              8D Event Management
-            </Text>
+        {/* ═══════════ ANALYTICS CHARTS (Lead Auditor card style) ═══════════ */}
+        <View
+          className={`mb-6 ${isDesktop ? "flex-row" : "flex-col"}`}
+          style={{ gap: 16 }}
+        >
+          <StepProgress data={stepCounts} completionRate={completionRate} />
+
+          <Card className="p-5" style={{ flex: 1 }}>
+            {/* ✅ FIX: Added a wrapper or direct style to reduce the bottom margin */}
+            <View style={{ marginBottom: -16 }}>
+              <SectionHeader
+                title="Status Breakdown"
+                subtitle="Distribution by current status"
+                icon={ListChecks}
+                right={
+                  <View
+                    className="rounded-lg border px-2.5 py-1"
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      borderColor: COLORS.primaryBorder,
+                    }}
+                  >
+                    <Text
+                      className="text-[10px] font-bold"
+                      style={{ color: COLORS.primaryDark }}
+                    >
+                      {totalEvents} total
+                    </Text>
+                  </View>
+                }
+              />
+            </View>
+            <View>
+              {statusCounts.map((item, index) => (
+                <View key={item.label}>
+                  <StatusProgress
+                    status={item.label}
+                    count={item.count}
+                    color={item.color}
+                    percentage={item.percentage}
+                  />
+                  {index < statusCounts.length - 1 && (
+                    <View
+                      className="ml-4 h-px"
+                      style={{ backgroundColor: "#F1F5F9" }}
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
+          </Card>
+        </View>
+
+        {/* ═══════════ FILTERS ═══════════ */}
+        <Card className="mb-6">
+          <View className="border-b p-5" style={{ borderColor: COLORS.border }}>
+            <View className="mb-4 flex-row items-center justify-between">
+              <View>
+                <Text
+                  className="text-base font-bold"
+                  style={{ color: COLORS.text }}
+                >
+                  8D Event Management
+                </Text>
+                <Text
+                  className="mt-0.5 text-xs font-medium"
+                  style={{ color: COLORS.textMuted }}
+                >
+                  {filtered.length} {filtered.length === 1 ? "event" : "events"}{" "}
+                  in view
+                </Text>
+              </View>
+              <View
+                className="rounded-lg border px-2.5 py-1.5"
+                style={{
+                  backgroundColor: COLORS.primaryLight,
+                  borderColor: COLORS.primaryBorder,
+                }}
+              >
+                <Text
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: COLORS.primaryDark }}
+                >
+                  {isHOD
+                    ? "HOD View"
+                    : isAdmin
+                      ? "Admin View"
+                      : "Initiator View"}
+                </Text>
+              </View>
+            </View>
 
             {isDesktop ? (
-              // ✅ DESKTOP: All filters in one single, perfectly aligned row
-              <View className="flex-row items-center gap-4">
-                {/* Search Input (Takes 2x the width of a single dropdown) */}
+              <View className="flex-row items-center gap-3">
                 <View
-                  className="flex-row items-center rounded-xl border border-slate-200 bg-white px-4 shadow-sm"
-                  style={{ flex: 2, height: 48 }}
+                  className="flex-row items-center rounded-xl border px-4"
+                  style={{
+                    flex: 2,
+                    height: 44,
+                    backgroundColor: COLORS.card,
+                    borderColor: COLORS.border,
+                  }}
                 >
-                  <Search size={18} color="#94a3b8" />
+                  <Search size={16} color={COLORS.textFaint} />
                   <TextInput
-                    placeholder="Search events or owner..."
+                    placeholder="Search by event number or owner..."
                     value={search}
                     onChangeText={setSearch}
-                    className="ml-3 flex-1 bg-transparent text-sm font-medium outline-none"
-                    placeholderTextColor="#94a3b8"
-                    style={{ height: 48 }}
+                    className="ml-2.5 flex-1 bg-transparent text-sm font-medium outline-none"
+                    placeholderTextColor={COLORS.textFaint}
+                    style={{ height: 44, color: COLORS.text }}
                   />
                   {search.length > 0 && (
                     <TouchableOpacity
                       onPress={() => setSearch("")}
                       className="p-1"
                     >
-                      <X size={16} color="#94a3b8" />
+                      <X size={14} color={COLORS.textFaint} />
                     </TouchableOpacity>
                   )}
                 </View>
 
-                {/* Status Filter (Takes 1x width) */}
+                {/* Status Filter */}
                 <View
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-                  style={{ flex: 1, height: 48 }}
+                  className="overflow-hidden rounded-xl border"
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    backgroundColor: COLORS.card,
+                    borderColor: COLORS.border,
+                  }}
                 >
                   <Picker
                     selectedValue={statusFilter}
                     onValueChange={setStatusFilter}
                     mode="dropdown"
-                    style={{ height: 48 }}
+                    style={
+                      {
+                        height: 44,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
+                      } as any
+                    }
                   >
                     <Picker.Item label="All Status" value="All" />
                     <Picker.Item label="In Progress" value="In Progress" />
@@ -1595,16 +1966,28 @@ export default function LandingPage({ type }: LandingPageProps) {
                   </Picker>
                 </View>
 
-                {/* Step Filter (Takes 1x width) */}
+                {/* Step Sort Filter */}
                 <View
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-                  style={{ flex: 1, height: 48 }}
+                  className="overflow-hidden rounded-xl border"
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    backgroundColor: COLORS.card,
+                    borderColor: COLORS.border,
+                  }}
                 >
                   <Picker
                     selectedValue={stepSort}
                     onValueChange={setStepSort}
                     mode="dropdown"
-                    style={{ height: 48 }}
+                    style={
+                      {
+                        height: 44,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
+                      } as any
+                    }
                   >
                     <Picker.Item label="All Steps" value="None" />
                     <Picker.Item label="Sort by Step" value="StepSort" />
@@ -1614,16 +1997,28 @@ export default function LandingPage({ type }: LandingPageProps) {
                   </Picker>
                 </View>
 
-                {/* View Limit Filter (Takes 1x width) */}
+                {/* View Limit Filter */}
                 <View
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-                  style={{ flex: 1, height: 48 }}
+                  className="overflow-hidden rounded-xl border"
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    backgroundColor: COLORS.card,
+                    borderColor: COLORS.border,
+                  }}
                 >
                   <Picker
                     selectedValue={viewLimit}
                     onValueChange={setViewLimit}
                     mode="dropdown"
-                    style={{ height: 48 }}
+                    style={
+                      {
+                        height: 44,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
+                      } as any
+                    }
                   >
                     <Picker.Item label="All Events" value="All" />
                     <Picker.Item label="Last 10" value="10" />
@@ -1633,23 +2028,29 @@ export default function LandingPage({ type }: LandingPageProps) {
                 </View>
               </View>
             ) : (
-              // ✅ MOBILE: Stacked layout with horizontal scroll for pickers (Unchanged)
               <>
-                <View className="mb-3 flex-row items-center rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <Search size={18} color="#94a3b8" />
+                <View
+                  className="mb-3 flex-row items-center rounded-xl border px-3.5 py-2.5"
+                  style={{
+                    backgroundColor: COLORS.card,
+                    borderColor: COLORS.border,
+                  }}
+                >
+                  <Search size={16} color={COLORS.textFaint} />
                   <TextInput
                     placeholder="Search events or owner..."
                     value={search}
                     onChangeText={setSearch}
-                    className="ml-3 flex-1 bg-transparent text-sm font-medium outline-none"
-                    placeholderTextColor="#94a3b8"
+                    className="ml-2.5 flex-1 bg-transparent text-sm font-medium outline-none"
+                    placeholderTextColor={COLORS.textFaint}
+                    style={{ color: COLORS.text }}
                   />
                   {search.length > 0 && (
                     <TouchableOpacity
                       onPress={() => setSearch("")}
                       className="p-1"
                     >
-                      <X size={16} color="#94a3b8" />
+                      <X size={14} color={COLORS.textFaint} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1657,109 +2058,133 @@ export default function LandingPage({ type }: LandingPageProps) {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 12, paddingRight: 16 }}
+                  contentContainerStyle={{ gap: 10, paddingRight: 8 }}
                 >
-                  <View className="min-w-[140px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <Picker
-                      selectedValue={statusFilter}
-                      onValueChange={setStatusFilter}
-                      mode="dropdown"
+                  {[
+                    {
+                      selectedValue: statusFilter,
+                      onValueChange: setStatusFilter,
+                      items: [
+                        { label: "All Status", value: "All" },
+                        { label: "In Progress", value: "In Progress" },
+                        { label: "Rejected", value: "Rejected" },
+                        {
+                          label: "Awaiting Approval",
+                          value: "Approval Pending",
+                        },
+                        { label: "D0 Approved", value: "D0 Approved" },
+                        { label: "Closed", value: "Closed" },
+                      ],
+                    },
+                    {
+                      selectedValue: stepSort,
+                      onValueChange: setStepSort,
+                      items: [
+                        { label: "All Steps", value: "None" },
+                        { label: "Sort by Step", value: "StepSort" },
+                        ...steps.map((s) => ({ label: s, value: s })),
+                      ],
+                    },
+                    {
+                      selectedValue: viewLimit,
+                      onValueChange: setViewLimit,
+                      items: [
+                        { label: "All Events", value: "All" },
+                        { label: "Last 10", value: "10" },
+                        { label: "Last 20", value: "20" },
+                        { label: "Last 50", value: "50" },
+                      ],
+                    },
+                  ].map((picker, idx) => (
+                    <View
+                      key={idx}
+                      className="min-w-[140px] overflow-hidden rounded-xl border"
+                      style={{
+                        backgroundColor: COLORS.card,
+                        borderColor: COLORS.border,
+                      }}
                     >
-                      <Picker.Item label="All Status" value="All" />
-                      <Picker.Item label="In Progress" value="In Progress" />
-                      <Picker.Item label="Rejected" value="Rejected" />
-                      <Picker.Item
-                        label="Awaiting Approval"
-                        value="Approval Pending"
-                      />
-                      <Picker.Item label="D0 Approved" value="D0 Approved" />
-                      <Picker.Item label="Closed" value="Closed" />
-                    </Picker>
-                  </View>
-
-                  <View className="min-w-[140px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <Picker
-                      selectedValue={stepSort}
-                      onValueChange={setStepSort}
-                      mode="dropdown"
-                    >
-                      <Picker.Item label="All Steps" value="None" />
-                      <Picker.Item label="Sort by Step" value="StepSort" />
-                      {steps.map((s) => (
-                        <Picker.Item key={s} label={s} value={s} />
-                      ))}
-                    </Picker>
-                  </View>
-
-                  <View className="min-w-[140px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <Picker
-                      selectedValue={viewLimit}
-                      onValueChange={setViewLimit}
-                      mode="dropdown"
-                    >
-                      <Picker.Item label="All Events" value="All" />
-                      <Picker.Item label="Last 10" value="10" />
-                      <Picker.Item label="Last 20" value="20" />
-                      <Picker.Item label="Last 50" value="50" />
-                    </Picker>
-                  </View>
+                      <Picker
+                        selectedValue={picker.selectedValue}
+                        onValueChange={picker.onValueChange}
+                        mode="dropdown"
+                        style={
+                          {
+                            borderWidth: 0,
+                            backgroundColor: "transparent",
+                            outlineStyle: "none",
+                          } as any
+                        }
+                      >
+                        {picker.items.map((it) => (
+                          <Picker.Item
+                            key={it.value}
+                            label={it.label}
+                            value={it.value}
+                          />
+                        ))}
+                      </Picker>
+                    </View>
+                  ))}
                 </ScrollView>
               </>
             )}
           </View>
 
-          <View className="p-4">
+          <View style={{ padding: 16 }}>
             {limitedFiltered.length > 0 ? (
               <FlatList
                 data={limitedFiltered}
                 renderItem={({ item }) => renderEventCard(item)}
                 keyExtractor={(item) => item.eventNo}
-                key={isDesktop ? "desktop-3-col-grid" : "mobile-1-col-list"}
+                key={isDesktop ? "desktop-3-col" : "mobile-1-col"}
                 numColumns={isDesktop ? 3 : 1}
                 columnWrapperStyle={
-                  isDesktop
-                    ? {
-                        justifyContent: "flex-start", // ✅ Changed from "space-between"
-                        // gap: 8, // ✅ Increased gap for better spacing
-                      }
-                    : undefined
+                  isDesktop ? { justifyContent: "flex-start" } : undefined
                 }
-                contentContainerStyle={{
-                  paddingBottom: 20,
-                }}
+                contentContainerStyle={{ paddingBottom: 8 }}
                 scrollEnabled={false}
                 showsVerticalScrollIndicator={false}
                 style={{ width: "100%" }}
               />
             ) : (
-              // ... empty state remains exactly the same ...
               !loading && (
                 <View className="items-center py-16">
-                  <Grid size={48} color="#cbd5e1" />
-                  <Text className="mt-3 text-base font-bold text-slate-500">
+                  <View
+                    className="mb-4 h-16 w-16 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: COLORS.primaryLight }}
+                  >
+                    <Grid size={28} color={COLORS.primary} />
+                  </View>
+                  <Text
+                    className="text-base font-bold"
+                    style={{ color: COLORS.textValue }}
+                  >
                     No 8D events found
                   </Text>
-                  <Text className="mt-1 px-8 text-center text-sm font-medium text-slate-400">
+                  <Text
+                    className="mt-1 max-w-md px-8 text-center text-sm font-medium"
+                    style={{ color: COLORS.textMuted }}
+                  >
                     Try adjusting your filters or create a new 8D event
                   </Text>
                   {(isInitiator || isAdmin) && (
-                    <TouchableOpacity
-                      onPress={createNew8D}
-                      className="mt-6 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-3 shadow-md active:opacity-90"
-                    >
-                      <Text className="text-sm font-bold text-white">
-                        Create Your First 8D
-                      </Text>
-                    </TouchableOpacity>
+                    <View style={{ marginTop: 20 }}>
+                      <OutlineButton
+                        title="Create New 8D"
+                        icon={Plus}
+                        onPress={createNew8D}
+                      />
+                    </View>
                   )}
                 </View>
               )
             )}
           </View>
-        </View>
+        </Card>
       </ScrollView>
 
-      {/* Preview Modal */}
+      {/* ═══════════ PREVIEW MODAL ═══════════ */}
       <Modal
         visible={showPreview}
         animationType="slide"
@@ -1768,22 +2193,55 @@ export default function LandingPage({ type }: LandingPageProps) {
       >
         <View className={`flex-1 ${isDesktop ? "items-end" : "bg-white"}`}>
           <View
-            className={`bg-white ${
-              isDesktop
-                ? "h-full w-[60%] border-l border-slate-200 shadow-2xl"
-                : "h-full w-full"
-            }`}
+            style={{
+              backgroundColor: COLORS.card,
+              ...(isDesktop
+                ? {
+                    height: "100%",
+                    width: "60%",
+                    borderLeftWidth: 1,
+                    borderColor: COLORS.border,
+                  }
+                : { height: "100%", width: "100%" }),
+            }}
           >
             <SafeAreaView className="flex-1">
-              <View className="flex-row items-center justify-between border-b border-slate-200 bg-slate-50 p-4">
-                <Text className="text-lg font-bold text-slate-800">
-                  Preview - Latest Data
-                </Text>
+              <View
+                className="flex-row items-center justify-between border-b p-4"
+                style={{
+                  borderColor: COLORS.border,
+                  backgroundColor: COLORS.bg,
+                }}
+              >
+                <View className="flex-row items-center gap-2.5">
+                  <View
+                    className="h-9 w-9 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: COLORS.primaryLight }}
+                  >
+                    <FileText size={16} color={COLORS.primary} />
+                  </View>
+                  <View>
+                    <Text
+                      className="text-sm font-bold"
+                      style={{ color: COLORS.text }}
+                    >
+                      Preview
+                    </Text>
+                    <Text
+                      className="text-[10px] font-medium"
+                      style={{ color: COLORS.textMuted }}
+                    >
+                      Latest data
+                    </Text>
+                  </View>
+                </View>
                 <TouchableOpacity
                   onPress={() => setShowPreview(false)}
-                  className="rounded-full bg-slate-200 p-2 active:bg-slate-300"
+                  className="h-9 w-9 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: COLORS.border }}
+                  activeOpacity={0.7}
                 >
-                  <X size={20} color="#64748b" />
+                  <X size={18} color={COLORS.textValue} />
                 </TouchableOpacity>
               </View>
               {activeEventId && (
@@ -1805,7 +2263,7 @@ export default function LandingPage({ type }: LandingPageProps) {
         </View>
       </Modal>
 
-      {/* Forum Modal */}
+      {/* ═══════════ FORUM MODAL ═══════════ */}
       <Modal
         visible={forumDrawerOpen}
         animationType="slide"
@@ -1814,11 +2272,17 @@ export default function LandingPage({ type }: LandingPageProps) {
       >
         <View className={`flex-1 ${isDesktop ? "items-end" : "bg-white"}`}>
           <View
-            className={`bg-white ${
-              isDesktop
-                ? "h-full w-[50%] border-l border-slate-200 shadow-2xl"
-                : "h-full w-full"
-            }`}
+            style={{
+              backgroundColor: COLORS.card,
+              ...(isDesktop
+                ? {
+                    height: "100%",
+                    width: "50%",
+                    borderLeftWidth: 1,
+                    borderColor: COLORS.border,
+                  }
+                : { height: "100%", width: "100%" }),
+            }}
           >
             <SafeAreaView className="flex-1">
               {selectedGroupId && (
@@ -1845,7 +2309,7 @@ export default function LandingPage({ type }: LandingPageProps) {
         </View>
       </Modal>
 
-      {/* Centered Modals for Rejection, Delete, Success */}
+      {/* ═══════════ REJECTION / DELETE / SUCCESS MODALS ═══════════ */}
       {[
         {
           visible: showRejectionReason,
@@ -1855,8 +2319,8 @@ export default function LandingPage({ type }: LandingPageProps) {
           },
           title: "Rejection Details",
           icon: AlertCircle,
-          iconColor: "#dc2626",
-          titleColor: "text-red-700",
+          iconColor: "#DC2626",
+          iconBg: "#FEF2F2",
         },
         {
           visible: showDeleteConfirm,
@@ -1866,17 +2330,16 @@ export default function LandingPage({ type }: LandingPageProps) {
           },
           title: "Confirm Deletion",
           icon: AlertCircle,
-          iconColor: "#dc2626",
-          titleColor: "text-red-700",
+          iconColor: "#DC2626",
+          iconBg: "#FEF2F2",
         },
         {
           visible: showDeleteSuccess,
           onClose: () => setShowDeleteSuccess(false),
-          title: "Deleted Successfully!",
+          title: "Deleted Successfully",
           icon: CheckCircle,
-          iconColor: "#10b981",
-          titleColor: "text-green-700",
-          isCentered: true,
+          iconColor: "#059669",
+          iconBg: "#ECFDF5",
         },
       ].map((modal, idx) => (
         <Modal
@@ -1886,142 +2349,294 @@ export default function LandingPage({ type }: LandingPageProps) {
           transparent={true}
           onRequestClose={modal.onClose}
         >
-          <View className="flex-1 items-center justify-center bg-black/50 p-4">
+          <View className="flex-1 items-center justify-center bg-slate-900/40 p-4">
             <View
-              className={`rounded-2xl bg-white p-5 shadow-2xl ${
-                isDesktop ? "w-[500px]" : "w-full max-w-md"
-              }`}
+              className="overflow-hidden rounded-3xl"
+              style={{
+                backgroundColor: COLORS.card,
+                width: isDesktop ? 500 : "100%",
+                maxWidth: 500,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.1,
+                shadowRadius: 20,
+                elevation: 10,
+              }}
             >
-              <View className="mb-4 flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <modal.icon size={22} color={modal.iconColor} />
-                  <Text className={`text-lg font-bold ${modal.titleColor}`}>
+              <View
+                className="flex-row items-center justify-between border-b p-5"
+                style={{ borderColor: COLORS.border }}
+              >
+                <View className="flex-row items-center gap-3">
+                  <View
+                    className="h-10 w-10 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: modal.iconBg }}
+                  >
+                    <modal.icon size={18} color={modal.iconColor} />
+                  </View>
+                  <Text
+                    className="text-base font-bold"
+                    style={{ color: COLORS.text }}
+                  >
                     {modal.title}
                   </Text>
                 </View>
                 <TouchableOpacity
                   onPress={modal.onClose}
-                  className="p-1 active:opacity-70"
+                  className="h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: COLORS.bg }}
+                  activeOpacity={0.7}
                 >
-                  <X size={20} color="#94a3b8" />
+                  <X size={16} color={COLORS.textValue} />
                 </TouchableOpacity>
               </View>
 
               {idx === 0 && selectedRejectionEvent && (
-                <View className="gap-4">
-                  <View>
-                    <Text className="mb-1 text-sm font-bold text-slate-700">
-                      Event Number
-                    </Text>
-                    <View className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
-                      <Text className="font-mono font-medium text-slate-800">
-                        {selectedRejectionEvent.eventNo}
-                      </Text>
-                    </View>
-                  </View>
-                  <View>
-                    <Text className="mb-1 text-sm font-bold text-slate-700">
-                      Rejection Reason
-                    </Text>
-                    <View className="min-h-[60px] rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
-                      <Text className="font-medium text-slate-800">
-                        {selectedRejectionEvent.rejectionReason ||
-                          "No specific reason provided"}
-                      </Text>
-                    </View>
-                  </View>
-                  {selectedRejectionEvent.hodRemarks && (
+                <ScrollView className="max-h-[400px] p-5">
+                  <View className="gap-4">
                     <View>
-                      <Text className="mb-1 text-sm font-bold text-slate-700">
-                        HOD Information
+                      <Text
+                        className="mb-1.5 text-xs font-bold uppercase tracking-wider"
+                        style={{ color: COLORS.textMuted }}
+                      >
+                        Event Number
                       </Text>
-                      <View className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-                        <Text className="font-medium text-slate-800">
-                          {selectedRejectionEvent.hodRemarks}
+                      <View
+                        className="rounded-xl border px-3 py-2.5"
+                        style={{
+                          backgroundColor: COLORS.bg,
+                          borderColor: COLORS.border,
+                        }}
+                      >
+                        <Text
+                          className="font-mono text-sm font-semibold"
+                          style={{ color: COLORS.text }}
+                        >
+                          {selectedRejectionEvent.eventNo}
                         </Text>
-                        {selectedRejectionEvent.rejectedAt && (
-                          <Text className="mt-1.5 text-xs font-medium text-slate-600">
-                            Rejected on:{" "}
-                            {format(
-                              new Date(selectedRejectionEvent.rejectedAt),
-                              "MM/dd/yyyy",
-                            )}
-                          </Text>
-                        )}
                       </View>
                     </View>
-                  )}
-                  <View className="flex-row justify-end pt-2">
-                    <TouchableOpacity
-                      onPress={modal.onClose}
-                      className="rounded-lg bg-slate-600 px-5 py-2.5 active:bg-slate-700"
-                    >
-                      <Text className="font-bold text-white">Close</Text>
-                    </TouchableOpacity>
+                    <View>
+                      <Text
+                        className="mb-1.5 text-xs font-bold uppercase tracking-wider"
+                        style={{ color: COLORS.textMuted }}
+                      >
+                        Rejection Reason
+                      </Text>
+                      <View
+                        className="rounded-xl border px-3 py-2.5"
+                        style={{
+                          backgroundColor: "#FEF2F2",
+                          borderColor: "#FECACA",
+                        }}
+                      >
+                        <Text
+                          className="text-sm font-medium"
+                          style={{ color: COLORS.textValue }}
+                        >
+                          {selectedRejectionEvent.rejectionReason ||
+                            "No specific reason provided"}
+                        </Text>
+                      </View>
+                    </View>
+                    {selectedRejectionEvent.hodRemarks && (
+                      <View>
+                        <Text
+                          className="mb-1.5 text-xs font-bold uppercase tracking-wider"
+                          style={{ color: COLORS.textMuted }}
+                        >
+                          HOD Information
+                        </Text>
+                        <View
+                          className="rounded-xl border px-3 py-2.5"
+                          style={{
+                            backgroundColor: "#FFFBEB",
+                            borderColor: "#FCD34D",
+                          }}
+                        >
+                          <Text
+                            className="text-sm font-medium"
+                            style={{ color: COLORS.textValue }}
+                          >
+                            {selectedRejectionEvent.hodRemarks}
+                          </Text>
+                          {selectedRejectionEvent.rejectedAt && (
+                            <Text
+                              className="mt-1.5 text-[11px] font-medium"
+                              style={{ color: COLORS.textMuted }}
+                            >
+                              Rejected on:{" "}
+                              {format(
+                                new Date(selectedRejectionEvent.rejectedAt),
+                                "MM/dd/yyyy",
+                              )}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    )}
                   </View>
-                </View>
+                </ScrollView>
               )}
 
               {idx === 1 && eventToDelete && (
-                <View className="gap-4">
-                  <Text className="font-medium text-slate-700">
-                    Are you sure you want to delete this event?
+                <View className="gap-4 p-5">
+                  <Text
+                    className="text-sm font-medium"
+                    style={{ color: COLORS.textValue }}
+                  >
+                    Are you sure you want to delete this event? This action
+                    cannot be undone.
                   </Text>
-                  <View className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <Text className="font-bold text-slate-800">
-                      Event: {eventToDelete.eventNo}
-                    </Text>
-                    <Text className="mt-1 text-sm font-medium text-slate-600">
-                      Status: {eventToDelete.status}
-                    </Text>
-                    <Text className="text-sm font-medium text-slate-600">
-                      Owner: {eventToDelete.owner}
-                    </Text>
-                  </View>
-                  <Text className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-600">
-                    ⚠️ This action cannot be undone. All event data and forum
-                    discussions will be permanently deleted.
-                  </Text>
-                  <View className="flex-row justify-end gap-3 pt-2">
-                    <TouchableOpacity
-                      onPress={modal.onClose}
-                      className="rounded-lg bg-slate-200 px-5 py-2.5 active:bg-slate-300"
-                    >
-                      <Text className="font-bold text-slate-700">Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleDelete}
-                      className="flex-row items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 active:bg-red-700"
-                    >
-                      <Trash2 size={16} color="#ffffff" />
-                      <Text className="font-bold text-white">
-                        Delete Permanently
+                  <View
+                    className="rounded-xl border p-4"
+                    style={{
+                      backgroundColor: COLORS.bg,
+                      borderColor: COLORS.border,
+                    }}
+                  >
+                    <View className="mb-1.5 flex-row items-center justify-between">
+                      <Text
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: COLORS.textMuted }}
+                      >
+                        Event
                       </Text>
-                    </TouchableOpacity>
+                      <Text
+                        className="text-xs font-bold"
+                        style={{ color: COLORS.text }}
+                      >
+                        {eventToDelete.eventNo}
+                      </Text>
+                    </View>
+                    <View className="mb-1.5 flex-row items-center justify-between">
+                      <Text
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: COLORS.textMuted }}
+                      >
+                        Status
+                      </Text>
+                      <Text
+                        className="text-xs font-semibold"
+                        style={{ color: COLORS.textValue }}
+                      >
+                        {eventToDelete.status}
+                      </Text>
+                    </View>
+                    <View className="flex-row items-center justify-between">
+                      <Text
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: COLORS.textMuted }}
+                      >
+                        Owner
+                      </Text>
+                      <Text
+                        className="text-xs font-semibold"
+                        style={{ color: COLORS.textValue }}
+                        numberOfLines={1}
+                      >
+                        {eventToDelete.owner}
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    className="rounded-xl border p-3"
+                    style={{
+                      backgroundColor: "#FEF2F2",
+                      borderColor: "#FECACA",
+                    }}
+                  >
+                    <Text
+                      className="text-xs font-semibold"
+                      style={{ color: "#B91C1C" }}
+                    >
+                      ⚠️ All event data and forum discussions will be
+                      permanently deleted.
+                    </Text>
                   </View>
                 </View>
               )}
 
               {idx === 2 && (
-                <View className="items-center py-4">
-                  <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                    <CheckCircle size={32} color="#10b981" />
+                <View className="items-center py-8">
+                  <View
+                    className="mb-4 h-16 w-16 items-center justify-center rounded-full"
+                    style={{ backgroundColor: "#ECFDF5" }}
+                  >
+                    <CheckCircle size={30} color="#059669" />
                   </View>
-                  <Text className="mb-2 text-center font-medium text-slate-600">
+                  <Text
+                    className="text-center text-sm font-medium"
+                    style={{ color: COLORS.textValue }}
+                  >
                     The event has been permanently deleted from the system.
                   </Text>
-                  <TouchableOpacity
-                    onPress={modal.onClose}
-                    className="mt-2 rounded-lg bg-green-600 px-8 py-2.5 active:bg-green-700"
-                  >
-                    <Text className="font-bold text-white">OK</Text>
-                  </TouchableOpacity>
                 </View>
               )}
+
+              <View
+                className="flex-row justify-end gap-2.5 border-t p-5"
+                style={{
+                  borderColor: COLORS.border,
+                  backgroundColor: COLORS.bg,
+                }}
+              >
+                {idx === 0 && (
+                  <TouchableOpacity
+                    onPress={modal.onClose}
+                    className="rounded-lg px-5 py-2.5"
+                    style={{ backgroundColor: COLORS.textValue }}
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-sm font-bold text-white">Close</Text>
+                  </TouchableOpacity>
+                )}
+                {idx === 1 && (
+                  <>
+                    <TouchableOpacity
+                      onPress={modal.onClose}
+                      className="rounded-lg border px-5 py-2.5"
+                      style={{
+                        backgroundColor: COLORS.card,
+                        borderColor: COLORS.border,
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        className="text-sm font-bold"
+                        style={{ color: COLORS.textValue }}
+                      >
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleDelete}
+                      className="flex-row items-center gap-2 rounded-lg px-5 py-2.5"
+                      style={{ backgroundColor: "#DC2626" }}
+                      activeOpacity={0.8}
+                    >
+                      <Trash2 size={14} color="#FFFFFF" />
+                      <Text className="text-sm font-bold text-white">
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {idx === 2 && (
+                  <TouchableOpacity
+                    onPress={modal.onClose}
+                    className="rounded-lg px-6 py-2.5"
+                    style={{ backgroundColor: COLORS.primary }}
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-sm font-bold text-white">OK</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         </Modal>
       ))}
-    </SafeAreaView>
+    </View>
   );
 }

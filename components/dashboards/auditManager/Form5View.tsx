@@ -1,24 +1,28 @@
 import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
-import { auditScheduleApi } from "@/services/auditScheduleApi"; // ✅ Added import for the API service
+import { auditScheduleApi } from "@/services/auditScheduleApi";
 import axios from "axios";
 import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import {
   ArrowLeft,
+  ArrowRight,
   Calendar,
   Check,
   CheckCircle,
+  ChevronDown,
   Clock,
   Download,
   FileText,
   Grid,
   List,
   MessageSquare,
+  MoreVertical,
   Plus,
   RefreshCw,
-  X } from "lucide-react-native";
+  X,
+} from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -30,34 +34,38 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions } from "react-native";
+  useWindowDimensions,
+} from "react-native";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../context/ToastContext"; // Adjust path if needed
+import { useToast } from "../../context/ToastContext";
 import DocumentControlSection from "./DocumentControlSection";
 import ScheduleListView from "./ScheduleListView";
 import ScheduleMatrixView from "./ScheduleMatrixView";
 import ScheduleModal from "./ScheduleModal";
 
-// ═════ MNC STANDARD PALETTE ═════
+// ═════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  text: "#000000",
-  textValue: "#1F2937",
-  textMuted: "#6B7280",
-  accent: "#3B82F6",
-  accentLight: "#EFF6FF",
-  accentBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  error: "#EF4444",
-  errorLight: "#FEF2F2",
-  errorBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A" };
+  // Primary Blue Shades
+  primary: "#2563EB", // Blue 600 (Main actions)
+  primaryLight: "#EFF6FF", // Blue 50 (Subtle backgrounds)
+  primaryBorder: "#DBEAFE", // Blue 200 (Borders)
+  primaryDark: "#1E3A8A", // Blue 900 (Text on blue bg)
+
+  // Neutral Slate Shades (For structure, no extra colors)
+  bg: "#F8FAFC", // Slate 50 (App background)
+  card: "#FFFFFF", // White (Cards)
+  border: "#E2E8F0", // Slate 200 (Dividers)
+  text: "#0F172A", // Slate 900 (Headings)
+  textValue: "#334155", // Slate 700 (Body text)
+  textMuted: "#64748B", // Slate 500 (Secondary text)
+
+  // Monochromatic State Adaptations (No Red/Green/Amber)
+  stateSuccessBg: "#EFF6FF", // Blue 50
+  stateErrorBg: "#F1F5F9", // Slate 100
+  stateWarningBg: "#F8FAFC", // Slate 50
+  stateErrorText: "#475569", // Slate 600
+  stateWarningText: "#64748B", // Slate 500
+};
 
 // Add these constants and helpers at the top of Form5View.tsx
 const PLANT_FIELD_CANDIDATES = [
@@ -84,7 +92,7 @@ const plantOf = (row: any): string | number | null => {
 const samePlant = (row: any, plantId: string | number | null): boolean => {
   if (plantId === null || plantId === undefined || plantId === "") return true;
   const rowPlant = plantOf(row);
-  if (rowPlant === null) return true; // fail-open when row has no plant
+  if (rowPlant === null) return true;
   return String(rowPlant) === String(plantId);
 };
 
@@ -106,98 +114,95 @@ const monthDisplay: Record<string, string> = {
   Dec: "December",
   Jan: "January",
   Feb: "February",
-  Mar: "March" };
+  Mar: "March",
+};
 const auditElementsMap: Record<string, string> = {
   "System Audit (ISO9001)": "A",
   "System Audit (IATF16949)": "B",
   "5S Audit": "C",
   "Process Audit": "D",
-  "Product Audit": "E" };
+  "Product Audit": "E",
+};
 
-// ═════ REUSABLE UI COMPONENTS ═════
-const Card = ({ children, className }: any) => (
+// ═════ REUSABLE UI COMPONENTS (Clean, Monochromatic, Spacious) ═════
+const Card = ({ children, className = "" }: any) => (
   <View
-    className={`mb-6 rounded-xl border border-gray-200 bg-white shadow-sm ${className || ""}`}
+    className={`mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white ${className}`}
+    style={{
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 4,
+      elevation: 1,
+    }}
   >
     {children}
   </View>
 );
 
-const ActionButton = ({
-  onPress,
-  disabled,
-  loading,
-  color,
-  bgColor,
-  borderColor,
-  icon: Icon,
-  children }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    disabled={disabled || loading}
-    className={`h-10 flex-row items-center justify-center gap-2 rounded-lg border px-5 ${disabled || loading ? "border-gray-200 bg-gray-100" : ""}`}
-    style={{
-      backgroundColor: disabled || loading ? undefined : bgColor,
-      borderColor:
-        disabled || loading ? undefined : borderColor || "transparent" }}
-  >
-    {loading ? (
-      <ActivityIndicator size="small" color={color} />
-    ) : Icon ? (
-      <Icon size={16} color={disabled || loading ? "#94A3B8" : color} />
-    ) : null}
-    <Text
-      className={`text-sm font-semibold ${disabled || loading ? "text-gray-400" : ""}`}
-      style={{ color: disabled || loading ? undefined : color }}
-    >
-      {children}
-    </Text>
-  </TouchableOpacity>
-);
-
 const AlertBanner = ({ type, title, message, footer, icon: Icon }: any) => {
+  // Strictly Blue and Slate shades only
   const stylesMap: any = {
     error: {
-      bg: COLORS.errorLight,
-      border: COLORS.errorBorder,
-      color: "#991B1B",
-      iconColor: "#DC2626" },
+      bg: COLORS.stateErrorBg,
+      border: COLORS.border,
+      color: COLORS.stateErrorText,
+      iconColor: COLORS.stateErrorText,
+      iconBg: "#E2E8F0",
+    },
     warning: {
-      bg: COLORS.warningLight,
-      border: COLORS.warningBorder,
-      color: "#92400E",
-      iconColor: "#D97706" },
+      bg: COLORS.stateWarningBg,
+      border: COLORS.border,
+      color: COLORS.stateWarningText,
+      iconColor: COLORS.stateWarningText,
+      iconBg: "#F1F5F9",
+    },
     success: {
-      bg: COLORS.successLight,
-      border: COLORS.successBorder,
-      color: "#065F46",
-      iconColor: "#059669" },
+      bg: COLORS.stateSuccessBg,
+      border: COLORS.primaryBorder,
+      color: COLORS.primaryDark,
+      iconColor: COLORS.primary,
+      iconBg: "#FFFFFF",
+    },
     info: {
-      bg: COLORS.accentLight,
-      border: COLORS.accentBorder,
-      color: "#1E3A8A",
-      iconColor: COLORS.accent } };
+      bg: COLORS.primaryLight,
+      border: COLORS.primaryBorder,
+      color: COLORS.primaryDark,
+      iconColor: COLORS.primary,
+      iconBg: "#FFFFFF",
+    },
+  };
   const s = stylesMap[type] || stylesMap.info;
   return (
     <View
-      className="mb-6 flex-row gap-3 rounded-xl border p-4"
+      className="mb-6 flex-row gap-4 rounded-2xl border p-5"
       style={{ backgroundColor: s.bg, borderColor: s.border }}
     >
       <View
-        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
-        style={{ borderColor: s.border }}
+        className="h-10 w-10 items-center justify-center rounded-xl"
+        style={{
+          backgroundColor: s.iconBg,
+          borderColor: s.border,
+          borderWidth: 1,
+        }}
       >
-        <Icon size={18} color={s.iconColor} />
+        <Icon size={20} color={s.iconColor} />
       </View>
-      <View className="flex-1">
-        <Text className="text-sm font-semibold" style={{ color: s.color }}>
+      <View className="flex-1 justify-center">
+        <Text className="text-sm font-bold" style={{ color: s.color }}>
           {title}
         </Text>
-        <Text className="mt-1 text-xs opacity-90" style={{ color: s.color }}>
+        <Text
+          className="mt-1 text-sm leading-5 opacity-90"
+          style={{ color: s.color }}
+        >
           {message}
         </Text>
         {footer && (
-          <Text className="mt-2 text-xs opacity-70" style={{ color: s.color }}>
+          <Text
+            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70"
+            style={{ color: s.color }}
+          >
             {footer}
           </Text>
         )}
@@ -214,14 +219,14 @@ const ActionModal = ({
   icon: Icon,
   iconColor,
   iconBg,
-  iconBorder,
   value,
   setValue,
   placeholder,
   onSubmit,
   submitLabel,
   submitBg,
-  submitting }: any) => {
+  submitting,
+}: any) => {
   if (!isOpen) return null;
   return (
     <Modal
@@ -231,29 +236,36 @@ const ActionModal = ({
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        className="flex-1 items-center justify-center bg-black/30 p-5"
+        className="flex-1 items-center justify-center bg-slate-900/30 p-6"
         activeOpacity={1}
         onPress={onClose}
       >
         <TouchableOpacity
           activeOpacity={1}
-          className="w-full max-w-md overflow-hidden rounded-2xl bg-white"
+          className="w-full max-w-md overflow-hidden rounded-3xl bg-white"
+          style={{
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.05,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
         >
-          <View className="flex-row items-center gap-4 border-b border-gray-200 p-6">
+          <View className="flex-row items-center gap-4 border-b border-slate-100 p-6">
             <View
-              className="h-11 w-11 items-center justify-center rounded-xl border"
-              style={{ backgroundColor: iconBg, borderColor: iconBorder }}
+              className="h-12 w-12 items-center justify-center rounded-2xl border border-slate-100"
+              style={{ backgroundColor: iconBg }}
             >
               <Icon size={22} color={iconColor} />
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-900">{title}</Text>
-              <Text className="mt-1 text-xs text-gray-500">{description}</Text>
+              <Text className="text-lg font-bold text-slate-900">{title}</Text>
+              <Text className="mt-1 text-sm text-slate-500">{description}</Text>
             </View>
           </View>
           <View className="p-6">
             <TextInput
-              className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-800"
+              className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800"
               value={value}
               onChangeText={setValue}
               multiline
@@ -263,22 +275,26 @@ const ActionModal = ({
               textAlignVertical="top"
             />
           </View>
-          <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
+          <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
             <TouchableOpacity
               onPress={onClose}
-              className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
+              className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
+              activeOpacity={0.7}
             >
-              <Text className="text-sm font-semibold text-gray-700">
+              <Text className="text-sm font-semibold text-slate-600">
                 Cancel
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onSubmit}
               disabled={!value.trim() || submitting}
-              className="h-10 flex-row items-center justify-center gap-2 rounded-lg px-5"
+              className="h-11 flex-row items-center justify-center gap-2 rounded-xl px-6"
               style={{
                 backgroundColor:
-                  !value.trim() || submitting ? "#F1F5F9" : submitBg }}
+                  !value.trim() || submitting ? "#CBD5E1" : submitBg,
+                opacity: !value.trim() || submitting ? 0.7 : 1,
+              }}
+              activeOpacity={0.8}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="#FFF" />
@@ -296,14 +312,164 @@ const ActionModal = ({
   );
 };
 
+// ✅ REUSABLE OUTLINE BUTTON WITH HOVER EFFECT
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB"; // Blue : Light Gray
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827"; // Blue : Black
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280"; // Blue : Gray
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent"; // Transparent Light Blue
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+
+      <Text className="text-sm font-semibold" style={{ color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const MarqueeText = ({ text, style }: { text: string; style?: any }) => {
+  const [offset, setOffset] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const GAP = 60;
+  const SPEED = 0.6; // px per frame — slower looks better
+
+  useEffect(() => {
+    // Need both measurements
+    if (textWidth === 0 || containerWidth === 0) return;
+    // Only animate if text is wider than the container
+    if (textWidth <= containerWidth) {
+      setOffset(0);
+      return;
+    }
+
+    const cycle = textWidth + GAP;
+    const interval = setInterval(() => {
+      setOffset((prev) => {
+        const next = prev - SPEED;
+        return next <= -cycle ? 0 : next;
+      });
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [textWidth, containerWidth]);
+
+  return (
+    <View
+      style={[
+        {
+          width: "100%",
+          height: 30,
+          overflow: "hidden",
+          justifyContent: "center",
+        },
+        style,
+      ]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 1) {
+          setContainerWidth(w);
+        }
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          transform: [{ translateX: offset }],
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && Math.abs(w - textWidth) > 1) {
+              setTextWidth(w);
+            }
+          }}
+        >
+          {text}
+        </Text>
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+        >
+          {text}
+        </Text>
+      </View>
+    </View>
+  );
+};
 // ═════ MAIN COMPONENT ═════
 interface Form5ViewProps {
   year?: number;
   preselectedYear?: number;
   preselectedMonth?: string;
   onBack?: () => void;
-  allUsers?: any[]; // ← Add this
-  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
+  allUsers?: any[];
+  onOpenForum?: (forumId: string) => void;
 }
 
 export default function Form5View({
@@ -312,17 +478,12 @@ export default function Form5View({
   preselectedMonth: propPreselectedMonth,
   onBack,
   onOpenForum,
-  allUsers = [] }: Form5ViewProps = {}) {
+  allUsers = [],
+}: Form5ViewProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement } = useAuth();
 
-  console.log("🟢🟢🟢 [Form5View] user from useAuth:");
-  console.log("   user?.id:", user?.id);
-  console.log("   user?.role:", user?.role);
-  console.log("   user?.plantId:", user?.plantId);
-  console.log("   user?.plantName:", user?.plantName);
-  console.log("   FULL USER:", JSON.stringify(user, null, 2));
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const { addToast } = useToast();
@@ -340,6 +501,8 @@ export default function Form5View({
   ) => {
     Alert.alert(type.charAt(0).toUpperCase() + type.slice(1), msg);
   };
+
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // State
   const [loading, setLoading] = useState(true);
@@ -373,17 +536,18 @@ export default function Form5View({
     rejectedAt: null as string | null,
     changeRequestedBy: "",
     changeRequestedAt: null as string | null,
-    // ✅ NEW
     laRejectionReason: "",
     laRejectedBy: "",
-    laRejectedAt: null as string | null });
+    laRejectedAt: null as string | null,
+  });
   const [summary, setSummary] = useState({
     totalSchedules: 0,
     departmentsCount: 0,
     weeksCovered: 0,
     completed: 0,
     inProgress: 0,
-    scheduled: 0 });
+    scheduled: 0,
+  });
   const [documentInfo, setDocumentInfo] = useState({
     documentRevision: "1.0",
     revisionDate: new Date().toISOString().split("T")[0],
@@ -391,12 +555,11 @@ export default function Form5View({
     auditFrequency: "Half yearly",
     preparedBy: "",
     approvedBy: "",
-    approvedAt: null });
-  const [auditObjective, setAuditObjective] =
-    useState(`* To assess the effectiveness and efficiency of the quality management system.
-* To verify compliance with IATF16949:2016 requirement.
-* To detect a particular problem for improvement.
-* Other.`);
+    approvedAt: null,
+  });
+  const [auditObjective, setAuditObjective] = useState(
+    `* To assess the effectiveness and efficiency of the quality management system.\n* To verify compliance with IATF16949:2016 requirement.\n* To detect a particular problem for improvement.\n* Other.`,
+  );
   const [auditScope, setAuditScope] = useState(
     "All elements of quality system",
   );
@@ -409,14 +572,16 @@ export default function Form5View({
     auditElements: [] as string[],
     auditorId: "",
     auditeeId: "",
-    status: "SCHEDULED" });
+    status: "SCHEDULED",
+  });
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [showYearModal, setShowYearModal] = useState(false);
   const [showMonthModal, setShowMonthModal] = useState(false);
   const [pdfViewer, setPDFViewer] = useState({
     visible: false,
     pdfData: "",
-    fileName: "" });
+    fileName: "",
+  });
 
   const getWeeksForMonth = useCallback((year: number, month: string) => {
     const monthMap: Record<string, number> = {
@@ -431,7 +596,8 @@ export default function Form5View({
       Dec: 11,
       Jan: 0,
       Feb: 1,
-      Mar: 2 };
+      Mar: 2,
+    };
     const monthNum = monthMap[month];
     if (monthNum === undefined) return 4;
     const actualYear =
@@ -501,7 +667,6 @@ export default function Form5View({
     }
     try {
       setLoading(true);
-
       const response = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
         selectedMonth as any,
@@ -510,26 +675,22 @@ export default function Form5View({
       const allSchedules = Array.isArray(response)
         ? response
         : response?.data || [];
-
-      // ✅ ADD PLANT FILTER HERE
       const plantScopedSchedules = filterByPlant(
         allSchedules,
         user?.plantId ?? null,
       );
-
       const weekSchedules = plantScopedSchedules.filter(
         (schedule: any) => !schedule.scheduledDate,
       );
-
       setSchedules(weekSchedules);
-      // ... rest of the logic
     } catch (error: any) {
       showToast("Failed to load schedules", "error");
       setSchedules([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedMonth, user?.plantId]); // ✅ Add user?.plantId dependency
+  }, [selectedYear, selectedMonth, user?.plantId]);
+
   const fetchSummary = useCallback(async () => {
     if (!selectedMonth) return;
     if (!user?.id) {
@@ -549,7 +710,8 @@ export default function Form5View({
           weeksCovered: 0,
           completed: 0,
           inProgress: 0,
-          scheduled: 0 };
+          scheduled: 0,
+        };
       setSummary(summaryData);
     } catch (error: any) {
       console.error("❌ ERROR fetching summary:", error);
@@ -573,17 +735,12 @@ export default function Form5View({
         const months = Array.isArray(response)
           ? response
           : response?.data || [];
-
-        console.log("🟩 [loadData] availableMonths count =", months.length);
-        console.log("🟩 [loadData] preselectedMonth =", preselectedMonth);
-
         setAvailableMonths(months);
         const initialStatus: Record<string, string> = {};
         months.forEach((month: any) => {
           initialStatus[month.month] = month.approvalStatus || "DRAFT";
         });
         setPlanStatus((prev) => ({ ...prev, ...initialStatus }));
-
         let finalMonth = "";
         if (preselectedMonth) {
           finalMonth = preselectedMonth;
@@ -591,8 +748,6 @@ export default function Form5View({
           const firstWithPlan = months.find((m: any) => m.hasPlannedAudits);
           finalMonth = firstWithPlan ? firstWithPlan.month : months[0].month;
         }
-
-        console.log("🟩 [loadData] computed finalMonth =", finalMonth);
         if (finalMonth) setSelectedMonth(finalMonth);
       } catch (error) {
         console.error("Error fetching available months:", error);
@@ -627,7 +782,6 @@ export default function Form5View({
           selectedYear,
           user.id,
         );
-        // ...
         const months = Array.isArray(response)
           ? response
           : response?.data || [];
@@ -671,9 +825,6 @@ export default function Form5View({
     fetchSummary();
   };
 
-  // Form5View.tsx - Replace handleDownloadPDF with handleViewPDF
-
-  // ✅ View PDF with Viewer (replaces direct download)
   const handleViewPDF = async () => {
     if (!selectedMonth) {
       showToast("Please select a month first", "warning");
@@ -683,19 +834,13 @@ export default function Form5View({
     try {
       const fileName = `Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
       const endpoint = `${API_BASE_URL}/api/audit-schedule/${selectedYear}/${selectedMonth}/download`;
-
       const response = await fetch(endpoint, {
         method: "GET",
-        headers: {
-          Accept: "application/pdf" },});
-
-      if (!response.ok) {
+        headers: { Accept: "application/pdf" },
+      });
+      if (!response.ok)
         throw new Error(`Failed to fetch PDF: ${response.status}`);
-      }
-
       const blob = await response.blob();
-
-      // ✅ Convert blob to base64 for PDF viewer
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -705,11 +850,7 @@ export default function Form5View({
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-
-      setPDFViewer({
-        visible: true,
-        pdfData: base64,
-        fileName: fileName });
+      setPDFViewer({ visible: true, pdfData: base64, fileName: fileName });
       setDownloading(false);
     } catch (error: any) {
       console.error("PDF View error:", error);
@@ -719,37 +860,24 @@ export default function Form5View({
   };
 
   const handleShareComplete = (forumId?: string) => {
-    console.log("🟡 [Form4View] onShareComplete called with forumId:", forumId);
-
-    // Close PDF viewer
     setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-
-    // Show toast
     addToast("✅ PDF shared to forum successfully!", "success");
-
-    // Navigate to forum
     if (forumId && onOpenForum) {
-      console.log("🟢 [Form4View] Calling onOpenForum with:", forumId);
       setTimeout(() => {
         onOpenForum(forumId);
       }, 300);
     }
   };
 
-  // ✅ Handle Navigate to Forum
   const handleNavigateToForum = (forumId: string) => {
-    console.log("🟣 [Form4View] onNavigateToForum called with:", forumId);
     if (onOpenForum) {
-      console.log("🟢 [Form4View] Direct navigation via onOpenForum:", forumId);
       onOpenForum(forumId);
       setPDFViewer({ visible: false, pdfData: "", fileName: "" });
     } else {
-      console.log("🔴 [Form4View] onOpenForum not available!");
       addToast("Please open the forum from the main menu", "info");
     }
   };
 
-  // ✅ Keep this for direct download (optional)
   const handleDownloadPDF = async () => {
     if (!selectedMonth) {
       showToast("Please select a month first", "warning");
@@ -758,11 +886,8 @@ export default function Form5View({
     setDownloading(true);
     try {
       const pdfUrl = `${API_BASE_URL}/api/audit-schedule/${selectedYear}/${selectedMonth}/download`;
-
       if (Platform.OS === "web") {
-        const response = await axios.get(pdfUrl, {
-          responseType: "blob" });
-
+        const response = await axios.get(pdfUrl, { responseType: "blob" });
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement("a");
         link.href = url;
@@ -774,7 +899,6 @@ export default function Form5View({
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
-
         showToast("PDF downloaded successfully!", "success");
       } else {
         let token = null;
@@ -786,21 +910,20 @@ export default function Form5View({
         } catch (e) {
           console.warn("AsyncStorage not found, proceeding without token.");
         }
-
         const headers: Record<string, string> = token
           ? { Authorization: `Bearer ${token}` }
           : {};
         const fileUri = `${FileSystem.documentDirectory}Form5_Internal_Quality_Audit_Schedule_${selectedMonth}_${selectedYear}.pdf`;
-
         const downloadResult = await FileSystem.downloadAsync(pdfUrl, fileUri, {
-          headers });
-
+          headers,
+        });
         if (downloadResult.status === 200) {
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(downloadResult.uri, {
               mimeType: "application/pdf",
               dialogTitle: "Save or Share Audit Schedule",
-              UTI: "com.adobe.pdf" });
+              UTI: "com.adobe.pdf",
+            });
             showToast("PDF downloaded successfully!", "success");
           } else {
             showToast("PDF downloaded to app directory.", "success");
@@ -838,12 +961,9 @@ export default function Form5View({
       );
       return false;
     }
-
-    // ✅ Validate that a primary auditor (first team member) exists
     const parsedAuditorId = scheduleData.auditorId
       ? parseInt(String(scheduleData.auditorId), 10)
       : NaN;
-
     if (!parsedAuditorId || isNaN(parsedAuditorId)) {
       showToast(
         "Primary auditor is missing. Please select at least one team member.",
@@ -851,44 +971,31 @@ export default function Form5View({
       );
       return false;
     }
-
     setSaving(true);
     try {
       const saveData = {
         id: scheduleData.id,
         planYear: selectedYear,
-
-        // ✅ Plant info
         plantId: scheduleData.plantId || null,
         plantName: scheduleData.plantName || "",
-
         department: scheduleData.department,
         month: scheduleData.month,
         week: scheduleData.week,
-
-        // ✅ Auto-derived lead auditor (first team member)
         auditorId: parsedAuditorId,
         leadAuditorId: parsedAuditorId,
         leadAuditorName: scheduleData.leadAuditorName || "",
-
-        // ✅ Team auditors (single source of truth)
-        // Sent as coAuditorIdList / coAuditorNames to match backend createSchedule()
         coAuditorIdList: scheduleData.coAuditorIdList || [],
         coAuditorNames: scheduleData.coAuditorNames || [],
-
-        // Auditees
         auditeeIdList: scheduleData.auditeeIdList || [],
         auditeeNames: scheduleData.auditeeNames || [],
-
         status: scheduleData.status || "SCHEDULED",
-        auditElements: scheduleData.auditElements || [] };
-
+        auditElements: scheduleData.auditElements || [],
+      };
       if (editingSchedule && editingSchedule.id) {
         await auditScheduleApi.update(editingSchedule.id, saveData);
       } else {
         await auditScheduleApi.create(saveData, user?.id as string | number);
       }
-
       showToast("Schedule saved successfully!", "success");
       await fetchSchedules();
       await fetchSummary();
@@ -912,7 +1019,7 @@ export default function Form5View({
       currentStatus !== "DRAFT" &&
       currentStatus !== "REJECTED" &&
       currentStatus !== "CHANGE_REQUESTED" &&
-      currentStatus !== "FEASIBILITY_REJECTED" // ✅ ADD
+      currentStatus !== "FEASIBILITY_REJECTED"
     ) {
       showToast(
         `Cannot delete schedule when status is ${currentStatus}`,
@@ -920,7 +1027,6 @@ export default function Form5View({
       );
       return;
     }
-
     const performDelete = async () => {
       try {
         await auditScheduleApi.delete(id);
@@ -931,17 +1037,12 @@ export default function Form5View({
         showToast("Failed to delete schedule", "error");
       }
     };
-
     if (Platform.OS === "web") {
-      // ✅ DESKTOP FIX: window.confirm works in browsers and returns true/false
       const confirmed = window.confirm(
         "Are you sure you want to delete this schedule?",
       );
-      if (confirmed) {
-        await performDelete();
-      }
+      if (confirmed) await performDelete();
     } else {
-      // ✅ MOBILE: Native Alert with buttons
       Alert.alert(
         "Confirm Delete",
         "Are you sure you want to delete this schedule?",
@@ -959,7 +1060,7 @@ export default function Form5View({
       currentStatus !== "DRAFT" &&
       currentStatus !== "REJECTED" &&
       currentStatus !== "CHANGE_REQUESTED" &&
-      currentStatus !== "FEASIBILITY_REJECTED" // ✅ ADD
+      currentStatus !== "FEASIBILITY_REJECTED"
     ) {
       showToast(
         `Only draft, rejected, or feasibility-rejected plans can be saved`,
@@ -986,7 +1087,8 @@ export default function Form5View({
         auditFrequency: documentInfo.auditFrequency,
         preparedBy: preparedByName,
         preparedByName,
-        approvalStatus: "DRAFT" };
+        approvalStatus: "DRAFT",
+      };
       await auditScheduleApi.saveMonthDocument(
         saveData,
         user?.id as string | number,
@@ -1028,7 +1130,7 @@ export default function Form5View({
         auditFrequency: documentInfo.auditFrequency,
         preparedBy: preparedByName,
         preparedByName,
-        approvalStatus: "PENDING_LA_CONFIRMATION", // ✅ CORRECT
+        approvalStatus: "PENDING_LA_CONFIRMATION",
       };
       await auditScheduleApi.saveMonthDocument(
         saveData,
@@ -1041,7 +1143,8 @@ export default function Form5View({
       );
       setPlanStatus((prev) => ({
         ...prev,
-        [selectedMonth]: "PENDING_LA_CONFIRMATION" }));
+        [selectedMonth]: "PENDING_LA_CONFIRMATION",
+      }));
       showToast(
         `${monthDisplay[selectedMonth]} schedule submitted to Lead Auditor for feasibility confirmation.`,
         "success",
@@ -1077,7 +1180,7 @@ export default function Form5View({
       );
       setPlanStatus((prev) => ({ ...prev, [selectedMonth]: "APPROVED" }));
       setMonthComments({
-        approvalComments: tempApprovalComment, // ✅ Use the actual comment
+        approvalComments: tempApprovalComment,
         rejectionReason: "",
         rejectedBy: "",
         rejectedAt: null,
@@ -1085,7 +1188,8 @@ export default function Form5View({
         changeRequestedAt: null,
         laRejectionReason: "",
         laRejectedBy: "",
-        laRejectedAt: null });
+        laRejectedAt: null,
+      });
       setShowApproveModal(false);
       setTempApprovalComment("");
       showToast(
@@ -1118,15 +1222,15 @@ export default function Form5View({
       setRejectionReason(tempRejectionReason);
       setMonthComments({
         approvalComments: "",
-        rejectionReason: tempRejectionReason, // ✅ Correct
-        rejectedBy: user?.name || user?.username || "", // ✅ Set this
-        rejectedAt: new Date().toISOString(), // ✅ Set this
+        rejectionReason: tempRejectionReason,
+        rejectedBy: user?.name || user?.username || "",
+        rejectedAt: new Date().toISOString(),
         changeRequestedBy: "",
         changeRequestedAt: null,
-        // ✅ ADD
         laRejectionReason: "",
         laRejectedBy: "",
-        laRejectedAt: null });
+        laRejectedAt: null,
+      });
       setShowRejectModal(false);
       setTempRejectionReason("");
       showToast(`${monthDisplay[selectedMonth]} schedule rejected`, "error");
@@ -1146,18 +1250,15 @@ export default function Form5View({
     }
     setSubmitting(true);
     try {
-      // Note: request-changes is not yet in auditScheduleApi, so we fall back to apiClient
-      // (matching the behavior of the React web version using axios directly for this endpoint).
-      // You can add `requestChanges` to auditScheduleApi later for consistency.
       const { apiClient } = await import("@/services/api");
       await apiClient.post(
         `/api/audit-schedule/${selectedYear}/${selectedMonth}/request-changes?userId=${user?.id}`,
         { reason: changeRequestReason },
       );
-
       setPlanStatus((prev) => ({
         ...prev,
-        [selectedMonth]: "CHANGE_REQUESTED" }));
+        [selectedMonth]: "CHANGE_REQUESTED",
+      }));
       setMonthComments({
         approvalComments: "",
         rejectionReason: changeRequestReason,
@@ -1165,10 +1266,10 @@ export default function Form5View({
         rejectedAt: null,
         changeRequestedBy: user?.name || user?.username || "",
         changeRequestedAt: new Date().toISOString(),
-        // ✅ ADD
         laRejectionReason: "",
         laRejectedBy: "",
-        laRejectedAt: null });
+        laRejectedAt: null,
+      });
       showToast(
         `Change request submitted for ${monthDisplay[selectedMonth]}`,
         "warning",
@@ -1187,14 +1288,14 @@ export default function Form5View({
     }
   };
 
-  // ═════ HELPERS & BADGES ═════
+  // ═════ HELPERS & BADGES (Strictly Monochromatic) ═════
   const isMonthEditable = (month: string) => {
     const status = planStatus[month] || "DRAFT";
     return (
       status === "DRAFT" ||
       status === "REJECTED" ||
       status === "CHANGE_REQUESTED" ||
-      status === "FEASIBILITY_REJECTED" // ✅ NEW — AM can rework LA rejections
+      status === "FEASIBILITY_REJECTED"
     );
   };
 
@@ -1202,72 +1303,81 @@ export default function Form5View({
   const canEdit = isAuditManager && isMonthEditable(selectedMonth);
   const canSubmit =
     isAuditManager && isMonthEditable(selectedMonth) && hasSchedules;
-  // ✅ TM can ONLY approve when LA has confirmed feasibility
   const canApprove =
     isTopManagement && planStatus[selectedMonth] === "CONFIRMED_BY_LA";
+
   const getPlanStatusBadge = () => {
     const status = planStatus[selectedMonth] || "DRAFT";
+    // All badges use ONLY Blue or Slate shades
     const stylesMap: any = {
       APPROVED: {
-        bg: COLORS.successLight,
-        color: "#065F46",
-        border: COLORS.successBorder,
+        bg: COLORS.stateSuccessBg,
+        color: COLORS.primaryDark,
+        border: COLORS.primaryBorder,
         text: "Approved",
-        icon: CheckCircle },
-      // ✅ NEW
+        icon: CheckCircle,
+      },
       PENDING_LA_CONFIRMATION: {
-        bg: "#EFF6FF", // light blue
-        color: "#1E40AF",
-        border: "#BFDBFE",
+        bg: COLORS.primaryLight,
+        color: COLORS.primary,
+        border: COLORS.primaryBorder,
         text: "Awaiting LA",
-        icon: Clock },
-      // ✅ NEW
+        icon: Clock,
+      },
       CONFIRMED_BY_LA: {
-        bg: "#EDE9FE", // light purple
-        color: "#5B21B6",
-        border: "#DDD6FE",
+        bg: "#F0F9FF",
+        color: "#0369A1",
+        border: "#BAE6FD",
         text: "Confirmed by LA",
-        icon: CheckCircle },
-      // ✅ NEW
+        icon: CheckCircle,
+      },
       FEASIBILITY_REJECTED: {
-        bg: "#FEF2F2",
-        color: "#991B1B",
-        border: "#FECACA",
+        bg: COLORS.stateErrorBg,
+        color: COLORS.stateErrorText,
+        border: COLORS.border,
         text: "Feasibility Rejected",
-        icon: X },
+        icon: X,
+      },
       PENDING_APPROVAL: {
-        bg: COLORS.warningLight,
-        color: "#92400E",
-        border: COLORS.warningBorder,
+        bg: COLORS.stateWarningBg,
+        color: COLORS.stateWarningText,
+        border: COLORS.border,
         text: "Pending",
-        icon: Clock },
+        icon: Clock,
+      },
       REJECTED: {
-        bg: COLORS.errorLight,
-        color: "#991B1B",
-        border: COLORS.errorBorder,
+        bg: COLORS.stateErrorBg,
+        color: COLORS.stateErrorText,
+        border: COLORS.border,
         text: "Rejected",
-        icon: X },
+        icon: X,
+      },
       CHANGE_REQUESTED: {
-        bg: "#FFF7ED",
-        color: "#9A3412",
-        border: "#FED7AA",
+        bg: "#F8FAFC",
+        color: "#475569",
+        border: "#E2E8F0",
         text: "Changes Requested",
-        icon: MessageSquare } };
-
+        icon: MessageSquare,
+      },
+    };
     const s = stylesMap[status] || {
       bg: "#F1F5F9",
       color: "#475569",
       border: "#E2E8F0",
       text: "Draft",
-      icon: FileText };
+      icon: FileText,
+    };
     const Icon = s.icon;
     return (
       <View
-        className="flex-row items-center gap-1.5 rounded-full border px-3 py-1"
+        className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
         style={{ backgroundColor: s.bg, borderColor: s.border }}
       >
-        <Icon size={12} color={s.color} />
-        <Text className="text-xs font-semibold" style={{ color: s.color }}>
+        <Icon size={14} color={s.color} />
+        <Text
+          className="text-xs font-bold uppercase tracking-wide"
+          style={{ color: s.color }}
+        >
           {s.text}
         </Text>
       </View>
@@ -1277,24 +1387,29 @@ export default function Form5View({
   const getStatusBadge = (status: string) => {
     const stylesMap: any = {
       COMPLETED: {
-        bg: COLORS.successLight,
-        color: "#065F46",
-        border: COLORS.successBorder },
+        bg: COLORS.stateSuccessBg,
+        color: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
       IN_PROGRESS: {
-        bg: COLORS.accentLight,
-        color: "#1E40AF",
-        border: COLORS.accentBorder },
+        bg: COLORS.primaryLight,
+        color: COLORS.primary,
+        border: COLORS.primaryBorder,
+      },
       CANCELLED: {
-        bg: COLORS.errorLight,
-        color: "#991B1B",
-        border: COLORS.errorBorder } };
+        bg: COLORS.stateErrorBg,
+        color: COLORS.stateErrorText,
+        border: COLORS.border,
+      },
+    };
     const s = stylesMap[status] || {
-      bg: COLORS.warningLight,
-      color: "#92400E",
-      border: COLORS.warningBorder };
+      bg: COLORS.stateWarningBg,
+      color: COLORS.stateWarningText,
+      border: COLORS.border,
+    };
     return (
       <View
-        className="flex-row items-center rounded-full border px-2 py-0.5"
+        className="flex-row items-center rounded-full border px-2.5 py-1"
         style={{ backgroundColor: s.bg, borderColor: s.border }}
       >
         <Text className="text-[11px] font-semibold" style={{ color: s.color }}>
@@ -1306,292 +1421,413 @@ export default function Form5View({
 
   if (loading && !selectedMonth) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color={COLORS.accent} />
-        <Text className="mt-3 text-sm text-gray-500">Loading schedule...</Text>
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text className="mt-3 text-sm font-medium text-slate-500">
+          Loading schedule...
+        </Text>
       </View>
     );
   }
 
+  // ... (keep all the imports and existing code the same until the return statement)
+
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-slate-50">
       {/* Header */}
-      <View
-        style={{
-          width: "100%",
-          paddingHorizontal: isDesktop ? 24 : 16,
-          paddingTop: isDesktop ? 20 : 16,
-          paddingBottom: isDesktop ? 20 : 16,
-          backgroundColor: "#FFFFFF",
-          borderBottomWidth: 1,
-          borderBottomColor: "#E5E7EB" }}
-      >
-        <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
+      <View className="border-b border-slate-200 bg-white px-4 py-4">
+        <View className="w-full px-4">
           <View
-            style={{
-              flexDirection: isDesktop ? "row" : "column",
-              alignItems: isDesktop ? "center" : "stretch",
-              justifyContent: isDesktop ? "space-between" : "flex-start",
-              gap: isDesktop ? 24 : 16 }}
+            className={`${isDesktop ? "flex-row items-center justify-between" : "flex-col gap-4"}`}
           >
+            {/* LEFT: Back + Icon + Title */}
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                flexShrink: 1 }}
+              className="flex-row items-center gap-3"
+              style={
+                !isDesktop
+                  ? { width: "100%", alignSelf: "stretch" }
+                  : { flex: 1 }
+              }
             >
+              {/* Back button */}
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
-                style={{
-                  width: 40,
-                  height: 40,
-                  marginRight: 12,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center" }}
+                className="h-10 w-10 items-center justify-center rounded-xl bg-slate-100"
+                activeOpacity={0.7}
               >
-                <ArrowLeft size={20} color="#6b7280" />
-              </TouchableOpacity>
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  backgroundColor: COLORS.accentLight,
-                  borderWidth: 1,
-                  borderColor: COLORS.accentBorder,
-                  alignItems: "center",
-                  justifyContent: "center" }}
-              >
-                <Calendar size={22} color={COLORS.accent} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 20 : 18,
-                    fontWeight: "700",
-                    color: "#111827" }}
-                  numberOfLines={1}
-                >
-                  Internal Quality Audit Schedule
-                </Text>
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    color: "#6B7280",
-                    marginTop: 2 }}
-                  numberOfLines={1}
-                >
-                  Form 5 - Week-wise Audit Planning
-                </Text>
-              </View>
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-                justifyContent: isDesktop ? "flex-end" : "flex-start" }}
-            >
-              {getPlanStatusBadge()}
-              <TouchableOpacity
-                onPress={() => setShowYearModal(true)}
-                style={{
-                  height: isDesktop ? 40 : 36,
-                  paddingHorizontal: isDesktop ? 16 : 12,
-                  justifyContent: "center",
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  backgroundColor: COLORS.card }}
-              >
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    fontWeight: "500",
-                    color: "#374151" }}
-                >
-                  {isDesktop
-                    ? `${selectedYear}-${selectedYear + 1}`
-                    : `${selectedYear}-${String(selectedYear + 1).slice(-2)}`}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowMonthModal(true)}
-                style={{
-                  height: isDesktop ? 40 : 36,
-                  paddingHorizontal: isDesktop ? 16 : 12,
-                  justifyContent: "center",
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  backgroundColor: COLORS.card }}
-              >
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    fontWeight: "500",
-                    color: "#374151" }}
-                >
-                  {selectedMonth
-                    ? isDesktop
-                      ? monthDisplay[selectedMonth]
-                      : selectedMonth
-                    : "Select Month"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleRefresh}
-                style={{
-                  width: isDesktop ? 40 : 36,
-                  height: isDesktop ? 40 : 36,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 8,
-                  alignItems: "center",
-                  justifyContent: "center" }}
-              >
-                <RefreshCw size={isDesktop ? 18 : 16} color="#6b7280" />
+                <ArrowLeft size={20} color="#475569" />
               </TouchableOpacity>
 
-              {/* View PDF Button - Opens PDF Viewer */}
-              <TouchableOpacity
-                onPress={handleViewPDF}
-                disabled={!selectedMonth || downloading}
-                style={{
-                  height: isDesktop ? 40 : 36,
-                  paddingHorizontal: isDesktop ? 20 : 12,
-                  backgroundColor:
-                    !selectedMonth || downloading ? "#E5E7EB" : "#8B5CF6",
-                  borderRadius: 8,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8 }}
-              >
-                {downloading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <FileText size={isDesktop ? 18 : 16} color="#FFF" />
-                )}
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    fontWeight: "600",
-                    color: "#FFF" }}
-                >
-                  View PDF
-                </Text>
-              </TouchableOpacity>
+              {/* Calendar icon */}
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <Calendar size={20} color={COLORS.primary} />
+              </View>
 
-              {/* Download PDF Button - Direct Download */}
-              <TouchableOpacity
-                onPress={handleDownloadPDF}
-                disabled={!selectedMonth || downloading}
-                style={{
-                  height: isDesktop ? 40 : 36,
-                  paddingHorizontal: isDesktop ? 20 : 12,
-                  backgroundColor:
-                    !selectedMonth || downloading ? "#E5E7EB" : COLORS.accent,
-                  borderRadius: 8,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8 }}
-              >
-                {downloading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
+              {/* Title block — flex:1 with minWidth:0 so it can shrink and give marquee a real width */}
+              <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                {isDesktop ? (
+                  <>
+                    <Text
+                      className="text-xl font-bold text-slate-900"
+                      numberOfLines={1}
+                    >
+                      Internal Quality Audit Schedule
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-sm font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      Form 5 - Week-wise Audit Planning
+                    </Text>
+                  </>
                 ) : (
-                  <Download size={isDesktop ? 18 : 16} color="#FFF" />
+                  <>
+                    <MarqueeText text="Internal Quality Audit Schedule" />
+                    <Text
+                      className="mt-0.5 text-sm font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      Form 5 - Week-wise Audit Planning
+                    </Text>
+                  </>
                 )}
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    fontWeight: "600",
-                    color: "#FFF" }}
-                >
-                  PDF
-                </Text>
-              </TouchableOpacity>
-              <View
-                style={{
-                  flexDirection: "row",
-                  padding: 4,
-                  backgroundColor: "#F3F4F6",
-                  borderWidth: 1,
-                  borderColor: "#E5E7EB",
-                  borderRadius: 8 }}
-              >
-                <TouchableOpacity
-                  onPress={() => setViewMode("matrix")}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: isDesktop ? 16 : 12,
-                    paddingVertical: isDesktop ? 8 : 6,
-                    borderRadius: 6,
-                    backgroundColor:
-                      viewMode === "matrix" ? "#FFFFFF" : "transparent",
-                    shadowColor: viewMode === "matrix" ? "#000" : "transparent",
-                    shadowOffset:
-                      viewMode === "matrix"
-                        ? { width: 0, height: 1 }
-                        : undefined,
-                    shadowOpacity: viewMode === "matrix" ? 0.05 : 0,
-                    shadowRadius: viewMode === "matrix" ? 2 : 0,
-                    elevation: viewMode === "matrix" ? 1 : 0 }}
-                >
-                  <Grid
-                    size={isDesktop ? 16 : 14}
-                    color={viewMode === "matrix" ? "#2563EB" : "#64748B"}
-                  />
-                  <Text
-                    style={{
-                      fontSize: isDesktop ? 14 : 12,
-                      fontWeight: "600",
-                      color: viewMode === "matrix" ? "#2563EB" : "#64748B" }}
-                  >
-                    Matrix
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setViewMode("list")}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: isDesktop ? 16 : 12,
-                    paddingVertical: isDesktop ? 8 : 6,
-                    borderRadius: 6,
-                    backgroundColor:
-                      viewMode === "list" ? "#FFFFFF" : "transparent",
-                    shadowColor: viewMode === "list" ? "#000" : "transparent",
-                    shadowOffset:
-                      viewMode === "list" ? { width: 0, height: 1 } : undefined,
-                    shadowOpacity: viewMode === "list" ? 0.05 : 0,
-                    shadowRadius: viewMode === "list" ? 2 : 0,
-                    elevation: viewMode === "list" ? 1 : 0 }}
-                >
-                  <List
-                    size={isDesktop ? 16 : 14}
-                    color={viewMode === "list" ? "#2563EB" : "#64748B"}
-                  />
-                  <Text
-                    style={{
-                      fontSize: isDesktop ? 14 : 12,
-                      fontWeight: "600",
-                      color: viewMode === "list" ? "#2563EB" : "#64748B" }}
-                  >
-                    List
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
+
+            {/* RIGHT: Desktop toolbar / Mobile badge + menu */}
+            {isDesktop ? (
+              <View className="flex-row flex-wrap items-center gap-3">
+                {/* 1. Plan Status Badge */}
+                <View className="flex-row items-center gap-2">
+                  {getPlanStatusBadge()}
+                </View>
+
+                {/* 2. Year Selector (Dropdown style for Desktop) */}
+                <TouchableOpacity
+                  onPress={() => setShowYearModal(true)}
+                  className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  activeOpacity={0.7}
+                >
+                  <Calendar size={16} color="#64748B" />
+                  <Text className="text-sm font-semibold text-slate-700">
+                    {selectedYear}-{selectedYear + 1}
+                  </Text>
+                  <ChevronDown size={14} color="#94A3B8" />
+                </TouchableOpacity>
+
+                {/* 3. Month Selector (Dropdown style for Desktop) */}
+                <TouchableOpacity
+                  onPress={() => setShowMonthModal(true)}
+                  className="flex-row items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                  activeOpacity={0.7}
+                >
+                  <Calendar size={16} color="#64748B" />
+                  <Text className="text-sm font-semibold text-slate-700">
+                    {monthDisplay[selectedMonth] || "Select Month"}
+                  </Text>
+                  <ChevronDown size={14} color="#94A3B8" />
+                </TouchableOpacity>
+
+                {/* 4. View Mode Toggle (Matrix / List) */}
+                <View className="flex-row items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <TouchableOpacity
+                    onPress={() => setViewMode("matrix")}
+                    className={`flex-row items-center gap-1.5 rounded-md px-3 py-1.5 ${
+                      viewMode === "matrix" ? "bg-white shadow-sm" : ""
+                    }`}
+                    activeOpacity={0.7}
+                  >
+                    <Grid
+                      size={14}
+                      color={viewMode === "matrix" ? COLORS.primary : "#64748B"}
+                    />
+                    <Text
+                      className={`text-xs font-semibold ${
+                        viewMode === "matrix"
+                          ? "text-blue-600"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      Matrix
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setViewMode("list")}
+                    className={`flex-row items-center gap-1.5 rounded-md px-3 py-1.5 ${
+                      viewMode === "list" ? "bg-white shadow-sm" : ""
+                    }`}
+                    activeOpacity={0.7}
+                  >
+                    <List
+                      size={14}
+                      color={viewMode === "list" ? COLORS.primary : "#64748B"}
+                    />
+                    <Text
+                      className={`text-xs font-semibold ${
+                        viewMode === "list" ? "text-blue-600" : "text-slate-500"
+                      }`}
+                    >
+                      List
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 5. Action Buttons (View PDF, Download, Refresh) */}
+                <View className="flex-row items-center gap-2 border-l border-slate-200 pl-3">
+                  {/* View PDF */}
+                  <TouchableOpacity
+                    onPress={handleViewPDF}
+                    disabled={!selectedMonth || downloading}
+                    className="rounded-lg bg-slate-100 p-2.5"
+                    activeOpacity={0.7}
+                    style={{ opacity: !selectedMonth || downloading ? 0.5 : 1 }}
+                  >
+                    {downloading ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : (
+                      <FileText size={16} color="#475569" />
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Download PDF */}
+                  <TouchableOpacity
+                    onPress={handleDownloadPDF}
+                    disabled={!selectedMonth || downloading}
+                    className="rounded-lg bg-slate-100 p-2.5"
+                    activeOpacity={0.7}
+                    style={{ opacity: !selectedMonth || downloading ? 0.5 : 1 }}
+                  >
+                    <Download size={16} color="#475569" />
+                  </TouchableOpacity>
+
+                  {/* Refresh */}
+                  <TouchableOpacity
+                    onPress={handleRefresh}
+                    className="rounded-lg bg-slate-100 p-2.5"
+                    activeOpacity={0.7}
+                  >
+                    <RefreshCw size={16} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View className="flex-row items-center justify-between gap-3">
+                {getPlanStatusBadge()}
+                <View style={{ zIndex: 1000 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowMobileMenu(!showMobileMenu)}
+                    className="h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white"
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={20} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </View>
+
+      {/* ✅ Dropdown Menu - Rendered at root level for Form5View */}
+      {showMobileMenu && !isDesktop && (
+        <View
+          style={{
+            position: "absolute",
+            top: 70,
+            right: 16,
+            width: 280,
+            zIndex: 9999,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.15,
+            shadowRadius: 15,
+            elevation: 10,
+            overflow: "hidden",
+          }}
+        >
+          {/* Year Selection */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowMobileMenu(false);
+              setShowYearModal(true);
+            }}
+            className="flex-row items-center justify-between px-4 py-3.5"
+            style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <Calendar size={18} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text className="text-sm font-semibold text-slate-900">
+                  {selectedYear}-{selectedYear + 1}
+                </Text>
+                <Text className="text-[11px] text-slate-500">Change Year</Text>
+              </View>
+            </View>
+            <ArrowRight size={16} color="#94A3B8" />
+          </TouchableOpacity>
+
+          {/* Month Selection */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowMobileMenu(false);
+              setShowMonthModal(true);
+            }}
+            className="flex-row items-center justify-between px-4 py-3.5"
+            style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <Calendar size={18} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text className="text-sm font-semibold text-slate-900">
+                  {monthDisplay[selectedMonth] || "Select Month"}
+                </Text>
+                <Text className="text-[11px] text-slate-500">Change Month</Text>
+              </View>
+            </View>
+            <ArrowRight size={16} color="#94A3B8" />
+          </TouchableOpacity>
+
+          {/* View PDF */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowMobileMenu(false);
+              handleViewPDF();
+            }}
+            disabled={!selectedMonth || downloading}
+            className="flex-row items-center gap-3 px-4 py-3.5"
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: "#F1F5F9",
+              opacity: !selectedMonth || downloading ? 0.5 : 1,
+            }}
+            activeOpacity={0.7}
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+              <FileText size={18} color={COLORS.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-slate-900">View</Text>
+              {downloading && (
+                <Text className="text-[11px] text-slate-500">Loading...</Text>
+              )}
+            </View>
+            {downloading && (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            )}
+          </TouchableOpacity>
+
+          {/* Download PDF */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowMobileMenu(false);
+              handleDownloadPDF();
+            }}
+            disabled={!selectedMonth || downloading}
+            className="flex-row items-center gap-3 px-4 py-3.5"
+            style={{ opacity: !selectedMonth || downloading ? 0.5 : 1 }}
+            activeOpacity={0.7}
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+              <Download size={18} color={COLORS.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-slate-900">
+                Download PDF
+              </Text>
+              {downloading && (
+                <Text className="text-[11px] text-slate-500">
+                  Downloading...
+                </Text>
+              )}
+            </View>
+            {downloading && (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            )}
+          </TouchableOpacity>
+          {/* Refresh */}
+          <TouchableOpacity
+            onPress={() => {
+              setShowMobileMenu(false);
+              handleRefresh();
+            }}
+            className="flex-row items-center gap-3 px-4 py-3.5"
+            style={{ borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}
+            activeOpacity={0.7}
+          >
+            <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+              <RefreshCw size={18} color="#475569" />
+            </View>
+            <Text className="text-sm font-semibold text-slate-900">
+              Refresh Data
+            </Text>
+          </TouchableOpacity>
+
+          {/* View Mode Toggle */}
+          <View className="border-t border-slate-100 p-3">
+            <Text className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-slate-400">
+              View Mode
+            </Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                onPress={() => {
+                  setViewMode("matrix");
+                  setShowMobileMenu(false);
+                }}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg border px-3 py-2.5 ${viewMode === "matrix" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white"}`}
+                activeOpacity={0.7}
+              >
+                <Grid
+                  size={16}
+                  color={viewMode === "matrix" ? COLORS.primary : "#64748B"}
+                />
+                <Text
+                  className={`text-xs font-semibold ${viewMode === "matrix" ? "text-blue-600" : "text-slate-600"}`}
+                >
+                  Matrix
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setViewMode("list");
+                  setShowMobileMenu(false);
+                }}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-lg border px-3 py-2.5 ${viewMode === "list" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white"}`}
+                activeOpacity={0.7}
+              >
+                <List
+                  size={16}
+                  color={viewMode === "list" ? COLORS.primary : "#64748B"}
+                />
+                <Text
+                  className={`text-xs font-semibold ${viewMode === "list" ? "text-blue-600" : "text-slate-600"}`}
+                >
+                  List
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ✅ Invisible overlay to close dropdown when tapping outside */}
+      {showMobileMenu && !isDesktop && (
+        <TouchableOpacity
+          className="absolute inset-0 z-50"
+          activeOpacity={1}
+          onPress={() => setShowMobileMenu(false)}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+      )}
 
       {/* Scrollable Content */}
       <ScrollView
@@ -1602,7 +1838,8 @@ export default function Form5View({
                 maxWidth: 1400,
                 alignSelf: "center",
                 width: "100%",
-                padding: 24 }
+                padding: 24,
+              }
             : { padding: 16 }
         }
         showsVerticalScrollIndicator={false}
@@ -1624,8 +1861,6 @@ export default function Form5View({
             message="Waiting for Top Management review. No changes allowed."
           />
         )}
-
-        {/* ✅ NEW: Awaiting LA confirmation */}
         {selectedMonth &&
           planStatus[selectedMonth] === "PENDING_LA_CONFIRMATION" && (
             <AlertBanner
@@ -1635,8 +1870,6 @@ export default function Form5View({
               message="This schedule has been submitted to the Lead Auditor for feasibility review. You'll be notified once confirmed."
             />
           )}
-
-        {/* ✅ NEW: Confirmed by LA — waiting for TM approval */}
         {selectedMonth && planStatus[selectedMonth] === "CONFIRMED_BY_LA" && (
           <AlertBanner
             type="info"
@@ -1645,8 +1878,6 @@ export default function Form5View({
             message="Feasibility confirmed. The schedule has been forwarded to Top Management for final approval."
           />
         )}
-
-        {/* ✅ NEW: LA rejected feasibility */}
         {selectedMonth &&
           planStatus[selectedMonth] === "FEASIBILITY_REJECTED" && (
             <AlertBanner
@@ -1664,7 +1895,6 @@ export default function Form5View({
               }
             />
           )}
-
         {selectedMonth &&
           planStatus[selectedMonth] === "APPROVED" &&
           monthComments.approvalComments && (
@@ -1698,75 +1928,6 @@ export default function Form5View({
             />
           )}
 
-        {/* Departments Info */}
-        {availableDepartments.length > 0 && (
-          <Card className="p-6">
-            <View className="mb-4 flex-row items-center gap-2">
-              <Text className="text-sm font-bold text-gray-900">
-                Departments for {monthDisplay[selectedMonth]}
-              </Text>
-            </View>
-            <View className="flex-row flex-wrap gap-2">
-              {availableDepartments.map((dept: any) => {
-                const hasSchedule = schedules.some(
-                  (s) => s.department === dept.department,
-                );
-                const scheduleCount = schedules.filter(
-                  (s) => s.department === dept.department,
-                ).length;
-                const completedCount = schedules.filter(
-                  (s) =>
-                    s.department === dept.department &&
-                    s.status === "COMPLETED",
-                ).length;
-                return (
-                  <View
-                    key={dept.department}
-                    className={`flex-row items-center gap-2 rounded-full border px-3 py-1.5 ${hasSchedule ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}
-                  >
-                    <Text
-                      className={`text-xs font-medium ${hasSchedule ? "text-green-800" : "text-gray-700"}`}
-                    >
-                      {dept.department}
-                    </Text>
-                    {hasSchedule ? (
-                      <CheckCircle size={14} color="#10B981" />
-                    ) : canEdit ? (
-                      <TouchableOpacity
-                        onPress={() => {
-                          setEditingSchedule(null);
-                          setFormData({
-                            plantId: user?.plantId || "",
-                            plantName: user?.plantName || "",
-                            department: dept.department,
-                            month: selectedMonth,
-                            week: "",
-                            auditElements: dept.auditElements || [],
-                            auditorId: "",
-                            auditeeId: "",
-                            status: "SCHEDULED" });
-                          setShowForm(true);
-                        }}
-                      >
-                        <Plus size={14} color="#2563EB" />
-                      </TouchableOpacity>
-                    ) : (
-                      <Clock size={14} color="#64748B" />
-                    )}
-                    {scheduleCount > 0 && (
-                      <Text
-                        className={`text-[10px] font-bold ${completedCount === scheduleCount ? "text-green-600" : "text-gray-500"}`}
-                      >
-                        {completedCount}/{scheduleCount}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          </Card>
-        )}
-
         {/* Main Table / List View */}
         <Card className="overflow-hidden">
           {viewMode === "matrix" ? (
@@ -1796,15 +1957,16 @@ export default function Form5View({
                 if (existingSchedule) {
                   setEditingSchedule(existingSchedule);
                   setFormData({
-                    plantId: existingSchedule.plantId || "", // ✅ NEW
-                    plantName: existingSchedule.plantName || "", // ✅ NEW
+                    plantId: existingSchedule.plantId || "",
+                    plantName: existingSchedule.plantName || "",
                     department: existingSchedule.department,
                     month: existingSchedule.month,
                     week: existingSchedule.week,
                     auditElements: existingSchedule.auditElements || [],
                     auditorId: existingSchedule.auditorId?.toString() || "",
                     auditeeId: existingSchedule.auditeeId?.toString() || "",
-                    status: existingSchedule.status || "SCHEDULED" });
+                    status: existingSchedule.status || "SCHEDULED",
+                  });
                 } else {
                   setEditingSchedule(null);
                   setFormData({
@@ -1816,7 +1978,8 @@ export default function Form5View({
                     auditElements: deptData?.auditElements || [],
                     auditorId: "",
                     auditeeId: "",
-                    status: "SCHEDULED" });
+                    status: "SCHEDULED",
+                  });
                 }
                 setShowForm(true);
               }}
@@ -1828,7 +1991,9 @@ export default function Form5View({
             <View className="p-6">
               {canEdit && availableDepartments.length > 0 && (
                 <View className="mb-5 flex-row justify-end">
-                  <ActionButton
+                  <OutlineButton
+                    title="Add"
+                    icon={Plus}
                     onPress={() => {
                       setEditingSchedule(null);
                       setFormData({
@@ -1840,15 +2005,11 @@ export default function Form5View({
                         auditElements: [],
                         auditorId: "",
                         auditeeId: "",
-                        status: "SCHEDULED" });
+                        status: "SCHEDULED",
+                      });
                       setShowForm(true);
                     }}
-                    color="#FFF"
-                    bgColor={COLORS.accent}
-                    icon={Plus}
-                  >
-                    Add Schedule
-                  </ActionButton>
+                  />
                 </View>
               )}
               <ScheduleListView
@@ -1857,16 +2018,16 @@ export default function Form5View({
                 onEdit={(schedule: any) => {
                   setEditingSchedule(schedule);
                   setFormData({
-                    plantId: schedule.plantId || "", // ✅ NEW
-                    plantName: schedule.plantName || "", // ✅ NEW
+                    plantId: schedule.plantId || "",
+                    plantName: schedule.plantName || "",
                     department: schedule.department,
                     month: schedule.month,
                     week: schedule.week,
                     auditElements: schedule.auditElements || [],
                     auditorId: schedule.auditorId?.toString() || "",
                     auditeeId: schedule.auditeeId?.toString() || "",
-                    status: schedule.status || "SCHEDULED" });
-
+                    status: schedule.status || "SCHEDULED",
+                  });
                   setShowForm(true);
                 }}
                 onDelete={handleDeleteSchedule}
@@ -1900,76 +2061,33 @@ export default function Form5View({
           />
         </Card>
 
-        {/* ✅ NEW: Resubmit button for AM when plan was rejected */}
+        {/* Resubmit button for AM when plan was rejected */}
         {isAuditManager &&
           (planStatus[selectedMonth] === "FEASIBILITY_REJECTED" ||
             planStatus[selectedMonth] === "CHANGE_REQUESTED" ||
             planStatus[selectedMonth] === "REJECTED") &&
           hasSchedules && (
             <View className="mb-6 flex-row justify-end">
-              <ActionButton
+              <OutlineButton
+                title="Resubmit"
+                icon={RefreshCw}
                 onPress={handleSubmitForApproval}
                 disabled={submitting}
                 loading={submitting}
-                color="#FFF"
-                bgColor={COLORS.accent}
-                icon={RefreshCw}
-              >
-                Resubmit to Lead Auditor
-              </ActionButton>
+              />
             </View>
           )}
 
         {/* Request Changes Button */}
         {isTopManagement && planStatus[selectedMonth] === "APPROVED" && (
           <View className="mb-6 flex-row justify-end">
-            <ActionButton
-              onPress={() => setShowChangeRequestModal(true)}
-              color="#FFF"
-              bgColor={COLORS.warning}
+            <OutlineButton
+              title="Request Changes"
               icon={MessageSquare}
-            >
-              Request Changes
-            </ActionButton>
+              onPress={() => setShowChangeRequestModal(true)}
+            />
           </View>
         )}
-
-        {/* Legend & Criteria */}
-        <Card className="p-6">
-          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-900">
-            Legend & Criteria
-          </Text>
-          <View className="mb-4 flex-row flex-wrap gap-6">
-            <View className="flex-row items-center gap-2">
-              <View className="h-3 w-3 rounded-full bg-blue-500"></View>
-              <Text className="text-xs text-gray-500">P - Planned</Text>
-            </View>
-            <View className="flex-row items-center gap-2">
-              <View className="h-3 w-3 rounded-full bg-green-500"></View>
-              <Text className="text-xs text-gray-500">C - Completed</Text>
-            </View>
-            <View className="flex-row items-center gap-2">
-              <View className="h-3 w-3 rounded-full bg-gray-300"></View>
-              <Text className="text-xs text-gray-500">— - Not Planned</Text>
-            </View>
-          </View>
-          <View className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-            <Text className="text-xs leading-5 text-gray-600">
-              <Text className="font-bold text-gray-800">Audit Criteria:</Text>{" "}
-              ISO9001:2015 IATF16949 Standard, QMS Manual, QMS Procedures, WI,
-              etc.
-            </Text>
-            <Text className="mt-1 text-xs leading-5 text-gray-600">
-              <Text className="font-bold text-gray-800">Audit Scope:</Text>{" "}
-              Applicable process within department/function and clause No. 4, 5,
-              6, 7, 8, 9 & 10
-            </Text>
-            <Text className="mt-1 text-xs leading-5 text-gray-600">
-              <Text className="font-bold text-gray-800">Audit Method:</Text>{" "}
-              Interview with Auditee, Observation and verification
-            </Text>
-          </View>
-        </Card>
       </ScrollView>
 
       {/* Modals */}
@@ -1982,15 +2100,14 @@ export default function Form5View({
         title={`Approve ${monthDisplay[selectedMonth]} Schedule`}
         description="Please provide approval comments:"
         icon={Check}
-        iconColor={COLORS.success}
-        iconBg={COLORS.successLight}
-        iconBorder={COLORS.successBorder}
+        iconColor={COLORS.primary}
+        iconBg={COLORS.stateSuccessBg}
         value={tempApprovalComment}
         setValue={setTempApprovalComment}
         placeholder="Enter approval comments..."
         onSubmit={handleApprove}
         submitLabel="Confirm Approve"
-        submitBg={COLORS.success}
+        submitBg={COLORS.primary}
         submitting={submitting}
       />
       <ActionModal
@@ -2002,15 +2119,14 @@ export default function Form5View({
         title={`Reject ${monthDisplay[selectedMonth]} Schedule`}
         description="Please provide a reason for rejection:"
         icon={X}
-        iconColor={COLORS.error}
-        iconBg={COLORS.errorLight}
-        iconBorder={COLORS.errorBorder}
+        iconColor={COLORS.stateErrorText}
+        iconBg={COLORS.stateErrorBg}
         value={tempRejectionReason}
         setValue={setTempRejectionReason}
         placeholder="Enter rejection reason..."
         onSubmit={handleReject}
         submitLabel="Confirm Reject"
-        submitBg={COLORS.error}
+        submitBg={COLORS.stateErrorText}
         submitting={submitting}
       />
       <ActionModal
@@ -2022,15 +2138,14 @@ export default function Form5View({
         title={`Request Changes - ${monthDisplay[selectedMonth]}`}
         description="Please provide details about what changes are needed:"
         icon={MessageSquare}
-        iconColor={COLORS.warning}
-        iconBg={COLORS.warningLight}
-        iconBorder={COLORS.warningBorder}
+        iconColor={COLORS.stateWarningText}
+        iconBg={COLORS.stateWarningBg}
         value={changeRequestReason}
         setValue={setChangeRequestReason}
         placeholder="Describe the changes required..."
         onSubmit={handleRequestChanges}
         submitLabel="Submit Request"
-        submitBg={COLORS.warning}
+        submitBg={COLORS.stateWarningText}
         submitting={submitting}
       />
 
@@ -2069,20 +2184,30 @@ export default function Form5View({
         onRequestClose={() => setShowYearModal(false)}
       >
         <TouchableOpacity
-          className="flex-1 items-center justify-center bg-black/30 p-5"
+          className="flex-1 items-center justify-center bg-slate-900/30 p-6"
           activeOpacity={1}
           onPress={() => setShowYearModal(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-2xl bg-white"
+            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-3xl bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.05,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
           >
-            <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
-              <Text className="text-lg font-bold text-gray-900">
+            <View className="flex-row items-center justify-between border-b border-slate-100 p-6">
+              <Text className="text-lg font-bold text-slate-900">
                 Select Year
               </Text>
-              <TouchableOpacity onPress={() => setShowYearModal(false)}>
-                <X size={20} color="#64748B" />
+              <TouchableOpacity
+                onPress={() => setShowYearModal(false)}
+                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+              >
+                <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
             <ScrollView className="p-4">
@@ -2093,14 +2218,17 @@ export default function Form5View({
                     setSelectedYear(year);
                     setShowYearModal(false);
                   }}
-                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedYear === year ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedYear === year ? "border-blue-500 bg-blue-50" : "border-slate-100 bg-white"}`}
+                  activeOpacity={0.7}
                 >
                   <Text
-                    className={`text-sm font-medium ${selectedYear === year ? "font-bold text-blue-600" : "text-gray-800"}`}
+                    className={`text-sm font-semibold ${selectedYear === year ? "font-bold text-blue-700" : "text-slate-700"}`}
                   >
                     {year} - {year + 1}
                   </Text>
-                  {selectedYear === year && <Check size={16} color="#2563EB" />}
+                  {selectedYear === year && (
+                    <Check size={18} color={COLORS.primary} />
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -2116,20 +2244,30 @@ export default function Form5View({
         onRequestClose={() => setShowMonthModal(false)}
       >
         <TouchableOpacity
-          className="flex-1 items-center justify-center bg-black/30 p-5"
+          className="flex-1 items-center justify-center bg-slate-900/30 p-6"
           activeOpacity={1}
           onPress={() => setShowMonthModal(false)}
         >
           <TouchableOpacity
             activeOpacity={1}
-            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-2xl bg-white"
+            className="max-h-[80%] w-full max-w-md overflow-hidden rounded-3xl bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.05,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
           >
-            <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
-              <Text className="text-lg font-bold text-gray-900">
+            <View className="flex-row items-center justify-between border-b border-slate-100 p-6">
+              <Text className="text-lg font-bold text-slate-900">
                 Select Month
               </Text>
-              <TouchableOpacity onPress={() => setShowMonthModal(false)}>
-                <X size={20} color="#64748B" />
+              <TouchableOpacity
+                onPress={() => setShowMonthModal(false)}
+                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+              >
+                <X size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
             <ScrollView className="p-4">
@@ -2140,17 +2278,18 @@ export default function Form5View({
                     setSelectedMonth(month.month);
                     setShowMonthModal(false);
                   }}
-                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedMonth === month.month ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                  className={`mb-2 flex-row items-center justify-between rounded-xl border p-4 ${selectedMonth === month.month ? "border-blue-500 bg-blue-50" : "border-slate-100 bg-white"}`}
                   disabled={!month.hasPlannedAudits}
+                  activeOpacity={0.7}
                 >
                   <Text
-                    className={`text-sm font-medium ${selectedMonth === month.month ? "font-bold text-blue-600" : "text-gray-800"}`}
+                    className={`text-sm font-semibold ${selectedMonth === month.month ? "font-bold text-blue-700" : "text-slate-700"}`}
                   >
                     {monthDisplay[month.month]}{" "}
                     {!month.hasPlannedAudits && "(No plan)"}
                   </Text>
                   {selectedMonth === month.month && (
-                    <Check size={16} color="#2563EB" />
+                    <Check size={18} color={COLORS.primary} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -2159,7 +2298,7 @@ export default function Form5View({
         </TouchableOpacity>
       </Modal>
 
-      {/* ✅ PDF Viewer with Sharing */}
+      {/* PDF Viewer with Sharing */}
       <PDFViewer
         visible={pdfViewer.visible}
         pdfData={pdfViewer.pdfData}
@@ -2167,16 +2306,18 @@ export default function Form5View({
         auditId={String(selectedYear)}
         auditNumber={`Form5-${selectedYear}`}
         pdfType="form5"
-        selectedMonth={selectedMonth} // ← NEW PROP
+        selectedMonth={selectedMonth}
         forumGroups={[
           {
             id: `AUDIT-${selectedYear}`,
             name: `📋 Audit Review ${selectedYear}`,
-            type: "Audit" },
+            type: "Audit",
+          },
           {
             id: "AUDIT-general-forum",
             name: "📢 General Discussion",
-            type: "General" },
+            type: "General",
+          },
         ]}
         onClose={() =>
           setPDFViewer({ visible: false, pdfData: "", fileName: "" })
@@ -2184,14 +2325,9 @@ export default function Form5View({
         onShareComplete={(forumId?: string) => {
           showToast("PDF shared to forum successfully!", "success");
           setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-          // Navigate to forum if needed
-          if (forumId) {
-            // You can add navigation logic here if needed
-            // For Form5, you might want to navigate to forum or just close
-          }
         }}
         currentUser={user}
-        allUsers={allUsers} // ✅ PASS allUsers from props to PDFViewer
+        allUsers={allUsers}
       />
     </View>
   );

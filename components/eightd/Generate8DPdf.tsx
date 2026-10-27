@@ -3,8 +3,89 @@ import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { Download, FileText } from "lucide-react-native";
 import React, { useState } from "react";
-import { Alert, Platform, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+// ─────────────────────────────────────────────────────────────
+// REUSABLE OUTLINE BUTTON (Matches other views)
+// ─────────────────────────────────────────────────────────────
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  border: "#E2E8F0",
+  textValue: "#334155",
+  textMuted: "#64748B",
+};
+
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? COLORS.primary : COLORS.border;
+  const textColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textValue;
+  const iconColor = isHoveredAndEnabled ? COLORS.primary : COLORS.textMuted;
+  const backgroundColor = isHoveredAndEnabled ? COLORS.primaryLight : "#FFFFFF";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5 shadow-sm"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text
+        className="text-sm font-semibold"
+        style={{
+          color: textColor,
+          fontFamily: Platform.OS === "ios" ? "System" : "sans-serif",
+        }}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 export interface Generate8DPdfProps {
   title?: string;
@@ -155,48 +236,22 @@ export default function Generate8DPdf({
       {/* Button Container */}
       <View className="flex-row items-center gap-3">
         {/* Download PDF Button */}
-        <Pressable
+        <OutlineButton
+          title={generating ? "Generating PDF..." : "Download PDF"}
+          icon={Download}
           onPress={generatePdf}
           disabled={generating || !eventId}
-          className="flex flex-row items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow active:bg-indigo-700 disabled:opacity-50"
-        >
-          <View className="flex-row items-center gap-2">
-            {generating ? (
-              <View className="flex-row items-center gap-2">
-                <View className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <Text className="font-medium text-white">
-                  Generating PDF...
-                </Text>
-              </View>
-            ) : (
-              <View className="flex-row items-center gap-2">
-                <Text className="text-lg text-white">📥</Text>
-                <Text className="font-medium text-white">Download PDF</Text>
-              </View>
-            )}
-          </View>
-        </Pressable>
+          loading={generating}
+        />
 
         {/* View PDF Button */}
-        <Pressable
+        <OutlineButton
+          title={generating ? "Loading..." : "View PDF"}
+          icon={FileText}
           onPress={handleViewPDF}
           disabled={generating || !eventId}
-          className="flex flex-row items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 shadow active:bg-purple-700 disabled:opacity-50"
-        >
-          <View className="flex-row items-center gap-2">
-            {generating ? (
-              <View className="flex-row items-center gap-2">
-                <View className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <Text className="font-medium text-white">Loading...</Text>
-              </View>
-            ) : (
-              <View className="flex-row items-center gap-2">
-                <Text className="text-lg text-white">📄</Text>
-                <Text className="font-medium text-white">View PDF</Text>
-              </View>
-            )}
-          </View>
-        </Pressable>
+          loading={generating}
+        />
       </View>
 
       {/* PDF Viewer Modal */}

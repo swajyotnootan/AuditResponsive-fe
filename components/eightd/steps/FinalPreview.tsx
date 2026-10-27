@@ -14,6 +14,7 @@ import {
   Eye,
   File,
   FileText,
+  Image as ImageIcon,
   Lightbulb,
   Mail,
   Plus,
@@ -94,6 +95,103 @@ interface TooltipProps {
   content: string;
   children: ReactNode;
 }
+
+// ─────────────────────────────────────────────────────────────
+// REUSABLE OUTLINE BUTTON (Added for consistent UI)
+// ─────────────────────────────────────────────────────────────
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  border: "#E2E8F0",
+  textValue: "#334155",
+  textMuted: "#64748B",
+};
+
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+  variant = "light", // 'light' for normal views, 'dark' for modals
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const isDark = variant === "dark";
+
+  const borderColor = isHoveredAndEnabled
+    ? COLORS.primary
+    : isDark
+      ? "rgba(255,255,255,0.3)"
+      : COLORS.border;
+  const textColor = isHoveredAndEnabled
+    ? COLORS.primary
+    : isDark
+      ? "#FFFFFF"
+      : COLORS.textValue;
+  const iconColor = isHoveredAndEnabled
+    ? COLORS.primary
+    : isDark
+      ? "#FFFFFF"
+      : COLORS.textMuted;
+  const backgroundColor = isHoveredAndEnabled
+    ? isDark
+      ? "rgba(37,99,235,0.2)"
+      : COLORS.primaryLight
+    : isDark
+      ? "transparent"
+      : "#FFFFFF";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5 shadow-sm"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator
+          size="small"
+          color={isDark ? "#FFF" : COLORS.primary}
+        />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text
+        className="text-sm font-semibold"
+        style={{
+          color: textColor,
+          fontFamily: Platform.OS === "ios" ? "System" : "sans-serif",
+        }}
+      >
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 // ============================================================================
 // CUSTOM TOOLTIP COMPONENT
@@ -261,6 +359,9 @@ export default function FinalPreview({
   const [approvalComment, setApprovalComment] = useState<string>("");
   const [memberError, setMemberError] = useState<string | null>(null);
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null);
+
+  // State to track broken images
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (memberError || memberSuccess) {
@@ -998,17 +1099,20 @@ export default function FinalPreview({
                                 )}
                               </View>
                               <View className="flex-row flex-wrap gap-2">
-                                <TouchableOpacity
+                                <OutlineButton
+                                  title="Add Member"
+                                  icon={Plus}
                                   onPress={addNewMemberField}
-                                  className="flex-row items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 active:bg-blue-700"
-                                >
-                                  <Plus size={16} color="white" />
-                                  <Text className="text-sm text-white">
-                                    Add Member
-                                  </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
+                                />
+                                <OutlineButton
+                                  title={
+                                    updatingMembers
+                                      ? "Saving..."
+                                      : "Save Changes"
+                                  }
+                                  icon={Save}
                                   onPress={saveTeamMembers}
+                                  loading={updatingMembers}
                                   disabled={
                                     updatingMembers ||
                                     tempTeamMembers.some(
@@ -1017,32 +1121,13 @@ export default function FinalPreview({
                                         !isValidEmail(member.email),
                                     )
                                   }
-                                  className={`flex-row items-center gap-2 rounded-lg px-4 py-2 ${updatingMembers || tempTeamMembers.some((member) => !member.email || !isValidEmail(member.email)) ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
-                                >
-                                  {updatingMembers ? (
-                                    <ActivityIndicator
-                                      size="small"
-                                      color="white"
-                                    />
-                                  ) : (
-                                    <Save size={16} color="white" />
-                                  )}
-                                  <Text className="text-sm text-white">
-                                    {updatingMembers
-                                      ? "Saving..."
-                                      : "Save Changes"}
-                                  </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
+                                />
+                                <OutlineButton
+                                  title="Cancel"
+                                  icon={X}
                                   onPress={cancelEditingMembers}
                                   disabled={updatingMembers}
-                                  className="flex-row items-center gap-2 rounded-lg bg-gray-600 px-4 py-2 active:bg-gray-700"
-                                >
-                                  <X size={16} color="white" />
-                                  <Text className="text-sm text-white">
-                                    Cancel
-                                  </Text>
-                                </TouchableOpacity>
+                                />
                               </View>
                               <View className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                                 <Text className="text-xs text-blue-800">
@@ -1168,15 +1253,11 @@ export default function FinalPreview({
                               )}
                               {(isHOD || checkIsInitiator) && (
                                 <View className="border-t border-gray-200 pt-3">
-                                  <TouchableOpacity
+                                  <OutlineButton
+                                    title="Manage Team Members"
+                                    icon={Edit3}
                                     onPress={startEditingTeamMembers}
-                                    className="flex-row items-center gap-2 self-start rounded-lg bg-blue-500 px-4 py-2 active:bg-blue-600"
-                                  >
-                                    <Edit3 size={16} color="white" />
-                                    <Text className="text-sm text-white">
-                                      Manage Team Members
-                                    </Text>
-                                  </TouchableOpacity>
+                                  />
                                 </View>
                               )}
                             </View>
@@ -1197,54 +1278,96 @@ export default function FinalPreview({
                     );
                   })}
                 </View>
+
+                {/* ───────────────────────────────────────────────────────────── */}
+                {/* ATTACHMENTS SECTION (FIXED WITH AUTH HEADERS) */}
+                {/* ───────────────────────────────────────────────────────────── */}
                 {stepFiles.length > 0 && (
                   <View className="mt-4">
-                    <View className="mb-2 flex-row items-center gap-1">
+                    <View className="mb-3 flex-row items-center gap-2">
                       <Camera size={16} color="#374151" />
                       <Text className="font-semibold text-gray-800">
                         Attachments ({stepFiles.length})
                       </Text>
                     </View>
-                    <View className="mt-2 flex-row flex-wrap justify-between">
-                      {stepFiles.map((file) => (
-                        <TouchableOpacity
-                          key={file.id}
-                          className="mb-3 w-[48%] overflow-hidden rounded-lg border border-gray-200 bg-white"
-                          activeOpacity={0.8}
-                          onPress={() =>
-                            handleFileClick(
-                              file.id,
-                              file.mimeType,
-                              file.fileName,
-                            )
-                          }
-                        >
-                          {file.fileType === "IMAGE" ? (
-                            <Image
-                              source={{ uri: getEightDFileUrl(file.id) }}
-                              style={{ width: "100%", height: 96 }}
-                              className="h-24 w-full"
-                              resizeMode="cover"
-                            />
-                          ) : file.mimeType === "application/pdf" ? (
-                            <View className="h-20 items-center justify-center bg-red-100 sm:h-24">
-                              <File size={32} color="#DC2626" />
+                    <View className="mt-2 flex-row flex-wrap gap-3">
+                      {stepFiles.map((file) => {
+                        const isImage = file.fileType === "IMAGE";
+                        const isBroken = brokenImages[file.id];
+
+                        // Retrieve token to pass to the Image component
+                        const token =
+                          typeof window !== "undefined"
+                            ? localStorage.getItem("token")
+                            : null;
+
+                        return (
+                          <TouchableOpacity
+                            key={file.id}
+                            className="w-[48%] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm sm:w-[31%] md:w-[23%]"
+                            activeOpacity={0.8}
+                            onPress={() =>
+                              handleFileClick(
+                                file.id,
+                                file.mimeType,
+                                file.fileName,
+                              )
+                            }
+                          >
+                            <View style={{ width: "100%", aspectRatio: 1.2 }}>
+                              {isImage && !isBroken ? (
+                                <Image
+                                  source={{
+                                    uri: getEightDFileUrl(file.id),
+                                    headers: token
+                                      ? { Authorization: `Bearer ${token}` }
+                                      : {},
+                                  }}
+                                  style={{ width: "100%", height: "100%" }}
+                                  resizeMode="cover"
+                                  onError={() => {
+                                    setBrokenImages((prev) => ({
+                                      ...prev,
+                                      [file.id]: true,
+                                    }));
+                                  }}
+                                />
+                              ) : isImage && isBroken ? (
+                                <View className="h-full w-full items-center justify-center bg-gray-100">
+                                  <ImageIcon size={32} color="#9CA3AF" />
+                                  <Text className="mt-2 px-2 text-center text-[10px] text-gray-500">
+                                    Image Unavailable
+                                  </Text>
+                                </View>
+                              ) : file.mimeType === "application/pdf" ? (
+                                <View className="h-full w-full items-center justify-center bg-red-50">
+                                  <File size={32} color="#DC2626" />
+                                  <Text className="mt-2 text-[10px] font-bold text-red-600">
+                                    PDF
+                                  </Text>
+                                </View>
+                              ) : (
+                                <View className="h-full w-full items-center justify-center bg-blue-50">
+                                  <File size={32} color="#2563EB" />
+                                  <Text className="mt-2 text-[10px] font-bold text-blue-600">
+                                    FILE
+                                  </Text>
+                                </View>
+                              )}
                             </View>
-                          ) : (
-                            <View className="h-20 items-center justify-center bg-blue-100 sm:h-24">
-                              <File size={32} color="#2563EB" />
+
+                            {/* Filename strip */}
+                            <View className="border-t border-gray-100 bg-white p-2.5">
+                              <Text
+                                className="text-[11px] font-medium text-gray-700"
+                                numberOfLines={2}
+                              >
+                                {file.fileName}
+                              </Text>
                             </View>
-                          )}
-                          <View className="bg-white p-2">
-                            <Text
-                              className="text-[10px] text-gray-700 sm:text-xs"
-                              numberOfLines={2}
-                            >
-                              {file.fileName}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
                 )}
@@ -1282,38 +1405,28 @@ export default function FinalPreview({
                 />
               </View>
               <View className="flex-row flex-wrap gap-3">
-                <TouchableOpacity
+                <OutlineButton
+                  title="Approve & Move to D1"
+                  icon={CheckCircle}
                   onPress={handleApprove}
+                  loading={approving}
                   disabled={
                     approving ||
                     !approvalComment.trim() ||
                     approvalComment.trim().length < 10
                   }
-                  className={`flex-row items-center gap-2 rounded px-4 py-2 ${approving || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-green-600 active:bg-green-700"}`}
-                >
-                  {approving && (
-                    <ActivityIndicator size="small" color="white" />
-                  )}
-                  <CheckCircle size={16} color="white" />
-                  <Text className="font-medium text-white">
-                    Approve & Move to D1
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                />
+                <OutlineButton
+                  title="Reject"
+                  icon={XCircle}
                   onPress={handleReject}
+                  loading={rejecting}
                   disabled={
                     rejecting ||
                     !approvalComment.trim() ||
                     approvalComment.trim().length < 10
                   }
-                  className={`flex-row items-center gap-2 rounded px-4 py-2 ${rejecting || !approvalComment.trim() || approvalComment.trim().length < 10 ? "bg-gray-400" : "bg-red-600 active:bg-red-700"}`}
-                >
-                  {rejecting && (
-                    <ActivityIndicator size="small" color="white" />
-                  )}
-                  <XCircle size={16} color="white" />
-                  <Text className="font-medium text-white">Reject</Text>
-                </TouchableOpacity>
+                />
               </View>
             </View>
           )}
@@ -1345,23 +1458,23 @@ export default function FinalPreview({
               </Text>
               <View className="flex-row gap-2">
                 {/* Download Button */}
-                <TouchableOpacity
+                <OutlineButton
+                  title="Download"
+                  icon={Download}
                   onPress={handleDownloadFile}
-                  className="rounded-full bg-blue-600 p-2 active:bg-blue-700"
-                >
-                  <Download size={20} color="white" />
-                </TouchableOpacity>
+                  variant="dark"
+                />
                 {/* Share Button */}
-                <TouchableOpacity
+                <OutlineButton
+                  title="Share"
+                  icon={Users}
                   onPress={handleDownloadOrShare}
-                  className="rounded-full bg-gray-700 p-2 active:bg-gray-600"
-                >
-                  <Users size={20} color="white" />
-                </TouchableOpacity>
+                  variant="dark"
+                />
                 {/* Close Button */}
                 <TouchableOpacity
                   onPress={closePreview}
-                  className="rounded-full bg-gray-700 p-2 active:bg-gray-600"
+                  className="ml-2 rounded-full bg-gray-700 p-2 active:bg-gray-600"
                 >
                   <X size={24} color="white" />
                 </TouchableOpacity>
@@ -1401,7 +1514,6 @@ export default function FinalPreview({
                   />
                 ) : (
                   // Mobile: Native Video Player with expo-av
-                  // Mobile: Native Video Player with expo-av
                   <View className="flex-1 items-center justify-center bg-black">
                     <Video
                       source={{ uri: previewUrl as string }}
@@ -1435,24 +1547,18 @@ export default function FinalPreview({
                     {previewFile?.fileName}
                   </Text>
                   <View className="flex-row gap-3">
-                    <TouchableOpacity
-                      className="flex-row items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 active:bg-blue-700"
+                    <OutlineButton
+                      title="Download"
+                      icon={Download}
                       onPress={handleDownloadFile}
-                    >
-                      <Download size={20} color="white" />
-                      <Text className="text-base font-semibold text-white">
-                        Download
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      className="flex-row items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 active:bg-indigo-700"
+                      variant="dark"
+                    />
+                    <OutlineButton
+                      title="Share"
+                      icon={Users}
                       onPress={handleDownloadOrShare}
-                    >
-                      <Users size={20} color="white" />
-                      <Text className="text-base font-semibold text-white">
-                        Share
-                      </Text>
-                    </TouchableOpacity>
+                      variant="dark"
+                    />
                   </View>
                 </View>
               ) : (
@@ -1468,24 +1574,18 @@ export default function FinalPreview({
                     {previewFile?.fileName}
                   </Text>
                   <View className="flex-row gap-3">
-                    <TouchableOpacity
-                      className="flex-row items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 active:bg-blue-700"
+                    <OutlineButton
+                      title="Download"
+                      icon={Download}
                       onPress={handleDownloadFile}
-                    >
-                      <Download size={20} color="white" />
-                      <Text className="text-base font-semibold text-white">
-                        Download
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      className="flex-row items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 active:bg-indigo-700"
+                      variant="dark"
+                    />
+                    <OutlineButton
+                      title="Share"
+                      icon={Users}
                       onPress={handleDownloadOrShare}
-                    >
-                      <Users size={20} color="white" />
-                      <Text className="text-base font-semibold text-white">
-                        Share
-                      </Text>
-                    </TouchableOpacity>
+                      variant="dark"
+                    />
                   </View>
                 </View>
               )}

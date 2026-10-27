@@ -159,8 +159,19 @@ export interface AuditResponse {
 }
 
 // Add near the top of the file (after api client)
-const ensureArray = <T>(v: any): T[] =>
-  Array.isArray(v) ? v : Array.isArray(v?.data) ? v.data : [];
+// Robust unwrap: handles raw arrays, Spring Page ({content}), and common envelopes
+const ensureArray = <T>(v: any): T[] => {
+  if (Array.isArray(v)) return v;
+  if (v == null) return [];
+  if (Array.isArray(v.data)) return v.data;
+  if (Array.isArray(v.content)) return v.content;
+  if (Array.isArray(v.items)) return v.items;
+  if (Array.isArray(v.results)) return v.results;
+  if (Array.isArray(v.ncrs)) return v.ncrs;
+  if (Array.isArray(v.responses)) return v.responses;
+  if (Array.isArray(v.schedules)) return v.schedules;
+  return [];
+};
 
 // ✅ ADD THIS INTERFACE - Evidence Upload Request
 export interface EvidenceUploadRequest {
@@ -568,6 +579,63 @@ export const auditScheduleApi = {
       { reason },
     ),
 
+  // ✅ NEW: Auditor's own checksheets for a year (array — for dashboard)
+  getAuditorResponsesByYear: async (
+    auditorId: string | number,
+    year: number,
+  ): Promise<AuditResponse[]> => {
+    const response = await api.get(
+      `/templates/responses/auditor/${auditorId}/year/${year}`,
+    );
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
+  // ✅ NEW: Auditee's own checksheets for a year (array — for dashboard)
+  getAuditeeResponsesByYear: async (
+    auditeeId: string | number,
+    year: number,
+  ): Promise<AuditResponse[]> => {
+    const response = await api.get(
+      `/templates/responses/auditee/${auditeeId}/year/${year}`,
+    );
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
+  // ✅ NEW: Paginated version — for admin tables later
+  getAuditorResponsesByYearPaginated: async (
+    auditorId: string | number,
+    year: number,
+    page: number = 0,
+    size: number = 20,
+  ): Promise<{
+    content: AuditResponse[];
+    totalElements: number;
+    totalPages: number;
+  }> => {
+    const response = await api.get(
+      `/templates/responses/auditor/${auditorId}/year/${year}/paginated`,
+      { params: { page, size } },
+    );
+    return response.data;
+  },
+
+  getAuditeeResponsesByYearPaginated: async (
+    auditeeId: string | number,
+    year: number,
+    page: number = 0,
+    size: number = 20,
+  ): Promise<{
+    content: AuditResponse[];
+    totalElements: number;
+    totalPages: number;
+  }> => {
+    const response = await api.get(
+      `/templates/responses/auditee/${auditeeId}/year/${year}/paginated`,
+      { params: { page, size } },
+    );
+    return response.data;
+  },
+
   // ========== DATE-BASED SCHEDULES ==========
   getDateSchedulesByMonth: (
     year: number,
@@ -958,19 +1026,22 @@ export const auditScheduleApi = {
   getAllAuditResponses: async (): Promise<AxiosResponse<AuditResponse[]>> => {
     console.log("Fetching all audit responses");
     try {
-      const response: AxiosResponse<AuditResponse[]> = await api.get(
-        "/templates/responses",
-      );
-      return response;
+      const response = await api.get("/templates/responses");
+      return {
+        ...response,
+        data: ensureArray<AuditResponse>(response.data),
+      } as AxiosResponse<AuditResponse[]>;
     } catch (error) {
       console.error("Error fetching all responses:", error);
-      // Fallback: try to get by check sheet ID 1
       try {
-        const fallbackResponse: AxiosResponse<AuditResponse[]> = await api.get(
+        const fallbackResponse = await api.get(
           "/templates/responses/check-sheet/1",
         );
-        return fallbackResponse;
-      } catch (fallbackError) {
+        return {
+          ...fallbackResponse,
+          data: ensureArray<AuditResponse>(fallbackResponse.data),
+        } as AxiosResponse<AuditResponse[]>;
+      } catch {
         throw error;
       }
     }
@@ -1346,7 +1417,13 @@ export const departmentPlanApi = {
 // ============================================================================
 
 export const ncrApi = {
-  getAllNCRs: (): ApiResponse<NCR[]> => api.get("/ncr/all"),
+  getAllNCRs: async (): Promise<AxiosResponse<NCR[]>> => {
+    const res = await api.get("/ncr/all");
+    return {
+      ...res,
+      data: ensureArray<NCR>(res.data),
+    } as AxiosResponse<NCR[]>;
+  },
 
   getNCRById: (id: string): ApiResponse<NCR> => api.get(`/ncr/${id}`),
 

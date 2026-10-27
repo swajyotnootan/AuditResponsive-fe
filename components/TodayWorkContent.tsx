@@ -425,8 +425,7 @@ export const TodayWorkContent: React.FC<{ onClose?: () => void }> = ({
 
     const fetchPlant = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
-        });
+        const res = await fetch(`${API_BASE_URL}/api/users/${userId}`, {});
         if (!res.ok) return;
         const data = await res.json();
         const resolved =
@@ -820,12 +819,12 @@ export const TodayWorkContent: React.FC<{ onClose?: () => void }> = ({
                 onPress={() => handleItemPress(item)}
               />
             ))}
-            {filteredOverdue.length > overdueLimit && (
+            {filteredOverdue.length > overdueLimit ? (
               <ShowMoreButton
                 remaining={filteredOverdue.length - overdueLimit}
                 onPress={() => setOverdueLimit(overdueLimit + PAGE_SIZE)}
               />
-            )}
+            ) : null}
           </Section>
         )}
 
@@ -878,12 +877,12 @@ export const TodayWorkContent: React.FC<{ onClose?: () => void }> = ({
                 muted
               />
             ))}
-            {filteredCompleted.length > completedLimit && (
+            {filteredCompleted.length > completedLimit ? (
               <ShowMoreButton
                 remaining={filteredCompleted.length - completedLimit}
                 onPress={() => setCompletedLimit(completedLimit + PAGE_SIZE)}
               />
-            )}
+            ) : null}
           </Section>
         )}
 
@@ -1016,11 +1015,11 @@ const WorkItemCard: React.FC<{
             </View>
           )}
         </View>
-        {item.daysOverdue != null && item.daysOverdue > 0 && (
+        {item.daysOverdue != null && item.daysOverdue > 0 ? (
           <View style={styles.daysLateBadge}>
             <Text style={styles.daysLateText}>{item.daysOverdue}d late</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {item.auditType && (
@@ -1052,19 +1051,19 @@ const WorkItemCard: React.FC<{
         </Text>
       )}
 
-      {item.auditeeNames && item.auditeeNames.length > 0 && (
+      {item.auditeeNames && item.auditeeNames.length > 0 ? (
         <Text style={styles.itemAuditees} numberOfLines={1}>
           Auditee: {item.auditeeNames.join(", ")}
         </Text>
-      )}
+      ) : null}
 
-      {action && (
+      {action ? (
         <View style={[styles.actionRow, { backgroundColor: action.bg }]}>
           <Text style={[styles.actionText, { color: action.color }]}>
             {action.text}
           </Text>
         </View>
-      )}
+      ) : null}
 
       <ChevronRight
         size={16}
@@ -1108,16 +1107,16 @@ const RequestCard: React.FC<{
     <Text style={styles.itemAuditor}>
       From: {request.requestedBy || request.auditorName}
     </Text>
-    {request.requestedNewDate && (
+    {request.requestedNewDate ? (
       <Text style={styles.itemAuditees}>
         New date: {request.requestedNewDate}
       </Text>
-    )}
-    {request.reason && (
+    ) : null}
+    {request.reason ? (
       <Text style={styles.itemReason} numberOfLines={2}>
         "{request.reason}"
       </Text>
-    )}
+    ) : null}
     <ChevronRight
       size={16}
       color="#cbd5e1"

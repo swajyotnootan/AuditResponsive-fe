@@ -1,65 +1,70 @@
-import YearFilter from "@/components/common/YearFilter"; // Adjust the path if your folder structure is different
+import YearFilter from "@/components/common/YearFilter";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
+  ArrowRight,
   Calendar,
+  Check,
   CheckCircle,
   ChevronRight,
   Clock,
+  Filter,
+  MoreVertical,
   RefreshCw,
+  X,
 } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Platform,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import { useAuth } from "../../context/AuthContext";
 
-// ═════ MNC STANDARD PALETTE ═════
+// ═════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
   bg: "#F8FAFC",
   card: "#FFFFFF",
   border: "#E2E8F0",
-  textMain: "#0F172A",
-  textValue: "#1E293B",
+  text: "#0F172A",
+  textValue: "#334155",
   textMuted: "#64748B",
-  primary: "#00529B",
-  primaryLight: "#EFF6FF",
-  primaryBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  danger: "#EF4444",
-  dangerLight: "#FEF2F2",
-  dangerBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
 };
 
-// ═════ SUBTLE MONTH COLORS ═════
+// ═════ MONTH THEME (All Blue Shades Only) ═════
 const monthThemeColors: Record<string, any> = {
-  Apr: { bg: "#ECFDF5", border: "#A7F3D0", text: "#065F46", icon: "#10B981" },
-  May: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#3B82F6" },
-  Jun: { bg: "#F5F3FF", border: "#DDD6FE", text: "#5B21B6", icon: "#8B5CF6" },
-  Jul: { bg: "#FDF2F8", border: "#FBCFE8", text: "#9D174D", icon: "#EC4899" },
-  Aug: { bg: "#FFF7ED", border: "#FED7AA", text: "#9A3412", icon: "#F97316" },
-  Sep: { bg: "#FFFBEB", border: "#FDE68A", text: "#92400E", icon: "#F59E0B" },
-  Oct: { bg: "#FEF2F2", border: "#FECACA", text: "#991B1B", icon: "#EF4444" },
-  Nov: { bg: "#F0FDF4", border: "#BBF7D0", text: "#166534", icon: "#22C55E" },
-  Dec: { bg: "#ECFEFF", border: "#A5F3FC", text: "#155E75", icon: "#06B6D4" },
-  Jan: { bg: "#F0F9FF", border: "#BAE6FD", text: "#075985", icon: "#0EA5E9" },
-  Feb: { bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", icon: "#6366F1" },
-  Mar: { bg: "#FAF5FF", border: "#E9D5FF", text: "#6B21A8", icon: "#A855F7" },
+  Apr: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#2563EB" },
+  May: { bg: "#F0F9FF", border: "#BAE6FD", text: "#075985", icon: "#0EA5E9" },
+  Jun: { bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", icon: "#4F46E5" },
+  Jul: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#2563EB" },
+  Aug: { bg: "#F0F9FF", border: "#BAE6FD", text: "#075985", icon: "#0EA5E9" },
+  Sep: { bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", icon: "#4F46E5" },
+  Oct: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#2563EB" },
+  Nov: { bg: "#F0F9FF", border: "#BAE6FD", text: "#075985", icon: "#0EA5E9" },
+  Dec: { bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", icon: "#4F46E5" },
+  Jan: { bg: "#EFF6FF", border: "#BFDBFE", text: "#1E40AF", icon: "#2563EB" },
+  Feb: { bg: "#F0F9FF", border: "#BAE6FD", text: "#075985", icon: "#0EA5E9" },
+  Mar: { bg: "#EEF2FF", border: "#C7D2FE", text: "#3730A3", icon: "#4F46E5" },
 };
 
 const monthDisplay: Record<string, string> = {
@@ -91,7 +96,33 @@ const financialMonths = [
   "Feb",
   "Mar",
 ];
+
 const weeks = ["W-1", "W-2", "W-3", "W-4", "W-5", "W-6"];
+
+const getQuarter = (month: string) => {
+  const quarters: Record<string, string> = {
+    Apr: "Q1",
+    May: "Q1",
+    Jun: "Q1",
+    Jul: "Q2",
+    Aug: "Q2",
+    Sep: "Q2",
+    Oct: "Q3",
+    Nov: "Q3",
+    Dec: "Q3",
+    Jan: "Q4",
+    Feb: "Q4",
+    Mar: "Q4",
+  };
+  return quarters[month] || "";
+};
+
+// ✅ Get actual calendar year for a month in the financial year
+const getActualYearForMonth = (fyStartYear: number, month: string) => {
+  return month === "Jan" || month === "Feb" || month === "Mar"
+    ? fyStartYear + 1
+    : fyStartYear;
+};
 
 interface WeekSelectionViewProps {
   year?: number;
@@ -136,6 +167,337 @@ const filterByPlant = <T,>(rows: T[], plantId: PlantKey): T[] => {
   return rows.filter((r) => samePlant(r as any, plantId));
 };
 
+// ═════ REUSABLE UI COMPONENTS ═════
+const Card = ({ children, style = {} }: any) => (
+  <View
+    style={[
+      {
+        marginBottom: 24,
+        overflow: "hidden",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        backgroundColor: COLORS.card,
+        shadowColor: "#0F172A",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1,
+      },
+      style,
+    ]}
+  >
+    {children}
+  </View>
+);
+
+const StatusBadge = ({ status, count }: { status: string; count?: number }) => {
+  if (status === "APPROVED") {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: COLORS.primaryBorder,
+          backgroundColor: COLORS.stateSuccessBg,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}
+      >
+        <CheckCircle size={14} color={COLORS.primary} />
+        <Text
+          style={{ fontSize: 11, fontWeight: "700", color: COLORS.primaryDark }}
+        >
+          {count !== undefined ? `${count} Schedules` : "Approved"}
+        </Text>
+      </View>
+    );
+  }
+  if (status === "EMPTY") {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          backgroundColor: "#F1F5F9",
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}
+      >
+        <Clock size={14} color={COLORS.textMuted} />
+        <Text
+          style={{ fontSize: 11, fontWeight: "700", color: COLORS.textMuted }}
+        >
+          No Schedules
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        backgroundColor: "#F1F5F9",
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+      }}
+    >
+      <Clock size={14} color={COLORS.textMuted} />
+      <Text
+        style={{ fontSize: 11, fontWeight: "700", color: COLORS.textMuted }}
+      >
+        Pending
+      </Text>
+    </View>
+  );
+};
+
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827";
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor,
+        backgroundColor,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text style={{ fontSize: 14, fontWeight: "600", color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// ═════ YEAR PICKER MODAL ═════
+const YearPickerModal = ({
+  isOpen,
+  onClose,
+  selectedYear,
+  availableYears,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedYear: number;
+  availableYears: number[];
+  onSelect: (year: number) => void;
+}) => {
+  if (!isOpen) return null;
+  return (
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(15, 23, 42, 0.4)",
+          padding: 24,
+        }}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            overflow: "hidden",
+            borderRadius: 20,
+            backgroundColor: COLORS.card,
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.15,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+        >
+          {/* Modal Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 20,
+              paddingVertical: 18,
+              borderBottomWidth: 1,
+              borderBottomColor: "#F1F5F9",
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: COLORS.primaryBorder,
+                  backgroundColor: COLORS.primaryLight,
+                }}
+              >
+                <Calendar size={20} color={COLORS.primary} />
+              </View>
+              <View>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: COLORS.text,
+                  }}
+                >
+                  Select Financial Year
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 12,
+                    color: COLORS.textMuted,
+                  }}
+                >
+                  Choose a year to view schedules
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{
+                width: 32,
+                height: 32,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 10,
+                backgroundColor: "#F1F5F9",
+              }}
+            >
+              <X size={16} color="#475569" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Year List */}
+          <ScrollView
+            style={{ maxHeight: 400 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {availableYears.map((year) => {
+              const isSelected = selectedYear === year;
+              return (
+                <TouchableOpacity
+                  key={year}
+                  onPress={() => {
+                    onSelect(year);
+                    onClose();
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 20,
+                    paddingVertical: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#F1F5F9",
+                    backgroundColor: isSelected
+                      ? COLORS.primaryLight
+                      : "transparent",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: isSelected ? "700" : "500",
+                      color: isSelected ? COLORS.primary : COLORS.textValue,
+                    }}
+                  >
+                    FY {year}-{year + 1}
+                  </Text>
+                  {isSelected && (
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: COLORS.primary,
+                      }}
+                    >
+                      <Check size={14} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
 // ═════ MAIN COMPONENT ═════
 export default function WeekSelectionView({
   year: propYear,
@@ -157,6 +519,14 @@ export default function WeekSelectionView({
   const [weeklyData, setWeeklyData] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"months" | "weeks">("months");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false); // ✅ New
+
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+  }, []);
 
   const getWeeksForMonth = (year: number, month: string) => {
     const monthMap: Record<string, number> = {
@@ -262,10 +632,7 @@ export default function WeekSelectionView({
         user.id,
       );
       const months = Array.isArray(response) ? response : response?.data || [];
-
-      // ✅ PLANT FILTER
       const plantScopedMonths = filterByPlant(months, user?.plantId);
-
       const approvedMonths = plantScopedMonths.filter(
         (month: any) =>
           month.approvalStatus === "APPROVED" && month.hasPlannedAudits,
@@ -287,15 +654,12 @@ export default function WeekSelectionView({
         month as any,
       );
       let schedules: any[] = [];
-      if (Array.isArray(response)) {
-        schedules = response;
-      } else if (response?.data) {
+      if (Array.isArray(response)) schedules = response;
+      else if (response?.data) {
         if (Array.isArray(response.data)) schedules = response.data;
       }
 
-      // ✅ PLANT FILTER (before week grouping)
       const plantScopedSchedules = filterByPlant(schedules, user?.plantId);
-
       const approvedSchedules = plantScopedSchedules.filter(
         (s: any) => s.approvalStatus === "APPROVED",
       );
@@ -329,25 +693,20 @@ export default function WeekSelectionView({
 
   useEffect(() => {
     fetchAvailableMonths();
-  }, [selectedYear, user?.plantId]); // ✅ add plantId
-
+  }, [selectedYear, user?.plantId]);
   useEffect(() => {
     if (selectedMonth) {
       fetchWeeklyData(selectedMonth);
       setViewMode("weeks");
     }
-  }, [selectedMonth, user?.plantId]); // ✅ add plantId
-
+  }, [selectedMonth, user?.plantId]);
   useEffect(() => {
-    if (params?.year) {
-      setSelectedYear(parseInt(params.year as string));
-    }
+    if (params?.year) setSelectedYear(parseInt(params.year as string));
   }, [params?.year]);
-
-  // ✅ Sync state if prop changes
   useEffect(() => {
     if (propYear) setSelectedYear(propYear);
   }, [propYear]);
+
   const handleMonthClick = (month: string) => setSelectedMonth(month);
   const handleBackToMonths = () => {
     setSelectedMonth(null);
@@ -367,7 +726,6 @@ export default function WeekSelectionView({
       Alert.alert("Warning", `Week ${week} does not exist in this month`);
       return;
     }
-
     if (onWeekSelect) {
       onWeekSelect({
         month: selectedMonth!,
@@ -391,182 +749,591 @@ export default function WeekSelectionView({
 
   if (loading && viewMode === "months") {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: COLORS.bg,
+        }}
+      >
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading schedule...</Text>
-      </SafeAreaView>
+        <Text
+          style={{
+            marginTop: 12,
+            fontSize: 14,
+            fontWeight: "500",
+            color: COLORS.textMuted,
+          }}
+        >
+          Loading schedule...
+        </Text>
+      </View>
     );
   }
 
   const currentMonthTheme = selectedMonth
     ? monthThemeColors[selectedMonth] || {
-        bg: "#F8FAFC",
-        border: "#E2E8F0",
-        text: "#1F2937",
-        icon: "#6B7280",
+        bg: "#EFF6FF",
+        border: "#BFDBFE",
+        text: "#1E40AF",
+        icon: "#2563EB",
       }
     : null;
 
+  const filteredMonths = availableMonths.filter((m: any) => {
+    if (filterStatus === "all") return true;
+    if (filterStatus === "approved") return m.approvalStatus === "APPROVED";
+    if (filterStatus === "pending") return m.approvalStatus !== "APPROVED";
+    return true;
+  });
+
   return (
-    <View style={styles.container}>
-      {/* ═════ NEW FORM5-STYLE HEADER ═════ */}
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
+      {/* ═════ HEADER ═════ */}
       <View
         style={{
-          width: "100%",
-          paddingHorizontal: isDesktop ? 24 : 16,
-          paddingTop: isDesktop ? 25 : 16,
-          paddingBottom: isDesktop ? 20 : 16,
-          backgroundColor: "#FFFFFF",
           borderBottomWidth: 1,
           borderBottomColor: COLORS.border,
+          backgroundColor: COLORS.card,
+          paddingHorizontal: isDesktop ? 24 : 16,
+          paddingVertical: 16,
+          zIndex: 100, // ✅ ensure header sits above content
+          elevation: 2, // ✅ Android
         }}
       >
         <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
-          <View
-            style={{
-              flexDirection: isDesktop ? "row" : "column",
-              alignItems: isDesktop ? "center" : "stretch",
-              justifyContent: isDesktop ? "space-between" : "flex-start",
-              gap: isDesktop ? 24 : 16,
-            }}
-          >
-            {/* Left Side: Back, Icon, Title, Subtitle */}
+          {isDesktop ? (
+            /* ─────────── DESKTOP HEADER ─────────── */
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                flexShrink: 1,
+                justifyContent: "space-between",
+                gap: 16,
               }}
             >
-              <TouchableOpacity
-                onPress={onBack || (() => router.back())}
-                style={{
-                  width: 40,
-                  height: 40,
-                  marginRight: 12,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ArrowLeft size={20} color="#6b7280" />
-              </TouchableOpacity>
+              {/* Left */}
               <View
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  backgroundColor: COLORS.primaryLight,
-                  borderWidth: 1,
-                  borderColor: COLORS.primaryBorder,
+                  flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
+                  gap: 12,
+                  flex: 1,
                 }}
               >
-                <Calendar size={22} color={COLORS.primary} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text
+                <TouchableOpacity
+                  onPress={onBack || (() => router.back())}
                   style={{
-                    fontSize: isDesktop ? 20 : 18,
-                    fontWeight: "700",
-                    color: "#111827",
+                    width: 40,
+                    height: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    backgroundColor: "#F1F5F9",
                   }}
-                  numberOfLines={1}
+                  activeOpacity={0.7}
                 >
-                  Audit Schedule Calendar
-                </Text>
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    color: "#6B7280",
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {viewMode === "months"
-                    ? "Select a month to view weekly schedules"
-                    : `${monthDisplay[selectedMonth!]} ${selectedYear} - Weekly Schedule`}
-                </Text>
-              </View>
-            </View>
+                  <ArrowLeft size={20} color="#475569" />
+                </TouchableOpacity>
 
-            {/* Right Side: Year & Refresh */}
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-                justifyContent: isDesktop ? "flex-end" : "flex-start",
-              }}
-            >
-              <YearFilter
-                selectedYear={selectedYear}
-                onYearChange={(newYear) => {
-                  setSelectedYear(newYear);
-                  // Optional: Updates the URL so the year persists if the user refreshes
-                  router.setParams({ year: newYear.toString() });
-                }}
-                availableYears={Array.from(
-                  { length: 11 },
-                  (_, i) => new Date().getFullYear() - 5 + i,
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.primaryBorder,
+                    backgroundColor: COLORS.primaryLight,
+                  }}
+                >
+                  <Calendar size={20} color={COLORS.primary} />
+                </View>
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 20,
+                      fontWeight: "700",
+                      color: COLORS.text,
+                    }}
+                    numberOfLines={1}
+                  >
+                    Audit Schedule Calendar
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: COLORS.textMuted,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {viewMode === "months"
+                      ? "Select a month to view weekly schedules"
+                      : `${monthDisplay[selectedMonth!]} ${selectedYear} - Weekly Schedule`}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Right */}
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              >
+                {viewMode === "weeks" && (
+                  <OutlineButton
+                    title="Back to Months"
+                    icon={ArrowLeft}
+                    onPress={handleBackToMonths}
+                  />
                 )}
-              />
-              <TouchableOpacity
-                onPress={() =>
-                  viewMode === "months"
-                    ? fetchAvailableMonths()
-                    : fetchWeeklyData(selectedMonth!)
-                }
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: COLORS.textMuted,
+                    }}
+                  >
+                    Status:
+                  </Text>
+                  <StatusBadge
+                    status={viewMode === "months" ? "APPROVED" : "EMPTY"}
+                    count={
+                      viewMode === "months" ? filteredMonths.length : undefined
+                    }
+                  />
+                </View>
+                <YearFilter
+                  selectedYear={selectedYear}
+                  onYearChange={(newYear) => {
+                    setSelectedYear(newYear);
+                    router.setParams({ year: newYear.toString() });
+                  }}
+                  availableYears={availableYears}
+                />
+                <TouchableOpacity
+                  onPress={() =>
+                    viewMode === "months"
+                      ? fetchAvailableMonths()
+                      : fetchWeeklyData(selectedMonth!)
+                  }
+                  style={{
+                    width: 40,
+                    height: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    backgroundColor: "#F1F5F9",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <RefreshCw size={16} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* ─────────── MOBILE HEADER (STACKED) ─────────── */
+            <View style={{ gap: 12 }}>
+              {/* Row 1: Back + Icon + Title */}
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <TouchableOpacity
+                  onPress={onBack || (() => router.back())}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    backgroundColor: "#F1F5F9",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <ArrowLeft size={18} color="#475569" />
+                </TouchableOpacity>
+
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: COLORS.primaryBorder,
+                    backgroundColor: COLORS.primaryLight,
+                  }}
+                >
+                  <Calendar size={18} color={COLORS.primary} />
+                </View>
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: COLORS.text,
+                    }}
+                    numberOfLines={1}
+                  >
+                    Audit Schedule Calendar
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 1,
+                      fontSize: 11,
+                      fontWeight: "500",
+                      color: COLORS.textMuted,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {viewMode === "months"
+                      ? "Select a month to view weekly schedules"
+                      : `${monthDisplay[selectedMonth!]} ${selectedYear} - Weekly Schedule`}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Row 2: Status + Menu */}
+              <View
                 style={{
-                  width: isDesktop ? 40 : 36,
-                  height: isDesktop ? 40 : 36,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 8,
+                  flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                <RefreshCw size={isDesktop ? 18 : 16} color="#6b7280" />
-              </TouchableOpacity>
+                <StatusBadge
+                  status={viewMode === "months" ? "APPROVED" : "EMPTY"}
+                  count={
+                    viewMode === "months" ? filteredMonths.length : undefined
+                  }
+                />
+
+                <TouchableOpacity
+                  onPress={() => setShowMobileMenu(!showMobileMenu)}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    backgroundColor: COLORS.card,
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MoreVertical size={20} color="#475569" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          )}
         </View>
       </View>
 
-      {/* ═════ SCROLLABLE CONTENT ═════ */}
+      {/* ═════ MOBILE DROPDOWN MENU (3 items only) ═════ */}
+      {showMobileMenu && !isDesktop && (
+        <>
+          <View
+            style={{
+              position: "absolute",
+              top: 70,
+              right: 16,
+              width: 280,
+              zIndex: 9999,
+              backgroundColor: COLORS.card,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 15,
+              elevation: 10,
+              overflow: "hidden",
+            }}
+          >
+            {/* 1. Year Info Row → opens Year Picker Modal */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                setShowYearPicker(true); // ✅ Open year modal
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    backgroundColor: COLORS.primaryLight,
+                  }}
+                >
+                  <Calendar size={18} color={COLORS.primary} />
+                </View>
+                <View>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: COLORS.text,
+                    }}
+                  >
+                    FY {selectedYear}-{selectedYear + 1}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: COLORS.textMuted }}>
+                    Change Year
+                  </Text>
+                </View>
+              </View>
+              <ArrowRight size={16} color="#94A3B8" />
+            </TouchableOpacity>
+
+            {/* 2. Back to Months (only in weeks view) */}
+            {viewMode === "weeks" && (
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMobileMenu(false);
+                  handleBackToMonths();
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#F1F5F9",
+                }}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 10,
+                    backgroundColor: COLORS.primaryLight,
+                  }}
+                >
+                  <ArrowLeft size={18} color={COLORS.primary} />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: COLORS.text,
+                  }}
+                >
+                  Back to Months
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* 3. Refresh Data */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                viewMode === "months"
+                  ? fetchAvailableMonths()
+                  : fetchWeeklyData(selectedMonth!);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+              }}
+              activeOpacity={0.7}
+            >
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 10,
+                  backgroundColor: "#F1F5F9",
+                }}
+              >
+                <RefreshCw size={18} color="#475569" />
+              </View>
+              <Text
+                style={{ fontSize: 14, fontWeight: "600", color: COLORS.text }}
+              >
+                Refresh Data
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Backdrop */}
+          <TouchableOpacity
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9998,
+            }}
+            activeOpacity={1}
+            onPress={() => setShowMobileMenu(false)}
+          />
+        </>
+      )}
+
+      {/* ═════ YEAR PICKER MODAL ═════ */}
+      <YearPickerModal
+        isOpen={showYearPicker}
+        onClose={() => setShowYearPicker(false)}
+        selectedYear={selectedYear}
+        availableYears={availableYears}
+        onSelect={(year) => {
+          setSelectedYear(year);
+          router.setParams({ year: year.toString() });
+        }}
+      />
+
+      {/* ═════ MAIN SCROLLVIEW ═════ */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          isDesktop && {
-            maxWidth: 1400,
-            alignSelf: "center",
-            width: "100%",
-            paddingHorizontal: 32,
-          },
-        ]}
+        style={{ flex: 1 }}
+        contentContainerStyle={
+          isDesktop
+            ? {
+                maxWidth: 1400,
+                alignSelf: "center",
+                width: "100%",
+                padding: 24,
+              }
+            : { padding: 16, paddingBottom: 40 }
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Month Grid View */}
+        {/* ═════ MONTH GRID VIEW ═════ */}
         {viewMode === "months" && (
           <>
-            {availableMonths.length === 0 ? (
-              <View style={styles.emptyCard}>
+            {/* Filter Bar */}
+            <Card style={{ padding: 16 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Filter size={16} color={COLORS.textMuted} />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: COLORS.textValue,
+                    }}
+                  >
+                    Filter:
+                  </Text>
+                  {[
+                    { id: "all", label: "All", color: COLORS.primary },
+                    {
+                      id: "approved",
+                      label: "Approved",
+                      color: COLORS.primaryDark,
+                    },
+                    {
+                      id: "pending",
+                      label: "Pending",
+                      color: COLORS.textMuted,
+                    },
+                  ].map((f) => (
+                    <TouchableOpacity
+                      key={f.id}
+                      onPress={() => setFilterStatus(f.id)}
+                      style={{
+                        borderRadius: 20,
+                        borderWidth: 1,
+                        borderColor:
+                          filterStatus === f.id ? f.color : COLORS.border,
+                        backgroundColor:
+                          filterStatus === f.id ? f.color : COLORS.card,
+                        paddingHorizontal: 14,
+                        paddingVertical: 6,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color:
+                            filterStatus === f.id
+                              ? "#FFFFFF"
+                              : COLORS.textValue,
+                        }}
+                      >
+                        {f.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
+                  Showing {filteredMonths.length} months
+                </Text>
+              </View>
+            </Card>
+
+            {filteredMonths.length === 0 ? (
+              <Card style={{ padding: 40, alignItems: "center" }}>
                 <Calendar
                   size={40}
                   color="#CBD5E1"
                   style={{ marginBottom: 16 }}
                 />
-                <Text style={styles.emptyTitle}>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "600",
+                    color: COLORS.textValue,
+                    marginBottom: 8,
+                  }}
+                >
                   No approved months found for {selectedYear}
                 </Text>
-                <Text style={styles.emptySubtitle}>
+                <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
                   Please complete Form 5 and get approval first.
                 </Text>
-              </View>
+              </Card>
             ) : (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
                 {financialMonths.map((month) => {
@@ -585,82 +1352,111 @@ export default function WeekSelectionView({
                       onPress={() => isApproved && handleMonthClick(month)}
                       disabled={!isApproved}
                       activeOpacity={0.8}
-                      style={[
-                        styles.monthCard,
-                        {
-                          width: isDesktop ? "30%" : "100%",
-                          opacity: isApproved ? 1 : 0.6,
-                        },
-                      ]}
+                      style={{
+                        width: isDesktop ? "30%" : "100%",
+                        marginBottom: 20,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: COLORS.border,
+                        backgroundColor: COLORS.card,
+                        overflow: "hidden",
+                        opacity: isApproved ? 1 : 0.6,
+                        shadowColor: "#0F172A",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.03,
+                        shadowRadius: 4,
+                        elevation: 1,
+                      }}
                     >
+                      {/* Card Header */}
                       <View
-                        style={[
-                          styles.monthCardHeader,
-                          { backgroundColor: monthTheme.bg },
-                        ]}
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: 16,
+                          borderBottomWidth: 1,
+                          borderBottomColor: COLORS.border,
+                          backgroundColor: monthTheme.bg,
+                        }}
                       >
-                        <View style={styles.monthCardHeaderLeft}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 12,
+                          }}
+                        >
                           <View
-                            style={[
-                              styles.iconBox,
-                              { borderColor: monthTheme.border },
-                            ]}
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: monthTheme.border,
+                              backgroundColor: COLORS.card,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
                           >
-                            <Calendar size={18} color={monthTheme.icon} />
+                            <Calendar size={20} color={monthTheme.icon} />
                           </View>
                           <View>
                             <Text
-                              style={[
-                                styles.monthTitle,
-                                { color: monthTheme.text },
-                              ]}
+                              style={{
+                                fontSize: 18,
+                                fontWeight: "700",
+                                color: monthTheme.text,
+                              }}
                             >
-                              {monthDisplay[month]}
+                              {monthDisplay[month]}{" "}
+                              {getActualYearForMonth(selectedYear, month)}
                             </Text>
-                            <Text style={styles.subtitle}>
-                              Financial Year {selectedYear}-{selectedYear + 1}
+                            <Text
+                              style={{
+                                marginTop: 2,
+                                fontSize: 12,
+                                fontWeight: "500",
+                                color: COLORS.textMuted,
+                              }}
+                            >
+                              FY {selectedYear}-{selectedYear + 1} •{" "}
+                              {getQuarter(month)}
                             </Text>
                           </View>
                         </View>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            isApproved
-                              ? styles.badgeSuccess
-                              : styles.badgeWarning,
-                          ]}
-                        >
-                          {isApproved ? (
-                            <CheckCircle size={12} color="#166534" />
-                          ) : (
-                            <Clock size={12} color="#92400E" />
-                          )}
-                          <Text
-                            style={[
-                              styles.badgeText,
-                              isApproved
-                                ? styles.badgeTextSuccess
-                                : styles.badgeTextWarning,
-                            ]}
-                          >
-                            {isApproved ? "Approved" : "Pending"}
-                          </Text>
-                        </View>
+                        <StatusBadge
+                          status={isApproved ? "APPROVED" : "PENDING"}
+                        />
                       </View>
-                      <View style={styles.cardBody}>
-                        <View style={styles.actionRow}>
+
+                      {/* Card Body */}
+                      <View style={{ padding: 20 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: 12,
+                            borderRadius: 10,
+                            backgroundColor: "#F8FAFC",
+                          }}
+                        >
                           <Text
-                            style={[
-                              styles.actionText,
-                              isApproved ? styles.textDark : styles.textMuted,
-                            ]}
+                            style={{
+                              fontSize: 13,
+                              fontWeight: "500",
+                              color: isApproved
+                                ? COLORS.textValue
+                                : COLORS.textMuted,
+                            }}
                           >
                             {isApproved
                               ? "Click to view weeks"
                               : "Awaiting approval"}
                           </Text>
                           {isApproved && (
-                            <ChevronRight size={16} color={COLORS.primary} />
+                            <ChevronRight size={18} color={COLORS.primary} />
                           )}
                         </View>
                       </View>
@@ -672,45 +1468,76 @@ export default function WeekSelectionView({
           </>
         )}
 
-        {/* Week Grid View */}
+        {/* ═════ WEEK GRID VIEW ═════ */}
         {viewMode === "weeks" && selectedMonth && currentMonthTheme && (
           <>
             {/* Month Header Card */}
-            <View
-              style={[
-                styles.weekViewHeader,
-                {
-                  backgroundColor: currentMonthTheme.bg,
-                  borderColor: currentMonthTheme.border,
-                },
-              ]}
+            <Card
+              style={{
+                backgroundColor: currentMonthTheme.bg,
+                borderColor: currentMonthTheme.border,
+                padding: 24,
+              }}
             >
-              <View style={styles.weekViewHeaderLeft}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 16 }}
+              >
                 <View
-                  style={[
-                    styles.iconBoxLarge,
-                    { borderColor: currentMonthTheme.border },
-                  ]}
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: currentMonthTheme.border,
+                    backgroundColor: COLORS.card,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
-                  <Calendar size={24} color={currentMonthTheme.icon} />
+                  <Calendar size={28} color={currentMonthTheme.icon} />
                 </View>
-                <View style={{ flexShrink: 1 }}>
-                  {" "}
-                  {/* 👈 Add this wrapper */}
+                <View style={{ flex: 1 }}>
                   <Text
-                    style={[
-                      styles.weekViewTitle,
-                      { color: currentMonthTheme.text },
-                    ]}
+                    style={{
+                      fontSize: 22,
+                      fontWeight: "700",
+                      color: currentMonthTheme.text,
+                    }}
                   >
                     {monthDisplay[selectedMonth]} {selectedYear}
                   </Text>
-                  <Text style={styles.subtitle} numberOfLines={1}>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 14,
+                      color: COLORS.textMuted,
+                    }}
+                  >
                     Select a week to create or view daily schedules
                   </Text>
                 </View>
+                <View
+                  style={{
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: currentMonthTheme.border,
+                    backgroundColor: COLORS.card,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: currentMonthTheme.text,
+                    }}
+                  >
+                    {getQuarter(selectedMonth)}
+                  </Text>
+                </View>
               </View>
-            </View>
+            </Card>
 
             {/* Weeks Grid */}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
@@ -740,111 +1567,195 @@ export default function WeekSelectionView({
                     onPress={() => handleWeekClick(week, weekData)}
                     disabled={!isScheduled}
                     activeOpacity={0.8}
-                    style={[
-                      styles.weekCard,
-                      {
-                        width: isDesktop ? "23%" : "100%",
-                        borderColor: isScheduled
-                          ? COLORS.successBorder
-                          : COLORS.border,
-                        opacity: isScheduled ? 1 : 0.7,
-                      },
-                    ]}
+                    style={{
+                      width: isDesktop ? "23%" : "100%",
+                      marginBottom: 20,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: isScheduled
+                        ? COLORS.primaryBorder
+                        : COLORS.border,
+                      backgroundColor: COLORS.card,
+                      overflow: "hidden",
+                      opacity: isScheduled ? 1 : 0.7,
+                      shadowColor: "#0F172A",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.03,
+                      shadowRadius: 4,
+                      elevation: 1,
+                    }}
                   >
-                    <View style={styles.weekCardHeader}>
+                    {/* Week Header */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: 20,
+                        borderBottomWidth: 1,
+                        borderBottomColor: COLORS.border,
+                        backgroundColor: isScheduled
+                          ? COLORS.stateSuccessBg
+                          : "#F8FAFC",
+                      }}
+                    >
                       <Text
-                        style={[
-                          styles.weekTitle,
-                          isScheduled ? styles.textSuccess : styles.textMuted,
-                        ]}
+                        style={{
+                          fontSize: 24,
+                          fontWeight: "700",
+                          color: isScheduled
+                            ? COLORS.primaryDark
+                            : COLORS.textMuted,
+                        }}
                       >
                         {week}
                       </Text>
+                      <StatusBadge
+                        status={isScheduled ? "APPROVED" : "EMPTY"}
+                        count={isScheduled ? weekData.scheduleCount : undefined}
+                      />
+                    </View>
+
+                    {/* Date Range */}
+                    <View style={{ padding: 20 }}>
                       <View
-                        style={[
-                          styles.statusBadge,
-                          isScheduled ? styles.badgeSuccess : styles.badgeGray,
-                        ]}
+                        style={{
+                          padding: 14,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: isScheduled
+                            ? COLORS.primaryBorder
+                            : COLORS.border,
+                          backgroundColor: "#F8FAFC",
+                          marginBottom: 16,
+                        }}
                       >
-                        {isScheduled ? (
-                          <CheckCircle size={12} color="#166534" />
-                        ) : (
-                          <Clock size={12} color="#64748B" />
-                        )}
                         <Text
-                          style={[
-                            styles.badgeText,
-                            isScheduled
-                              ? styles.badgeTextSuccess
-                              : styles.badgeTextGray,
-                          ]}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: COLORS.textMuted,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                          }}
                         >
-                          {isScheduled ? weekData.scheduleCount : "Empty"}
+                          Date Range
+                        </Text>
+                        <Text
+                          style={{
+                            marginTop: 6,
+                            fontSize: 14,
+                            fontWeight: "600",
+                            color: COLORS.textValue,
+                          }}
+                        >
+                          {dateRange.startDate} to {dateRange.endDate}
                         </Text>
                       </View>
-                    </View>
 
-                    <View
-                      style={[
-                        styles.dateRangeBox,
-                        {
-                          borderColor: isScheduled
-                            ? COLORS.successBorder
-                            : COLORS.border,
-                        },
-                      ]}
-                    >
-                      <Text style={styles.dateRangeLabel}>Date Range</Text>
-                      <Text style={styles.dateRangeText}>
-                        {dateRange.startDate} to {dateRange.endDate}
-                      </Text>
-                    </View>
-
-                    {isScheduled && weekData.departments.length > 0 && (
-                      <View style={styles.deptContainer}>
-                        <Text style={styles.deptLabel}>Departments</Text>
-                        <View style={styles.deptChips}>
-                          {weekData.departments
-                            .slice(0, 3)
-                            .map((dept: string) => (
-                              <View key={dept} style={styles.deptChip}>
-                                <Text style={styles.deptChipText}>{dept}</Text>
+                      {/* Departments */}
+                      {isScheduled && weekData.departments.length > 0 && (
+                        <View style={{ marginBottom: 16 }}>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "700",
+                              color: COLORS.textMuted,
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
+                              marginBottom: 8,
+                            }}
+                          >
+                            Departments
+                          </Text>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              flexWrap: "wrap",
+                              gap: 6,
+                            }}
+                          >
+                            {weekData.departments
+                              .slice(0, 3)
+                              .map((dept: string) => (
+                                <View
+                                  key={dept}
+                                  style={{
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: COLORS.chipBorder,
+                                    backgroundColor: COLORS.chipBg,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 4,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: "600",
+                                      color: COLORS.chipText,
+                                    }}
+                                  >
+                                    {dept}
+                                  </Text>
+                                </View>
+                              ))}
+                            {weekData.departments.length > 3 && (
+                              <View
+                                style={{
+                                  borderRadius: 12,
+                                  borderWidth: 1,
+                                  borderColor: COLORS.border,
+                                  backgroundColor: "#F1F5F9",
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 4,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: "600",
+                                    color: COLORS.textMuted,
+                                  }}
+                                >
+                                  +{weekData.departments.length - 3}
+                                </Text>
                               </View>
-                            ))}
-                          {weekData.departments.length > 3 && (
-                            <View style={styles.deptChipMore}>
-                              <Text style={styles.deptChipTextMore}>
-                                +{weekData.departments.length - 3}
-                              </Text>
-                            </View>
-                          )}
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    )}
-
-                    <View
-                      style={[
-                        styles.weekActionRow,
-                        {
-                          borderTopColor: isScheduled
-                            ? COLORS.successBorder
-                            : COLORS.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.actionText,
-                          isScheduled ? styles.textSuccess : styles.textMuted,
-                        ]}
-                      >
-                        {isScheduled
-                          ? "Create Daily Schedule"
-                          : "No schedules yet"}
-                      </Text>
-                      {isScheduled && (
-                        <ChevronRight size={16} color="#166534" />
                       )}
+
+                      {/* Action Row */}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          paddingTop: 14,
+                          borderTopWidth: 1,
+                          borderTopColor: isScheduled
+                            ? COLORS.primaryBorder
+                            : COLORS.border,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "600",
+                            color: isScheduled
+                              ? COLORS.primaryDark
+                              : COLORS.textMuted,
+                          }}
+                        >
+                          {isScheduled
+                            ? "Create Daily Schedule"
+                            : "No schedules yet"}
+                        </Text>
+                        {isScheduled && (
+                          <ChevronRight size={18} color={COLORS.primary} />
+                        )}
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -852,285 +1763,75 @@ export default function WeekSelectionView({
             </View>
 
             {/* Legend */}
-            <View style={styles.legendCard}>
-              <Text style={styles.legendTitle}>Status Legend</Text>
-              <View style={styles.legendContent}>
-                <View style={styles.legendItem}>
-                  <View style={styles.legendIconSuccess}>
-                    <CheckCircle size={10} color={COLORS.success} />
+            <Card style={{ padding: 24 }}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "700",
+                  color: COLORS.text,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                  marginBottom: 16,
+                }}
+              >
+                Status Legend
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: COLORS.primaryBorder,
+                      backgroundColor: COLORS.stateSuccessBg,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <CheckCircle size={12} color={COLORS.primary} />
                   </View>
-                  <Text style={styles.legendText}>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
                     Week has schedules - Click to create daily schedule
                   </Text>
                 </View>
-                <View style={styles.legendItem}>
-                  <View style={styles.legendIconGray}>
-                    <Clock size={10} color="#64748B" />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      backgroundColor: "#F1F5F9",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Clock size={12} color={COLORS.textMuted} />
                   </View>
-                  <Text style={styles.legendText}>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
                     No schedules - Complete Form 5 first
                   </Text>
                 </View>
               </View>
-            </View>
+            </Card>
           </>
         )}
       </ScrollView>
     </View>
   );
 }
-
-// ═════ STYLES ═════
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.bg,
-  },
-  loadingText: { marginTop: 12, color: COLORS.textMuted, fontSize: 14 },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-
-  emptyCard: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 40,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.textValue,
-    marginBottom: 8,
-  },
-  emptySubtitle: { fontSize: 13, color: COLORS.textMuted, marginBottom: 20 },
-
-  monthCard: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-    marginBottom: 20,
-  },
-  monthCardHeader: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  monthCardHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  iconBoxLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  monthTitle: { fontSize: 18, fontWeight: "700" },
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 2,
-    flexShrink: 1,
-  },
-  cardBody: { padding: 20 },
-  actionRow: {
-    padding: 12,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  actionText: { fontSize: 13, fontWeight: "500" },
-  textDark: { color: COLORS.textValue },
-  textMuted: { color: COLORS.textMuted },
-  textSuccess: { color: "#166534" },
-
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  badgeText: { fontSize: 11, fontWeight: "600" },
-  badgeSuccess: {
-    backgroundColor: COLORS.successLight,
-    borderColor: COLORS.successBorder,
-  },
-  badgeTextSuccess: { color: "#166534" },
-  badgeWarning: {
-    backgroundColor: COLORS.warningLight,
-    borderColor: COLORS.warningBorder,
-  },
-  badgeTextWarning: { color: "#92400E" },
-  badgeGray: { backgroundColor: "#F1F5F9", borderColor: COLORS.border },
-  badgeTextGray: { color: "#64748B" },
-
-  weekViewHeader: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 24,
-    marginBottom: 24,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 16,
-  },
-  weekViewHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 16 },
-  weekViewTitle: { fontSize: 20, fontWeight: "700" },
-
-  weekCard: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-    marginBottom: 20,
-  },
-  weekCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  weekTitle: { fontSize: 24, fontWeight: "700" },
-
-  dateRangeBox: {
-    padding: 12,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  dateRangeLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  dateRangeText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textValue,
-    marginTop: 4,
-  },
-
-  deptContainer: { marginBottom: 16 },
-  deptLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  deptChips: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  deptChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: COLORS.primaryLight,
-    borderWidth: 1,
-    borderColor: COLORS.primaryBorder,
-    borderRadius: 12,
-  },
-  deptChipText: { fontSize: 11, fontWeight: "500", color: "#1E40AF" },
-  deptChipMore: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-  },
-  deptChipTextMore: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: COLORS.textMuted,
-  },
-
-  weekActionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-
-  legendCard: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 24,
-    marginTop: 24,
-  },
-  legendTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.textMain,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 16,
-  },
-  legendContent: { flexDirection: "row", flexWrap: "wrap", gap: 24 },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexShrink: 1,
-  },
-  legendIconSuccess: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: COLORS.successLight,
-    borderWidth: 1,
-    borderColor: COLORS.successBorder,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  legendIconGray: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  legendText: { fontSize: 13, color: COLORS.textMuted, flexShrink: 1 },
-});

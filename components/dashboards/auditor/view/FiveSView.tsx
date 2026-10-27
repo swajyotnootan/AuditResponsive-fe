@@ -10,26 +10,29 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  Award,
+  BarChart3,
   Building,
   Calendar,
   CheckCircle,
+  ClipboardList,
   Clock,
   Download,
   FileText,
   Film,
   Info,
+  Layers,
   MapPin,
   Mic,
-  Pause, // ✅ ADDED
-  PenTool,
-  Play, // ✅ ADDED
+  Pause,
+  Play,
   Sparkles,
-  Star,
   ThumbsDown,
   ThumbsUp,
   User,
   XCircle,
 } from "lucide-react-native";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -40,30 +43,94 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions, // 👈 Added for responsive table
 } from "react-native";
-
-// ✅ ADDED useRef
-import React, { useEffect, useRef, useState } from "react";
-
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 
-// ============================================================================
-// MNC PROFESSIONAL COLOR PALETTE
-// ============================================================================
-const NAVBAR_COLORS = {
-  primary: "#00529B",
-  secondary: "#3b82f6",
-  dark: "#1e3a8a",
-  light: "#60a5fa",
-  lighter: "#93c5fd",
-  bg: "#eff6ff",
-  white: "#ffffff",
+// ═════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
 };
 
-// =====================================================
-// ✅ WEB VIDEO PLAYER (Robust HTML5 Fallback)
-// =====================================================
+// ============================================================================
+// REUSABLE OUTLINE BUTTON WITH HOVER EFFECT (same as IATF)
+// ============================================================================
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? COLORS.primary : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? COLORS.primary : "#111827";
+  const iconColor = isHoveredAndEnabled ? COLORS.primary : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text className="text-sm font-semibold" style={{ color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// ============================================================================
+// WEB VIDEO PLAYER (Robust HTML5 Fallback)
+// ============================================================================
 const WebVideoPlayer = ({
   url,
   onClose,
@@ -179,7 +246,7 @@ const WebVideoPlayer = ({
                 if (videoRef.current) videoRef.current.load();
               }}
               style={{
-                backgroundColor: "#2563eb",
+                backgroundColor: COLORS.primary,
                 paddingHorizontal: 24,
                 paddingVertical: 10,
                 borderRadius: 8,
@@ -211,9 +278,9 @@ const WebVideoPlayer = ({
   );
 };
 
-// =====================================================
-// ✅ WEB AUDIO PLAYER (Robust HTML5 Fallback)
-// =====================================================
+// ============================================================================
+// WEB AUDIO PLAYER (Robust HTML5 Fallback)
+// ============================================================================
 const WebAudioPlayerModal = ({
   url,
   onClose,
@@ -324,17 +391,17 @@ const WebAudioPlayerModal = ({
             padding: 16,
             marginBottom: 16,
             borderRadius: 999,
-            backgroundColor: "#eff6ff",
+            backgroundColor: COLORS.primaryLight,
           }}
         >
-          <Mic size={32} color="#00529B" />
+          <Mic size={32} color={COLORS.primary} />
         </View>
         <Text
           style={{
             marginBottom: 16,
             fontSize: 18,
             fontWeight: "bold",
-            color: "#1e293b",
+            color: COLORS.text,
           }}
         >
           Audio Evidence
@@ -343,7 +410,7 @@ const WebAudioPlayerModal = ({
         {isLoading ? (
           <ActivityIndicator
             size="large"
-            color="#00529B"
+            color={COLORS.primary}
             style={{ marginBottom: 12 }}
           />
         ) : error ? (
@@ -367,7 +434,7 @@ const WebAudioPlayerModal = ({
               width: 48,
               height: 48,
               borderRadius: 24,
-              backgroundColor: "#00529B",
+              backgroundColor: COLORS.primary,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -383,7 +450,7 @@ const WebAudioPlayerModal = ({
             <View
               style={{
                 height: 6,
-                backgroundColor: "#e2e8f0",
+                backgroundColor: COLORS.border,
                 borderRadius: 3,
                 overflow: "hidden",
                 marginBottom: 4,
@@ -393,7 +460,7 @@ const WebAudioPlayerModal = ({
                 style={{
                   height: "100%",
                   width: `${progress}%`,
-                  backgroundColor: "#00529B",
+                  backgroundColor: COLORS.primary,
                   borderRadius: 3,
                 }}
               />
@@ -401,10 +468,10 @@ const WebAudioPlayerModal = ({
             <View
               style={{ flexDirection: "row", justifyContent: "space-between" }}
             >
-              <Text style={{ fontSize: 12, color: "#64748b" }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
                 {formatDuration(currentTime)}
               </Text>
-              <Text style={{ fontSize: 12, color: "#64748b" }}>
+              <Text style={{ fontSize: 12, color: COLORS.textMuted }}>
                 {formatDuration(duration)}
               </Text>
             </View>
@@ -415,6 +482,9 @@ const WebAudioPlayerModal = ({
   );
 };
 
+// ============================================================================
+// HELPERS
+// ============================================================================
 const getFullMediaUrl = (uri: string) => {
   if (!uri) return "";
   if (
@@ -426,29 +496,9 @@ const getFullMediaUrl = (uri: string) => {
   ) {
     return uri;
   }
-
   const baseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
   const cleanUri = uri.startsWith("/") ? uri : `/${uri}`;
   return `${baseUrl}${cleanUri}`;
-};
-
-const ensureBase64 = async (uri: string): Promise<string> => {
-  if (uri.startsWith("data:")) return uri;
-  if (Platform.OS === "web" && uri.startsWith("blob:")) {
-    const blob = await (await fetch(uri)).blob();
-    return new Promise((resolve) => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(r.result as string);
-      r.readAsDataURL(blob);
-    });
-  }
-  if (uri.startsWith("file://")) {
-    const b64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return `data:application/octet-stream;base64,${b64}`;
-  }
-  return uri;
 };
 
 const getStatusBadge = (status: string) => {
@@ -467,61 +517,14 @@ const getStatusBadge = (status: string) => {
 
 const getScoreInfo = (score: number | null | undefined) => {
   if (score === 4)
-    return {
-      label: "Total Compliance",
-      level: "Excellent",
-      color: "green",
-      bgColor: "bg-emerald-50",
-      textColor: "text-emerald-700",
-    };
-  if (score === 3)
-    return {
-      label: "Significant Compliance",
-      level: "Good",
-      color: "lime",
-      bgColor: "bg-lime-50",
-      textColor: "text-lime-700",
-    };
+    return { bgColor: "bg-emerald-50", textColor: "text-emerald-700" };
+  if (score === 3) return { bgColor: "bg-lime-50", textColor: "text-lime-700" };
   if (score === 2)
-    return {
-      label: "Some Compliance",
-      level: "Average",
-      color: "yellow",
-      bgColor: "bg-amber-50",
-      textColor: "text-amber-700",
-    };
+    return { bgColor: "bg-amber-50", textColor: "text-amber-700" };
   if (score === 1)
-    return {
-      label: "Very Little Compliance",
-      level: "Poor",
-      color: "orange",
-      bgColor: "bg-orange-50",
-      textColor: "text-orange-700",
-    };
-  if (score === 0)
-    return {
-      label: "No Compliance",
-      level: "Very Poor",
-      color: "red",
-      bgColor: "bg-rose-50",
-      textColor: "text-rose-700",
-    };
-  return {
-    label: "Not Rated",
-    level: "Not Rated",
-    color: "gray",
-    bgColor: "bg-slate-100",
-    textColor: "text-slate-600",
-  };
-};
-
-const getLevelOfJudgment = (score: number | null | undefined) => {
-  if (score === 4) return "Total Compliance";
-  if (score === 3) return "Significant Compliance";
-  if (score === 2) return "Some Compliance";
-  if (score === 1) return "Very Little Compliance";
-  if (score === 0) return "No Compliance";
-  return "Not Rated";
+    return { bgColor: "bg-orange-50", textColor: "text-orange-700" };
+  if (score === 0) return { bgColor: "bg-rose-50", textColor: "text-rose-700" };
+  return { bgColor: "bg-slate-100", textColor: "text-slate-600" };
 };
 
 const getSectionStyles = (sectionName: string) => {
@@ -533,7 +536,6 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-blue-200",
         textColor: "text-blue-700",
         barColor: "bg-blue-500",
-        description: "Determine what is needed and remove the rest.",
       };
     case "2S - SET IN ORDER":
       return {
@@ -542,7 +544,6 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-cyan-200",
         textColor: "text-cyan-700",
         barColor: "bg-cyan-500",
-        description: "A place for everything and everything in its place.",
       };
     case "3S - SHINE":
       return {
@@ -551,7 +552,6 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-emerald-200",
         textColor: "text-emerald-700",
         barColor: "bg-emerald-500",
-        description: "Cleaning and looking for ways to keep it clean.",
       };
     case "4S - STANDARDIZE":
       return {
@@ -560,7 +560,6 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-amber-200",
         textColor: "text-amber-700",
         barColor: "bg-amber-500",
-        description: "Make standards obvious and maintained.",
       };
     case "5S - SUSTAIN":
       return {
@@ -569,7 +568,6 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-indigo-200",
         textColor: "text-indigo-700",
         barColor: "bg-indigo-500",
-        description: "Maintain high standards and constantly seek to improve.",
       };
     default:
       return {
@@ -578,21 +576,30 @@ const getSectionStyles = (sectionName: string) => {
         headerBorder: "border-slate-200",
         textColor: "text-slate-700",
         barColor: "bg-slate-500",
-        description: "",
       };
   }
 };
 
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
 export default function FiveSView({
   initialId,
   onClose,
-}: { initialId?: string; onClose?: () => void } = {}) {
+}: {
+  initialId?: string;
+  onClose?: () => void;
+} = {}) {
   const { id: paramId } = useLocalSearchParams();
   const id = initialId || paramId;
 
   const router = useRouter();
   const { addToast } = useToast();
   const { user } = useAuth();
+
+  // 👈 ADDED THIS HOOK TO DETECT SCREEN WIDTH
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
 
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -606,7 +613,6 @@ export default function FiveSView({
   const [auditeeComment, setAuditeeComment] = useState("");
   const [auditorSignedAt, setAuditorSignedAt] = useState<string | null>(null);
   const [auditeeSignedAt, setAuditeeSignedAt] = useState<string | null>(null);
-
   const [auditorSignatureUrl, setAuditorSignatureUrl] = useState<string | null>(
     null,
   );
@@ -614,9 +620,7 @@ export default function FiveSView({
     null,
   );
   const [loadingSignatures, setLoadingSignatures] = useState(false);
-
   const [evidences, setEvidences] = useState<Record<number, any[]>>({});
-
   const [imageModal, setImageModal] = useState({ open: false, url: "" });
   const [videoModal, setVideoModal] = useState({ open: false, url: "" });
   const [audioModal, setAudioModal] = useState({ open: false, url: "" });
@@ -625,17 +629,13 @@ export default function FiveSView({
     pdfData: "",
     fileName: "",
   });
-  // ✅ 1. Add state for users
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  // ✅ 2. Fetch users on mount
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/users`, {
           headers: { Accept: "application/json" },
-          // Add auth header if your API needs it:
-          // 'Authorization': `Bearer ${token}`,
         });
         if (response.ok) {
           const data = await response.json();
@@ -649,9 +649,7 @@ export default function FiveSView({
   }, []);
 
   useEffect(() => {
-    if (id) {
-      fetchAuditDetails();
-    }
+    if (id) fetchAuditDetails();
   }, [id]);
 
   const fetchSignatureAsImageUrl = async (
@@ -671,15 +669,15 @@ export default function FiveSView({
         const nameParts = fullName.trim().split(" ", 2);
         const firstName = nameParts[0];
         const lastName = nameParts.length > 1 ? nameParts[1] : "";
-        url = `${API_BASE_URL}/api/users/signature?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`;
+        url = `${API_BASE_URL}/api/users/signature?firstName=${encodeURIComponent(
+          firstName,
+        )}&lastName=${encodeURIComponent(lastName)}`;
       } else {
         return null;
       }
-
       const response = await fetch(url, {
         headers: { Accept: "image/png, image/jpeg, application/json" },
       });
-
       if (response.ok) {
         const blob = await response.blob();
         return new Promise<string | null>((resolve) => {
@@ -711,16 +709,13 @@ export default function FiveSView({
       const response = await auditScheduleApi.getAuditResponse(
         parseInt(id as string),
       );
-
       const auditData: any =
         response?.data !== undefined ? response.data : response;
       if (!auditData) {
-        console.error("❌ API returned empty or invalid response:", response);
         addToast("Failed to load audit data: Empty response", "error");
         setLoading(false);
         return;
       }
-
       setAudit(auditData);
 
       if (auditData.id) {
@@ -730,20 +725,13 @@ export default function FiveSView({
           const existingEvidences =
             evidenceResponse?.data || evidenceResponse || [];
           const mappedEvidences: Record<number, any[]> = {};
-
           if (Array.isArray(existingEvidences)) {
             existingEvidences.forEach((ev: any) => {
               const slNo = ev.questionSlNo;
               if (!mappedEvidences[slNo]) mappedEvidences[slNo] = [];
-
               let mediaUrl = ev.uri || ev.filePath || "";
-
-              // ✅ If it's a blob URL, use filePath instead
-              if (mediaUrl && mediaUrl.startsWith("blob:")) {
+              if (mediaUrl && mediaUrl.startsWith("blob:"))
                 mediaUrl = ev.filePath || "";
-              }
-
-              // ✅ CRITICAL FIX: Don't use Windows file paths as URLs
               if (
                 mediaUrl &&
                 (mediaUrl.includes(":\\") || mediaUrl.match(/^[A-Za-z]:/))
@@ -754,16 +742,10 @@ export default function FiveSView({
                   `evidence_${ev.id}`;
                 const baseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
                 mediaUrl = `${baseUrl}/uploads/evidences/${fileName}`;
-                console.log(`📸 Converted Windows path to URL: ${mediaUrl}`);
               }
-
-              // ✅ CRITICAL FIX: Remove /app/ prefix if it exists (backend stores internal paths)
               if (mediaUrl && mediaUrl.includes("/app/")) {
                 mediaUrl = mediaUrl.replace("/app/", "/");
-                console.log(`📸 Removed /app/ prefix: ${mediaUrl}`);
               }
-
-              // ✅ Build full URL if relative path
               if (
                 mediaUrl &&
                 !mediaUrl.startsWith("http") &&
@@ -771,17 +753,11 @@ export default function FiveSView({
                 !mediaUrl.startsWith("file:")
               ) {
                 const baseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
-
-                // Remove leading slash if baseUrl already has trailing slash
                 const cleanPath = mediaUrl.startsWith("/")
                   ? mediaUrl
                   : `/${mediaUrl}`;
                 mediaUrl = `${baseUrl}${cleanPath}`;
               }
-
-              // ✅ Debug log to see what URL we're trying to load
-              console.log(`📸 Evidence URL for question ${slNo}:`, mediaUrl);
-
               mappedEvidences[slNo].push({
                 id: ev.id,
                 type: ev.evidenceType,
@@ -792,9 +768,6 @@ export default function FiveSView({
             });
           }
           setEvidences(mappedEvidences);
-          console.log(
-            `✅ Loaded ${Object.keys(mappedEvidences).length} evidence items`,
-          );
         } catch (e) {
           console.warn("Could not load evidence:", e);
         }
@@ -891,7 +864,6 @@ export default function FiveSView({
             typeof checkSheet.questions === "string"
               ? JSON.parse(checkSheet.questions)
               : checkSheet.questions;
-
           const formattedQuestions = parsedQuestions.map(
             (q: any, idx: number) => {
               let category = q.category || "";
@@ -925,7 +897,7 @@ export default function FiveSView({
               return {
                 slNo: q.sNo || q.slNo || idx + 1,
                 checkpoint: q.displayLabel,
-                category: category,
+                category,
                 maxMarks: q.maxRating || 4,
                 fieldKey: q.fieldKey,
               };
@@ -983,13 +955,10 @@ export default function FiveSView({
     try {
       const responseId = audit.id;
       const endpoint = `${API_BASE_URL}/api/fives-audits/${responseId}/pdf`;
-
       const response = await fetch(endpoint, {
         headers: { Accept: "application/pdf" },
       });
-
       if (!response.ok) throw new Error("Failed to fetch PDF from server");
-
       const blob = await response.blob();
 
       if (Platform.OS === "web") {
@@ -1007,7 +976,6 @@ export default function FiveSView({
         const directory =
           FileSystem.documentDirectory || FileSystem.cacheDirectory;
         const fileUri = `${directory}5S_Audit_Report_${responseId}.pdf`;
-
         const reader = new FileReader();
         reader.onloadend = async () => {
           try {
@@ -1015,11 +983,8 @@ export default function FiveSView({
             await FileSystem.writeAsStringAsync(
               fileUri,
               base64data.split(",")[1],
-              {
-                encoding: FileSystem.EncodingType.Base64,
-              },
+              { encoding: FileSystem.EncodingType.Base64 },
             );
-
             if (await Sharing.isAvailableAsync()) {
               await Sharing.shareAsync(fileUri);
             } else {
@@ -1050,13 +1015,10 @@ export default function FiveSView({
     try {
       const responseId = audit.id;
       const endpoint = `${API_BASE_URL}/api/fives-audits/${responseId}/pdf`;
-
       const response = await fetch(endpoint, {
         headers: { Accept: "application/pdf" },
       });
-
       if (!response.ok) throw new Error("Failed to fetch PDF");
-
       const blob = await response.blob();
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -1067,7 +1029,6 @@ export default function FiveSView({
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-
       setPDFViewer({
         visible: true,
         pdfData: base64,
@@ -1099,7 +1060,6 @@ export default function FiveSView({
         signatureToSave = auditeeSignature;
       }
     }
-
     if (!signatureToSave || !signatureToSave.trim()) {
       addToast(
         "No signature available. Please upload signature in your profile or type your name.",
@@ -1107,28 +1067,23 @@ export default function FiveSView({
       );
       return;
     }
-
     setSubmitting(true);
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/templates/responses/${audit.id}/approve`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             signature: signatureToSave,
             comment: auditeeComment || "No comments provided",
           }),
         },
       );
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to approve audit");
       }
-
       const responseData = await response.json();
       if (responseData) {
         addToast("✓ Audit approved successfully!", "success");
@@ -1156,18 +1111,14 @@ export default function FiveSView({
         `${API_BASE_URL}/api/templates/responses/${audit.id}/reject`,
         {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ comment: auditeeComment }),
         },
       );
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to reject audit");
       }
-
       const responseData = await response.json();
       if (responseData) {
         addToast("✗ Audit rejected. The auditor has been notified.", "warning");
@@ -1184,6 +1135,9 @@ export default function FiveSView({
     }
   };
 
+  // ============================================================================
+  // CALCULATIONS
+  // ============================================================================
   const scores: Record<string, any> = answers.scores || {};
   const comments: Record<string, any> = answers.comments || {};
   const totalScore = Object.values(scores).reduce(
@@ -1244,43 +1198,38 @@ export default function FiveSView({
     (audit?.auditeeName && audit?.auditeeName === user?.name);
   const showAuditeeActions = isAuditee && isSubmitted;
 
+  // ============================================================================
+  // RENDER STATES
+  // ============================================================================
   if (loading) {
     return (
-      <View
-        className="flex-1 items-center justify-center"
-        style={{ backgroundColor: NAVBAR_COLORS.bg }}
-      >
-        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <ActivityIndicator
-            size="large"
-            color={NAVBAR_COLORS.primary}
-            className="mb-4"
-          />
-          <Text className="text-sm font-medium text-slate-500">
-            Loading audit report...
-          </Text>
-        </View>
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text className="mt-3 text-sm font-medium text-slate-500">
+          Loading audit report...
+        </Text>
       </View>
     );
   }
 
   if (!audit) {
     return (
-      <View
-        className="flex-1 items-center justify-center"
-        style={{ backgroundColor: NAVBAR_COLORS.bg }}
-      >
-        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <AlertCircle size={48} color="#f43f5e" className="mx-auto mb-4" />
-          <Text className="text-lg font-bold text-slate-800">
+      <View className="flex-1 items-center justify-center bg-slate-50 p-6">
+        <View className="w-full max-w-md items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <AlertCircle
+            size={48}
+            color={COLORS.stateErrorText}
+            className="mb-4"
+          />
+          <Text className="text-lg font-bold text-slate-900">
             Audit not found
           </Text>
           <TouchableOpacity
-            onPress={() => router.back()}
-            className="mt-4 rounded-xl px-5 py-2.5 shadow-md"
-            style={{ backgroundColor: NAVBAR_COLORS.primary }}
+            onPress={() => (onClose ? onClose() : router.back())}
+            className="mt-6 rounded-xl bg-blue-600 px-6 py-3"
+            activeOpacity={0.8}
           >
-            <Text className="text-sm font-medium text-white">Go Back</Text>
+            <Text className="text-sm font-semibold text-white">Go Back</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1288,138 +1237,173 @@ export default function FiveSView({
   }
 
   return (
-    <>
+    <View className="flex-1 bg-slate-50">
       <ScrollView
         className="flex-1"
-        style={{ backgroundColor: NAVBAR_COLORS.bg }}
         contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
       >
         <View
-          className="p-4"
-          style={{ maxWidth: 1200, alignSelf: "center", width: "100%" }}
+          style={{
+            maxWidth: 1200,
+            alignSelf: "center",
+            width: "100%",
+            padding: 16,
+          }}
         >
+          {/* Header with Actions */}
           <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
-            <View className="flex-1 flex-row items-center gap-2">
+            <View className="flex-1 flex-row items-center gap-3">
               <TouchableOpacity
-                onPress={() => {
-                  if (onClose) {
-                    onClose();
-                  } else {
-                    router.back();
-                  }
-                }}
-                className="flex-shrink-0 flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                onPress={() => (onClose ? onClose() : router.back())}
+                className="h-10 w-10 items-center justify-center rounded-xl bg-slate-100"
+                activeOpacity={0.7}
               >
-                <ArrowLeft size={18} color="#334155" />
-                <Text className="text-sm font-medium text-slate-700">Back</Text>
+                <ArrowLeft size={20} color="#475569" />
               </TouchableOpacity>
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <Sparkles size={20} color={COLORS.primary} />
+              </View>
               <View className="flex-1">
                 <Text
-                  className="text-lg font-bold text-slate-800"
+                  className="text-xl font-bold text-slate-900"
                   numberOfLines={1}
                 >
                   5S Audit Report
                 </Text>
                 <Text
-                  className="mt-0.5 text-xs text-slate-500"
+                  className="mt-0.5 text-sm font-medium text-slate-500"
                   numberOfLines={1}
                 >
-                  Workplace organization audit details
+                  5S Workplace Organization Audit Details
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={handleDownloadPDF}
-              disabled={downloading}
-              className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
-              style={{ backgroundColor: NAVBAR_COLORS.primary }}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Download size={16} color="#ffffff" />
-              )}
-              <Text className="text-sm font-medium text-white">
-                {downloading ? "Generating..." : "Download PDF"}
-              </Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleViewPDF}
-              disabled={downloading}
-              className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
-              style={{ backgroundColor: "#8B5CF6" }}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <FileText size={16} color="#ffffff" />
-              )}
-              <Text className="text-sm font-medium text-white">View PDF</Text>
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-3">
+              <OutlineButton
+                title="View PDF"
+                icon={FileText}
+                onPress={handleViewPDF}
+                disabled={downloading}
+                loading={downloading}
+              />
+              <OutlineButton
+                title="Download PDF"
+                icon={Download}
+                onPress={handleDownloadPDF}
+                disabled={downloading}
+                loading={downloading}
+              />
+            </View>
           </View>
 
+          {/* Status Banners */}
           {isApproved && (
-            <View className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-              <View className="flex-row items-center justify-center gap-2">
-                <CheckCircle size={20} color="#047857" />
-                <Text className="text-lg font-bold text-emerald-800">
-                  ✓ Audit Approved by Auditee
-                </Text>
+            <View
+              className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+              style={{
+                backgroundColor: COLORS.stateSuccessBg,
+                borderColor: COLORS.primaryBorder,
+              }}
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-white bg-white">
+                <CheckCircle size={20} color={COLORS.primary} />
               </View>
-              {answers.auditeeComment && (
-                <View className="mt-2">
-                  <Text className="text-sm text-emerald-700">
-                    <Text className="font-semibold">Comment: </Text>
-                    {answers.auditeeComment}
+              <View className="flex-1 justify-center">
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: COLORS.primaryDark }}
+                >
+                  Audit Approved by Auditee
+                </Text>
+                {answers.auditeeComment && (
+                  <Text
+                    className="mt-1 text-sm leading-5"
+                    style={{ color: COLORS.primaryDark, opacity: 0.9 }}
+                  >
+                    Comment: {answers.auditeeComment}
                   </Text>
-                </View>
-              )}
+                )}
+              </View>
             </View>
           )}
 
           {isRejected && (
-            <View className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-center">
-              <View className="flex-row items-center justify-center gap-2">
-                <XCircle size={20} color="#be123c" />
-                <Text className="text-lg font-bold text-rose-800">
-                  ✗ Audit Rejected - Corrections Required
-                </Text>
+            <View
+              className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+              style={{
+                backgroundColor: COLORS.stateErrorBg,
+                borderColor: COLORS.border,
+              }}
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white">
+                <XCircle size={20} color={COLORS.stateErrorText} />
               </View>
-              {answers.auditeeComment && (
-                <View className="mt-2">
-                  <Text className="text-sm text-rose-700">
-                    <Text className="font-semibold">Reason: </Text>
-                    {answers.auditeeComment}
+              <View className="flex-1 justify-center">
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: COLORS.stateErrorText }}
+                >
+                  Audit Rejected - Corrections Required
+                </Text>
+                {answers.auditeeComment && (
+                  <Text
+                    className="mt-1 text-sm leading-5"
+                    style={{ color: COLORS.stateErrorText, opacity: 0.9 }}
+                  >
+                    Reason: {answers.auditeeComment}
                   </Text>
-                </View>
-              )}
+                )}
+              </View>
             </View>
           )}
 
+          {/* Main Banner */}
           <View
-            className="mb-6 rounded-2xl p-4 text-center shadow-md"
-            style={{ backgroundColor: NAVBAR_COLORS.primary }}
+            className="mb-6 items-center justify-center overflow-hidden rounded-2xl border p-6"
+            style={{
+              backgroundColor: COLORS.primaryLight,
+              borderColor: COLORS.primaryBorder,
+            }}
           >
-            <View className="mb-1 flex-row items-center justify-center gap-2">
-              <Sparkles size={24} color="#ffffff" />
-              <Text className="text-xl font-bold text-white">
-                5S AUDIT CHECK SHEET
+            <View className="mb-2 flex-row items-center justify-center gap-2">
+              <Sparkles size={22} color={COLORS.primaryDark} />
+              <Text
+                className="text-center text-lg font-bold"
+                style={{ color: COLORS.primaryDark }}
+              >
+                5S Audit Check Sheet
               </Text>
             </View>
-            <Text className="text-center text-sm text-blue-100">
+            <Text
+              className="text-center text-sm"
+              style={{ color: COLORS.primaryDark, opacity: 0.8 }}
+            >
               Sort | Set in Order | Shine | Standardize | Sustain
             </Text>
           </View>
 
-          <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <View className="mb-4 flex-row items-center gap-2">
-              <FileText size={18} color={NAVBAR_COLORS.primary} />
-              <Text className="text-base font-bold text-slate-800">
-                Audit Information
-              </Text>
+          {/* Audit Information Card */}
+          <View
+            className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <FileText size={18} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Audit Information
+                </Text>
+              </View>
             </View>
-            <View className="-mx-2 flex-row flex-wrap">
+            <View className="flex-row flex-wrap p-3">
               {[
                 {
                   icon: FileText,
@@ -1427,24 +1411,19 @@ export default function FiveSView({
                   value: answers.documentNumber || `5S-${audit.id}`,
                 },
                 {
-                  icon: Building,
-                  label: "Department",
-                  value: answers.department || audit.department || "-",
+                  icon: Calendar,
+                  label: "Audit Date",
+                  value: answers.date || formatDate(audit.auditDate),
                 },
                 {
                   icon: User,
-                  label: "Auditor (Supervisor)",
+                  label: "Auditor",
                   value: auditorName || answers.auditorName || "N/A",
                 },
                 {
                   icon: User,
                   label: "Auditee",
                   value: auditeeName || answers.auditeeName || "N/A",
-                },
-                {
-                  icon: Calendar,
-                  label: "Audit Date",
-                  value: answers.date || formatDate(audit.auditDate),
                 },
                 {
                   icon: MapPin,
@@ -1456,116 +1435,97 @@ export default function FiveSView({
                   label: "Shift",
                   value: audit.shift || answers.shift || "-",
                 },
+                {
+                  icon: Building,
+                  label: "Department",
+                  value: answers.department || audit.department || "-",
+                },
+                {
+                  icon: Layers,
+                  label: "Status",
+                  value: currentStatus || "DRAFT",
+                },
               ].map((item, idx) => (
-                <View key={idx} className="mb-4 w-full px-2 md:w-1/2">
-                  <View className="flex-row items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <item.icon size={16} color="#94a3b8" />
-                    <View>
+                <View key={idx} className="mb-2 w-full px-2 md:w-1/2 lg:w-1/4">
+                  <View className="flex-row items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <item.icon size={16} color="#94A3B8" className="mt-0.5" />
+                    <View className="min-w-0 flex-1">
                       <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                         {item.label}
                       </Text>
-                      <Text className="text-sm font-semibold text-slate-800">
+                      <Text
+                        className="mt-1 text-sm font-semibold text-slate-800"
+                        numberOfLines={2}
+                      >
                         {item.value}
                       </Text>
                     </View>
                   </View>
                 </View>
               ))}
-              <View className="mb-4 w-full px-2 md:w-1/2">
-                <View className="flex-row items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <View className="h-4 w-4" />
-                  <View>
-                    <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Status
-                    </Text>
-                    <View className={`self-start rounded-lg px-2.5 py-1`}>
-                      <Text
-                        className={`text-xs font-semibold ${getStatusBadge(currentStatus)}`}
-                      >
-                        {currentStatus || "DRAFT"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
             </View>
           </View>
 
+          {/* Rating Scale */}
           <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <Text className="mb-3 text-sm font-bold text-slate-700">
-              Rating Scale:
+              Rating Scale
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {[
-                {
-                  label: "0 = No",
-                  bg: "bg-rose-50",
-                  border: "border-rose-200",
-                  text: "text-rose-700",
-                },
-                {
-                  label: "1 = Very Little",
-                  bg: "bg-orange-50",
-                  border: "border-orange-200",
-                  text: "text-orange-700",
-                },
-                {
-                  label: "2 = Some",
-                  bg: "bg-amber-50",
-                  border: "border-amber-200",
-                  text: "text-amber-700",
-                },
-                {
-                  label: "3 = Significant",
-                  bg: "bg-lime-50",
-                  border: "border-lime-200",
-                  text: "text-lime-700",
-                },
-                {
-                  label: "4 = Total",
-                  bg: "bg-emerald-50",
-                  border: "border-emerald-200",
-                  text: "text-emerald-700",
-                },
+                { label: "0 = No Compliance" },
+                { label: "1 = Very Little Compliance" },
+                { label: "2 = Some Compliance" },
+                { label: "3 = Significant Compliance" },
+                { label: "4 = Total Compliance" },
               ].map((item, idx) => (
                 <View
                   key={idx}
-                  className={`rounded-lg border px-3 py-2 ${item.bg} ${item.border}`}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                 >
-                  <Text className={`text-xs font-medium ${item.text}`}>
-                    {item.label} Compliance
+                  <Text className="text-xs font-semibold text-slate-600">
+                    {item.label}
                   </Text>
                 </View>
               ))}
             </View>
           </View>
 
-          <View className="-mx-2 mb-6 flex-row flex-wrap">
+          {/* Score Summary Cards */}
+          <View className="mb-6 flex-row flex-wrap gap-3">
             {[
               {
                 label: "Total Questions",
                 value: totalQuestions.toString(),
-                color: "text-slate-800",
+                color: COLORS.primaryDark,
               },
               {
                 label: "Rated",
                 value: ratedCount.toString(),
-                color: "text-emerald-600",
+                color: COLORS.primaryDark,
               },
               {
                 label: "Total Score",
                 value: totalScore.toString(),
-                color: "text-[#00529B]",
+                color: COLORS.primaryDark,
+              },
+              {
+                label: "Max Score",
+                value: maxScore.toString(),
+                color: COLORS.primaryDark,
               },
               {
                 label: "Percentage",
                 value: `${percentage}%`,
-                color: getScoreColor(percentage),
+                color: COLORS.primaryDark,
               },
             ].map((item, idx) => (
-              <View key={idx} className="mb-4 w-1/2 px-2">
-                <View className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-                  <Text className={`text-2xl font-bold ${item.color}`}>
+              <View key={idx} style={{ flex: 1, minWidth: 120 }}>
+                <View className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <Text
+                    className="text-2xl font-bold"
+                    style={{ color: item.color }}
+                  >
                     {item.value}
                   </Text>
                   <Text className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -1576,6 +1536,7 @@ export default function FiveSView({
             ))}
           </View>
 
+          {/* 5S Sections Summary */}
           <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <Text className="mb-4 text-base font-bold text-slate-800">
               5S Sections Summary
@@ -1594,41 +1555,35 @@ export default function FiveSView({
                   const sectionPercentage = Math.round(
                     (sectionScore / sectionMaxScore) * 100,
                   );
-                  const styles = getSectionStyles(sectionName);
-
-                  // Determine color based on percentage
-                  let scoreColor = "text-slate-800";
-                  if (sectionPercentage >= 80) scoreColor = "text-emerald-600";
-                  else if (sectionPercentage >= 60)
-                    scoreColor = "text-amber-600";
-                  else scoreColor = "text-rose-600";
 
                   return (
                     <View
                       key={sectionName}
                       className="mb-4 w-1/2 px-2 md:w-1/5"
                     >
-                      <View className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-center">
-                        <Text
-                          className={`text-[10px] font-bold uppercase tracking-wider ${styles.textColor}`}
-                        >
-                          {styles.displayName}
+                      <View className="rounded-xl border border-slate-200 bg-white p-4">
+                        <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {sectionName}
                         </Text>
                         <Text
-                          className={`mt-1 text-2xl font-bold ${scoreColor}`}
+                          className="mt-1 text-2xl font-bold text-slate-800"
+                          style={{ color: COLORS.primaryDark }}
                         >
                           {sectionScore}
                         </Text>
-                        <Text className="text-[10px] text-slate-400">
+                        <Text className="text-[10px] font-medium text-slate-400">
                           / {sectionMaxScore}
                         </Text>
-                        <View className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                        <View className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
                           <View
-                            className={`h-full rounded-full ${styles.barColor}`}
-                            style={{ width: `${sectionPercentage}%` }}
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${sectionPercentage}%`,
+                              backgroundColor: COLORS.primaryDark,
+                            }}
                           />
                         </View>
-                        <Text className="mt-1 text-xs font-medium text-slate-600">
+                        <Text className="mt-2 text-xs font-semibold text-slate-600">
                           {sectionPercentage}%{" "}
                           {sectionPercentage >= 80
                             ? "✅"
@@ -1644,173 +1599,186 @@ export default function FiveSView({
             </View>
 
             {/* Overall Score Bar */}
-            <View className="mt-2 flex-row flex-wrap items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <View className="mt-2 flex-row flex-wrap items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4">
               <View>
-                <Text className="text-xs font-medium text-slate-500">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Overall Score
                 </Text>
-                <Text className="text-lg font-bold text-slate-800">
+                <Text
+                  className="text-lg font-bold"
+                  style={{ color: COLORS.primaryDark }}
+                >
                   {totalScore} / {maxScore}
                 </Text>
               </View>
-              <View className="mx-4 flex-1">
-                <View className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <View className="mx-6 flex-1">
+                <View className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
                   <View
                     className="h-full rounded-full"
                     style={{
                       width: `${percentage}%`,
-                      backgroundColor:
-                        percentage >= 80
-                          ? "#059669"
-                          : percentage >= 60
-                            ? "#d97706"
-                            : "#dc2626",
+                      backgroundColor: COLORS.primaryDark,
                     }}
                   />
                 </View>
               </View>
               <Text
-                className={`text-lg font-bold ${percentage >= 80 ? "text-emerald-600" : percentage >= 60 ? "text-amber-600" : "text-rose-600"}`}
+                className="text-lg font-bold"
+                style={{ color: COLORS.primaryDark }}
               >
                 {percentage}%
               </Text>
             </View>
           </View>
-
           {/* Audit Findings Table */}
-          <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
-            <View className="mb-4 flex-row items-center gap-2">
-              <Sparkles size={20} color={NAVBAR_COLORS.primary} />
-              <Text className="text-base font-bold text-slate-800">
-                Audit Findings
-              </Text>
+          <View
+            className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <ClipboardList size={20} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Audit Findings
+                </Text>
+              </View>
             </View>
 
-            {/* ✅ HORIZONTAL SCROLL FOR TABLE RESPONSIVENESS */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ minWidth: 700, width: "100%" }}>
-                {Object.entries(sections).map(
-                  ([sectionName, section]: [string, any]) => {
-                    const sectionScore = getSectionScore(
-                      section.start,
-                      section.end,
-                    );
-                    const sectionMaxScore = getSectionMaxScore(
-                      section.start,
-                      section.end,
-                    );
-                    const sectionPercentage = Math.round(
-                      (sectionScore / sectionMaxScore) * 100,
-                    );
-                    const styles = getSectionStyles(sectionName);
+            {/* ✅ RESPONSIVE WRAPPER FOR TABLE */}
+            {(() => {
+              const TableContent = (
+                <View
+                  style={
+                    isDesktop
+                      ? { width: "100%" }
+                      : { minWidth: 1060, width: "100%" }
+                  }
+                >
+                  {Object.entries(sections).map(
+                    ([sectionName, section]: [string, any]) => {
+                      const sectionScore = getSectionScore(
+                        section.start,
+                        section.end,
+                      );
+                      const sectionMaxScore = getSectionMaxScore(
+                        section.start,
+                        section.end,
+                      );
+                      const sectionPercentage = Math.round(
+                        (sectionScore / sectionMaxScore) * 100,
+                      );
+                      const styles = getSectionStyles(sectionName);
 
-                    return (
-                      <View
-                        key={sectionName}
-                        className="mb-6 overflow-hidden rounded-xl border border-slate-200"
-                      >
-                        <View
-                          className={`p-4 ${styles.headerBg} border-b ${styles.headerBorder}`}
-                        >
-                          <View className="flex-row items-start justify-between">
-                            <View className="flex-1">
-                              <View className="flex-row items-center gap-2">
-                                <Text
-                                  className={`text-sm font-bold ${styles.textColor}`}
-                                >
-                                  {styles.displayName}
-                                </Text>
-                                <View>
+                      return (
+                        <View key={sectionName} className="mb-0">
+                          {/* Section Header */}
+                          <View
+                            className={`p-4 ${styles.headerBg} border-b ${styles.headerBorder}`}
+                          >
+                            <View className="flex-row items-start justify-between">
+                              <View className="flex-1">
+                                <View className="flex-row items-center gap-2">
+                                  <Text
+                                    className={`text-sm font-bold ${styles.textColor}`}
+                                  >
+                                    {styles.displayName}
+                                  </Text>
                                   <Info size={14} color="#94a3b8" />
                                 </View>
-                              </View>
-                              <Text className="mt-0.5 text-xs text-slate-500">
-                                Max marks: {sectionMaxScore} | Score:{" "}
-                                {sectionScore}/{sectionMaxScore} (
-                                {sectionPercentage}%)
-                              </Text>
-                            </View>
-                            <View className="items-end">
-                              <Text
-                                className={`text-xs font-semibold ${styles.textColor}`}
-                              >
-                                Level:{" "}
-                                {sectionPercentage >= 80
-                                  ? "Excellent"
-                                  : sectionPercentage >= 60
-                                    ? "Good"
-                                    : sectionPercentage >= 40
-                                      ? "Average"
-                                      : "Poor"}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        <View className="flex-row border-b border-slate-200 bg-slate-50">
-                          <View className="w-10 items-center justify-center px-1 py-2">
-                            <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
-                              S.No
-                            </Text>
-                          </View>
-                          <View className="flex-[2] justify-center px-2 py-2">
-                            <Text className="text-[10px] font-bold uppercase text-slate-600">
-                              Checkpoint
-                            </Text>
-                          </View>
-                          <View className="w-10 items-center justify-center px-1 py-2">
-                            <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
-                              Max
-                            </Text>
-                          </View>
-                          <View className="w-14 items-center justify-center px-1 py-2">
-                            <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
-                              Score
-                            </Text>
-                          </View>
-                          <View className="flex-1 justify-center px-2 py-2">
-                            <Text className="text-[10px] font-bold uppercase text-slate-600">
-                              Comments
-                            </Text>
-                          </View>
-                          <View className="w-28 items-center justify-center px-1 py-2">
-                            <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
-                              Evidence
-                            </Text>
-                          </View>
-                        </View>
-
-                        {section.questions.map((q: any) => {
-                          const score = scores[q.slNo];
-                          const comment = comments[q.slNo];
-                          const scoreInfo = getScoreInfo(score);
-
-                          return (
-                            <View
-                              key={q.slNo}
-                              className="flex-row border-b border-slate-100"
-                            >
-                              <View className="w-10 items-center justify-center px-1 py-3">
-                                <Text className="text-center text-xs font-medium text-slate-600">
-                                  {q.slNo}
+                                <Text className="mt-0.5 text-xs text-slate-500">
+                                  Max marks: {sectionMaxScore} | Score:{" "}
+                                  {sectionScore}/{sectionMaxScore} (
+                                  {sectionPercentage}%)
                                 </Text>
                               </View>
-                              <View className="flex-[2] justify-center px-2 py-3">
+                              <View className="items-end">
                                 <Text
-                                  className="text-xs text-slate-800"
-                                  numberOfLines={3}
+                                  className={`text-xs font-semibold ${styles.textColor}`}
                                 >
-                                  {q.checkpoint}
+                                  Level:{" "}
+                                  {sectionPercentage >= 80
+                                    ? "Excellent"
+                                    : sectionPercentage >= 60
+                                      ? "Good"
+                                      : sectionPercentage >= 40
+                                        ? "Average"
+                                        : "Poor"}
                                 </Text>
                               </View>
-                              <View className="w-10 items-center justify-center px-1 py-3">
-                                <Text className="text-center text-xs text-slate-500">
-                                  4
-                                </Text>
-                              </View>
-                              <View className="w-14 items-center justify-center px-1 py-3">
-                                {score !== undefined && score !== null ? (
-                                  <View className="items-center gap-1">
+                            </View>
+                          </View>
+
+                          {/* Table Header */}
+                          <View className="flex-row border-b border-slate-200 bg-slate-50">
+                            <View className="w-10 items-center justify-center px-1 py-3">
+                              <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                S.No
+                              </Text>
+                            </View>
+                            <View className="flex-[2] justify-start px-3 py-3">
+                              <Text className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Checkpoint
+                              </Text>
+                            </View>
+                            <View className="w-10 items-center justify-center px-1 py-3">
+                              <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Max
+                              </Text>
+                            </View>
+                            <View className="w-14 items-center justify-center px-1 py-3">
+                              <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Score
+                              </Text>
+                            </View>
+                            <View className="flex-1 justify-start px-3 py-3">
+                              <Text className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Comments
+                              </Text>
+                            </View>
+                            <View className="w-28 items-center justify-center px-1 py-3">
+                              <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Evidence
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Table Body */}
+                          {section.questions.map((q: any) => {
+                            const score = scores[q.slNo];
+                            const comment = comments[q.slNo];
+                            const scoreInfo = getScoreInfo(score);
+
+                            return (
+                              <View
+                                key={q.slNo}
+                                className="flex-row border-b border-slate-100"
+                              >
+                                <View className="w-10 items-center justify-center px-1 py-4">
+                                  <Text className="text-center text-xs font-medium text-slate-600">
+                                    {q.slNo}
+                                  </Text>
+                                </View>
+                                <View className="flex-[2] justify-start px-3 py-4">
+                                  <Text
+                                    className="text-xs leading-5 text-slate-800"
+                                    numberOfLines={4}
+                                  >
+                                    {q.checkpoint}
+                                  </Text>
+                                </View>
+                                <View className="w-10 items-center justify-center px-1 py-4">
+                                  <Text className="text-center text-xs text-slate-500">
+                                    4
+                                  </Text>
+                                </View>
+                                <View className="w-14 items-center justify-center px-1 py-4">
+                                  {score !== undefined && score !== null ? (
                                     <View
                                       className={`h-7 w-7 items-center justify-center rounded-full border-2 ${scoreInfo.bgColor} ${scoreInfo.textColor}`}
                                     >
@@ -1818,188 +1786,197 @@ export default function FiveSView({
                                         {score}
                                       </Text>
                                     </View>
-                                  </View>
-                                ) : (
-                                  <View className="rounded-full bg-slate-100 px-1 py-1">
-                                    <Text className="text-center text-[9px] font-medium text-slate-500">
-                                      N/A
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                              <View className="flex-1 justify-center px-2 py-3">
-                                <Text
-                                  className="text-xs text-slate-600"
-                                  numberOfLines={3}
-                                >
-                                  {comment || "-"}
-                                </Text>
-                              </View>
-
-                              <View className="w-28 items-center justify-center px-1 py-3">
-                                <View className="flex-row flex-wrap justify-center gap-1.5">
-                                  {evidences[q.slNo] &&
-                                  evidences[q.slNo].length > 0 ? (
-                                    evidences[q.slNo].map((ev, idx) => {
-                                      const evType = ev.type?.toLowerCase();
-                                      const mediaUrl = ev.uri || ev.filePath;
-
-                                      if (!mediaUrl) return null;
-
-                                      // Check if URL is valid
-                                      const isValidUrl =
-                                        mediaUrl.startsWith("http") ||
-                                        mediaUrl.startsWith("data:") ||
-                                        mediaUrl.startsWith("file:");
-
-                                      // Check if it's a Windows path that won't load
-                                      const isWindowsPath =
-                                        mediaUrl.includes(":\\") ||
-                                        mediaUrl.match(/^[A-Za-z]:/);
-
-                                      return (
-                                        <TouchableOpacity
-                                          key={idx}
-                                          onPress={() => {
-                                            if (!isValidUrl || isWindowsPath) {
-                                              addToast(
-                                                "This media file cannot be previewed - file path is invalid",
-                                                "warning",
-                                              );
-                                              return;
-                                            }
-                                            if (evType === "image") {
-                                              setImageModal({
-                                                open: true,
-                                                url: mediaUrl,
-                                              });
-                                            } else if (evType === "video") {
-                                              setVideoModal({
-                                                open: true,
-                                                url: mediaUrl,
-                                              });
-                                            } else if (evType === "audio") {
-                                              setAudioModal({
-                                                open: true,
-                                                url: mediaUrl,
-                                              });
-                                            }
-                                          }}
-                                          className="active:opacity-70"
-                                        >
-                                          {evType === "image" &&
-                                          isValidUrl &&
-                                          !isWindowsPath ? (
-                                            <Image
-                                              source={{ uri: mediaUrl }}
-                                              style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 6,
-                                                backgroundColor: "#f1f5f9",
-                                              }}
-                                              onError={() => {
-                                                console.warn(
-                                                  `Failed to load image: ${mediaUrl}`,
-                                                );
-                                              }}
-                                            />
-                                          ) : evType === "image" &&
-                                            (isValidUrl || !isWindowsPath) ? (
-                                            <View
-                                              style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 6,
-                                                backgroundColor: "#f1f5f9",
-                                                justifyContent: "center",
-                                                alignItems: "center",
-                                              }}
-                                            >
-                                              <Text style={{ fontSize: 16 }}>
-                                                📷
-                                              </Text>
-                                            </View>
-                                          ) : evType === "video" ? (
-                                            <View
-                                              style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 6,
-                                                backgroundColor: "#1e293b",
-                                                justifyContent: "center",
-                                                alignItems: "center",
-                                              }}
-                                            >
-                                              <Film size={18} color="#fff" />
-                                            </View>
-                                          ) : evType === "audio" ? (
-                                            <View
-                                              style={{
-                                                width: 36,
-                                                height: 36,
-                                                borderRadius: 6,
-                                                backgroundColor: "#00529B",
-                                                justifyContent: "center",
-                                                alignItems: "center",
-                                              }}
-                                            >
-                                              <Mic size={18} color="#fff" />
-                                            </View>
-                                          ) : null}
-                                        </TouchableOpacity>
-                                      );
-                                    })
                                   ) : (
-                                    <Text className="text-xs text-slate-400">
-                                      -
-                                    </Text>
+                                    <View className="rounded-full bg-slate-100 px-2 py-1">
+                                      <Text className="text-center text-[9px] font-medium text-slate-500">
+                                        N/A
+                                      </Text>
+                                    </View>
                                   )}
                                 </View>
+                                <View className="flex-1 justify-start px-3 py-4">
+                                  <Text
+                                    className="text-xs leading-5 text-slate-600"
+                                    numberOfLines={4}
+                                  >
+                                    {comment || "-"}
+                                  </Text>
+                                </View>
+                                <View className="w-28 items-center justify-center px-1 py-4">
+                                  <View className="flex-row flex-wrap justify-center gap-1.5">
+                                    {evidences[q.slNo] &&
+                                    evidences[q.slNo].length > 0 ? (
+                                      evidences[q.slNo].map((ev, idx) => {
+                                        const evType = ev.type?.toLowerCase();
+                                        const mediaUrl = ev.uri || ev.filePath;
+                                        if (!mediaUrl) return null;
+                                        const isValidUrl =
+                                          mediaUrl.startsWith("http") ||
+                                          mediaUrl.startsWith("data:") ||
+                                          mediaUrl.startsWith("file:");
+                                        const isWindowsPath =
+                                          mediaUrl.includes(":\\") ||
+                                          mediaUrl.match(/^[A-Za-z]:/);
+
+                                        return (
+                                          <TouchableOpacity
+                                            key={idx}
+                                            onPress={() => {
+                                              if (
+                                                !isValidUrl ||
+                                                isWindowsPath
+                                              ) {
+                                                addToast(
+                                                  "This media file cannot be previewed - file path is invalid",
+                                                  "warning",
+                                                );
+                                                return;
+                                              }
+                                              if (evType === "image")
+                                                setImageModal({
+                                                  open: true,
+                                                  url: mediaUrl,
+                                                });
+                                              else if (evType === "video")
+                                                setVideoModal({
+                                                  open: true,
+                                                  url: mediaUrl,
+                                                });
+                                              else if (evType === "audio")
+                                                setAudioModal({
+                                                  open: true,
+                                                  url: mediaUrl,
+                                                });
+                                            }}
+                                            className="active:opacity-70"
+                                          >
+                                            {evType === "image" &&
+                                            isValidUrl &&
+                                            !isWindowsPath ? (
+                                              <Image
+                                                source={{ uri: mediaUrl }}
+                                                style={{
+                                                  width: 36,
+                                                  height: 36,
+                                                  borderRadius: 6,
+                                                  backgroundColor: "#f1f5f9",
+                                                }}
+                                                onError={() =>
+                                                  console.warn(
+                                                    `Failed to load image: ${mediaUrl}`,
+                                                  )
+                                                }
+                                              />
+                                            ) : evType === "image" ? (
+                                              <View
+                                                style={{
+                                                  width: 36,
+                                                  height: 36,
+                                                  borderRadius: 6,
+                                                  backgroundColor: "#f1f5f9",
+                                                  justifyContent: "center",
+                                                  alignItems: "center",
+                                                }}
+                                              >
+                                                <Text style={{ fontSize: 16 }}>
+                                                  📷
+                                                </Text>
+                                              </View>
+                                            ) : evType === "video" ? (
+                                              <View
+                                                style={{
+                                                  width: 36,
+                                                  height: 36,
+                                                  borderRadius: 6,
+                                                  backgroundColor: "#1e293b",
+                                                  justifyContent: "center",
+                                                  alignItems: "center",
+                                                }}
+                                              >
+                                                <Film size={18} color="#fff" />
+                                              </View>
+                                            ) : evType === "audio" ? (
+                                              <View
+                                                style={{
+                                                  width: 36,
+                                                  height: 36,
+                                                  borderRadius: 6,
+                                                  backgroundColor:
+                                                    COLORS.primary,
+                                                  justifyContent: "center",
+                                                  alignItems: "center",
+                                                }}
+                                              >
+                                                <Mic size={18} color="#fff" />
+                                              </View>
+                                            ) : null}
+                                          </TouchableOpacity>
+                                        );
+                                      })
+                                    ) : (
+                                      <Text className="text-xs text-slate-400">
+                                        -
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
                               </View>
+                            );
+                          })}
+
+                          {/* Section Total */}
+                          <View className="flex-row border-t border-slate-200 bg-slate-50">
+                            <View className="w-10 px-1 py-3" />
+                            <View className="flex-[2] justify-center px-3 py-3">
+                              <Text className="text-right text-xs font-bold text-slate-700">
+                                Section Total:
+                              </Text>
                             </View>
-                          );
-                        })}
-
-                        <View className="flex-row border-t border-slate-200 bg-slate-50">
-                          <View className="w-10 px-1 py-3" />
-                          <View className="flex-[2] justify-center px-2 py-3">
-                            <Text className="text-right text-xs font-bold text-slate-700">
-                              Section Total:
-                            </Text>
+                            <View className="w-10 items-center justify-center px-1 py-3">
+                              <Text className="text-center text-xs font-bold text-slate-800">
+                                {sectionMaxScore}
+                              </Text>
+                            </View>
+                            <View className="w-14 items-center justify-center px-1 py-3">
+                              <Text className="text-xs font-bold text-slate-800">
+                                {sectionScore}
+                              </Text>
+                            </View>
+                            <View className="flex-1 justify-center px-3 py-3">
+                              <Text className="text-xs font-medium text-slate-600">
+                                {sectionPercentage}%
+                              </Text>
+                            </View>
+                            <View className="w-28 px-1 py-3" />
                           </View>
-                          <View className="w-10 items-center justify-center px-1 py-3">
-                            <Text className="text-center text-xs font-bold text-slate-800">
-                              {sectionMaxScore}
-                            </Text>
-                          </View>
-                          <View className="w-14 items-center justify-center px-1 py-3">
-                            <Text className="text-xs font-bold text-slate-800">
-                              {sectionScore}
-                            </Text>
-                          </View>
-                          <View className="flex-1 justify-center px-2 py-3">
-                            <Text className="text-xs font-medium text-slate-600">
-                              {sectionPercentage}%
-                            </Text>
-                          </View>
-                          <View className="w-28 px-1 py-3" />
                         </View>
-                      </View>
-                    );
-                  },
-                )}
-              </View>
-            </ScrollView>
-          </View>
+                      );
+                    },
+                  )}
+                </View>
+              );
 
-          {/* ============================================================
-    5S OVERALL SCORE & PERCENTAGE CALCULATION
-    ============================================================ */}
+              return isDesktop ? (
+                TableContent
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  {TableContent}
+                </ScrollView>
+              );
+            })()}
+          </View>
+          {/* 5S Overall Score & Percentage */}
           <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <Text className="mb-4 text-base font-bold text-slate-800">
-              📊 5S Overall Score Calculation
-            </Text>
+            <View className="mb-4 flex-row items-center gap-2">
+              <BarChart3 size={18} color={COLORS.primary} />
+              <Text className="text-base font-bold text-slate-800">
+                5S Overall Score Calculation
+              </Text>
+            </View>
 
             {/* Score Summary Cards */}
             <View className="-mx-2 mb-4 flex-row flex-wrap">
@@ -2007,40 +1984,38 @@ export default function FiveSView({
                 {
                   label: "Total Questions",
                   value: totalQuestions,
-                  color: "text-slate-800",
+                  color: COLORS.primaryDark,
                 },
                 {
                   label: "Rated",
                   value: ratedCount,
-                  color: "text-emerald-600",
+                  color: COLORS.primaryDark,
                 },
                 {
                   label: "Total Score",
                   value: totalScore,
-                  color: "text-[#00529B]",
+                  color: COLORS.primaryDark,
                 },
                 {
                   label: "Max Score",
                   value: maxScore,
-                  color: "text-slate-800",
+                  color: COLORS.primaryDark,
                 },
                 {
                   label: "Percentage",
                   value: `${percentage}%`,
-                  color:
-                    percentage >= 80
-                      ? "text-emerald-600"
-                      : percentage >= 60
-                        ? "text-amber-600"
-                        : "text-rose-600",
+                  color: COLORS.primaryDark,
                 },
               ].map((item, idx) => (
                 <View key={idx} className="mb-3 w-1/3 px-2 md:w-1/5">
-                  <View className="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm">
-                    <Text className={`text-xl font-bold ${item.color}`}>
+                  <View className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <Text
+                      className="text-2xl font-bold"
+                      style={{ color: item.color }}
+                    >
                       {item.value}
                     </Text>
-                    <Text className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    <Text className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                       {item.label}
                     </Text>
                   </View>
@@ -2049,116 +2024,110 @@ export default function FiveSView({
             </View>
 
             {/* Progress Bar */}
-            <View className="mb-2 w-full">
-              <View className="mb-1 flex-row justify-between">
-                <Text className="text-xs font-medium text-slate-600">
+            <View className="mb-4 w-full">
+              <View className="mb-2 flex-row justify-between">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Progress
                 </Text>
                 <Text className="text-xs font-bold text-slate-800">
                   {percentage}%
                 </Text>
               </View>
-              <View className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <View className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                 <View
                   className="h-full rounded-full"
                   style={{
                     width: `${percentage}%`,
-                    backgroundColor:
-                      percentage >= 80
-                        ? "#059669"
-                        : percentage >= 60
-                          ? "#d97706"
-                          : "#dc2626",
+                    backgroundColor: COLORS.primaryDark,
                   }}
                 />
               </View>
             </View>
 
-            {/* Rating Text */}
+            {/* Rating Text Banner */}
             <View
-              className={`mt-2 rounded-xl border p-3 text-center ${
-                percentage >= 90
-                  ? "border-emerald-200 bg-emerald-50"
-                  : percentage >= 75 && percentage < 90
-                    ? "border-lime-200 bg-lime-50"
-                    : percentage >= 60 && percentage < 75
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-rose-200 bg-rose-50"
-              }`}
+              className="mt-2 flex-row items-center justify-center gap-2 rounded-xl border p-4"
+              style={{
+                backgroundColor: COLORS.primaryLight,
+                borderColor: COLORS.primaryBorder,
+              }}
             >
-              <View className="flex-row items-center justify-center gap-2">
-                {percentage >= 90 && <Star size={18} color="#047857" />}
-                {percentage >= 75 && percentage < 90 && (
-                  <ThumbsUp size={18} color="#3f6212" />
-                )}
-                {percentage >= 60 && percentage < 75 && (
-                  <AlertCircle size={18} color="#b45309" />
-                )}
-                {percentage < 60 && <AlertCircle size={18} color="#be123c" />}
-                <Text
-                  className={`font-bold ${
-                    percentage >= 90
-                      ? "text-emerald-800"
-                      : percentage >= 75 && percentage < 90
-                        ? "text-lime-800"
-                        : percentage >= 60 && percentage < 75
-                          ? "text-amber-800"
-                          : "text-rose-800"
-                  }`}
-                >
-                  {percentage >= 90
-                    ? "🌟 Excellent - World Class 5S!"
-                    : percentage >= 75
-                      ? "👍 Good - Above Average"
-                      : percentage >= 60
-                        ? "⚠️ Needs Improvement"
-                        : "🚨 Poor - Immediate Action Required"}
+              {percentage >= 90 ? (
+                <CheckCircle size={18} color={COLORS.primary} />
+              ) : percentage >= 75 ? (
+                <ThumbsUp size={18} color={COLORS.primary} />
+              ) : (
+                <AlertCircle size={18} color={COLORS.primary} />
+              )}
+              <Text
+                className="text-sm font-bold"
+                style={{ color: COLORS.primaryDark }}
+              >
+                {percentage >= 90
+                  ? "Excellent - World Class 5S!"
+                  : percentage >= 75
+                    ? "Good - Above Average"
+                    : percentage >= 60
+                      ? "Needs Improvement"
+                      : "Poor - Immediate Action Required"}
+              </Text>
+            </View>
+          </View>
+          {/* Signatures & Comments */}
+          <View
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <Award size={18} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Signatures & Comments
                 </Text>
               </View>
             </View>
-          </View>
 
-          <View className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <View className="mb-4 flex-row items-center gap-2">
-              <PenTool size={18} color={NAVBAR_COLORS.primary} />
-              <Text className="text-base font-bold text-slate-800">
-                Signatures & Comments
-              </Text>
-            </View>
-            <View className="-mx-2 flex-row flex-wrap">
+            <View className="flex-row flex-wrap p-4">
+              {/* Auditor Signature */}
               <View className="mb-4 w-full px-2 md:w-1/2">
-                <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <View className="h-full rounded-xl border border-slate-200 bg-slate-50 p-5">
                   <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                     Auditor Signature
                   </Text>
-                  <View className="mt-3">
+                  <View className="mt-4">
                     {loadingSignatures ? (
-                      <View className="items-center justify-center p-4">
+                      <View className="items-center justify-center py-6">
                         <ActivityIndicator
                           size="small"
-                          color={NAVBAR_COLORS.primary}
+                          color={COLORS.primary}
                         />
                       </View>
                     ) : auditorSignatureUrl ? (
                       <Image
                         source={{ uri: auditorSignatureUrl }}
-                        className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
+                        className="rounded-lg border border-slate-200 bg-white p-3"
                         style={{ height: 96, width: "100%" }}
                         resizeMode="contain"
                       />
                     ) : (
-                      <View className="flex-row items-center gap-2">
-                        <AlertTriangle size={16} color="#94a3b8" />
+                      <View className="flex-row items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-white p-4">
+                        <AlertTriangle size={16} color="#94A3B8" />
                         <Text className="text-sm font-medium text-slate-400">
                           No signature uploaded
                         </Text>
                       </View>
                     )}
                   </View>
-                  <Text className="mt-3 text-sm font-semibold text-slate-700">
+                  <Text className="mt-4 text-sm font-semibold text-slate-800">
                     Name: {auditorName}
                   </Text>
-                  <Text className="mt-0.5 text-xs text-slate-500">
+                  <Text className="mt-1 text-xs text-slate-500">
                     Date:{" "}
                     {auditorSignedAt
                       ? formatDateTime(auditorSignedAt)
@@ -2166,8 +2135,10 @@ export default function FiveSView({
                   </Text>
                   {answers.auditorComment && (
                     <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                      <Text className="text-xs text-slate-600">
-                        <Text className="font-bold">Comment:</Text>{" "}
+                      <Text className="text-xs leading-5 text-slate-600">
+                        <Text className="font-bold text-slate-800">
+                          Comment:{" "}
+                        </Text>
                         {answers.auditorComment}
                       </Text>
                     </View>
@@ -2175,54 +2146,55 @@ export default function FiveSView({
                 </View>
               </View>
 
+              {/* Auditee Signature */}
               <View className="mb-4 w-full px-2 md:w-1/2">
-                <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <View className="h-full rounded-xl border border-slate-200 bg-slate-50 p-5">
                   {showAuditeeActions ? (
                     <>
                       <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                         Your Electronic Signature
                       </Text>
-                      {loadingSignatures ? (
-                        <View className="items-center justify-center p-4">
-                          <ActivityIndicator
-                            size="small"
-                            color={NAVBAR_COLORS.primary}
-                          />
-                        </View>
-                      ) : auditeeSignatureUrl ? (
-                        <View className="mt-3">
-                          <Image
-                            source={{ uri: auditeeSignatureUrl }}
-                            className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
-                            style={{ height: 96, width: "100%" }}
-                            resizeMode="contain"
-                          />
-                          <Text
-                            className="mt-2 text-xs font-medium"
-                            style={{ color: NAVBAR_COLORS.secondary }}
-                          >
-                            ✓ Signature loaded from your profile
-                          </Text>
-                          <Text className="mt-1 text-xs text-slate-500">
-                            Name: {auditeeName}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View className="mt-3">
-                          <View className="flex-row items-center gap-2">
-                            <AlertTriangle size={16} color="#94a3b8" />
-                            <Text className="text-sm font-medium text-slate-400">
-                              No signature uploaded in profile
+                      <View className="mt-4">
+                        {loadingSignatures ? (
+                          <View className="items-center justify-center py-6">
+                            <ActivityIndicator
+                              size="small"
+                              color={COLORS.primary}
+                            />
+                          </View>
+                        ) : auditeeSignatureUrl ? (
+                          <View>
+                            <Image
+                              source={{ uri: auditeeSignatureUrl }}
+                              className="rounded-lg border border-slate-200 bg-white p-3"
+                              style={{ height: 96, width: "100%" }}
+                              resizeMode="contain"
+                            />
+                            <Text className="mt-2 text-xs font-medium text-blue-600">
+                              ✓ Signature loaded from your profile
+                            </Text>
+                            <Text className="mt-1 text-xs text-slate-500">
+                              Name: {auditeeName}
                             </Text>
                           </View>
-                          <TextInput
-                            value={auditeeSignature}
-                            onChangeText={setAuditeeSignature}
-                            placeholder="Type your full name as signature (fallback)"
-                            className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"
-                          />
-                        </View>
-                      )}
+                        ) : (
+                          <View>
+                            <View className="mb-2 flex-row items-center gap-2">
+                              <AlertTriangle size={16} color="#94A3B8" />
+                              <Text className="text-sm font-medium text-slate-400">
+                                No signature uploaded in profile
+                              </Text>
+                            </View>
+                            <TextInput
+                              value={auditeeSignature}
+                              onChangeText={setAuditeeSignature}
+                              placeholder="Type your full name as signature"
+                              placeholderTextColor="#94A3B8"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                            />
+                          </View>
+                        )}
+                      </View>
 
                       <Text className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">
                         Comments / Remarks
@@ -2231,9 +2203,10 @@ export default function FiveSView({
                         value={auditeeComment}
                         onChangeText={setAuditeeComment}
                         placeholder="Enter your comments (required for rejection)"
+                        placeholderTextColor="#94A3B8"
                         multiline
                         numberOfLines={3}
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                        className="mt-2 min-h-[80px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
                         style={{ textAlignVertical: "top" }}
                       />
 
@@ -2244,20 +2217,33 @@ export default function FiveSView({
                             submitting ||
                             (!auditeeSignatureUrl && !auditeeSignature.trim())
                           }
-                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 shadow-md disabled:opacity-50"
+                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3"
+                          activeOpacity={0.8}
+                          style={{
+                            opacity:
+                              submitting ||
+                              (!auditeeSignatureUrl && !auditeeSignature.trim())
+                                ? 0.5
+                                : 1,
+                          }}
                         >
                           <ThumbsUp size={16} color="#ffffff" />
-                          <Text className="text-sm font-medium text-white">
+                          <Text className="text-sm font-semibold text-white">
                             {submitting ? "Processing..." : "Approve & Sign"}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={handleReject}
                           disabled={submitting}
-                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 shadow-md disabled:opacity-50"
+                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                          activeOpacity={0.8}
+                          style={{ opacity: submitting ? 0.5 : 1 }}
                         >
-                          <ThumbsDown size={16} color="#ffffff" />
-                          <Text className="text-sm font-medium text-white">
+                          <ThumbsDown size={16} color={COLORS.stateErrorText} />
+                          <Text
+                            className="text-sm font-semibold"
+                            style={{ color: COLORS.stateErrorText }}
+                          >
                             Reject
                           </Text>
                         </TouchableOpacity>
@@ -2268,52 +2254,52 @@ export default function FiveSView({
                       <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
                         Auditee Signature
                       </Text>
-                      <View className="mt-3">
+                      <View className="mt-4">
                         {loadingSignatures ? (
-                          <View className="items-center justify-center p-4">
+                          <View className="items-center justify-center py-6">
                             <ActivityIndicator
                               size="small"
-                              color={NAVBAR_COLORS.primary}
+                              color={COLORS.primary}
                             />
                           </View>
                         ) : isApproved || isRejected ? (
                           auditeeSignatureUrl ? (
                             <Image
                               source={{ uri: auditeeSignatureUrl }}
-                              className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
+                              className="rounded-lg border border-slate-200 bg-white p-3"
                               style={{ height: 96, width: "100%" }}
                               resizeMode="contain"
                             />
                           ) : auditeeSignature ? (
-                            <View className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                            <View className="rounded-lg border border-slate-200 bg-white p-4">
                               <Text className="text-sm font-semibold text-slate-800">
                                 {auditeeSignature}
                               </Text>
                             </View>
                           ) : (
-                            <View className="flex-row items-center gap-2">
-                              <AlertTriangle size={16} color="#94a3b8" />
+                            <View className="flex-row items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-white p-4">
+                              <AlertTriangle size={16} color="#94A3B8" />
                               <Text className="text-sm font-medium text-slate-400">
                                 No signature available
                               </Text>
                             </View>
                           )
                         ) : (
-                          <View className="items-center justify-center rounded-xl border-2 border-dashed border-amber-200 bg-amber-50 p-6">
-                            <Clock size={32} color="#f59e0b" className="mb-2" />
-                            <Text className="text-sm font-bold text-amber-700">
+                          <View className="items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-white p-6">
+                            <Clock size={28} color="#94A3B8" className="mb-2" />
+                            <Text className="text-sm font-bold text-slate-700">
                               Waiting for Approval
                             </Text>
-                            <Text className="mt-0.5 text-center text-xs text-amber-600">
+                            <Text className="mt-1 text-center text-xs text-slate-500">
                               Signature will appear after auditee approval
                             </Text>
                           </View>
                         )}
                       </View>
-                      <Text className="mt-3 text-sm font-semibold text-slate-700">
+                      <Text className="mt-4 text-sm font-semibold text-slate-800">
                         Name: {auditeeName}
                       </Text>
-                      <Text className="mt-0.5 text-xs text-slate-500">
+                      <Text className="mt-1 text-xs text-slate-500">
                         Date:{" "}
                         {auditeeSignedAt
                           ? formatDateTime(auditeeSignedAt)
@@ -2325,8 +2311,10 @@ export default function FiveSView({
                       {(answers.auditeeComment || auditeeComment) &&
                         (isApproved || isRejected) && (
                           <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                            <Text className="text-xs text-slate-600">
-                              <Text className="font-bold">Comment:</Text>{" "}
+                            <Text className="text-xs leading-5 text-slate-600">
+                              <Text className="font-bold text-slate-800">
+                                Comment:{" "}
+                              </Text>
                               {answers.auditeeComment || auditeeComment}
                             </Text>
                           </View>
@@ -2338,23 +2326,56 @@ export default function FiveSView({
                         </Text>
                         <View className="mt-2">
                           {isApproved ? (
-                            <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5">
-                              <CheckCircle size={12} color="#047857" />
-                              <Text className="text-xs font-semibold text-emerald-700">
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateSuccessBg,
+                                borderColor: COLORS.primaryBorder,
+                              }}
+                            >
+                              <CheckCircle size={12} color={COLORS.primary} />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.primary }}
+                              >
                                 Approved
                               </Text>
                             </View>
                           ) : isRejected ? (
-                            <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5">
-                              <XCircle size={12} color="#be123c" />
-                              <Text className="text-xs font-semibold text-rose-700">
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateErrorBg,
+                                borderColor: COLORS.border,
+                              }}
+                            >
+                              <XCircle
+                                size={12}
+                                color={COLORS.stateErrorText}
+                              />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.stateErrorText }}
+                              >
                                 Rejected
                               </Text>
                             </View>
                           ) : (
-                            <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5">
-                              <AlertCircle size={12} color="#b45309" />
-                              <Text className="text-xs font-semibold text-amber-700">
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateWarningBg,
+                                borderColor: COLORS.border,
+                              }}
+                            >
+                              <AlertCircle
+                                size={12}
+                                color={COLORS.stateWarningText}
+                              />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.stateWarningText }}
+                              >
                                 Pending Approval
                               </Text>
                             </View>
@@ -2368,6 +2389,7 @@ export default function FiveSView({
             </View>
           </View>
 
+          {/* Footer */}
           <View className="mt-8 items-center pb-6">
             <Text className="text-center text-xs text-slate-400">
               5S Workplace Organization Audit Report | Generated on{" "}
@@ -2378,201 +2400,200 @@ export default function FiveSView({
               signature
             </Text>
           </View>
-        </View>
-      </ScrollView>
 
-      <Modal
-        visible={imageModal.open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setImageModal({ open: false, url: "" })}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.95)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <TouchableOpacity
-            style={{
-              position: "absolute",
-              top: 50,
-              right: 20,
-              zIndex: 10,
-              padding: 10,
-            }}
-            onPress={() => setImageModal({ open: false, url: "" })}
+          {/* Modals */}
+          <Modal
+            visible={imageModal.open}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setImageModal({ open: false, url: "" })}
           >
-            <XCircle size={34} color="white" />
-          </TouchableOpacity>
-          {imageModal.url && (
-            <Image
-              source={{ uri: imageModal.url }}
-              style={{ width: "95%", height: "85%" }}
-              resizeMode="contain"
-              onError={() => {
-                addToast("Failed to load image", "error");
-                setImageModal({ open: false, url: "" });
-              }}
-              onLoadStart={() => {
-                console.log("Loading image:", imageModal.url);
-              }}
-            />
-          )}
-        </View>
-      </Modal>
-
-      {/* ✅ FULLSCREEN VIDEO MODAL */}
-      <Modal
-        visible={videoModal.open}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setVideoModal({ open: false, url: "" })}
-      >
-        {Platform.OS === "web" ? (
-          <WebVideoPlayer
-            url={videoModal.url}
-            onClose={() => setVideoModal({ open: false, url: "" })}
-          />
-        ) : (
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "black",
-              justifyContent: "center",
-            }}
-          >
-            <TouchableOpacity
-              style={{
-                position: "absolute",
-                top: 50,
-                right: 20,
-                zIndex: 10,
-                padding: 10,
-              }}
-              onPress={() => setVideoModal({ open: false, url: "" })}
-            >
-              <XCircle size={34} color="white" />
-            </TouchableOpacity>
-            {videoModal.url && (
-              <Video
-                source={{ uri: videoModal.url }}
-                style={{ width: "100%", height: "100%" }}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
-              />
-            )}
-          </View>
-        )}
-      </Modal>
-
-      {/* ✅ FULLSCREEN AUDIO MODAL */}
-      <Modal
-        visible={audioModal.open}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAudioModal({ open: false, url: "" })}
-      >
-        {Platform.OS === "web" ? (
-          <WebAudioPlayerModal
-            url={audioModal.url}
-            onClose={() => setAudioModal({ open: false, url: "" })}
-          />
-        ) : (
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.85)",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <TouchableOpacity
-              style={{
-                position: "absolute",
-                top: 50,
-                right: 20,
-                zIndex: 10,
-                padding: 10,
-              }}
-              onPress={() => setAudioModal({ open: false, url: "" })}
-            >
-              <XCircle size={34} color="white" />
-            </TouchableOpacity>
             <View
               style={{
-                width: "90%",
-                maxWidth: 400,
-                padding: 24,
-                backgroundColor: "white",
-                borderRadius: 16,
+                flex: 1,
+                backgroundColor: "rgba(0,0,0,0.95)",
+                justifyContent: "center",
                 alignItems: "center",
               }}
             >
-              <View
+              <TouchableOpacity
                 style={{
-                  padding: 16,
-                  marginBottom: 16,
-                  borderRadius: 999,
-                  backgroundColor: "#eff6ff",
+                  position: "absolute",
+                  top: 50,
+                  right: 20,
+                  zIndex: 10,
+                  padding: 10,
                 }}
+                onPress={() => setImageModal({ open: false, url: "" })}
               >
-                <Mic size={32} color="#00529B" />
-              </View>
-              <Text
-                style={{
-                  marginBottom: 16,
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  color: "#1e293b",
-                }}
-              >
-                Audio Evidence
-              </Text>
-              {audioModal.url && (
-                <Video
-                  source={{ uri: audioModal.url }}
-                  style={{ width: "100%", height: 60 }}
-                  useNativeControls
-                  resizeMode={ResizeMode.CONTAIN}
+                <XCircle size={34} color="white" />
+              </TouchableOpacity>
+              {imageModal.url && (
+                <Image
+                  source={{ uri: imageModal.url }}
+                  style={{ width: "95%", height: "85%" }}
+                  resizeMode="contain"
+                  onError={() => {
+                    addToast("Failed to load image", "error");
+                    setImageModal({ open: false, url: "" });
+                  }}
+                  onLoadStart={() =>
+                    console.log("Loading image:", imageModal.url)
+                  }
                 />
               )}
             </View>
-          </View>
-        )}
-      </Modal>
+          </Modal>
 
-      <PDFViewer
-        visible={pdfViewer.visible}
-        pdfData={pdfViewer.pdfData}
-        fileName={pdfViewer.fileName}
-        auditId={String(audit?.id || "")}
-        auditNumber={`5S-${audit?.id || ""}`}
-        pdfType="5s"
-        forumGroups={[
-          {
-            id: `AUDIT-${audit?.auditScheduleId || audit?.scheduleId || ""}`,
-            name: `📋 5S Audit ${audit?.auditScheduleId || audit?.scheduleId || ""}`,
-            type: "Audit",
-          },
-          {
-            id: "AUDIT-general-forum",
-            name: "📢 General Discussion",
-            type: "General",
-          },
-        ]}
-        onClose={() =>
-          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
-        }
-        onShareComplete={(forumId?: string) => {
-          addToast("PDF shared to forum successfully!", "success");
-          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-        }}
-        currentUser={user}
-        allUsers={allUsers}
-      />
-    </>
+          <Modal
+            visible={videoModal.open}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setVideoModal({ open: false, url: "" })}
+          >
+            {Platform.OS === "web" ? (
+              <WebVideoPlayer
+                url={videoModal.url}
+                onClose={() => setVideoModal({ open: false, url: "" })}
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "black",
+                  justifyContent: "center",
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    top: 50,
+                    right: 20,
+                    zIndex: 10,
+                    padding: 10,
+                  }}
+                  onPress={() => setVideoModal({ open: false, url: "" })}
+                >
+                  <XCircle size={34} color="white" />
+                </TouchableOpacity>
+                {videoModal.url && (
+                  <Video
+                    source={{ uri: videoModal.url }}
+                    style={{ width: "100%", height: "100%" }}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                  />
+                )}
+              </View>
+            )}
+          </Modal>
+
+          <Modal
+            visible={audioModal.open}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setAudioModal({ open: false, url: "" })}
+          >
+            {Platform.OS === "web" ? (
+              <WebAudioPlayerModal
+                url={audioModal.url}
+                onClose={() => setAudioModal({ open: false, url: "" })}
+              />
+            ) : (
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: "rgba(0,0,0,0.85)",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    position: "absolute",
+                    top: 50,
+                    right: 20,
+                    zIndex: 10,
+                    padding: 10,
+                  }}
+                  onPress={() => setAudioModal({ open: false, url: "" })}
+                >
+                  <XCircle size={34} color="white" />
+                </TouchableOpacity>
+                <View
+                  style={{
+                    width: "90%",
+                    maxWidth: 400,
+                    padding: 24,
+                    backgroundColor: "white",
+                    borderRadius: 16,
+                    alignItems: "center",
+                  }}
+                >
+                  <View
+                    style={{
+                      padding: 16,
+                      marginBottom: 16,
+                      borderRadius: 999,
+                      backgroundColor: COLORS.primaryLight,
+                    }}
+                  >
+                    <Mic size={32} color={COLORS.primary} />
+                  </View>
+                  <Text
+                    style={{
+                      marginBottom: 16,
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      color: COLORS.text,
+                    }}
+                  >
+                    Audio Evidence
+                  </Text>
+                  {audioModal.url && (
+                    <Video
+                      source={{ uri: audioModal.url }}
+                      style={{ width: "100%", height: 60 }}
+                      useNativeControls
+                      resizeMode={ResizeMode.CONTAIN}
+                    />
+                  )}
+                </View>
+              </View>
+            )}
+          </Modal>
+
+          <PDFViewer
+            visible={pdfViewer.visible}
+            pdfData={pdfViewer.pdfData}
+            fileName={pdfViewer.fileName}
+            auditId={String(audit?.id || "")}
+            auditNumber={`5S-${audit?.id || ""}`}
+            pdfType="5s"
+            forumGroups={[
+              {
+                id: `AUDIT-${audit?.auditScheduleId || audit?.scheduleId || ""}`,
+                name: `📋 5S Audit ${audit?.auditScheduleId || audit?.scheduleId || ""}`,
+                type: "Audit",
+              },
+              {
+                id: "AUDIT-general-forum",
+                name: "📢 General Discussion",
+                type: "General",
+              },
+            ]}
+            onClose={() =>
+              setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+            }
+            onShareComplete={(forumId?: string) => {
+              addToast("PDF shared to forum successfully!", "success");
+              setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+            }}
+            currentUser={user}
+            allUsers={allUsers}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }

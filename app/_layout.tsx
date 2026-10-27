@@ -11,18 +11,15 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Platform } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler"; // ✅ ADDED
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-// ✅ Polyfill for Windows flag emojis — with font override
-// ✅ Polyfill MUST run before CSS is imported
 import "./global.css";
 
-// ✅ Polyfill for Windows flag emojis — web only
 if (Platform.OS === "web" && typeof document !== "undefined") {
   const { polyfillCountryFlagEmojis } = require("country-flag-emoji-polyfill");
   polyfillCountryFlagEmojis();
 }
-// Keep the native splash screen visible while we fetch assets (Only on Mobile)
+
 if (Platform.OS !== "web") {
   SplashScreen.preventAutoHideAsync();
 }
@@ -31,7 +28,6 @@ function RootLayoutContent() {
   const { loading, isAuthenticated } = useAuth();
   const [appIsReady, setAppIsReady] = useState(false);
 
-  // Animation values
   const spinValue = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -52,17 +48,18 @@ function RootLayoutContent() {
 
   useEffect(() => {
     if (appIsReady) {
+      // 500ms delay allows the router to settle before the splash screen fades
       setTimeout(async () => {
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 800,
+          duration: 500,
           useNativeDriver: true,
         }).start(async () => {
           if (Platform.OS !== "web") {
             await SplashScreen.hideAsync();
           }
         });
-      }, 1200);
+      }, 500);
     }
   }, [appIsReady]);
 
@@ -71,6 +68,7 @@ function RootLayoutContent() {
     outputRange: ["0deg", "360deg"],
   });
 
+  // 🛑 CRITICAL: Block the router completely until loading is done AND splash is ready
   if (loading || !appIsReady) {
     return (
       <Animated.View
@@ -104,7 +102,11 @@ function RootLayoutContent() {
   return (
     <>
       <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* ✅ key forces a clean remount when auth state changes */}
+      <Stack
+        key={isAuthenticated ? "app" : "auth"}
+        screenOptions={{ headerShown: false }}
+      >
         {isAuthenticated ? (
           <Stack.Screen name="(app)" options={{ headerShown: false }} />
         ) : (
@@ -117,8 +119,6 @@ function RootLayoutContent() {
 
 export default function RootLayout() {
   return (
-    // ✅ GestureHandlerRootView MUST be the outermost wrapper
-    //    so drag/pan gestures work app-wide (Fishbone, 5 Why, etc.)
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AppModeProvider>
         <AuthProvider>

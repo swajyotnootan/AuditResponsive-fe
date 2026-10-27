@@ -3,7 +3,7 @@ import PDFViewer from "@/components/audit/PDFViewer";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi, User } from "@/services/auditScheduleApi";
 import { pdfService } from "@/services/pdfService";
-import DateTimePicker from "@react-native-community/datetimepicker"; // ← ADD THIS LINE
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -13,14 +13,20 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  CheckCircle,
   CheckSquare,
+  Clock,
   Coffee,
   Edit2,
+  Eye,
   FileText,
+  Filter,
   MessageSquare,
+  MoreVertical,
   Plus,
   Printer,
   RefreshCw,
+  Repeat,
   Send,
   Sunrise,
   Sunset,
@@ -41,6 +47,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -48,31 +55,40 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
-import AddScheduleModal from "./AddScheduleModal"; // ✅ NEW IMPORT
+import AddScheduleModal from "./AddScheduleModal";
 
+// ════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
 const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
   bg: "#F8FAFC",
   card: "#FFFFFF",
   border: "#E2E8F0",
-  text: "#000000",
-  textValue: "#1F2937",
-  textMuted: "#6B7280",
-  accent: "#00529B",
-  accentLight: "#EFF6FF",
-  accentBorder: "#DBEAFE",
-  success: "#10B981",
-  successLight: "#ECFDF5",
-  successBorder: "#A7F3D0",
-  error: "#EF4444",
-  errorLight: "#FEF2F2",
-  errorBorder: "#FECACA",
-  warning: "#F59E0B",
-  warningLight: "#FFFBEB",
-  warningBorder: "#FDE68A",
-  purple: "#8B5CF6",
-  purpleLight: "#F5F3FF",
-  purpleBorder: "#DDD6FE",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
+  chipBg: "#EFF6FF",
+  chipBorder: "#BFDBFE",
+  chipText: "#1E40AF",
 };
+
+// ═════ STYLES ═════
+const styles = StyleSheet.create({
+  expandedRow: {
+    backgroundColor: "#F8FAFC",
+  },
+  chip: {
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+});
 
 // ═════ PLANT FILTER HELPERS ═════
 type PlantKey = string | number | null | undefined;
@@ -105,6 +121,7 @@ const filterByPlant = <T,>(rows: T[], plantId: PlantKey): T[] => {
   if (plantId === null || plantId === undefined || plantId === "") return rows;
   return rows.filter((r) => samePlant(r as any, plantId));
 };
+
 // ═════ CONSTANTS ═════
 const monthNumber: Record<string, number> = {
   Jan: 0,
@@ -134,6 +151,24 @@ const monthDisplay: Record<string, string> = {
   Jan: "January",
   Feb: "February",
   Mar: "March",
+};
+
+const getQuarter = (month: string) => {
+  const quarters: Record<string, string> = {
+    Apr: "Q1",
+    May: "Q1",
+    Jun: "Q1",
+    Jul: "Q2",
+    Aug: "Q2",
+    Sep: "Q2",
+    Oct: "Q3",
+    Nov: "Q3",
+    Dec: "Q3",
+    Jan: "Q4",
+    Feb: "Q4",
+    Mar: "Q4",
+  };
+  return quarters[month] || "";
 };
 
 const departmentDisplayToEnum: Record<string, string> = {
@@ -269,22 +304,193 @@ interface BasicSchedule {
 }
 
 // ═════ SUB-COMPONENTS ═════
-const Card = ({
-  children,
-  className = "",
-  style,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  style?: any;
-}) => (
+const Card = ({ children, className = "" }: any) => (
   <View
-    className={`mb-4 rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}
-    style={style}
+    className={`mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white ${className}`}
+    style={{
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 4,
+      elevation: 1,
+    }}
   >
     {children}
   </View>
 );
+
+const AlertBanner = ({ type, title, message, footer, icon: Icon }: any) => {
+  const stylesMap: any = {
+    error: {
+      bg: COLORS.stateErrorBg,
+      border: COLORS.border,
+      color: COLORS.stateErrorText,
+      iconColor: COLORS.stateErrorText,
+      iconBg: "#E2E8F0",
+    },
+    warning: {
+      bg: COLORS.stateWarningBg,
+      border: COLORS.border,
+      color: COLORS.stateWarningText,
+      iconColor: COLORS.stateWarningText,
+      iconBg: "#F1F5F9",
+    },
+    success: {
+      bg: COLORS.stateSuccessBg,
+      border: COLORS.primaryBorder,
+      color: COLORS.primaryDark,
+      iconColor: COLORS.primary,
+      iconBg: "#FFFFFF",
+    },
+  };
+  const s = stylesMap[type] || stylesMap.error;
+  return (
+    <View
+      className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+      style={{ backgroundColor: s.bg, borderColor: s.border }}
+    >
+      <View
+        className="h-10 w-10 items-center justify-center rounded-xl"
+        style={{
+          backgroundColor: s.iconBg,
+          borderColor: s.border,
+          borderWidth: 1,
+        }}
+      >
+        <Icon size={20} color={s.iconColor} />
+      </View>
+      <View className="flex-1 justify-center">
+        <Text className="text-sm font-bold" style={{ color: s.color }}>
+          {title}
+        </Text>
+        <Text
+          className="mt-1 text-sm leading-5 opacity-90"
+          style={{ color: s.color }}
+        >
+          {message}
+        </Text>
+        {footer && (
+          <Text
+            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70"
+            style={{ color: s.color }}
+          >
+            {footer}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const StatusBadge = ({ status }: { status: string }) => {
+  if (status === "COMPLETED") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <Check size={14} color={COLORS.primary} />
+      </View>
+    );
+  }
+  if (status === "SCHEDULED" || status === "PLANNED") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <Clock size={14} color={COLORS.primary} />
+      </View>
+    );
+  }
+  if (status === "IN_PROGRESS") {
+    return (
+      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <Repeat size={14} color={COLORS.primary} />
+      </View>
+    );
+  }
+  return (
+    <View className="h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
+      <Text className="text-[11px] font-bold text-slate-400">—</Text>
+    </View>
+  );
+};
+
+const ApprovalBadge = ({ status }: { status?: string }) => {
+  const getStyle = () => {
+    switch (status) {
+      case "APPROVED":
+        return {
+          bg: COLORS.stateSuccessBg,
+          color: COLORS.primaryDark,
+          border: COLORS.primaryBorder,
+          text: "Approved",
+          icon: CheckCircle,
+        };
+      case "CONFIRMED_BY_LA":
+        return {
+          bg: COLORS.primaryLight,
+          color: COLORS.primary,
+          border: COLORS.primaryBorder,
+          text: "Confirmed by LA",
+          icon: CheckCircle,
+        };
+      case "PENDING_LA_CONFIRMATION":
+        return {
+          bg: COLORS.primaryLight,
+          color: COLORS.primary,
+          border: COLORS.primaryBorder,
+          text: "Pending LA",
+          icon: Clock,
+        };
+      case "PENDING_APPROVAL":
+        return {
+          bg: COLORS.stateWarningBg,
+          color: COLORS.stateWarningText,
+          border: COLORS.border,
+          text: "Pending TM",
+          icon: Clock,
+        };
+      case "FEASIBILITY_REJECTED":
+      case "REJECTED":
+        return {
+          bg: COLORS.stateErrorBg,
+          color: COLORS.stateErrorText,
+          border: COLORS.border,
+          text: status === "REJECTED" ? "Rejected" : "Rejected by LA",
+          icon: XCircle,
+        };
+      case "CHANGE_REQUESTED":
+        return {
+          bg: COLORS.stateWarningBg,
+          color: COLORS.stateWarningText,
+          border: COLORS.border,
+          text: "Changes Requested",
+          icon: MessageSquare,
+        };
+      default:
+        return {
+          bg: "#F1F5F9",
+          color: "#475569",
+          border: "#E2E8F0",
+          text: "Draft",
+          icon: FileText,
+        };
+    }
+  };
+
+  const s = getStyle();
+  const Icon = s.icon;
+  return (
+    <View
+      className="flex-row items-center gap-1.5 self-start rounded-full border px-2.5 py-1"
+      style={{ backgroundColor: s.bg, borderColor: s.border }}
+    >
+      <Icon size={12} color={s.color} />
+      <Text
+        className="text-[10px] font-bold uppercase tracking-wide"
+        style={{ color: s.color }}
+      >
+        {s.text}
+      </Text>
+    </View>
+  );
+};
 
 const ActionButton = ({
   onPress,
@@ -310,12 +516,13 @@ const ActionButton = ({
   <TouchableOpacity
     onPress={onPress}
     disabled={disabled || loading}
-    className={`h-10 flex-row items-center justify-center gap-2 rounded-lg border px-5 ${disabled || loading ? "border-gray-200 bg-gray-100" : ""} ${className}`}
+    className={`h-10 flex-row items-center justify-center gap-2 rounded-lg border px-4 ${disabled || loading ? "border-slate-200 bg-slate-100" : ""} ${className}`}
     style={{
       backgroundColor: disabled || loading ? undefined : bgColor,
       borderColor:
         disabled || loading ? undefined : borderColor || "transparent",
     }}
+    activeOpacity={0.8}
   >
     {loading ? (
       <ActivityIndicator size="small" color={color} />
@@ -323,7 +530,7 @@ const ActionButton = ({
       <Icon size={16} color={disabled || loading ? "#94A3B8" : color} />
     ) : null}
     <Text
-      className={`text-sm font-semibold ${disabled || loading ? "text-gray-400" : ""}`}
+      className={`text-sm font-semibold ${disabled || loading ? "text-slate-400" : ""}`}
       style={{ color: disabled || loading ? undefined : color }}
     >
       {children}
@@ -331,71 +538,56 @@ const ActionButton = ({
   </TouchableOpacity>
 );
 
-const AlertBanner = ({
-  type,
+const OutlineButton = ({
   title,
-  message,
-  footer,
   icon: Icon,
-}: {
-  type: "error" | "warning" | "success" | "info";
-  title: string;
-  message: string;
-  footer?: string;
-  icon: any;
-}) => {
-  const stylesMap: Record<string, any> = {
-    error: {
-      bg: COLORS.errorLight,
-      border: COLORS.errorBorder,
-      color: "#991B1B",
-      iconColor: "#DC2626",
-    },
-    warning: {
-      bg: COLORS.warningLight,
-      border: COLORS.warningBorder,
-      color: "#92400E",
-      iconColor: "#D97706",
-    },
-    success: {
-      bg: COLORS.successLight,
-      border: COLORS.successBorder,
-      color: "#065F46",
-      iconColor: "#059669",
-    },
-    info: {
-      bg: COLORS.accentLight,
-      border: COLORS.accentBorder,
-      color: "#1E3A8A",
-      iconColor: COLORS.accent,
-    },
-  };
-  const s = stylesMap[type] || stylesMap.info;
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827";
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
   return (
-    <View
-      className="mb-4 flex-row gap-3 rounded-xl border p-4"
-      style={{ backgroundColor: s.bg, borderColor: s.border }}
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-3 py-2.5"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
     >
-      <View
-        className="h-9 w-9 items-center justify-center rounded-lg border bg-white"
-        style={{ borderColor: s.border }}
-      >
-        <Icon size={18} color={s.iconColor} />
-      </View>
-      <View className="flex-1">
-        <Text className="text-sm font-semibold" style={{ color: s.color }}>
-          {title}
-        </Text>
-        <Text className="mt-1 text-xs opacity-90" style={{ color: s.color }}>
-          {message}
-        </Text>
-        {footer && (
-          <Text className="mt-2 text-xs opacity-70" style={{ color: s.color }}>
-            {footer}
-          </Text>
-        )}
-      </View>
-    </View>
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text className="text-sm font-semibold" style={{ color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
   );
 };
 
@@ -407,7 +599,6 @@ const ActionModal = ({
   icon: Icon,
   iconColor,
   iconBg,
-  iconBorder,
   value,
   setValue,
   placeholder,
@@ -415,23 +606,7 @@ const ActionModal = ({
   submitLabel,
   submitBg,
   submitting,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  description: string;
-  icon: any;
-  iconColor: string;
-  iconBg: string;
-  iconBorder: string;
-  value: string;
-  setValue: (val: string) => void;
-  placeholder: string;
-  onSubmit: () => void;
-  submitLabel: string;
-  submitBg: string;
-  submitting: boolean;
-}) => {
+}: any) => {
   if (!isOpen) return null;
   return (
     <Modal
@@ -441,29 +616,36 @@ const ActionModal = ({
       onRequestClose={onClose}
     >
       <TouchableOpacity
-        className="flex-1 items-center justify-center bg-black/30 p-5"
+        className="flex-1 items-center justify-center bg-slate-900/30 p-6"
         activeOpacity={1}
         onPress={onClose}
       >
         <TouchableOpacity
           activeOpacity={1}
-          className="w-full max-w-md overflow-hidden rounded-2xl bg-white"
+          className="w-full max-w-md overflow-hidden rounded-3xl bg-white"
+          style={{
+            shadowColor: "#0F172A",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.05,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
         >
-          <View className="flex-row items-center gap-4 border-b border-gray-200 p-6">
+          <View className="flex-row items-center gap-4 border-b border-slate-100 p-6">
             <View
-              className="h-11 w-11 items-center justify-center rounded-xl border"
-              style={{ backgroundColor: iconBg, borderColor: iconBorder }}
+              className="h-12 w-12 items-center justify-center rounded-2xl border border-slate-100"
+              style={{ backgroundColor: iconBg }}
             >
               <Icon size={22} color={iconColor} />
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-bold text-gray-900">{title}</Text>
-              <Text className="mt-1 text-xs text-gray-500">{description}</Text>
+              <Text className="text-lg font-bold text-slate-900">{title}</Text>
+              <Text className="mt-1 text-sm text-slate-500">{description}</Text>
             </View>
           </View>
           <View className="p-6">
             <TextInput
-              className="min-h-[120px] w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-800"
+              className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800"
               value={value}
               onChangeText={setValue}
               multiline
@@ -473,23 +655,26 @@ const ActionModal = ({
               textAlignVertical="top"
             />
           </View>
-          <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
+          <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
             <TouchableOpacity
               onPress={onClose}
-              className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
+              className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
+              activeOpacity={0.7}
             >
-              <Text className="text-sm font-semibold text-gray-700">
+              <Text className="text-sm font-semibold text-slate-600">
                 Cancel
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onSubmit}
               disabled={!value.trim() || submitting}
-              className="h-10 flex-row items-center justify-center gap-2 rounded-lg px-5"
+              className="h-11 flex-row items-center justify-center gap-2 rounded-xl px-6"
               style={{
                 backgroundColor:
-                  !value.trim() || submitting ? "#F1F5F9" : submitBg,
+                  !value.trim() || submitting ? "#CBD5E1" : submitBg,
+                opacity: !value.trim() || submitting ? 0.7 : 1,
               }}
+              activeOpacity={0.8}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color="#FFF" />
@@ -504,6 +689,85 @@ const ActionModal = ({
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
+  );
+};
+
+const MarqueeText = ({ text, style }: { text: string; style?: any }) => {
+  const [offset, setOffset] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const GAP = 60;
+  const SPEED = 0.6;
+  useEffect(() => {
+    if (textWidth === 0 || containerWidth === 0) return;
+    if (textWidth <= containerWidth) {
+      setOffset(0);
+      return;
+    }
+    const cycle = textWidth + GAP;
+    const interval = setInterval(() => {
+      setOffset((prev) => {
+        const next = prev - SPEED;
+        return next <= -cycle ? 0 : next;
+      });
+    }, 16);
+    return () => clearInterval(interval);
+  }, [textWidth, containerWidth]);
+  return (
+    <View
+      style={[
+        {
+          width: "100%",
+          height: 30,
+          overflow: "hidden",
+          justifyContent: "center",
+        },
+        style,
+      ]}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 1) setContainerWidth(w);
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          transform: [{ translateX: offset }],
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+          onLayout={(e) => {
+            const w = e.nativeEvent.layout.width;
+            if (w > 0 && Math.abs(w - textWidth) > 1) setTextWidth(w);
+          }}
+        >
+          {text}
+        </Text>
+        <Text
+          numberOfLines={1}
+          allowFontScaling={false}
+          style={{
+            fontSize: 20,
+            fontWeight: "bold",
+            color: "#0F172A",
+            marginRight: GAP,
+            flexShrink: 0,
+          }}
+        >
+          {text}
+        </Text>
+      </View>
+    </View>
   );
 };
 
@@ -566,8 +830,8 @@ interface Form5DetailedViewProps {
   startDate?: string;
   endDate?: string;
   onBack?: () => void;
-  allUsers?: any[]; // ← Add this
-  onOpenForum?: (forumId: string) => void; // ✅ ADD THIS
+  allUsers?: any[];
+  onOpenForum?: (forumId: string) => void;
 }
 
 export default function Form5DetailedView({
@@ -617,6 +881,7 @@ export default function Form5DetailedView({
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const defaultMonth = new Date().toLocaleString("default", { month: "short" });
   const defaultYear = new Date().getFullYear();
@@ -700,7 +965,6 @@ export default function Form5DetailedView({
     [],
   );
 
-  // ✅ NEW: bulk competent users (mirrors AddScheduleModal logic)
   const [bulkCompetentAuditors, setBulkCompetentAuditors] = useState<User[]>(
     [],
   );
@@ -819,6 +1083,7 @@ export default function Form5DetailedView({
     pdfData: "",
     fileName: "",
   });
+
   const getUserIdAsNumber = (): number => {
     if (!user?.id) return 0;
     if (typeof user.id === "number") return user.id;
@@ -874,26 +1139,13 @@ export default function Form5DetailedView({
     [getMonthLimits],
   );
 
-  // ✅ NEW — only uses selectedWeek or full month, never startDate
   const getDateLimits = useCallback(() => {
     if (selectedWeek) {
       return getWeekLimits(selectedWeek);
     }
-    // Always fall back to full month limits so user can pick ANY date in the month
     return getMonthLimits();
   }, [selectedWeek, getWeekLimits, getMonthLimits]);
 
-  // useEffect(() => {
-  //   if (!selectedWeek) return;
-  //   const limits = getWeekLimits(selectedWeek);
-  //   if (!limits) return;
-  //   if (!startDate && !endDate) {
-  //     setStartDate(limits.min);
-  //     setEndDate(limits.max);
-  //   }
-  // }, [selectedWeek, getWeekLimits, startDate, endDate]);
-
-  // ✅ Fill table data: sync auditSchedules → filteredAuditSchedules
   useEffect(() => {
     if (!globalAuditType || globalAuditType === "") {
       setFilteredAuditSchedules(auditSchedules);
@@ -1033,7 +1285,6 @@ export default function Form5DetailedView({
       dt <= toDate;
       dt.setDate(dt.getDate() + 1)
     ) {
-      // ✅ Use local ISO, not toISOString()
       const dateStr = toISODate(dt);
       weeksInRange.add(getWeekNumber(dateStr));
     }
@@ -1073,7 +1324,6 @@ export default function Form5DetailedView({
           );
         }
 
-        // ✅ Match normal schedule: show dept if no global type OR has matching elements
         const shouldShow = !globalAuditType || filteredElements.length > 0;
         if (shouldShow && !departmentsMap.has(schedule.department)) {
           departmentsMap.set(schedule.department, {
@@ -1086,6 +1336,7 @@ export default function Form5DetailedView({
 
     return Array.from(departmentsMap.values());
   }, [basicSchedules, bulkData.fromDate, bulkData.toDate, globalAuditType]);
+
   const getAvailableAuditors = useCallback((): User[] => {
     const auditorIds: number[] = [];
     if (headerData.leadAuditorId) auditorIds.push(headerData.leadAuditorId);
@@ -1159,11 +1410,9 @@ export default function Form5DetailedView({
       let teamIds: number[] = [];
       let teamNames: string[] = [];
 
-      // Resolve primary auditor ID early (used for merging below)
       const primaryAuditorId =
         matchedSchedule.auditorId ?? matchedSchedule.leadAuditorId ?? null;
 
-      // 1. Prefer teamAuditorIds, else coAuditorIds
       if (matchedSchedule.teamAuditorIds) {
         teamIds = matchedSchedule.teamAuditorIds as number[];
         if (typeof teamIds === "string") {
@@ -1188,15 +1437,12 @@ export default function Form5DetailedView({
         ? teamIds.map((id) => parseInt(id as any)).filter((id) => !isNaN(id))
         : [];
 
-      // ✅ 2. Merge the PRIMARY auditor into the team (if not already present)
       if (primaryAuditorId != null) {
         const primary = parseInt(primaryAuditorId as any);
         if (!isNaN(primary) && !teamIds.includes(primary)) {
-          teamIds.unshift(primary); // put primary first
+          teamIds.unshift(primary);
         }
       }
-      // Prefer coAuditorNames first (it already includes primary + co-auditors
-      // on the fixed backend), then fall back to teamAuditorNames
       if (matchedSchedule.coAuditorNames) {
         teamNames = matchedSchedule.coAuditorNames as string[];
         if (typeof teamNames === "string") {
@@ -1218,7 +1464,6 @@ export default function Form5DetailedView({
         }
       }
 
-      // ✅ Ensure the primary auditor's name is present
       const primaryName =
         matchedSchedule.auditorName ?? matchedSchedule.leadAuditorName ?? null;
       if (
@@ -1230,7 +1475,6 @@ export default function Form5DetailedView({
         teamNames.unshift(primaryName.trim());
       }
 
-      // Cleanup any non-string values
       teamNames = teamNames
         .filter((n: any) => typeof n === "string" && n.trim().length > 0)
         .map((n: string) => n.trim());
@@ -1303,14 +1547,6 @@ export default function Form5DetailedView({
 
   const fetchDepartmentUsers = useCallback(
     async (departmentCode: string, forBulk: boolean = false) => {
-      console.log("🟦 [fetchDepartmentUsers] START", {
-        departmentCode,
-        forBulk,
-        enumValue: departmentDisplayToEnum[departmentCode] || departmentCode,
-        plantId: (user as any)?.plantId,
-      });
-
-      // ── Guard: no department ─────────────────────────────────
       if (!departmentCode) {
         if (forBulk) {
           setBulkDepartmentAuditors([]);
@@ -1322,10 +1558,8 @@ export default function Form5DetailedView({
         return;
       }
 
-      // ── Guard: no plant ──────────────────────────────────────
       const plantId = (user as any)?.plantId;
       if (!plantId) {
-        console.warn("⚠️ No plantId — cannot fetch department users");
         if (forBulk) {
           setBulkDepartmentAuditors([]);
           setBulkDepartmentAuditees([]);
@@ -1339,7 +1573,6 @@ export default function Form5DetailedView({
       const enumValue =
         departmentDisplayToEnum[departmentCode] || departmentCode;
 
-      // ── Loading flag ─────────────────────────────────────────
       if (forBulk) {
         setBulkLoadingCompetent(true);
       } else {
@@ -1347,28 +1580,16 @@ export default function Form5DetailedView({
       }
 
       try {
-        // ── Fetch AUDITORS ─────────────────────────────────────
         const auditorsRes = await auditScheduleApi
           .getAuditorsByDepartment(enumValue)
           .catch((err) => {
-            console.error("🔴 [fetchDepartmentUsers] auditors API FAILED", err);
+            console.error("Auditors API FAILED", err);
             return [] as User[];
           });
         const auditorsList = Array.isArray(auditorsRes)
           ? auditorsRes
           : (auditorsRes as any)?.data || [];
 
-        console.log("🟦 [fetchDepartmentUsers] AUDITORS from API", {
-          enumValue,
-          rawCount: Array.isArray(auditorsRes)
-            ? auditorsRes.length
-            : ((auditorsRes as any)?.data?.length ?? 0),
-          finalCount: auditorsList.length,
-          ids: auditorsList.map((u: any) => u.id),
-          names: auditorsList.map((u: any) => `${u.firstName} ${u.lastName}`),
-        });
-
-        // ── Fetch AUDITEES ─────────────────────────────────────
         const auditeesRes = await auditScheduleApi
           .getAuditeesByDepartment(enumValue, plantId)
           .catch(() => [] as User[]);
@@ -1376,7 +1597,6 @@ export default function Form5DetailedView({
           ? auditeesRes
           : (auditeesRes as any)?.data || [];
 
-        // ── Route to correct state ─────────────────────────────
         if (forBulk) {
           setBulkDepartmentAuditors(auditorsList);
           setBulkDepartmentAuditees(auditeesList);
@@ -1411,15 +1631,6 @@ export default function Form5DetailedView({
       teamAuditorIds: number[] = [],
       teamAuditeeIds: number[] = [],
     ) => {
-      console.log("🟩 [fetchCompetentUsers] START", {
-        departmentCode,
-        enumDept: departmentDisplayToEnum[departmentCode] || departmentCode,
-        auditElements,
-        teamAuditorIds,
-        teamAuditeeIds,
-        plantId: (user as any)?.plantId,
-      });
-
       if (!departmentCode || !user?.id) {
         setCompetentAuditors([]);
         setCompetentAuditees([]);
@@ -1428,7 +1639,6 @@ export default function Form5DetailedView({
 
       const plantId = (user as any)?.plantId;
       if (!plantId) {
-        console.warn("⚠️ No plantId on user — cannot fetch competent users");
         setCompetentAuditors([]);
         setCompetentAuditees([]);
         return;
@@ -1455,14 +1665,6 @@ export default function Form5DetailedView({
             ? regularRes
             : (regularRes as any)?.data || [];
 
-          console.log("🟩 [fetchCompetentUsers] TEAM BRANCH result", {
-            enumDept,
-            leadCount: leadList.length,
-            leadIds: leadList.map((u: any) => u.id),
-            regularCount: regularList.length,
-            regularIds: regularList.map((u: any) => u.id),
-          });
-
           const seen = new Set<number>();
           const merged: User[] = [];
           for (const u of [...leadList, ...regularList]) {
@@ -1473,12 +1675,6 @@ export default function Form5DetailedView({
             }
           }
 
-          console.log("🟩 [fetchCompetentUsers] TEAM BRANCH merged", {
-            mergedIds: merged.map((u) => u.id),
-            mergedNames: merged.map((u) => `${u.firstName} ${u.lastName}`),
-          });
-
-          // Keep the full dept list available for merging in AddScheduleModal
           setCompetentAuditors(merged);
         } else if (auditElements.length > 0) {
           const auditorsRes = await auditScheduleApi.getFullyCompetentAuditors(
@@ -1491,11 +1687,7 @@ export default function Form5DetailedView({
             ? auditorsRes
             : (auditorsRes as any)?.data || [];
 
-          // ✅ FALLBACK: if competency filter returns 0, use dept auditors
           if (auditorsList.length === 0) {
-            console.warn(
-              "⚠️ Competency filter empty — falling back to dept auditors",
-            );
             const enumDept =
               departmentDisplayToEnum[departmentCode] || departmentCode;
             const [leadRes, regularRes] = await Promise.all([
@@ -1552,9 +1744,8 @@ export default function Form5DetailedView({
           setCompetentAuditors(merged);
         }
 
-        // ✅ 2. AUDITEES — use team when present, else plant-wide
         if (teamAuditeeIds.length > 0) {
-          setCompetentAuditees([]); // force modal to read from departmentTeamInfo
+          setCompetentAuditees([]);
         } else if (auditElements.length > 0) {
           const auditeesRes =
             await auditScheduleApi.getCompetentAuditeesByDepartment(
@@ -1602,7 +1793,6 @@ export default function Form5DetailedView({
 
       const plantId = (user as any)?.plantId;
       if (!plantId) {
-        console.warn("⚠️ No plantId — cannot fetch bulk competent users");
         setBulkCompetentAuditors([]);
         setBulkCompetentAuditees([]);
         return;
@@ -1613,9 +1803,8 @@ export default function Form5DetailedView({
         const enumDept =
           departmentDisplayToEnum[departmentCode] || departmentCode;
 
-        // --- Auditors ---
         if (teamAuditorIds.length > 0) {
-          setBulkCompetentAuditors([]); // use team from bulkDepartmentTeamInfo
+          setBulkCompetentAuditors([]);
         } else if (auditElements.length > 0) {
           const auditorsRes = await auditScheduleApi.getFullyCompetentAuditors(
             auditElements,
@@ -1627,19 +1816,15 @@ export default function Form5DetailedView({
             ? auditorsRes
             : (auditorsRes as any)?.data || [];
 
-          // ✅ FALLBACK: if competency filter returns 0, use dept auditors
           if (auditorsList.length === 0) {
-            console.warn(
-              "⚠️ Competency filter empty — falling back to dept auditors",
-            );
-            const enumDept =
+            const enumDeptLocal =
               departmentDisplayToEnum[departmentCode] || departmentCode;
             const [leadRes, regularRes] = await Promise.all([
               auditScheduleApi
-                .getLeadAuditorsByDepartment(enumDept)
+                .getLeadAuditorsByDepartment(enumDeptLocal)
                 .catch(() => []),
               auditScheduleApi
-                .getRegularAuditorsByDepartment(enumDept)
+                .getRegularAuditorsByDepartment(enumDeptLocal)
                 .catch(() => []),
             ]);
             const leadList = Array.isArray(leadRes)
@@ -1658,7 +1843,7 @@ export default function Form5DetailedView({
               }
             }
           }
-          setBulkCompetentAuditors(auditorsList); // ✅
+          setBulkCompetentAuditors(auditorsList);
         } else {
           const [leadRes, regularRes] = await Promise.all([
             auditScheduleApi
@@ -1686,7 +1871,6 @@ export default function Form5DetailedView({
           setBulkCompetentAuditors(merged);
         }
 
-        // --- Auditees ---
         if (teamAuditeeIds.length > 0) {
           setBulkCompetentAuditees([]);
         } else if (auditElements.length > 0) {
@@ -1740,7 +1924,6 @@ export default function Form5DetailedView({
         ...(dateSchedules.data || []),
       ];
 
-      // ✅ PLANT FILTER
       const allSchedules = filterByPlant(rawAllSchedules, user?.plantId);
 
       setBasicSchedules(allSchedules);
@@ -1820,11 +2003,9 @@ export default function Form5DetailedView({
       );
       const dateSchedules = response.data || [];
 
-      // ✅ PLANT FILTER (before any processing)
       const plantScopedSchedules = filterByPlant(dateSchedules, user?.plantId);
 
       const processedSchedules = plantScopedSchedules.map((schedule: any) => {
-        // ... existing remark-parsing logic
         if ((!schedule.startTime || !schedule.endTime) && schedule.remarks) {
           try {
             const remarks = JSON.parse(schedule.remarks);
@@ -1846,7 +2027,6 @@ export default function Form5DetailedView({
         return schedule;
       });
       setAuditSchedules(processedSchedules);
-      // ... rest unchanged
 
       if (processedSchedules.length > 0) {
         const dates = [
@@ -1932,7 +2112,6 @@ export default function Form5DetailedView({
       startDate ||
       (selectedWeek ? (getWeekLimits(selectedWeek)?.min ?? null) : null);
 
-    // 1. Compute week team from basicSchedules
     const teamInfo = getTeamMembersForDepartment(
       departmentCode,
       effectiveDate,
@@ -1940,10 +2119,8 @@ export default function Form5DetailedView({
     );
     setDepartmentTeamInfo(teamInfo);
 
-    // 2. Fetch department users (needed for team filtering in the modal)
     await fetchDepartmentUsers(departmentCode);
 
-    // 3. Fetch competent users, but respect the team
     const elementsToUse = globalAuditType ? [globalAuditType] : [];
     await fetchCompetentUsers(
       departmentCode,
@@ -1954,6 +2131,7 @@ export default function Form5DetailedView({
 
     setFormData((prev) => ({ ...prev, auditorId: "", auditeeId: "" }));
   };
+
   const handleSave = async () => {
     if (formData.id) {
       const existingSchedule = auditSchedules.find((s) => s.id === formData.id);
@@ -2039,7 +2217,6 @@ export default function Form5DetailedView({
         timeSlot: `${formData.startTime} - ${formData.endTime}`,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        // ✅ Single-day schedule — range = the schedule's own date
         fromDate: formData.date,
         toDate: formData.date,
         auditorId:
@@ -2064,7 +2241,6 @@ export default function Form5DetailedView({
         preparedByName:
           headerData.preparedBy || user?.name || user?.username || "",
         preparedByPosition: "Audit Manager",
-        // ✅ NEW: Plant scope (backend resolves from userId as fallback)
         plantId: (user as any)?.plantId ?? null,
         plantName: (user as any)?.plantName ?? null,
       };
@@ -2297,26 +2473,19 @@ export default function Form5DetailedView({
     ]);
   };
 
-  // =====================================================
-  // ✅ FIXED: handleDelete function (Works on Web + Mobile)
-  // =====================================================
   const handleDelete = (id: number) => {
-    console.log("🗑️ Delete function called for ID:", id);
-
     if (!id) {
       showToast("Invalid schedule ID", "error");
       return;
     }
 
     const scheduleToDelete = auditSchedules.find((s) => s.id === id);
-    console.log("📋 Schedule found:", scheduleToDelete);
 
     if (!scheduleToDelete) {
       showToast("Schedule not found", "error");
       return;
     }
 
-    // Check if schedule can be deleted
     if (scheduleToDelete.detailedApprovalStatus === "APPROVED") {
       showToast("Cannot delete an approved schedule", "warning");
       return;
@@ -2327,11 +2496,7 @@ export default function Form5DetailedView({
       return;
     }
 
-    // ✅ Confirmation dialog - works on BOTH web and mobile
     const confirmAndDelete = () => {
-      console.log("🗑️ Confirming delete for schedule:", id);
-
-      // ✅ WEB: Use browser confirm
       if (Platform.OS === "web") {
         const isConfirmed = window.confirm(
           "Are you sure you want to delete this schedule?",
@@ -2342,7 +2507,6 @@ export default function Form5DetailedView({
         return;
       }
 
-      // ✅ MOBILE: Use Alert
       Alert.alert(
         "Confirm Delete",
         "Are you sure you want to delete this schedule?",
@@ -2360,9 +2524,7 @@ export default function Form5DetailedView({
     confirmAndDelete();
   };
 
-  // ✅ Separate function to perform the actual API call
   const performDelete = async (id: number) => {
-    console.log("🗑️ Performing delete for ID:", id);
     try {
       await auditScheduleApi.delete(id);
       showToast("✅ Schedule deleted successfully!", "success");
@@ -2630,8 +2792,6 @@ export default function Form5DetailedView({
     }
   };
 
-  // Add this function to view PDF (similar to handleViewPDF in other forms):
-  // In Form5DetailedView.tsx - Updated handleViewPDF using pdfService
   const handleViewPDF = async () => {
     try {
       setDownloadingPdf(true);
@@ -2794,7 +2954,6 @@ export default function Form5DetailedView({
     setShowModal(true);
   };
 
-  // ✅ Recompute team whenever the audit date changes in the modal
   useEffect(() => {
     if (!showModal) return;
     if (!selectedAuditDepartment) return;
@@ -2847,7 +3006,7 @@ export default function Form5DetailedView({
       await fetchBulkCompetentUsers(
         bulkSelectedAuditDepartment,
         elementsToUse,
-        teamInfo.teamAuditorIds, // ⚠️ this is almost always [] at this point
+        teamInfo.teamAuditorIds,
         teamInfo.auditeeIds,
       );
     })();
@@ -2904,7 +3063,6 @@ export default function Form5DetailedView({
     formData.id,
   ]);
 
-  // ✅ Auto-fill defaults on first load
   useEffect(() => {
     const limits = getDateLimits();
     if (!limits) return;
@@ -2915,7 +3073,6 @@ export default function Form5DetailedView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek, selectedMonth, selectedYear]);
 
-  // ✅ Clamp dates if they fall outside month/week boundaries
   useEffect(() => {
     const limits = getDateLimits();
     if (!limits) return;
@@ -2930,7 +3087,6 @@ export default function Form5DetailedView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek, selectedMonth, selectedYear]);
 
-  // ✅ Clear To Date if it's before From Date
   useEffect(() => {
     if (startDate && endDate && endDate < startDate) {
       setEndDate("");
@@ -2951,13 +3107,11 @@ export default function Form5DetailedView({
   // ═════ COMPUTED VALUES ═════
 
   const availableAuditors: User[] = (() => {
-    // ✅ Priority 1: week schedule team (authoritative)
     if (departmentTeamInfo.teamAuditorIds.length > 0) {
       return departmentAuditors.filter((auditor) =>
         departmentTeamInfo.teamAuditorIds.includes(Number(auditor.id)),
       );
     }
-    // Priority 2: competent list (fallback when no week team)
     if (competentAuditors.length > 0) {
       return competentAuditors;
     }
@@ -2965,13 +3119,11 @@ export default function Form5DetailedView({
   })();
 
   const availableAuditees: User[] = (() => {
-    // ✅ Priority 1: week schedule team
     if (departmentTeamInfo.auditeeIds.length > 0) {
       return departmentAuditees.filter((auditee) =>
         departmentTeamInfo.auditeeIds.includes(Number(auditee.id)),
       );
     }
-    // Priority 2: competent list (fallback)
     if (competentAuditees.length > 0) {
       return competentAuditees;
     }
@@ -2984,12 +3136,10 @@ export default function Form5DetailedView({
   const dateRange = generateDateRange();
 
   const getBulkDateLimits = useCallback(() => {
-    // If From Date is selected → lock to that week
     if (bulkData.fromDate) {
       const weekNum = getWeekNumber(bulkData.fromDate);
       return getWeekLimits(weekNum);
     }
-    // Before any date is picked → allow full month
     return getMonthLimits();
   }, [bulkData.fromDate, getWeekLimits, getMonthLimits]);
 
@@ -3034,7 +3184,6 @@ export default function Form5DetailedView({
 
   const fromMaxDate = dateLimits?.max;
 
-  // To Date: min = selected startDate (if any), max = month/week end
   const toMinDate = startDate || dateLimits?.min;
 
   const fromMinDate = dateLimits?.min;
@@ -3096,12 +3245,11 @@ export default function Form5DetailedView({
         ? new Date(`${minDate}T00:00:00`)
         : new Date();
 
-    // ✅ WEB: Use native HTML date input
     if (Platform.OS === "web") {
       return (
         <View className={`relative ${className}`}>
           <View
-            className="h-11 flex-row items-center justify-between rounded-lg border border-gray-200 bg-white px-3"
+            className="h-11 flex-row items-center justify-between rounded-lg border border-slate-200 bg-white px-3"
             style={{
               position: "relative",
               overflow: "hidden",
@@ -3110,7 +3258,7 @@ export default function Form5DetailedView({
             }}
           >
             <Text
-              className="flex-1 text-gray-800"
+              className="flex-1 text-slate-800"
               style={{ pointerEvents: "none" }}
             >
               {value || placeholder}
@@ -3152,8 +3300,6 @@ export default function Form5DetailedView({
       );
     }
 
-    // ✅ MOBILE: Use DateTimePicker
-    // ✅ MOBILE: Use DateTimePicker (Fixed for iOS Modal)
     return (
       <>
         <TouchableOpacity
@@ -3161,13 +3307,13 @@ export default function Form5DetailedView({
             if (!disabled) setShowPicker(true);
           }}
           disabled={disabled}
-          className={`h-11 flex-row items-center justify-between rounded-lg border border-gray-200 px-3 ${className}`}
+          className={`h-11 flex-row items-center justify-between rounded-lg border border-slate-200 px-3 ${className}`}
           style={{
             backgroundColor: disabled ? "#F1F5F9" : "#FFFFFF",
             opacity: disabled ? 0.7 : 1,
           }}
         >
-          <Text className="flex-1 text-gray-800">{value || placeholder}</Text>
+          <Text className="flex-1 text-slate-800">{value || placeholder}</Text>
           <Calendar size={16} color={disabled ? "#94A3B8" : iconColor} />
         </TouchableOpacity>
 
@@ -3204,7 +3350,7 @@ export default function Form5DetailedView({
                   <TouchableOpacity onPress={() => setShowPicker(false)}>
                     <Text
                       style={{
-                        color: COLORS.accent,
+                        color: COLORS.primary,
                         fontSize: 16,
                         fontWeight: "600",
                       }}
@@ -3215,7 +3361,7 @@ export default function Form5DetailedView({
                   <TouchableOpacity onPress={() => setShowPicker(false)}>
                     <Text
                       style={{
-                        color: COLORS.accent,
+                        color: COLORS.primary,
                         fontSize: 16,
                         fontWeight: "700",
                       }}
@@ -3261,45 +3407,45 @@ export default function Form5DetailedView({
   // ═════ RENDER ═════
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color={COLORS.accent} />
-        <Text className="mt-3 text-sm text-gray-500">Loading schedule...</Text>
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text className="mt-3 text-sm font-medium text-slate-500">
+          Loading schedule...
+        </Text>
       </View>
     );
   }
 
   if (approvalStatus !== "APPROVED") {
     return (
-      <View className="flex-1 bg-gray-50 p-6">
+      <View className="flex-1 bg-slate-50 p-6">
         <View className="mx-auto max-w-2xl">
           <TouchableOpacity
             onPress={onBack || (() => router.back())}
             className="mb-6 flex-row items-center gap-2"
           >
-            <ArrowLeft size={18} color={COLORS.accent} />
+            <ArrowLeft size={18} color={COLORS.primary} />
             <Text className="text-sm font-semibold text-blue-600">
               Back to Form 5
             </Text>
           </TouchableOpacity>
           <Card className="items-center p-12">
-            <View className="mb-4 h-20 w-20 items-center justify-center rounded-full border border-yellow-200 bg-yellow-50">
-              <AlertCircle size={40} color={COLORS.warning} />
+            <View className="mb-4 h-20 w-20 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+              <AlertCircle size={40} color={COLORS.primary} />
             </View>
-            <Text className="mb-2 text-xl font-bold text-gray-900">
+            <Text className="mb-2 text-xl font-bold text-slate-900">
               Form 5 Not Approved Yet
             </Text>
-            <Text className="mb-6 text-center text-sm text-gray-500">
+            <Text className="mb-6 text-center text-sm text-slate-500">
               Please complete and get approval for the basic schedule in Form 5
               first.{"\n"}
               {monthDisplay[selectedMonth]} {selectedYear} is not approved.
             </Text>
-            <ActionButton
+            <OutlineButton
+              title="Go to Form 5"
+              icon={ArrowLeft}
               onPress={onBack || (() => router.back())}
-              color="#FFF"
-              bgColor={COLORS.accent}
-            >
-              Go to Form 5
-            </ActionButton>
+            />
           </Card>
         </View>
       </View>
@@ -3307,147 +3453,246 @@ export default function Form5DetailedView({
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View
-        style={{
-          width: "100%",
-          paddingHorizontal: isDesktop ? 24 : 16,
-          paddingVertical: isDesktop ? 20 : 16,
-          backgroundColor: "#FFFFFF",
-          borderBottomWidth: 1,
-          borderBottomColor: "#E5E7EB",
-        }}
-      >
-        <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
+    <View className="flex-1 bg-slate-50">
+      {/* HEADER */}
+      <View className="border-b border-slate-200 bg-white px-4 py-4">
+        <View className="w-full px-4">
           <View
-            style={{
-              flexDirection: isDesktop ? "row" : "column",
-              alignItems: isDesktop ? "center" : "stretch",
-              justifyContent: isDesktop ? "space-between" : "flex-start",
-              gap: isDesktop ? 24 : 16,
-            }}
+            className={`${isDesktop ? "flex-row items-center justify-between" : "flex-col gap-4"}`}
           >
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                flexShrink: 1,
-              }}
+              className="flex-row items-center gap-3"
+              style={
+                !isDesktop
+                  ? { width: "100%", alignSelf: "stretch" }
+                  : { flex: 1 }
+              }
             >
               <TouchableOpacity
                 onPress={onBack || (() => router.back())}
-                style={{
-                  width: 40,
-                  height: 40,
-                  marginRight: 12,
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                className="h-10 w-10 items-center justify-center rounded-xl bg-slate-100"
+                activeOpacity={0.7}
               >
-                <ArrowLeft size={20} color="#6b7280" />
+                <ArrowLeft size={20} color="#475569" />
               </TouchableOpacity>
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  backgroundColor: COLORS.accentLight,
-                  borderWidth: 1,
-                  borderColor: COLORS.accentBorder,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <FileText size={22} color={COLORS.accent} />
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <FileText size={20} color={COLORS.primary} />
               </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 20 : 18,
-                    fontWeight: "700",
-                    color: "#111827",
-                  }}
-                  numberOfLines={1}
-                >
-                  Internal Audit Schedule
-                </Text>
-                <Text
-                  style={{
-                    fontSize: isDesktop ? 14 : 12,
-                    color: "#6B7280",
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {monthDisplay[selectedMonth]} {selectedYear}
-                </Text>
+              <View style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                {isDesktop ? (
+                  <>
+                    <Text
+                      className="text-xl font-bold text-slate-900"
+                      numberOfLines={1}
+                    >
+                      Internal Audit Schedule
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-sm font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      {monthDisplay[selectedMonth]} {selectedYear} - Detailed
+                      View
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      className="text-lg font-bold text-slate-900"
+                      numberOfLines={1}
+                    >
+                      Internal Audit Schedule
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-xs font-medium text-slate-500"
+                      numberOfLines={1}
+                    >
+                      {monthDisplay[selectedMonth]} {selectedYear} - Detailed
+                      View
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 8,
-                justifyContent: isDesktop ? "flex-end" : "flex-start",
-              }}
-            >
-              {/* ✅ REPLACE the existing PDF button with this */}
-              <ActionButton
-                onPress={handleViewPDF} // ← Changed from handleDownloadPdf
-                loading={downloadingPdf}
-                color="#FFF"
-                bgColor={COLORS.purple} // ← Changed to purple to differentiate
-                icon={FileText} // ← Changed from Printer
-                className="h-10"
-              >
-                View PDF
-              </ActionButton>
 
-              {/* ✅ OPTIONAL: Add a separate Download button if needed */}
-              <ActionButton
-                onPress={handleDownloadPdf}
-                loading={downloadingPdf}
-                color="#FFF"
-                bgColor={COLORS.accent}
-                icon={Printer}
-                className="h-10"
-              >
-                Download
-              </ActionButton>
-              {/* <ActionButton
-                onPress={handleExport}
-                color="#FFF"
-                bgColor={COLORS.accent}
-                icon={Download}
-                className="h-10"
-              >
-                Export
-              </ActionButton> */}
-              <TouchableOpacity
-                onPress={() => {
-                  fetchDetailedSchedules();
-                }}
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: COLORS.border,
-                  backgroundColor: COLORS.card,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <RefreshCw size={16} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
+            {isDesktop ? (
+              <View className="flex-row items-center gap-3">
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-xs font-semibold text-slate-500">
+                    Status:
+                  </Text>
+                  <View
+                    className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
+                    style={{
+                      backgroundColor: COLORS.stateSuccessBg,
+                      borderColor: COLORS.primaryBorder,
+                    }}
+                  >
+                    <CheckCircle size={14} color={COLORS.primary} />
+                    <Text
+                      className="text-xs font-bold uppercase tracking-wide"
+                      style={{ color: COLORS.primaryDark }}
+                    >
+                      Approved
+                    </Text>
+                  </View>
+                </View>
+                <OutlineButton
+                  title="View PDF"
+                  icon={Eye}
+                  onPress={handleViewPDF}
+                  loading={downloadingPdf}
+                />
+                <OutlineButton
+                  title="Download"
+                  icon={Printer}
+                  onPress={handleDownloadPdf}
+                  loading={downloadingPdf}
+                />
+                <TouchableOpacity
+                  onPress={() => {
+                    fetchDetailedSchedules();
+                  }}
+                  className="rounded-lg bg-slate-100 p-2.5"
+                  activeOpacity={0.7}
+                >
+                  <RefreshCw size={16} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View className="flex-row items-center justify-between gap-3">
+                <View
+                  className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
+                  style={{
+                    backgroundColor: COLORS.stateSuccessBg,
+                    borderColor: COLORS.primaryBorder,
+                  }}
+                >
+                  <CheckCircle size={14} color={COLORS.primary} />
+                  <Text
+                    className="text-xs font-bold uppercase tracking-wide"
+                    style={{ color: COLORS.primaryDark }}
+                  >
+                    Approved
+                  </Text>
+                </View>
+                <View style={{ zIndex: 1000 }}>
+                  <TouchableOpacity
+                    onPress={() => setShowMobileMenu(!showMobileMenu)}
+                    className="h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white"
+                    activeOpacity={0.7}
+                  >
+                    <MoreVertical size={20} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </View>
+
+      {/* Mobile Dropdown Menu */}
+      {showMobileMenu && !isDesktop && (
+        <>
+          <View
+            style={{
+              position: "absolute",
+              top: 70,
+              right: 16,
+              width: 280,
+              zIndex: 9999,
+              backgroundColor: "#FFFFFF",
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 15,
+              elevation: 10,
+              overflow: "hidden",
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                handleViewPDF();
+              }}
+              disabled={downloadingPdf}
+              className="flex-row items-center gap-3 px-4 py-3.5"
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+                opacity: downloadingPdf ? 0.5 : 1,
+              }}
+              activeOpacity={0.7}
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <Eye size={18} color={COLORS.primary} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-900">
+                  View PDF
+                </Text>
+                {downloadingPdf && (
+                  <Text className="text-[11px] text-slate-500">Loading...</Text>
+                )}
+              </View>
+              {downloadingPdf && (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                handleDownloadPdf();
+              }}
+              disabled={downloadingPdf}
+              className="flex-row items-center gap-3 px-4 py-3.5"
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: "#F1F5F9",
+                opacity: downloadingPdf ? 0.5 : 1,
+              }}
+              activeOpacity={0.7}
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                <Printer size={18} color={COLORS.primary} />
+              </View>
+              <Text className="text-sm font-semibold text-slate-900">
+                Download PDF
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowMobileMenu(false);
+                fetchDetailedSchedules();
+              }}
+              className="flex-row items-center gap-3 px-4 py-3.5"
+              activeOpacity={0.7}
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-lg bg-slate-100">
+                <RefreshCw size={18} color="#475569" />
+              </View>
+              <Text className="text-sm font-semibold text-slate-900">
+                Refresh Data
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            className="absolute inset-0 z-50"
+            activeOpacity={1}
+            onPress={() => setShowMobileMenu(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            }}
+          />
+        </>
+      )}
 
       <ScrollView
         className="flex-1"
@@ -3463,10 +3708,13 @@ export default function Form5DetailedView({
         }
         showsVerticalScrollIndicator={false}
       >
-        <Card className="p-4">
-          <View className="mb-4 flex-row items-center gap-2">
-            <Calendar size={16} color={COLORS.accent} />
-            <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+        {/* Date Range Card */}
+        <Card className="p-5">
+          <View className="mb-4 flex-row items-center gap-3">
+            <View className="h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+              <Calendar size={18} color={COLORS.primary} />
+            </View>
+            <Text className="text-base font-bold text-slate-900">
               Date Range
             </Text>
           </View>
@@ -3474,7 +3722,7 @@ export default function Form5DetailedView({
             style={{ flexDirection: isDesktop ? "row" : "column", gap: 16 }}
           >
             <View style={{ flex: 1 }}>
-              <Text className="mb-2 text-sm font-semibold text-gray-900">
+              <Text className="mb-2 text-sm font-semibold text-slate-900">
                 From Date
               </Text>
               <DatePickerField
@@ -3491,7 +3739,7 @@ export default function Form5DetailedView({
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text className="mb-2 text-sm font-semibold text-gray-900">
+              <Text className="mb-2 text-sm font-semibold text-slate-900">
                 To Date
               </Text>
               <DatePickerField
@@ -3509,72 +3757,93 @@ export default function Form5DetailedView({
         </Card>
 
         {/* Audit Type Filter */}
-        <Card className="p-4">
-          <View className="flex-row flex-wrap items-center gap-4">
-            <Text className="text-sm font-semibold text-gray-900">
-              Audit Type:
+        <Card className="p-5">
+          <View className="mb-4 flex-row items-center gap-3">
+            <View className="h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+              <Filter size={18} color={COLORS.primary} />
+            </View>
+            <Text className="text-base font-bold text-slate-900">
+              Audit Type Filter
             </Text>
-            <View className="flex-row flex-wrap gap-2">
+          </View>
+          <View className="flex-row flex-wrap gap-2">
+            <TouchableOpacity
+              onPress={() => setGlobalAuditType("")}
+              className="rounded-full border px-4 py-2"
+              style={{
+                borderColor: !globalAuditType ? COLORS.primary : "#E2E8F0",
+                backgroundColor: !globalAuditType ? COLORS.primary : "#FFFFFF",
+              }}
+              activeOpacity={0.7}
+            >
+              <Text
+                className="text-sm font-semibold"
+                style={{
+                  color: !globalAuditType ? "#FFFFFF" : "#475569",
+                }}
+              >
+                All Types
+              </Text>
+            </TouchableOpacity>
+            {globalAuditTypesList.map((type) => (
               <TouchableOpacity
-                onPress={() => setGlobalAuditType("")}
-                className={`rounded-full border px-4 py-2 ${!globalAuditType ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                key={type}
+                onPress={() => setGlobalAuditType(type)}
+                className="rounded-full border px-4 py-2"
+                style={{
+                  borderColor:
+                    globalAuditType === type ? COLORS.primary : "#E2E8F0",
+                  backgroundColor:
+                    globalAuditType === type ? COLORS.primary : "#FFFFFF",
+                }}
+                activeOpacity={0.7}
               >
                 <Text
-                  className={`text-sm font-medium ${!globalAuditType ? "text-blue-600" : "text-gray-700"}`}
+                  className="text-sm font-semibold"
+                  style={{
+                    color: globalAuditType === type ? "#FFFFFF" : "#475569",
+                  }}
                 >
-                  All Types
+                  {type}
                 </Text>
               </TouchableOpacity>
-              {globalAuditTypesList.map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  onPress={() => setGlobalAuditType(type)}
-                  className={`rounded-full border px-4 py-2 ${globalAuditType === type ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
-                >
-                  <Text
-                    className={`text-sm font-medium ${globalAuditType === type ? "text-blue-600" : "text-gray-700"}`}
-                  >
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            ))}
           </View>
         </Card>
 
         {/* Schedule Table */}
-        <Card className="w-full overflow-hidden">
+        <Card className="w-full overflow-hidden p-0">
           <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
             <View style={{ width: 1350 }}>
               {/* Table Header */}
-              <View className="flex-row border-b border-gray-200 bg-gray-50">
+              <View className="flex-row border-b border-slate-200 bg-slate-50">
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Date & Time
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Area / Dept / Event
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Auditor
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Auditee
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Status
                   </Text>
                 </View>
                 <View style={{ flex: 1 }} className="p-4">
-                  <Text className="text-center text-xs font-bold uppercase tracking-wider text-gray-900">
+                  <Text className="text-center text-[11px] font-bold uppercase tracking-wider text-slate-700">
                     Actions
                   </Text>
                 </View>
@@ -3588,18 +3857,18 @@ export default function Form5DetailedView({
                   return (
                     <View
                       key={idx}
-                      className="flex-row border-b border-gray-200 bg-gray-50"
+                      className="flex-row border-b border-slate-200 bg-slate-50"
                     >
                       <View style={{ flex: 1 }} className="p-4">
-                        <Text className="text-sm font-medium text-gray-500">
+                        <Text className="text-sm font-medium text-slate-500">
                           {dateInfo.displayDate}
                         </Text>
-                        <Text className="text-xs text-gray-400">
+                        <Text className="text-xs text-slate-400">
                           {dateInfo.dayOfWeek}
                         </Text>
                       </View>
                       <View style={{ flex: 1 }} className="p-4">
-                        <Text className="text-sm italic text-gray-400">
+                        <Text className="text-sm italic text-slate-400">
                           Weekend
                         </Text>
                       </View>
@@ -3613,13 +3882,13 @@ export default function Form5DetailedView({
                 return (
                   <View key={idx}>
                     {/* Date Group Header */}
-                    <View className="flex-row border-b border-gray-200 bg-gray-50">
+                    <View className="flex-row border-b border-slate-200 bg-slate-50">
                       <View style={{ flex: 1 }} className="p-4">
                         <View className="flex-row items-center gap-3">
-                          <Text className="text-sm font-bold text-gray-900">
+                          <Text className="text-sm font-bold text-slate-900">
                             {dateInfo.displayDate}
                           </Text>
-                          <Text className="text-xs text-gray-500">
+                          <Text className="text-xs text-slate-500">
                             {dateInfo.dayOfWeek}
                           </Text>
                           {daySchedules.length > 0 && (
@@ -3645,14 +3914,14 @@ export default function Form5DetailedView({
                     </View>
 
                     {daySchedules.length === 0 ? (
-                      <View className="flex-row border-b border-gray-200 bg-white">
+                      <View className="flex-row border-b border-slate-200 bg-white">
                         <View style={{ flex: 1 }} className="p-4">
-                          <Text className="text-sm text-gray-900">
+                          <Text className="text-sm text-slate-900">
                             {dateInfo.displayDate}
                           </Text>
                         </View>
                         <View style={{ flex: 1 }} className="p-4">
-                          <Text className="text-sm italic text-gray-400">
+                          <Text className="text-sm italic text-slate-400">
                             No schedules
                           </Text>
                         </View>
@@ -3666,83 +3935,19 @@ export default function Form5DetailedView({
                                 handleAddSchedule(dateInfo.dateStr)
                               }
                               className="h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50"
+                              activeOpacity={0.7}
                             >
-                              <Plus size={18} color={COLORS.accent} />
+                              <Plus size={18} color={COLORS.primary} />
                             </TouchableOpacity>
                           )}
                         </View>
                       </View>
                     ) : (
                       daySchedules.map((schedule, sIdx) => {
-                        const statusStyle =
-                          schedule.status === "COMPLETED"
-                            ? {
-                                bg: COLORS.successLight,
-                                color: "#065F46",
-                                border: COLORS.successBorder,
-                              }
-                            : schedule.status === "IN_PROGRESS"
-                              ? {
-                                  bg: COLORS.accentLight,
-                                  color: "#1E40AF",
-                                  border: COLORS.accentBorder,
-                                }
-                              : {
-                                  bg: COLORS.warningLight,
-                                  color: "#92400E",
-                                  border: COLORS.warningBorder,
-                                };
-                        const approvalStyle =
-                          schedule.detailedApprovalStatus === "APPROVED"
-                            ? {
-                                bg: COLORS.successLight,
-                                color: "#065F46",
-                                border: COLORS.successBorder,
-                              }
-                            : schedule.detailedApprovalStatus ===
-                                "CONFIRMED_BY_LA"
-                              ? {
-                                  bg: "#ECFDF5",
-                                  color: "#065F46",
-                                  border: "#A7F3D0",
-                                }
-                              : schedule.detailedApprovalStatus ===
-                                  "PENDING_LA_CONFIRMATION"
-                                ? {
-                                    bg: "#FEF3C7",
-                                    color: "#92400E",
-                                    border: "#FDE68A",
-                                  }
-                                : schedule.detailedApprovalStatus ===
-                                    "FEASIBILITY_REJECTED"
-                                  ? {
-                                      bg: COLORS.errorLight,
-                                      color: "#991B1B",
-                                      border: COLORS.errorBorder,
-                                    }
-                                  : schedule.detailedApprovalStatus ===
-                                      "PENDING_APPROVAL"
-                                    ? {
-                                        bg: COLORS.warningLight,
-                                        color: "#92400E",
-                                        border: COLORS.warningBorder,
-                                      }
-                                    : schedule.detailedApprovalStatus ===
-                                        "REJECTED"
-                                      ? {
-                                          bg: COLORS.errorLight,
-                                          color: "#991B1B",
-                                          border: COLORS.errorBorder,
-                                        }
-                                      : {
-                                          bg: "#F1F5F9",
-                                          color: "#475569",
-                                          border: "#E2E8F0",
-                                        };
                         return (
                           <View
                             key={`${idx}-${sIdx}`}
-                            className={`flex-row border-b border-gray-200 ${schedule.isSpecialEvent ? "bg-gray-50" : "bg-white"}`}
+                            className={`flex-row border-b border-slate-200 ${schedule.isSpecialEvent ? "bg-slate-50" : "bg-white"}`}
                           >
                             {/* Date & Time */}
                             <View style={{ flex: 1 }} className="p-4">
@@ -3751,28 +3956,28 @@ export default function Form5DetailedView({
                               schedule.fromDate !== schedule.toDate ? (
                                 <>
                                   <View className="mb-1 flex-row items-center gap-1">
-                                    <Text className="text-xs font-semibold text-purple-600">
+                                    <Text className="text-xs font-semibold text-blue-600">
                                       Range:
                                     </Text>
-                                    <View className="rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5">
-                                      <Text className="text-xs font-semibold text-purple-700">
+                                    <View className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5">
+                                      <Text className="text-xs font-semibold text-blue-700">
                                         Flexible
                                       </Text>
                                     </View>
                                   </View>
-                                  <Text className="text-xs text-gray-700">
+                                  <Text className="text-xs text-slate-700">
                                     {schedule.fromDate} → {schedule.toDate}
                                   </Text>
                                 </>
                               ) : (
-                                <Text className="mb-1 text-xs text-gray-500">
+                                <Text className="mb-1 text-xs text-slate-500">
                                   {schedule.scheduledDate || schedule.date}
                                 </Text>
                               )}
-                              <Text className="font-mono text-sm font-semibold text-gray-900">
+                              <Text className="font-mono text-sm font-semibold text-slate-900">
                                 {schedule.startTime} - {schedule.endTime}
                               </Text>
-                              <Text className="mt-1 text-xs text-gray-500">
+                              <Text className="mt-1 text-xs text-slate-500">
                                 {schedule.auditType || globalAuditType || "-"}
                               </Text>
                             </View>
@@ -3781,15 +3986,15 @@ export default function Form5DetailedView({
                               {schedule.isSpecialEvent ? (
                                 <View className="flex-row items-center gap-2">
                                   {schedule.specialEventType === "OPENING" && (
-                                    <Sunrise size={16} color={COLORS.accent} />
+                                    <Sunrise size={16} color={COLORS.primary} />
                                   )}
                                   {schedule.specialEventType === "LUNCH" && (
-                                    <Coffee size={16} color={COLORS.warning} />
+                                    <Coffee size={16} color={COLORS.primary} />
                                   )}
                                   {schedule.specialEventType === "CLOSING" && (
-                                    <Sunset size={16} color={COLORS.purple} />
+                                    <Sunset size={16} color={COLORS.primary} />
                                   )}
-                                  <Text className="text-sm font-semibold text-gray-900">
+                                  <Text className="text-sm font-semibold text-slate-900">
                                     {schedule.specialEventType === "OPENING" &&
                                       "Opening"}
                                     {schedule.specialEventType === "LUNCH" &&
@@ -3807,7 +4012,7 @@ export default function Form5DetailedView({
                                         className="flex-row items-center gap-2"
                                       >
                                         <View className="h-2 w-2 rounded-full bg-blue-600" />
-                                        <Text className="text-sm text-gray-900">
+                                        <Text className="text-sm text-slate-900">
                                           {dept}
                                         </Text>
                                       </View>
@@ -3819,7 +4024,7 @@ export default function Form5DetailedView({
                             {/* Auditor */}
                             <View style={{ flex: 1 }} className="p-4">
                               <Text
-                                className="text-sm text-gray-900"
+                                className="text-sm text-slate-900"
                                 numberOfLines={2}
                               >
                                 {schedule.auditorName || "-"}
@@ -3828,7 +4033,7 @@ export default function Form5DetailedView({
                             {/* Auditee */}
                             <View style={{ flex: 1 }} className="p-4">
                               <Text
-                                className="text-sm text-gray-900"
+                                className="text-sm text-slate-900"
                                 numberOfLines={2}
                               >
                                 {schedule.auditeeName || "-"}
@@ -3837,52 +4042,14 @@ export default function Form5DetailedView({
                             {/* Status */}
                             <View style={{ flex: 1 }} className="p-4">
                               <View className="gap-1">
-                                <View
-                                  className="self-start rounded-full border px-2 py-0.5"
-                                  style={{
-                                    backgroundColor: statusStyle.bg,
-                                    borderColor: statusStyle.border,
-                                  }}
-                                >
-                                  <Text
-                                    className="text-xs font-semibold"
-                                    style={{ color: statusStyle.color }}
-                                  >
+                                <View className="self-start rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1">
+                                  <Text className="text-[10px] font-bold uppercase tracking-wide text-blue-800">
                                     {schedule.status || "SCHEDULED"}
                                   </Text>
                                 </View>
-                                <View
-                                  className="self-start rounded-full border px-2 py-0.5"
-                                  style={{
-                                    backgroundColor: approvalStyle.bg,
-                                    borderColor: approvalStyle.border,
-                                  }}
-                                >
-                                  <Text
-                                    className="text-xs font-semibold"
-                                    style={{ color: approvalStyle.color }}
-                                  >
-                                    {schedule.detailedApprovalStatus ===
-                                    "APPROVED"
-                                      ? "✓ Approved"
-                                      : schedule.detailedApprovalStatus ===
-                                          "CONFIRMED_BY_LA"
-                                        ? "✅ Confirmed by LA"
-                                        : schedule.detailedApprovalStatus ===
-                                            "PENDING_LA_CONFIRMATION"
-                                          ? "⏳ Pending LA"
-                                          : schedule.detailedApprovalStatus ===
-                                              "FEASIBILITY_REJECTED"
-                                            ? "❌ Rejected by LA"
-                                            : schedule.detailedApprovalStatus ===
-                                                "PENDING_APPROVAL"
-                                              ? "⏳ Pending TM"
-                                              : schedule.detailedApprovalStatus ===
-                                                  "REJECTED"
-                                                ? "✗ Rejected"
-                                                : "📝 Draft"}
-                                  </Text>
-                                </View>
+                                <ApprovalBadge
+                                  status={schedule.detailedApprovalStatus}
+                                />
                               </View>
                             </View>
                             {/* Actions */}
@@ -3891,7 +4058,7 @@ export default function Form5DetailedView({
                               className="items-center p-4"
                             >
                               <View className="flex-row items-center gap-2">
-                                {/* ✅ NEW: LA confirm/reject for daily schedules */}
+                                {/* LA confirm/reject for daily schedules */}
                                 {isLeadAuditor &&
                                   schedule.detailedApprovalStatus ===
                                     "PENDING_LA_CONFIRMATION" && (
@@ -3901,17 +4068,18 @@ export default function Form5DetailedView({
                                           handleLaConfirmSingle(schedule.id!)
                                         }
                                         disabled={submitting}
-                                        className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50"
+                                        activeOpacity={0.7}
                                       >
                                         {submitting ? (
                                           <ActivityIndicator
                                             size="small"
-                                            color={COLORS.success}
+                                            color={COLORS.primary}
                                           />
                                         ) : (
                                           <CheckSquare
                                             size={14}
-                                            color={COLORS.success}
+                                            color={COLORS.primary}
                                           />
                                         )}
                                       </TouchableOpacity>
@@ -3922,11 +4090,12 @@ export default function Form5DetailedView({
                                           setLaRejectReason("");
                                           setShowLaRejectModal(true);
                                         }}
-                                        className="h-8 w-8 items-center justify-center rounded border border-red-200 bg-red-50"
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50"
+                                        activeOpacity={0.7}
                                       >
                                         <XCircle
                                           size={14}
-                                          color={COLORS.error}
+                                          color={COLORS.stateErrorText}
                                         />
                                       </TouchableOpacity>
                                     </>
@@ -3943,39 +4112,24 @@ export default function Form5DetailedView({
                                         onPress={() =>
                                           handleEditSchedule(schedule)
                                         }
-                                        delayPressIn={0} // ← ADD THIS
-                                        activeOpacity={0.7} // ← ADD THIS
-                                        className="h-8 w-8 items-center justify-center rounded border border-blue-200 bg-blue-50"
+                                        activeOpacity={0.7}
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50"
                                       >
                                         <Edit2
                                           size={14}
-                                          color={COLORS.accent}
+                                          color={COLORS.primary}
                                         />
                                       </TouchableOpacity>
-                                      {/* ✅ DELETE BUTTON - FIXED */}
                                       <TouchableOpacity
                                         onPress={() => {
-                                          console.log(
-                                            "👆 Delete button clicked for schedule:",
-                                            schedule.id,
-                                          );
                                           handleDelete(schedule.id!);
                                         }}
                                         activeOpacity={0.7}
-                                        style={{
-                                          width: 32,
-                                          height: 32,
-                                          borderRadius: 8,
-                                          borderWidth: 1,
-                                          borderColor: "#FECACA",
-                                          backgroundColor: "#FEF2F2",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                        }}
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50"
                                       >
                                         <Trash2
                                           size={14}
-                                          color={COLORS.error}
+                                          color={COLORS.stateErrorText}
                                         />
                                       </TouchableOpacity>
                                       {isSubmittableDraft(
@@ -3987,11 +4141,12 @@ export default function Form5DetailedView({
                                               schedule.id!,
                                             )
                                           }
-                                          className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
+                                          className="h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50"
+                                          activeOpacity={0.7}
                                         >
                                           <Send
                                             size={14}
-                                            color={COLORS.success}
+                                            color={COLORS.primary}
                                           />
                                         </TouchableOpacity>
                                       )}
@@ -4005,11 +4160,12 @@ export default function Form5DetailedView({
                                         onPress={() =>
                                           handleApproveSchedule(schedule.id!)
                                         }
-                                        className="h-8 w-8 items-center justify-center rounded border border-green-200 bg-green-50"
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50"
+                                        activeOpacity={0.7}
                                       >
                                         <Check
                                           size={14}
-                                          color={COLORS.success}
+                                          color={COLORS.primary}
                                         />
                                       </TouchableOpacity>
                                       <TouchableOpacity
@@ -4020,9 +4176,13 @@ export default function Form5DetailedView({
                                           setTempScheduleId(schedule.id!);
                                           setShowRejectModal(true);
                                         }}
-                                        className="h-8 w-8 items-center justify-center rounded border border-red-200 bg-red-50"
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50"
+                                        activeOpacity={0.7}
                                       >
-                                        <X size={14} color={COLORS.error} />
+                                        <X
+                                          size={14}
+                                          color={COLORS.stateErrorText}
+                                        />
                                       </TouchableOpacity>
                                       <TouchableOpacity
                                         onPress={() => {
@@ -4033,11 +4193,12 @@ export default function Form5DetailedView({
                                           setChangeRequestReason("");
                                           setShowChangeRequestModal(true);
                                         }}
-                                        className="h-8 w-8 items-center justify-center rounded border border-yellow-200 bg-yellow-50"
+                                        className="h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50"
+                                        activeOpacity={0.7}
                                       >
                                         <MessageSquare
                                           size={14}
-                                          color={COLORS.warning}
+                                          color={COLORS.stateWarningText}
                                         />
                                       </TouchableOpacity>
                                     </>
@@ -4054,11 +4215,12 @@ export default function Form5DetailedView({
                                         setChangeRequestReason("");
                                         setShowChangeRequestModal(true);
                                       }}
-                                      className="h-8 w-8 items-center justify-center rounded border border-yellow-200 bg-yellow-50"
+                                      className="h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50"
+                                      activeOpacity={0.7}
                                     >
                                       <MessageSquare
                                         size={14}
-                                        color={COLORS.warning}
+                                        color={COLORS.stateWarningText}
                                       />
                                     </TouchableOpacity>
                                   )}
@@ -4076,887 +4238,1052 @@ export default function Form5DetailedView({
         </Card>
 
         {/* Action Buttons */}
-        <View className="mb-4 flex-row flex-wrap items-center justify-between gap-4">
-          <View className="flex-row flex-wrap gap-2">
-            {canEdit &&
-              dateRange
-                .filter((d) => !d.isWeekend)
-                .slice(0, 3)
-                .map((dateInfo) => (
-                  <ActionButton
-                    key={dateInfo.dateStr}
-                    onPress={() => handleAddSchedule(dateInfo.dateStr)}
-                    color="#FFF"
-                    bgColor={COLORS.accent}
-                    icon={Plus}
-                    className="h-10"
-                  >
-                    Add {dateInfo.displayDate}
-                  </ActionButton>
-                ))}
-            {canEdit && (
-              <ActionButton
-                onPress={() => setShowBulkModal(true)}
-                color="#FFF"
-                bgColor={COLORS.purple}
-                icon={Calendar}
-                className="h-10"
+        <Card className="p-5">
+          <View
+            className={`${
+              isDesktop
+                ? "flex-row items-center justify-between"
+                : "flex-col gap-3"
+            }`}
+          >
+            {/* Left group: Add buttons + Bulk Schedule */}
+            <View className="flex-row flex-wrap items-center gap-2">
+              {canEdit &&
+                dateRange
+                  .filter((d) => !d.isWeekend)
+                  .slice(0, 3)
+                  .map((dateInfo) => (
+                    <OutlineButton
+                      key={dateInfo.dateStr}
+                      title={`Add ${dateInfo.displayDate}`}
+                      icon={Plus}
+                      onPress={() => handleAddSchedule(dateInfo.dateStr)}
+                    />
+                  ))}
+              {canEdit && (
+                <OutlineButton
+                  title="Bulk Schedule"
+                  icon={Calendar}
+                  onPress={() => setShowBulkModal(true)}
+                />
+              )}
+            </View>
+
+            {/* Submit button */}
+            {hasSchedules && canEdit && (
+              <View
+                className={`flex-row items-center ${
+                  isDesktop ? "justify-end" : "justify-start"
+                }`}
               >
-                Bulk Schedule
-              </ActionButton>
+                <OutlineButton
+                  title="Submit"
+                  icon={Send}
+                  onPress={handleSubmitAllDraftSchedules}
+                  loading={submitting}
+                />
+              </View>
             )}
           </View>
-          {hasSchedules && canEdit && (
-            <ActionButton
-              onPress={handleSubmitAllDraftSchedules}
-              loading={submitting}
-              color="#FFF"
-              bgColor={COLORS.accent}
-              icon={Send}
-              className="h-10"
-            >
-              Submit All Draft Schedules
-            </ActionButton>
-          )}
-        </View>
-
+        </Card>
         {/* Legend */}
-        <Card className="p-6">
-          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-900">
+        <Card className="p-5">
+          <Text className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-700">
             Legend & Criteria
           </Text>
           <View className="flex-row flex-wrap gap-4">
             <View className="flex-row items-center gap-2">
-              <Sunrise size={16} color={COLORS.accent} />
-              <Text className="text-xs text-gray-500">Opening Meeting</Text>
+              <Sunrise size={16} color={COLORS.primary} />
+              <Text className="text-xs text-slate-500">Opening Meeting</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <Coffee size={16} color={COLORS.warning} />
-              <Text className="text-xs text-gray-500">Lunch Break</Text>
+              <Coffee size={16} color={COLORS.primary} />
+              <Text className="text-xs text-slate-500">Lunch Break</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <Sunset size={16} color={COLORS.purple} />
-              <Text className="text-xs text-gray-500">Closing Meeting</Text>
-            </View>
-            <View className="flex-row items-center gap-2">
-              <View className="h-3 w-3 rounded-full border border-yellow-200 bg-yellow-50" />
-              <Text className="text-xs text-gray-500">Scheduled</Text>
+              <Sunset size={16} color={COLORS.primary} />
+              <Text className="text-xs text-slate-500">Closing Meeting</Text>
             </View>
             <View className="flex-row items-center gap-2">
               <View className="h-3 w-3 rounded-full border border-blue-200 bg-blue-50" />
-              <Text className="text-xs text-gray-500">In Progress</Text>
+              <Text className="text-xs text-slate-500">Scheduled</Text>
             </View>
             <View className="flex-row items-center gap-2">
-              <View className="h-3 w-3 rounded-full border border-green-200 bg-green-50" />
-              <Text className="text-xs text-gray-500">Completed</Text>
+              <View className="h-3 w-3 rounded-full border border-blue-200 bg-blue-50" />
+              <Text className="text-xs text-slate-500">In Progress</Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <View className="h-3 w-3 rounded-full border border-blue-200 bg-blue-50" />
+              <Text className="text-xs text-slate-500">Completed</Text>
             </View>
           </View>
         </Card>
-      </ScrollView>
 
-      {/* ✅ EXTRACTED ADD SCHEDULE MODAL */}
-      <AddScheduleModal
-        showModal={showModal}
-        onClose={() => {
-          setShowModal(false);
-          resetForm();
-        }}
-        formData={formData}
-        setFormData={setFormData}
-        conflictWarning={conflictWarning}
-        selectedAuditDepartment={selectedAuditDepartment}
-        setSelectedAuditDepartment={setSelectedAuditDepartment}
-        departmentTeamInfo={departmentTeamInfo}
-        departmentAuditors={departmentAuditors}
-        departmentAuditees={departmentAuditees}
-        // ✅ NEW: competent auditor/auditee lists from backend
-        competentAuditors={competentAuditors}
-        competentAuditees={competentAuditees}
-        loadingCompetentAuditors={loadingCompetentAuditors}
-        saving={saving}
-        onSave={handleSave}
-        onAuditDepartmentChange={handleAuditDepartmentChange}
-        getAvailableDepartmentsForDate={getAvailableDepartmentsForDate}
-        isDesktop={isDesktop}
-      />
+        {/* Document Control */}
+        <Card className="p-5">
+          <View className={`${isDesktop ? "flex-row" : "flex-col"} gap-6`}>
+            <View className="flex-1">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                Document Control
+              </Text>
+              <View className="gap-2">
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Document No.:
+                  </Text>
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
+                    IQA/F/05
+                  </Text>
+                </View>
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Revision:
+                  </Text>
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
+                    {headerData.documentRevision || "1.0"}
+                  </Text>
+                </View>
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Month:
+                  </Text>
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
+                    {monthDisplay[selectedMonth]} {selectedYear}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <View className="flex-1">
+              <Text className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                Audit Info
+              </Text>
+              <View className="gap-2">
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Objective:
+                  </Text>
+                  <Text
+                    className="flex-1 text-sm font-medium text-slate-800"
+                    numberOfLines={2}
+                  >
+                    {headerData.auditObjective || "—"}
+                  </Text>
+                </View>
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Scope:
+                  </Text>
+                  <Text
+                    className="flex-1 text-sm font-medium text-slate-800"
+                    numberOfLines={2}
+                  >
+                    {headerData.auditScope || "—"}
+                  </Text>
+                </View>
+                <View className="flex-row">
+                  <Text className="w-[100px] text-sm text-slate-500">
+                    Lead Auditor:
+                  </Text>
+                  <Text className="flex-1 text-sm font-medium text-slate-800">
+                    {headerData.leadAuditorName || "—"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Card>
 
-      {/* Bulk Schedule Modal (kept in main file) */}
-      {showBulkModal && (
-        <Modal
-          visible={showBulkModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowBulkModal(false)}
-        >
-          <TouchableOpacity
-            className="flex-1 items-center justify-center bg-black/30 p-5"
-            activeOpacity={1}
-            onPress={() => setShowBulkModal(false)}
+        {/* Footer */}
+        <Card className="p-6">
+          <View className="flex-row flex-wrap gap-6">
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Prepared By
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {headerData.preparedBy || "—"}
+              </Text>
+            </View>
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Approved By
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {headerData.approvedBy || "—"}
+              </Text>
+            </View>
+            <View className="min-w-[150px] flex-1">
+              <Text className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Date
+              </Text>
+              <Text className="text-sm font-medium text-slate-800">
+                {new Date().toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Add Schedule Modal */}
+        <AddScheduleModal
+          showModal={showModal}
+          onClose={() => {
+            setShowModal(false);
+            resetForm();
+          }}
+          formData={formData}
+          setFormData={setFormData}
+          conflictWarning={conflictWarning}
+          selectedAuditDepartment={selectedAuditDepartment}
+          setSelectedAuditDepartment={setSelectedAuditDepartment}
+          departmentTeamInfo={departmentTeamInfo}
+          departmentAuditors={departmentAuditors}
+          departmentAuditees={departmentAuditees}
+          competentAuditors={competentAuditors}
+          competentAuditees={competentAuditees}
+          loadingCompetentAuditors={loadingCompetentAuditors}
+          saving={saving}
+          onSave={handleSave}
+          onAuditDepartmentChange={handleAuditDepartmentChange}
+          getAvailableDepartmentsForDate={getAvailableDepartmentsForDate}
+          isDesktop={isDesktop}
+        />
+
+        {/* Bulk Schedule Modal */}
+        {showBulkModal && (
+          <Modal
+            visible={showBulkModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowBulkModal(false)}
           >
             <TouchableOpacity
+              className="flex-1 items-center justify-center bg-slate-900/30 p-6"
               activeOpacity={1}
-              className="max-h-[90%] overflow-hidden rounded-2xl bg-white"
-              style={{
-                maxWidth: isDesktop ? 800 : "100%",
-                alignSelf: "center",
-                margin: isDesktop ? 40 : 0,
-                width: isDesktop ? "90%" : "100%",
-              }}
+              onPress={() => setShowBulkModal(false)}
             >
-              {/* Header */}
-              <View className="flex-row items-center justify-between border-b border-gray-200 p-6">
-                <View>
-                  <Text className="text-lg font-bold text-gray-900">
-                    Bulk Schedule
-                  </Text>
-                  <Text className="text-xs text-gray-500">
-                    Schedule same audit for multiple dates
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowBulkModal(false);
-                    setBulkSelectedAuditDepartment("");
-                  }}
-                  className="h-9 w-9 items-center justify-center rounded-lg border border-gray-200"
-                >
-                  <X size={20} color="#64748B" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Body */}
-              <ScrollView className="p-6" showsVerticalScrollIndicator={false}>
-                {/* Date Range */}
-                {/* Date Range - Week Locked */}
-                <View className="mb-4 flex-row gap-4">
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      From Date *
-                    </Text>
-                    <DatePickerField
-                      value={bulkData.fromDate}
-                      onChange={(dateStr) =>
-                        setBulkData((prev) => ({
-                          ...prev,
-                          fromDate: dateStr,
-                          // Reset To Date if it falls outside the new week
-                          toDate: "",
-                        }))
-                      }
-                      minDate={getMonthLimits()?.min}
-                      maxDate={getMonthLimits()?.max}
-                      placeholder="Select Start Date"
-                    />
-                    {bulkData.fromDate && (
-                      <Text className="mt-1 text-xs text-blue-600">
-                        📅 Week: {getWeekNumber(bulkData.fromDate)}
+              <TouchableOpacity
+                activeOpacity={1}
+                className="max-h-[90%] overflow-hidden rounded-3xl bg-white"
+                style={{
+                  maxWidth: isDesktop ? 800 : "100%",
+                  alignSelf: "center",
+                  margin: isDesktop ? 40 : 0,
+                  width: isDesktop ? "90%" : "100%",
+                  shadowColor: "#0F172A",
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 20,
+                  elevation: 10,
+                }}
+              >
+                {/* Header */}
+                <View className="flex-row items-center justify-between border-b border-slate-100 p-6">
+                  <View className="flex-1 flex-row items-center gap-4">
+                    <View className="h-12 w-12 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50">
+                      <Calendar size={22} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text className="text-lg font-bold text-slate-900">
+                        Bulk Schedule
                       </Text>
-                    )}
-                  </View>
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      To Date *
-                    </Text>
-                    <DatePickerField
-                      value={bulkData.toDate}
-                      onChange={(dateStr) =>
-                        setBulkData({ ...bulkData, toDate: dateStr })
-                      }
-                      minDate={bulkToMinDate}
-                      maxDate={bulkToMaxDate}
-                      disabled={isBulkToDateDisabled}
-                      placeholder={
-                        !bulkData.fromDate
-                          ? "Select From Date first"
-                          : "Select End Date"
-                      }
-                    />
-                    {bulkData.fromDate && bulkData.toDate && (
-                      <Text className="mt-1 text-xs text-gray-500">
-                        Range: {bulkData.fromDate} → {bulkData.toDate}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-
-                {/* Department Picker */}
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
-                    Department to Audit *
-                  </Text>
-                  {!bulkData.fromDate || !bulkData.toDate ? (
-                    <View className="h-11 justify-center rounded-lg border border-gray-200 bg-gray-100 px-3">
-                      <Text className="text-sm text-gray-500">
-                        ⚠️ Please select From Date and To Date first
+                      <Text className="mt-1 text-sm text-slate-500">
+                        Schedule same audit for multiple dates
                       </Text>
                     </View>
-                  ) : (
-                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                      <Picker
-                        selectedValue={bulkSelectedAuditDepartment}
-                        onValueChange={(itemValue: string) => {
-                          setBulkSelectedAuditDepartment(itemValue);
-                          if (itemValue) {
-                            const availableDepts =
-                              getAvailableDepartmentsForBulk();
-                            const selectedDeptInfo = availableDepts.find(
-                              (d) => d.department === itemValue,
-                            );
-                            if (selectedDeptInfo) {
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowBulkModal(false);
+                      setBulkSelectedAuditDepartment("");
+                    }}
+                    className="h-9 w-9 items-center justify-center rounded-lg bg-slate-50"
+                  >
+                    <X size={18} color="#475569" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Body */}
+                <ScrollView
+                  className="px-6 py-4"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Date Range */}
+                  <View className="mb-4 flex-row gap-4">
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-semibold text-slate-900">
+                        From Date *
+                      </Text>
+                      <DatePickerField
+                        value={bulkData.fromDate}
+                        onChange={(dateStr) =>
+                          setBulkData((prev) => ({
+                            ...prev,
+                            fromDate: dateStr,
+                            toDate: "",
+                          }))
+                        }
+                        minDate={getMonthLimits()?.min}
+                        maxDate={getMonthLimits()?.max}
+                        placeholder="Select Start Date"
+                      />
+                      {bulkData.fromDate && (
+                        <Text className="mt-1 text-xs text-blue-600">
+                          📅 Week: {getWeekNumber(bulkData.fromDate)}
+                        </Text>
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-semibold text-slate-900">
+                        To Date *
+                      </Text>
+                      <DatePickerField
+                        value={bulkData.toDate}
+                        onChange={(dateStr) =>
+                          setBulkData({ ...bulkData, toDate: dateStr })
+                        }
+                        minDate={bulkToMinDate}
+                        maxDate={bulkToMaxDate}
+                        disabled={isBulkToDateDisabled}
+                        placeholder={
+                          !bulkData.fromDate
+                            ? "Select From Date first"
+                            : "Select End Date"
+                        }
+                      />
+                      {bulkData.fromDate && bulkData.toDate && (
+                        <Text className="mt-1 text-xs text-slate-500">
+                          Range: {bulkData.fromDate} → {bulkData.toDate}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Department Picker */}
+                  <View className="mb-4">
+                    <Text className="mb-2 text-sm font-semibold text-slate-900">
+                      Department to Audit *
+                    </Text>
+                    {!bulkData.fromDate || !bulkData.toDate ? (
+                      <View className="h-11 justify-center rounded-lg border border-slate-200 bg-slate-100 px-3">
+                        <Text className="text-sm text-slate-500">
+                          ⚠️ Please select From Date and To Date first
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <Picker
+                          selectedValue={bulkSelectedAuditDepartment}
+                          onValueChange={(itemValue: string) => {
+                            setBulkSelectedAuditDepartment(itemValue);
+                            if (itemValue) {
+                              const availableDepts =
+                                getAvailableDepartmentsForBulk();
+                              const selectedDeptInfo = availableDepts.find(
+                                (d) => d.department === itemValue,
+                              );
+                              if (selectedDeptInfo) {
+                                setBulkData((prev) => ({
+                                  ...prev,
+                                  selectedDepartments: [
+                                    {
+                                      department: itemValue,
+                                      selectedElements: [
+                                        ...selectedDeptInfo.auditElements,
+                                      ],
+                                    },
+                                  ],
+                                }));
+                              }
+                            } else {
                               setBulkData((prev) => ({
                                 ...prev,
-                                selectedDepartments: [
-                                  {
-                                    department: itemValue,
-                                    selectedElements: [
-                                      ...selectedDeptInfo.auditElements,
-                                    ],
-                                  },
-                                ],
+                                selectedDepartments: [],
                               }));
                             }
-                          } else {
-                            setBulkData((prev) => ({
-                              ...prev,
-                              selectedDepartments: [],
-                            }));
-                          }
-                        }}
-                        style={{ height: 50, width: "100%" }}
-                      >
-                        <Picker.Item label="Select Department" value="" />
-                        {getAvailableDepartmentsForBulk().map((dept, index) => (
-                          <Picker.Item
-                            key={index}
-                            label={dept.department}
-                            value={dept.department}
-                          />
-                        ))}
-                      </Picker>
-                    </View>
-                  )}
-                </View>
-
-                {/* Time Pickers */}
-                <View className="mb-4 flex-row gap-4">
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      Start Time *
-                    </Text>
-                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                      <Picker
-                        selectedValue={bulkData.startTime}
-                        onValueChange={(itemValue: string) => {
-                          let newEndTime = bulkData.endTime;
-                          if (
-                            newEndTime &&
-                            getTimeValue(newEndTime) <= getTimeValue(itemValue)
-                          )
-                            newEndTime = "";
-                          setBulkData({
-                            ...bulkData,
-                            startTime: itemValue,
-                            endTime: newEndTime,
-                          });
-                        }}
-                        style={{ height: 50 }}
-                      >
-                        {timeOptions.map((time) => (
-                          <Picker.Item key={time} label={time} value={time} />
-                        ))}
-                      </Picker>
-                    </View>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="mb-2 text-sm font-semibold text-gray-900">
-                      End Time *
-                    </Text>
-                    <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                      <Picker
-                        selectedValue={bulkData.endTime}
-                        onValueChange={(itemValue: string) =>
-                          setBulkData({ ...bulkData, endTime: itemValue })
-                        }
-                        style={{ height: 50 }}
-                      >
-                        {timeOptions
-                          .filter(
-                            (t) =>
-                              !bulkData.startTime ||
-                              getTimeValue(t) >
-                                getTimeValue(bulkData.startTime),
-                          )
-                          .map((time) => (
-                            <Picker.Item key={time} label={time} value={time} />
-                          ))}
-                      </Picker>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Special Event Checkbox */}
-                <View className="mb-4 flex-row items-center gap-3">
-                  <TouchableOpacity
-                    onPress={() =>
-                      setBulkData({
-                        ...bulkData,
-                        isSpecialEvent: !bulkData.isSpecialEvent,
-                        specialEventType: "",
-                        selectedDepartments: [],
-                      })
-                    }
-                    className="h-5 w-5 items-center justify-center rounded border border-gray-300"
-                    style={{
-                      backgroundColor: bulkData.isSpecialEvent
-                        ? COLORS.accent
-                        : "transparent",
-                    }}
-                  >
-                    {bulkData.isSpecialEvent && (
-                      <Check size={14} color="#FFF" />
+                          }}
+                          style={{ height: 50, width: "100%" }}
+                        >
+                          <Picker.Item label="Select Department" value="" />
+                          {getAvailableDepartmentsForBulk().map(
+                            (dept, index) => (
+                              <Picker.Item
+                                key={index}
+                                label={dept.department}
+                                value={dept.department}
+                              />
+                            ),
+                          )}
+                        </Picker>
+                      </View>
                     )}
-                  </TouchableOpacity>
-                  <Text className="text-sm text-gray-900">
-                    This is a Special Event (Opening/Lunch/Closing)
-                  </Text>
-                </View>
+                  </View>
 
-                {bulkData.isSpecialEvent ? (
-                  <>
-                    <View className="mb-4">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Event Type *
+                  {/* Time Pickers */}
+                  <View className="mb-4 flex-row gap-4">
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-semibold text-slate-900">
+                        Start Time *
                       </Text>
-                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                      <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                         <Picker
-                          selectedValue={bulkData.specialEventType}
-                          onValueChange={(itemValue: string) =>
+                          selectedValue={bulkData.startTime}
+                          onValueChange={(itemValue: string) => {
+                            let newEndTime = bulkData.endTime;
+                            if (
+                              newEndTime &&
+                              getTimeValue(newEndTime) <=
+                                getTimeValue(itemValue)
+                            )
+                              newEndTime = "";
                             setBulkData({
                               ...bulkData,
-                              specialEventType: itemValue,
-                            })
-                          }
+                              startTime: itemValue,
+                              endTime: newEndTime,
+                            });
+                          }}
                           style={{ height: 50 }}
                         >
-                          <Picker.Item label="Select Event Type" value="" />
-                          <Picker.Item
-                            label="Opening Meeting"
-                            value="OPENING"
-                          />
-                          <Picker.Item label="Lunch Break" value="LUNCH" />
-                          <Picker.Item
-                            label="Closing Meeting"
-                            value="CLOSING"
-                          />
+                          {timeOptions.map((time) => (
+                            <Picker.Item key={time} label={time} value={time} />
+                          ))}
                         </Picker>
                       </View>
                     </View>
-                    {bulkData.specialEventType !== "LUNCH" && (
-                      <View className="mb-4 flex-row gap-4">
-                        <View className="flex-1">
-                          <Text className="mb-2 text-sm font-semibold text-gray-900">
-                            Auditor *
-                          </Text>
-                          <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                            <Picker
-                              selectedValue={bulkData.auditorId}
-                              onValueChange={(itemValue: string) =>
-                                setBulkData({
-                                  ...bulkData,
-                                  auditorId: itemValue,
-                                })
-                              }
-                              style={{ height: 50 }}
-                            >
-                              <Picker.Item label="Select Auditor" value="" />
-                              {bulkAvailableAuditors.length > 0 ? (
-                                bulkAvailableAuditors.map((auditor) => (
-                                  <Picker.Item
-                                    key={auditor.id}
-                                    label={`${auditor.firstName} ${auditor.lastName}`}
-                                    value={auditor.id.toString()}
-                                  />
-                                ))
-                              ) : (
-                                <Picker.Item
-                                  label={
-                                    bulkLoadingCompetent
-                                      ? "Loading auditors..."
-                                      : "No auditors available"
-                                  }
-                                  value=""
-                                  enabled={false}
-                                />
-                              )}
-                            </Picker>
-                          </View>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="mb-2 text-sm font-semibold text-gray-900">
-                            Auditee *
-                          </Text>
-                          <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                            <Picker
-                              selectedValue={bulkData.auditeeId}
-                              onValueChange={(itemValue: string) =>
-                                setBulkData({
-                                  ...bulkData,
-                                  auditeeId: itemValue,
-                                })
-                              }
-                              style={{ height: 50 }}
-                            >
-                              <Picker.Item label="Select Auditee" value="" />
-                              {bulkAvailableAuditees.length > 0 ? (
-                                bulkAvailableAuditees.map((auditee) => (
-                                  <Picker.Item
-                                    key={auditee.id}
-                                    label={`${auditee.firstName} ${auditee.lastName}${
-                                      auditee.role === "HOD" ? " (HOD)" : ""
-                                    }`}
-                                    value={auditee.id.toString()}
-                                  />
-                                ))
-                              ) : (
-                                <Picker.Item
-                                  label={
-                                    bulkLoadingCompetent
-                                      ? "Loading auditees..."
-                                      : "No auditees available"
-                                  }
-                                  value=""
-                                  enabled={false}
-                                />
-                              )}
-                            </Picker>
-                          </View>
+                    <View className="flex-1">
+                      <Text className="mb-2 text-sm font-semibold text-slate-900">
+                        End Time *
+                      </Text>
+                      <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <Picker
+                          selectedValue={bulkData.endTime}
+                          onValueChange={(itemValue: string) =>
+                            setBulkData({ ...bulkData, endTime: itemValue })
+                          }
+                          style={{ height: 50 }}
+                        >
+                          {timeOptions
+                            .filter(
+                              (t) =>
+                                !bulkData.startTime ||
+                                getTimeValue(t) >
+                                  getTimeValue(bulkData.startTime),
+                            )
+                            .map((time) => (
+                              <Picker.Item
+                                key={time}
+                                label={time}
+                                value={time}
+                              />
+                            ))}
+                        </Picker>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Special Event Checkbox */}
+                  <View className="mb-4 flex-row items-center gap-3">
+                    <TouchableOpacity
+                      onPress={() =>
+                        setBulkData({
+                          ...bulkData,
+                          isSpecialEvent: !bulkData.isSpecialEvent,
+                          specialEventType: "",
+                          selectedDepartments: [],
+                        })
+                      }
+                      className="h-5 w-5 items-center justify-center rounded border border-slate-300"
+                      style={{
+                        backgroundColor: bulkData.isSpecialEvent
+                          ? COLORS.primary
+                          : "transparent",
+                      }}
+                    >
+                      {bulkData.isSpecialEvent && (
+                        <Check size={14} color="#FFF" />
+                      )}
+                    </TouchableOpacity>
+                    <Text className="text-sm text-slate-900">
+                      This is a Special Event (Opening/Lunch/Closing)
+                    </Text>
+                  </View>
+
+                  {bulkData.isSpecialEvent ? (
+                    <>
+                      <View className="mb-4">
+                        <Text className="mb-2 text-sm font-semibold text-slate-900">
+                          Event Type *
+                        </Text>
+                        <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <Picker
+                            selectedValue={bulkData.specialEventType}
+                            onValueChange={(itemValue: string) =>
+                              setBulkData({
+                                ...bulkData,
+                                specialEventType: itemValue,
+                              })
+                            }
+                            style={{ height: 50 }}
+                          >
+                            <Picker.Item label="Select Event Type" value="" />
+                            <Picker.Item
+                              label="Opening Meeting"
+                              value="OPENING"
+                            />
+                            <Picker.Item label="Lunch Break" value="LUNCH" />
+                            <Picker.Item
+                              label="Closing Meeting"
+                              value="CLOSING"
+                            />
+                          </Picker>
                         </View>
                       </View>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {/* Audit Elements Selection */}
-                    <View className="mb-4">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Select Audit Elements *
-                      </Text>
-                      <View className="max-h-60 rounded-lg border border-gray-200 p-4">
-                        {!bulkSelectedAuditDepartment ? (
-                          <Text className="text-center text-sm text-gray-500">
-                            Please select a department first
-                          </Text>
-                        ) : (
-                          (() => {
-                            const availableDepts =
-                              getAvailableDepartmentsForBulk();
-                            const deptInfo = availableDepts.find(
-                              (d) =>
-                                d.department === bulkSelectedAuditDepartment,
-                            );
-                            if (
-                              !deptInfo ||
-                              deptInfo.auditElements.length === 0
-                            ) {
-                              return (
-                                <Text className="text-center text-sm text-gray-500">
-                                  No audit elements available
-                                </Text>
-                              );
-                            }
-                            const selectedDept =
-                              bulkData.selectedDepartments?.find(
+                      {bulkData.specialEventType !== "LUNCH" && (
+                        <View className="mb-4 flex-row gap-4">
+                          <View className="flex-1">
+                            <Text className="mb-2 text-sm font-semibold text-slate-900">
+                              Auditor *
+                            </Text>
+                            <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                              <Picker
+                                selectedValue={bulkData.auditorId}
+                                onValueChange={(itemValue: string) =>
+                                  setBulkData({
+                                    ...bulkData,
+                                    auditorId: itemValue,
+                                  })
+                                }
+                                style={{ height: 50 }}
+                              >
+                                <Picker.Item label="Select Auditor" value="" />
+                                {bulkAvailableAuditors.length > 0 ? (
+                                  bulkAvailableAuditors.map((auditor) => (
+                                    <Picker.Item
+                                      key={auditor.id}
+                                      label={`${auditor.firstName} ${auditor.lastName}`}
+                                      value={auditor.id.toString()}
+                                    />
+                                  ))
+                                ) : (
+                                  <Picker.Item
+                                    label={
+                                      bulkLoadingCompetent
+                                        ? "Loading auditors..."
+                                        : "No auditors available"
+                                    }
+                                    value=""
+                                    enabled={false}
+                                  />
+                                )}
+                              </Picker>
+                            </View>
+                          </View>
+                          <View className="flex-1">
+                            <Text className="mb-2 text-sm font-semibold text-slate-900">
+                              Auditee *
+                            </Text>
+                            <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                              <Picker
+                                selectedValue={bulkData.auditeeId}
+                                onValueChange={(itemValue: string) =>
+                                  setBulkData({
+                                    ...bulkData,
+                                    auditeeId: itemValue,
+                                  })
+                                }
+                                style={{ height: 50 }}
+                              >
+                                <Picker.Item label="Select Auditee" value="" />
+                                {bulkAvailableAuditees.length > 0 ? (
+                                  bulkAvailableAuditees.map((auditee) => (
+                                    <Picker.Item
+                                      key={auditee.id}
+                                      label={`${auditee.firstName} ${auditee.lastName}${
+                                        auditee.role === "HOD" ? " (HOD)" : ""
+                                      }`}
+                                      value={auditee.id.toString()}
+                                    />
+                                  ))
+                                ) : (
+                                  <Picker.Item
+                                    label={
+                                      bulkLoadingCompetent
+                                        ? "Loading auditees..."
+                                        : "No auditees available"
+                                    }
+                                    value=""
+                                    enabled={false}
+                                  />
+                                )}
+                              </Picker>
+                            </View>
+                          </View>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Audit Elements Selection */}
+                      <View className="mb-4">
+                        <Text className="mb-2 text-sm font-semibold text-slate-900">
+                          Select Audit Elements *
+                        </Text>
+                        <View className="max-h-60 rounded-lg border border-slate-200 p-4">
+                          {!bulkSelectedAuditDepartment ? (
+                            <Text className="text-center text-sm text-slate-500">
+                              Please select a department first
+                            </Text>
+                          ) : (
+                            (() => {
+                              const availableDepts =
+                                getAvailableDepartmentsForBulk();
+                              const deptInfo = availableDepts.find(
                                 (d) =>
                                   d.department === bulkSelectedAuditDepartment,
                               );
-                            const selectedElements =
-                              selectedDept?.selectedElements || [];
-                            return (
-                              <View>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    let updated = [
-                                      ...(bulkData.selectedDepartments || []),
-                                    ];
-                                    const existingIndex = updated.findIndex(
-                                      (d) =>
-                                        d.department ===
-                                        bulkSelectedAuditDepartment,
-                                    );
-                                    if (existingIndex >= 0) {
-                                      updated[existingIndex].selectedElements =
-                                        [...deptInfo.auditElements];
-                                    } else {
-                                      updated.push({
-                                        department: bulkSelectedAuditDepartment,
-                                        selectedElements: [
-                                          ...deptInfo.auditElements,
-                                        ],
-                                      });
-                                    }
-                                    setBulkData((prev) => ({
-                                      ...prev,
-                                      selectedDepartments: updated,
-                                    }));
-                                  }}
-                                  className="mb-3 flex-row items-center gap-3"
-                                >
-                                  <View
-                                    className="h-5 w-5 items-center justify-center rounded border border-gray-300"
-                                    style={{
-                                      backgroundColor:
-                                        selectedElements.length ===
-                                        deptInfo.auditElements.length
-                                          ? COLORS.accent
-                                          : "transparent",
-                                    }}
-                                  >
-                                    {selectedElements.length ===
-                                      deptInfo.auditElements.length && (
-                                      <Check size={14} color="#FFF" />
-                                    )}
-                                  </View>
-                                  <Text className="font-semibold text-gray-900">
-                                    {bulkSelectedAuditDepartment}
+                              if (
+                                !deptInfo ||
+                                deptInfo.auditElements.length === 0
+                              ) {
+                                return (
+                                  <Text className="text-center text-sm text-slate-500">
+                                    No audit elements available
                                   </Text>
-                                </TouchableOpacity>
-                                <View className="ml-8 flex-row flex-wrap gap-2">
-                                  {deptInfo.auditElements.map((element) => (
-                                    <TouchableOpacity
-                                      key={element}
-                                      onPress={() => {
-                                        let updated = [
-                                          ...(bulkData.selectedDepartments ||
-                                            []),
+                                );
+                              }
+                              const selectedDept =
+                                bulkData.selectedDepartments?.find(
+                                  (d) =>
+                                    d.department ===
+                                    bulkSelectedAuditDepartment,
+                                );
+                              const selectedElements =
+                                selectedDept?.selectedElements || [];
+                              return (
+                                <View>
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      let updated = [
+                                        ...(bulkData.selectedDepartments || []),
+                                      ];
+                                      const existingIndex = updated.findIndex(
+                                        (d) =>
+                                          d.department ===
+                                          bulkSelectedAuditDepartment,
+                                      );
+                                      if (existingIndex >= 0) {
+                                        updated[
+                                          existingIndex
+                                        ].selectedElements = [
+                                          ...deptInfo.auditElements,
                                         ];
-                                        let deptIndex = updated.findIndex(
-                                          (d) =>
-                                            d.department ===
+                                      } else {
+                                        updated.push({
+                                          department:
                                             bulkSelectedAuditDepartment,
-                                        );
-                                        if (deptIndex === -1) {
-                                          updated.push({
-                                            department:
+                                          selectedElements: [
+                                            ...deptInfo.auditElements,
+                                          ],
+                                        });
+                                      }
+                                      setBulkData((prev) => ({
+                                        ...prev,
+                                        selectedDepartments: updated,
+                                      }));
+                                    }}
+                                    className="mb-3 flex-row items-center gap-3"
+                                  >
+                                    <View
+                                      className="h-5 w-5 items-center justify-center rounded border border-slate-300"
+                                      style={{
+                                        backgroundColor:
+                                          selectedElements.length ===
+                                          deptInfo.auditElements.length
+                                            ? COLORS.primary
+                                            : "transparent",
+                                      }}
+                                    >
+                                      {selectedElements.length ===
+                                        deptInfo.auditElements.length && (
+                                        <Check size={14} color="#FFF" />
+                                      )}
+                                    </View>
+                                    <Text className="font-semibold text-slate-900">
+                                      {bulkSelectedAuditDepartment}
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <View className="ml-8 flex-row flex-wrap gap-2">
+                                    {deptInfo.auditElements.map((element) => (
+                                      <TouchableOpacity
+                                        key={element}
+                                        onPress={() => {
+                                          let updated = [
+                                            ...(bulkData.selectedDepartments ||
+                                              []),
+                                          ];
+                                          let deptIndex = updated.findIndex(
+                                            (d) =>
+                                              d.department ===
                                               bulkSelectedAuditDepartment,
-                                            selectedElements: [],
-                                          });
-                                          deptIndex = updated.length - 1;
-                                        }
-                                        const isSelected =
-                                          updated[
-                                            deptIndex
-                                          ].selectedElements.includes(element);
-                                        if (isSelected) {
-                                          updated[deptIndex].selectedElements =
+                                          );
+                                          if (deptIndex === -1) {
+                                            updated.push({
+                                              department:
+                                                bulkSelectedAuditDepartment,
+                                              selectedElements: [],
+                                            });
+                                            deptIndex = updated.length - 1;
+                                          }
+                                          const isSelected =
                                             updated[
+                                              deptIndex
+                                            ].selectedElements.includes(
+                                              element,
+                                            );
+                                          if (isSelected) {
+                                            updated[
+                                              deptIndex
+                                            ].selectedElements = updated[
                                               deptIndex
                                             ].selectedElements.filter(
                                               (el) => el !== element,
                                             );
-                                        } else {
-                                          updated[deptIndex].selectedElements =
-                                            [
+                                          } else {
+                                            updated[
+                                              deptIndex
+                                            ].selectedElements = [
                                               ...updated[deptIndex]
                                                 .selectedElements,
                                               element,
                                             ];
-                                        }
-                                        if (
-                                          updated[deptIndex].selectedElements
-                                            .length === 0
-                                        )
-                                          updated.splice(deptIndex, 1);
-                                        setBulkData((prev) => ({
-                                          ...prev,
-                                          selectedDepartments: updated,
-                                        }));
-                                      }}
-                                      className={`flex-row items-center gap-2 rounded-full border px-3 py-1.5 ${selectedElements.includes(element) ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}
-                                    >
-                                      {selectedElements.includes(element) && (
-                                        <Check
-                                          size={12}
-                                          color={COLORS.accent}
-                                        />
-                                      )}
-                                      <Text
-                                        className={`text-xs font-medium ${selectedElements.includes(element) ? "text-blue-700" : "text-gray-700"}`}
+                                          }
+                                          if (
+                                            updated[deptIndex].selectedElements
+                                              .length === 0
+                                          )
+                                            updated.splice(deptIndex, 1);
+                                          setBulkData((prev) => ({
+                                            ...prev,
+                                            selectedDepartments: updated,
+                                          }));
+                                        }}
+                                        className="flex-row items-center gap-2 rounded-full border px-3 py-1.5"
+                                        style={{
+                                          borderColor:
+                                            selectedElements.includes(element)
+                                              ? COLORS.primaryBorder
+                                              : "#E2E8F0",
+                                          backgroundColor:
+                                            selectedElements.includes(element)
+                                              ? COLORS.primaryLight
+                                              : "#F8FAFC",
+                                        }}
                                       >
-                                        {element}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  ))}
+                                        {selectedElements.includes(element) && (
+                                          <Check
+                                            size={12}
+                                            color={COLORS.primary}
+                                          />
+                                        )}
+                                        <Text
+                                          className="text-xs font-medium"
+                                          style={{
+                                            color: selectedElements.includes(
+                                              element,
+                                            )
+                                              ? COLORS.primaryDark
+                                              : "#475569",
+                                          }}
+                                        >
+                                          {element}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
                                 </View>
-                              </View>
-                            );
-                          })()
-                        )}
-                      </View>
-                    </View>
-                    {/* Auditor Picker */}
-                    <View className="mb-4 flex-1">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Auditor *
-                      </Text>
-                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                        <Picker
-                          selectedValue={bulkData.auditorId}
-                          onValueChange={(itemValue: string) =>
-                            setBulkData({ ...bulkData, auditorId: itemValue })
-                          }
-                          style={{ height: 50 }}
-                        >
-                          <Picker.Item label="Select Auditor" value="" />
-                          {bulkAvailableAuditors.length > 0 ? (
-                            bulkAvailableAuditors.map((auditor) => (
-                              <Picker.Item
-                                key={auditor.id}
-                                label={`${auditor.firstName || ""} ${auditor.lastName || ""}`.trim()}
-                                value={String(auditor.id)}
-                              />
-                            ))
-                          ) : (
-                            <Picker.Item
-                              label={
-                                bulkLoadingCompetent
-                                  ? "Loading auditors..."
-                                  : "No auditors available"
-                              }
-                              value=""
-                              enabled={false}
-                            />
+                              );
+                            })()
                           )}
-                        </Picker>
+                        </View>
                       </View>
-                    </View>
-                    {/* Auditee Picker — team-aware */}
-                    <View className="mb-4 flex-1">
-                      <Text className="mb-2 text-sm font-semibold text-gray-900">
-                        Auditee *
-                      </Text>
-                      <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                        <Picker
-                          selectedValue={bulkData.auditeeId}
-                          onValueChange={(itemValue: string) =>
-                            setBulkData({ ...bulkData, auditeeId: itemValue })
-                          }
-                          style={{ height: 50 }}
-                        >
-                          <Picker.Item label="Select Auditee" value="" />
-                          {bulkAvailableAuditees.length > 0 ? (
-                            bulkAvailableAuditees.map((auditee) => (
+                      {/* Auditor Picker */}
+                      <View className="mb-4 flex-1">
+                        <Text className="mb-2 text-sm font-semibold text-slate-900">
+                          Auditor *
+                        </Text>
+                        <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <Picker
+                            selectedValue={bulkData.auditorId}
+                            onValueChange={(itemValue: string) =>
+                              setBulkData({
+                                ...bulkData,
+                                auditorId: itemValue,
+                              })
+                            }
+                            style={{ height: 50 }}
+                          >
+                            <Picker.Item label="Select Auditor" value="" />
+                            {bulkAvailableAuditors.length > 0 ? (
+                              bulkAvailableAuditors.map((auditor) => (
+                                <Picker.Item
+                                  key={auditor.id}
+                                  label={`${auditor.firstName || ""} ${auditor.lastName || ""}`.trim()}
+                                  value={String(auditor.id)}
+                                />
+                              ))
+                            ) : (
                               <Picker.Item
-                                key={auditee.id}
-                                label={`${auditee.firstName || ""} ${auditee.lastName || ""}${
-                                  auditee.role === "HOD" ? " (HOD)" : ""
-                                }`.trim()}
-                                value={String(auditee.id)}
+                                label={
+                                  bulkLoadingCompetent
+                                    ? "Loading auditors..."
+                                    : "No auditors available"
+                                }
+                                value=""
+                                enabled={false}
                               />
-                            ))
-                          ) : (
-                            <Picker.Item
-                              label={
-                                bulkLoadingCompetent
-                                  ? "Loading auditees..."
-                                  : "No auditees available"
-                              }
-                              value=""
-                              enabled={false}
-                            />
-                          )}
-                        </Picker>
+                            )}
+                          </Picker>
+                        </View>
                       </View>
-                    </View>
-                  </>
-                )}
+                      {/* Auditee Picker */}
+                      <View className="mb-4 flex-1">
+                        <Text className="mb-2 text-sm font-semibold text-slate-900">
+                          Auditee *
+                        </Text>
+                        <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <Picker
+                            selectedValue={bulkData.auditeeId}
+                            onValueChange={(itemValue: string) =>
+                              setBulkData({
+                                ...bulkData,
+                                auditeeId: itemValue,
+                              })
+                            }
+                            style={{ height: 50 }}
+                          >
+                            <Picker.Item label="Select Auditee" value="" />
+                            {bulkAvailableAuditees.length > 0 ? (
+                              bulkAvailableAuditees.map((auditee) => (
+                                <Picker.Item
+                                  key={auditee.id}
+                                  label={`${auditee.firstName || ""} ${auditee.lastName || ""}${
+                                    auditee.role === "HOD" ? " (HOD)" : ""
+                                  }`.trim()}
+                                  value={String(auditee.id)}
+                                />
+                              ))
+                            ) : (
+                              <Picker.Item
+                                label={
+                                  bulkLoadingCompetent
+                                    ? "Loading auditees..."
+                                    : "No auditees available"
+                                }
+                                value=""
+                                enabled={false}
+                              />
+                            )}
+                          </Picker>
+                        </View>
+                      </View>
+                    </>
+                  )}
 
-                {/* Status Picker */}
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm font-semibold text-gray-900">
-                    Status
-                  </Text>
-                  <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                    <Picker
-                      selectedValue={bulkData.status}
-                      onValueChange={(itemValue: string) =>
-                        setBulkData({ ...bulkData, status: itemValue })
-                      }
-                      style={{ height: 50 }}
-                    >
-                      <Picker.Item label="Scheduled" value="SCHEDULED" />
-                      <Picker.Item label="In Progress" value="IN_PROGRESS" />
-                      <Picker.Item label="Completed" value="COMPLETED" />
-                      <Picker.Item label="Cancelled" value="CANCELLED" />
-                    </Picker>
+                  {/* Status Picker */}
+                  <View className="mb-4">
+                    <Text className="mb-2 text-sm font-semibold text-slate-900">
+                      Status
+                    </Text>
+                    <View className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                      <Picker
+                        selectedValue={bulkData.status}
+                        onValueChange={(itemValue: string) =>
+                          setBulkData({ ...bulkData, status: itemValue })
+                        }
+                        style={{ height: 50 }}
+                      >
+                        <Picker.Item label="Scheduled" value="SCHEDULED" />
+                        <Picker.Item label="In Progress" value="IN_PROGRESS" />
+                        <Picker.Item label="Completed" value="COMPLETED" />
+                        <Picker.Item label="Cancelled" value="CANCELLED" />
+                      </Picker>
+                    </View>
                   </View>
-                </View>
-              </ScrollView>
+                </ScrollView>
 
-              {/* Footer Buttons */}
-              <View className="flex-row justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowBulkModal(false);
-                    setBulkSelectedAuditDepartment("");
-                  }}
-                  className="h-10 justify-center rounded-lg border border-gray-200 bg-white px-5"
-                >
-                  <Text className="text-sm font-semibold text-gray-700">
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleBulkSchedule}
-                  disabled={
-                    saving ||
-                    !bulkSelectedAuditDepartment ||
-                    !bulkData.auditorId ||
-                    !bulkData.auditeeId ||
-                    !bulkData.startTime ||
-                    !bulkData.endTime
-                  }
-                  className="h-10 flex-row items-center gap-2 rounded-lg px-5"
-                  style={{
-                    backgroundColor:
+                {/* Footer Buttons */}
+                <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowBulkModal(false);
+                      setBulkSelectedAuditDepartment("");
+                    }}
+                    className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
+                    activeOpacity={0.7}
+                  >
+                    <Text className="text-sm font-semibold text-slate-600">
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleBulkSchedule}
+                    disabled={
                       saving ||
                       !bulkSelectedAuditDepartment ||
                       !bulkData.auditorId ||
                       !bulkData.auditeeId ||
                       !bulkData.startTime ||
                       !bulkData.endTime
-                        ? "#F1F5F9"
-                        : COLORS.purple,
-                  }}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Calendar size={16} color="#FFF" />
-                  )}
-                  <Text className="text-sm font-semibold text-white">
-                    Create Bulk Schedules
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                    }
+                    className="h-11 flex-row items-center justify-center gap-2 rounded-xl px-6"
+                    style={{
+                      backgroundColor:
+                        saving ||
+                        !bulkSelectedAuditDepartment ||
+                        !bulkData.auditorId ||
+                        !bulkData.auditeeId ||
+                        !bulkData.startTime ||
+                        !bulkData.endTime
+                          ? "#CBD5E1"
+                          : COLORS.primary,
+                      opacity:
+                        saving ||
+                        !bulkSelectedAuditDepartment ||
+                        !bulkData.auditorId ||
+                        !bulkData.auditeeId ||
+                        !bulkData.startTime ||
+                        !bulkData.endTime
+                          ? 0.7
+                          : 1,
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {saving ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Calendar size={16} color="#FFF" />
+                    )}
+                    <Text className="text-sm font-semibold text-white">
+                      Create Bulk Schedules
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </Modal>
-      )}
+          </Modal>
+        )}
 
-      {/* Reject Modal */}
-      <ActionModal
-        isOpen={showRejectModal}
-        onClose={() => {
-          setShowRejectModal(false);
-          setRejectionReason("");
-          setSelectedRejectDate(null);
-          setTempScheduleId(null);
-        }}
-        title="Reject Schedule"
-        description="Please provide a reason for rejection:"
-        icon={X}
-        iconColor={COLORS.error}
-        iconBg={COLORS.errorLight}
-        iconBorder={COLORS.errorBorder}
-        value={rejectionReason}
-        setValue={setRejectionReason}
-        placeholder="Enter rejection reason..."
-        onSubmit={() => {
-          if (tempScheduleId) {
-            handleRejectSchedule(tempScheduleId);
+        {/* Reject Modal */}
+        <ActionModal
+          isOpen={showRejectModal}
+          onClose={() => {
+            setShowRejectModal(false);
+            setRejectionReason("");
+            setSelectedRejectDate(null);
             setTempScheduleId(null);
-          }
-        }}
-        submitLabel="Confirm Reject"
-        submitBg={COLORS.error}
-        submitting={submitting}
-      />
+          }}
+          title="Reject Schedule"
+          description="Please provide a reason for rejection:"
+          icon={X}
+          iconColor={COLORS.stateErrorText}
+          iconBg={COLORS.stateErrorBg}
+          value={rejectionReason}
+          setValue={setRejectionReason}
+          placeholder="Enter rejection reason..."
+          onSubmit={() => {
+            if (tempScheduleId) {
+              handleRejectSchedule(tempScheduleId);
+              setTempScheduleId(null);
+            }
+          }}
+          submitLabel="Confirm Reject"
+          submitBg={COLORS.stateErrorText}
+          submitting={submitting}
+        />
 
-      {/* ✅ NEW: LA Reject Modal (Daily Feasibility) */}
-      <ActionModal
-        isOpen={showLaRejectModal}
-        onClose={() => {
-          setShowLaRejectModal(false);
-          setLaRejectReason("");
-          setTempScheduleId(null);
-        }}
-        title="Reject Daily Feasibility"
-        description="Please provide a reason for rejecting this daily schedule:"
-        icon={XCircle}
-        iconColor={COLORS.error}
-        iconBg={COLORS.errorLight}
-        iconBorder={COLORS.errorBorder}
-        value={laRejectReason}
-        setValue={setLaRejectReason}
-        placeholder="Explain why this schedule is not feasible..."
-        onSubmit={() => {
-          if (tempScheduleId) handleLaRejectSingle(tempScheduleId);
-        }}
-        submitLabel="Reject Feasibility"
-        submitBg={COLORS.error}
-        submitting={submitting}
-      />
-
-      {/* Change Request Modal */}
-      <ActionModal
-        isOpen={showChangeRequestModal}
-        onClose={() => {
-          setShowChangeRequestModal(false);
-          setChangeRequestReason("");
-          setTempScheduleId(null);
-          setSelectedRejectDate(null);
-        }}
-        title="Request Changes"
-        description="Please provide details about what changes are needed:"
-        icon={MessageSquare}
-        iconColor={COLORS.warning}
-        iconBg={COLORS.warningLight}
-        iconBorder={COLORS.warningBorder}
-        value={changeRequestReason}
-        setValue={setChangeRequestReason}
-        placeholder="Describe the changes required..."
-        onSubmit={() => {
-          if (tempScheduleId) {
-            handleRequestChanges(tempScheduleId);
+        {/* LA Reject Modal (Daily Feasibility) */}
+        <ActionModal
+          isOpen={showLaRejectModal}
+          onClose={() => {
+            setShowLaRejectModal(false);
+            setLaRejectReason("");
             setTempScheduleId(null);
-          }
-        }}
-        submitLabel="Submit Request"
-        submitBg={COLORS.warning}
-        submitting={submitting}
-      />
+          }}
+          title="Reject Daily Feasibility"
+          description="Please provide a reason for rejecting this daily schedule:"
+          icon={XCircle}
+          iconColor={COLORS.stateErrorText}
+          iconBg={COLORS.stateErrorBg}
+          value={laRejectReason}
+          setValue={setLaRejectReason}
+          placeholder="Explain why this schedule is not feasible..."
+          onSubmit={() => {
+            if (tempScheduleId) handleLaRejectSingle(tempScheduleId);
+          }}
+          submitLabel="Reject Feasibility"
+          submitBg={COLORS.stateErrorText}
+          submitting={submitting}
+        />
 
-      <PDFViewer
-        visible={pdfViewer.visible}
-        pdfData={pdfViewer.pdfData}
-        fileName={pdfViewer.fileName}
-        auditId={String(selectedYear)}
-        auditNumber={`Form5-Detailed-${selectedYear}`}
-        pdfType="form5"
-        selectedMonth={selectedMonth}
-        fromDetailedView={true} // ✅ ADD THIS
-        forumGroups={[
-          {
-            id: `AUDIT-${selectedYear}`,
-            name: `📋 Audit Review ${selectedYear}`,
-            type: "Audit",
-          },
-          {
-            id: "AUDIT-general-forum",
-            name: "📢 General Discussion",
-            type: "General",
-          },
-        ]}
-        onClose={() =>
-          setPDFViewer({ visible: false, pdfData: "", fileName: "" })
-        }
-        onShareComplete={(forumId?: string) => {
-          showToast("PDF shared to forum successfully!", "success");
-          setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-        }}
-        currentUser={user}
-        allUsers={allUsers}
-      />
+        {/* Change Request Modal */}
+        <ActionModal
+          isOpen={showChangeRequestModal}
+          onClose={() => {
+            setShowChangeRequestModal(false);
+            setChangeRequestReason("");
+            setTempScheduleId(null);
+            setSelectedRejectDate(null);
+          }}
+          title="Request Changes"
+          description="Please provide details about what changes are needed:"
+          icon={MessageSquare}
+          iconColor={COLORS.stateWarningText}
+          iconBg={COLORS.stateWarningBg}
+          value={changeRequestReason}
+          setValue={setChangeRequestReason}
+          placeholder="Describe the changes required..."
+          onSubmit={() => {
+            if (tempScheduleId) {
+              handleRequestChanges(tempScheduleId);
+              setTempScheduleId(null);
+            }
+          }}
+          submitLabel="Submit Request"
+          submitBg={COLORS.stateWarningText}
+          submitting={submitting}
+        />
+
+        <PDFViewer
+          visible={pdfViewer.visible}
+          pdfData={pdfViewer.pdfData}
+          fileName={pdfViewer.fileName}
+          auditId={String(selectedYear)}
+          auditNumber={`Form5-Detailed-${selectedYear}`}
+          pdfType="form5"
+          selectedMonth={selectedMonth}
+          fromDetailedView={true}
+          forumGroups={[
+            {
+              id: `AUDIT-${selectedYear}`,
+              name: `📋 Audit Review ${selectedYear}`,
+              type: "Audit",
+            },
+            {
+              id: "AUDIT-general-forum",
+              name: "📢 General Discussion",
+              type: "General",
+            },
+          ]}
+          onClose={() =>
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+          }
+          onShareComplete={(forumId?: string) => {
+            showToast("PDF shared to forum successfully!", "success");
+            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+          }}
+          currentUser={user}
+          allUsers={allUsers}
+        />
+      </ScrollView>
     </View>
   );
 }

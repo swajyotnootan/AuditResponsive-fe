@@ -8,11 +8,13 @@ import {
 } from "@/components/context/TodayWorkPopupContext";
 import Navbar from "@/components/Navbar";
 import SmartNavigator from "@/components/navigation/SmartNavigator";
+import { WelcomePopup } from "@/components/WelcomePopup";
+import { API_BASE_URL } from "@/config/apiConfig";
+import { consumeIntentionalLogout } from "@/utils/sessionFlags";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Redirect, Stack } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import { router, Stack } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Dimensions,
   LogBox,
   Platform,
@@ -39,12 +41,22 @@ export default function AppLayout() {
 }
 
 function AppLayoutInner() {
-  const { user, loading } = useAuth();
+  const { user, logout } = useAuth();
   const { isOpen: drawerVisible, toggleSidebar, closeSidebar } = useSidebar();
   const { openOncePerDay } = useTodayWorkPopup();
 
-  // ✅ Track which user we've already tried to auto-open for
   const lastUserIdRef = useRef<string | null>(null);
+
+  // Welcome popup state
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeUser, setWelcomeUser] = useState<any>(null);
+  const welcomeCheckedRef = useRef(false);
+
+  // Gate the today-popup until welcome is dismissed
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+
+  // ✅ marks whether this mount is a fresh login (skip Today popup)
+  const freshLoginRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -52,54 +64,241 @@ function AppLayoutInner() {
     }
   }, []);
 
+  // ─────────────────────────────────────────────────────────────
+  // 1) Welcome popup + fresh-login detection
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user || welcomeCheckedRef.current) return;
+    welcomeCheckedRef.current = true;
+
+    (async () => {
+      try {
+        const pending = await AsyncStorage.getItem("@welcome_pending");
+
+        if (pending !== "true") {
+          setWelcomeDismissed(true);
+          return;
+        }
+
+        // ✅ Fresh login → mark it so effect #3 can skip the Today popup
+        freshLoginRef.current = true;
+
+        const raw = await AsyncStorage.getItem("@welcome_user");
+        let parsed: any = user;
+        if (raw) {
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = user;
+          }
+        }
+
+        setWelcomeUser(parsed);
+        setShowWelcome(true);
+
+        await AsyncStorage.multiRemove(["@welcome_pending", "@welcome_user"]);
+      } catch (e) {
+        console.warn("Welcome flag read failed:", e);
+        setWelcomeDismissed(true);
+      }
+    })();
+  }, [user]);
+
+  // ─────────────────────────────────────────────────────────────
+  // 2) Session watchdog — kicks user out on 401 (revoked/expired)
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    let stopped = false;
+
+    const check = async () => {
+      if (stopped) return;
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) return;
+        const res = await fetch(`${API_BASE_URL}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store" as RequestCache,
+        });
+        if (res.status === 401 && !stopped) {
+          stopped = true;
+
+          let reason = "Your session has ended. Please sign in again.";
+          try {
+            const body = await res.clone().json();
+            if (body?.error) reason = body.error;
+          } catch {}
+
+          const wasIntentional = await consumeIntentionalLogout();
+          if (!wasIntentional) {
+            await AsyncStorage.setItem("@logout_reason", reason);
+          }
+
+          await logout();
+
+          if (Platform.OS === "web" && typeof window !== "undefined") {
+            window.location.href = "/auth/login";
+          } else {
+            router.replace("/auth/login" as any);
+          }
+        }
+      } catch {}
+    };
+
+    void check();
+    const id = setInterval(check, 15_000);
+
+    let onFocus: (() => void) | undefined;
+    let onVisible: (() => void) | undefined;
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      onFocus = () => void check();
+      onVisible = () => {
+        if (document.visibilityState === "visible") void check();
+      };
+      window.addEventListener("focus", onFocus);
+      document.addEventListener("visibilitychange", onVisible);
+    }
+
+    return () => {
+      stopped = true;
+      clearInterval(id);
+      if (onFocus) window.removeEventListener("focus", onFocus);
+      if (onVisible)
+        document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [user, logout]);
+
+  // ─────────────────────────────────────────────────────────────
+  // 2b) SSE — instant kick when this session is revoked remotely
+  //     ✅ TOP-LEVEL EFFECT (was previously nested — that was the bug)
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    if (typeof EventSource === "undefined") return;
+
+    let closed = false;
+    let retryDelay = 1000;
+    let currentEs: EventSource | null = null;
+
+    const connect = async () => {
+      if (closed) return;
+
+      // Retry reading the token a few times — handles login→dashboard race
+      let token: string | null = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        token = await AsyncStorage.getItem("authToken");
+        if (token) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+
+      if (!token) {
+        console.warn("[SSE] no token after retries, retrying in 2s...");
+        setTimeout(connect, 2000);
+        return;
+      }
+
+      console.log("[SSE] opening with token:", token.slice(0, 20) + "...");
+      const url = `${API_BASE_URL}/api/sessions/events?token=${encodeURIComponent(token)}`;
+      const es = new EventSource(url);
+      currentEs = es;
+
+      es.addEventListener("connected", () => {
+        console.log("[SSE] connected");
+        retryDelay = 1000;
+      });
+
+      es.addEventListener("revoked", async (evt: MessageEvent) => {
+        console.warn("[SSE] session revoked:", evt.data);
+        closed = true;
+        es.close();
+
+        let reason = "Your session has ended. Please sign in again.";
+        try {
+          const parsed = JSON.parse(evt.data);
+          if (parsed?.reason) reason = parsed.reason;
+        } catch {}
+
+        const wasIntentional = await consumeIntentionalLogout();
+        if (!wasIntentional) {
+          await AsyncStorage.setItem("@logout_reason", reason);
+        }
+
+        await logout();
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.location.href = "/auth/login";
+        } else {
+          router.replace("/auth/login" as any);
+        }
+      });
+
+      es.onerror = () => {
+        es.close();
+        currentEs = null;
+        if (closed) return;
+        console.log("[SSE] disconnected, retrying in", retryDelay, "ms");
+        setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+      };
+    };
+
+    void connect();
+
+    return () => {
+      closed = true;
+      currentEs?.close();
+    };
+  }, [user, logout]);
+
+  // ─────────────────────────────────────────────────────────────
+  // 3) Today's Work popup — SKIP on fresh login
+  // ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user || !user.id) return;
+    if (!welcomeDismissed) return;
+
+    if (freshLoginRef.current) {
+      freshLoginRef.current = false;
+      AsyncStorage.removeItem("@today_popup_auto_open").catch(() => {});
+      lastUserIdRef.current = String(user.id);
+      return;
+    }
 
     const currentUserId = String(user.id);
-
-    // ✅ Only run once per user session (not per app session)
     if (lastUserIdRef.current === currentUserId) return;
 
     const checkAutoOpen = async () => {
       try {
-        // Small delay ensures login page has finished writing the flag
         await new Promise((resolve) => setTimeout(resolve, 300));
-
         const flag = await AsyncStorage.getItem("@today_popup_auto_open");
         if (flag === "true") {
           await AsyncStorage.removeItem("@today_popup_auto_open");
-          // 5-second auto-close
           await openOncePerDay(currentUserId, 10000);
         }
       } catch (e) {
         console.warn("Failed to check auto-open flag:", e);
       } finally {
-        // ✅ Remember we checked for this user
         lastUserIdRef.current = currentUserId;
       }
     };
 
     checkAutoOpen();
-  }, [user, openOncePerDay]);
-
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#fff",
-        }}
-      >
-        <ActivityIndicator size="large" color="#5B4E97" />
-      </View>
-    );
-  }
+  }, [user, openOncePerDay, welcomeDismissed]);
 
   if (!user) {
-    return <Redirect href="/auth/login" />;
+    return null;
   }
+
+  const handleCloseWelcome = () => {
+    setShowWelcome(false);
+    setWelcomeDismissed(true);
+  };
+
+  useEffect(() => {
+    if (!showWelcome) return;
+    const t = setTimeout(() => handleCloseWelcome(), 1000);
+    return () => clearTimeout(t);
+  }, [showWelcome]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -149,6 +348,12 @@ function AppLayoutInner() {
       </View>
 
       <TodayWorkPopup />
+
+      <WelcomePopup
+        isOpen={showWelcome}
+        onClose={handleCloseWelcome}
+        userData={welcomeUser}
+      />
     </View>
   );
 }

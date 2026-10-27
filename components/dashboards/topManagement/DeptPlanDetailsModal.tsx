@@ -1,16 +1,115 @@
 // src/components/modals/DeptPlanDetailsModal.tsx
 import { AlertCircle, Check, CheckCircle, Clock, X } from "lucide-react-native";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+
+// ═══ MONOCHROMATIC BLUE PALETTE ═══
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  blue50: "#EFF6FF",
+  blue100: "#DBEAFE",
+  blue200: "#BFDBFE",
+  blue300: "#93C5FD",
+  blue800: "#1E40AF",
+  blue900: "#1E3A8A",
+  gray100: "#F1F5F9",
+  gray200: "#E2E8F0",
+  gray300: "#CBD5E1",
+  gray400: "#94A3B8",
+  white: "#FFFFFF",
+};
+
+// ═══ MOBILE COLUMN WIDTHS ═══
+const MOBILE_DEPT_WIDTH = 130;
+const MOBILE_ELEM_WIDTH = 100;
+const MOBILE_MONTH_WIDTH = 44;
+const MOBILE_TABLE_WIDTH =
+  MOBILE_DEPT_WIDTH + MOBILE_ELEM_WIDTH + MOBILE_MONTH_WIDTH * 12; // = 758
+
+// ═══ REUSABLE OUTLINE BUTTON ═══
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827";
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderColor,
+        backgroundColor,
+        opacity: disabled ? 0.5 : 1,
+        // @ts-ignore
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+      <Text style={{ fontSize: 14, fontWeight: "600", color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 interface DeptPlanDetailsModalProps {
   selectedPlan: any;
@@ -82,44 +181,46 @@ const DeptPlanDetailsModal = ({
   const completionRate =
     totalPlanned > 0 ? ((totalCompleted / totalPlanned) * 100).toFixed(1) : "0";
 
-  const getStatusBadge = (status: string) => {
-    if (status === "APPROVED") {
+  const approvalStatus = (selectedPlan.approvalStatus || "").toUpperCase();
+  const isApproved = approvalStatus.includes("APPROVED");
+  const isPending = approvalStatus.includes("PENDING_APPROVAL");
+  const isRejected = approvalStatus.includes("REJECTED");
+
+  // ═══ Status badge — ALL BLUE ═══
+  const renderStatusBadge = () => {
+    if (isApproved) {
       return (
-        <View className="flex-row items-center gap-1 rounded-full bg-green-100 px-2 py-1">
-          <CheckCircle size={12} color="#15803d" />
-          <Text className="text-xs text-green-700">Approved</Text>
+        <View style={styles.statusPillApproved}>
+          <CheckCircle size={12} color={COLORS.primary} />
+          <Text style={styles.statusPillApprovedText}>Approved</Text>
         </View>
       );
     }
-    if (status === "PENDING_APPROVAL") {
+    if (isPending) {
       return (
-        <View className="flex-row items-center gap-1 rounded-full bg-yellow-100 px-2 py-1">
-          <Clock size={12} color="#b45309" />
-          <Text className="text-xs text-yellow-700">Pending</Text>
+        <View style={styles.statusPillPending}>
+          <Clock size={12} color={COLORS.textMuted} />
+          <Text style={styles.statusPillPendingText}>Pending</Text>
         </View>
       );
     }
-    if (status === "REJECTED") {
+    if (isRejected) {
       return (
-        <View className="flex-row items-center gap-1 rounded-full bg-red-100 px-2 py-1">
-          <X size={12} color="#b91c1c" />
-          <Text className="text-xs text-red-700">Rejected</Text>
+        <View style={styles.statusPillRejected}>
+          <X size={12} color={COLORS.primaryDark} />
+          <Text style={styles.statusPillRejectedText}>Rejected</Text>
         </View>
       );
     }
     return (
-      <View className="rounded-full bg-gray-100 px-2 py-1">
-        <Text className="text-xs text-gray-700">Draft</Text>
+      <View style={styles.statusPillDraft}>
+        <Text style={styles.statusPillDraftText}>Draft</Text>
       </View>
     );
   };
 
-  const modalMaxWidth = isDesktop
-    ? selectedPlan.approvalStatus === "PENDING_APPROVAL"
-      ? 896
-      : 700
-    : "100%";
-  const modalHeight = isDesktop ? windowHeight * 0.9 : windowHeight * 0.85;
+  const modalMaxWidth = isDesktop ? 1100 : "100%";
+  const modalHeight = isDesktop ? windowHeight * 0.9 : windowHeight * 0.92;
   const headerHeight = 70;
 
   return (
@@ -129,145 +230,172 @@ const DeptPlanDetailsModal = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View className="flex-1 items-center justify-center bg-black/50 p-2">
+      <View style={styles.overlay}>
         <View
-          className="w-full overflow-hidden rounded-2xl bg-white"
-          style={{
-            maxWidth: modalMaxWidth,
-            height: modalHeight,
-          }}
+          style={[
+            styles.modalContainer,
+            { maxWidth: modalMaxWidth, height: modalHeight },
+          ]}
         >
-          {/* Header */}
-          <View className="flex-row items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-            <View className="flex-1 pr-2">
-              <Text
-                className="text-base font-bold text-gray-900 md:text-lg"
-                numberOfLines={1}
-              >
-                Department Audit Plan {selectedPlan.year}
-              </Text>
-              <View className="mt-1 flex-row flex-wrap items-center gap-1">
-                {getStatusBadge(selectedPlan.approvalStatus)}
-                <Text className="text-xs text-gray-500" numberOfLines={1}>
+          {/* ═══════════════ HEADER ═══════════════ */}
+          {isDesktop ? (
+            /* ── DESKTOP HEADER — UNCHANGED ── */
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  Department Audit Plan {selectedPlan.year}
+                </Text>
+              </View>
+
+              <View style={styles.headerRight}>
+                {renderStatusBadge()}
+
+                <Text style={styles.headerSubText} numberOfLines={1}>
+                  Prepared by: {selectedPlan.preparedBy || "N/A"}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeIconButton}
+                  activeOpacity={0.7}
+                >
+                  <X size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* ── MOBILE HEADER — STACKED ── */
+            <View style={styles.headerMobile}>
+              <View style={styles.headerMobileTop}>
+                <Text
+                  style={styles.headerTitleMobile}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  Department Audit Plan {selectedPlan.year}
+                </Text>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeIconButton}
+                  activeOpacity={0.7}
+                >
+                  <X size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.headerMobileBottom}>
+                {renderStatusBadge()}
+                <Text
+                  style={styles.headerSubTextMobile}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   Prepared by: {selectedPlan.preparedBy || "N/A"}
                 </Text>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={onClose}
-              className="rounded-full bg-gray-100 p-2"
-            >
-              <X size={18} color="#64748b" />
-            </TouchableOpacity>
-          </View>
+          )}
 
-          {/* ✅ CRITICAL FIX: ScrollView configuration for TextInput focus */}
           <ScrollView
-            className="flex-1"
+            style={[styles.scrollView, { height: modalHeight - headerHeight }]}
             showsVerticalScrollIndicator={true}
-            keyboardShouldPersistTaps="always" // 🔑 Forces ScrollView to let TextInput handle taps
+            keyboardShouldPersistTaps="always"
             keyboardDismissMode="interactive"
-            style={{ height: modalHeight - headerHeight }}
             contentContainerStyle={{
-              padding: 12,
+              paddingHorizontal: isDesktop ? 24 : 16,
+              paddingTop: 20,
               paddingBottom: 24,
               flexGrow: 1,
-            }} // 🔑 Ensures touch boundaries are calculated correctly
+            }}
           >
-            {/* Statistics Cards */}
-            <View className="mb-4 flex-row flex-wrap gap-2">
-              <View
-                className="items-center rounded-lg bg-blue-50 p-2"
-                style={{ width: isDesktop ? "23%" : "48%" }}
-              >
-                <Text className="mb-1 text-[10px] font-semibold text-blue-600">
-                  Planned (P)
-                </Text>
-                <Text className="text-lg font-bold text-blue-700">
-                  {totalPlanned}
-                </Text>
+            {/* ═══ KPI CARDS ═══ */}
+            {isDesktop ? (
+              /* ── DESKTOP KPI — 4 in a row (UNCHANGED) ── */
+              <View style={styles.kpiRow}>
+                <View style={[styles.kpiCard, styles.kpiCardBlue]}>
+                  <Text style={styles.kpiLabelBlue}>Planned (P)</Text>
+                  <Text style={styles.kpiValueBlue}>{totalPlanned}</Text>
+                </View>
+                <View style={[styles.kpiCard, styles.kpiCardBlueLight]}>
+                  <Text style={styles.kpiLabelBlueLight}>Completed (C)</Text>
+                  <Text style={styles.kpiValueBlueLight}>{totalCompleted}</Text>
+                </View>
+                <View style={[styles.kpiCard, styles.kpiCardBlueSoft]}>
+                  <Text style={styles.kpiLabelBlueSoft}>Rescheduled (R)</Text>
+                  <Text style={styles.kpiValueBlueSoft}>
+                    {totalRescheduled}
+                  </Text>
+                </View>
+                <View style={[styles.kpiCard, styles.kpiCardBlueDeep]}>
+                  <Text style={styles.kpiLabelBlueDeep}>Completion Rate</Text>
+                  <Text style={styles.kpiValueBlueDeep}>{completionRate}%</Text>
+                </View>
               </View>
-              <View
-                className="items-center rounded-lg bg-green-50 p-2"
-                style={{ width: isDesktop ? "23%" : "48%" }}
-              >
-                <Text className="mb-1 text-[10px] font-semibold text-green-600">
-                  Completed (C)
-                </Text>
-                <Text className="text-lg font-bold text-green-700">
-                  {totalCompleted}
-                </Text>
+            ) : (
+              /* ── MOBILE KPI — 2×2 grid, compact ── */
+              <View style={styles.kpiGridMobile}>
+                <View style={styles.kpiRowMobile}>
+                  <View style={[styles.kpiCardMobile, styles.kpiCardBlue]}>
+                    <Text style={styles.kpiLabelMobile}>Planned</Text>
+                    <Text style={styles.kpiValueMobile}>{totalPlanned}</Text>
+                  </View>
+                  <View style={[styles.kpiCardMobile, styles.kpiCardBlueLight]}>
+                    <Text style={styles.kpiLabelMobile}>Completed</Text>
+                    <Text style={styles.kpiValueMobile}>{totalCompleted}</Text>
+                  </View>
+                </View>
+                <View style={styles.kpiRowMobile}>
+                  <View style={[styles.kpiCardMobile, styles.kpiCardBlueSoft]}>
+                    <Text style={styles.kpiLabelMobile}>Resched.</Text>
+                    <Text style={styles.kpiValueMobile}>
+                      {totalRescheduled}
+                    </Text>
+                  </View>
+                  <View style={[styles.kpiCardMobile, styles.kpiCardBlueDeep]}>
+                    <Text style={styles.kpiLabelMobile}>Rate</Text>
+                    <Text style={styles.kpiValueMobile}>{completionRate}%</Text>
+                  </View>
+                </View>
               </View>
-              <View
-                className="items-center rounded-lg bg-orange-50 p-2"
-                style={{ width: isDesktop ? "23%" : "48%" }}
-              >
-                <Text className="mb-1 text-[10px] font-semibold text-orange-600">
-                  Rescheduled (R)
-                </Text>
-                <Text className="text-lg font-bold text-orange-700">
-                  {totalRescheduled}
-                </Text>
-              </View>
-              <View
-                className="items-center rounded-lg bg-purple-50 p-2"
-                style={{ width: isDesktop ? "23%" : "48%" }}
-              >
-                <Text className="mb-1 text-[10px] font-semibold text-purple-600">
-                  Completion Rate
-                </Text>
-                <Text className="text-lg font-bold text-purple-700">
-                  {completionRate}%
-                </Text>
-              </View>
-            </View>
+            )}
 
-            {/* Department Table */}
-            <View
-              className="mb-4 overflow-hidden rounded-lg border border-gray-200"
-              style={{ width: "100%" }}
-            >
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={true}
-                contentContainerStyle={{ flexGrow: 1 }}
-              >
-                <View style={{ width: "100%", minWidth: "100%" }}>
-                  {/* Table Header */}
-                  <View className="flex-row border-b-2 border-gray-300 bg-gray-100">
+            {/* ═══ DEPARTMENT TABLE ═══ */}
+            <View style={styles.tableContainer}>
+              {isDesktop ? (
+                /* ── DESKTOP: no scroll, table fills width via flex ── */
+                <View style={{ width: "100%", flexDirection: "column" }}>
+                  <View style={styles.tableHeader}>
                     <View
-                      className="items-center justify-center border-r border-gray-200 px-3 py-3"
-                      style={{ minWidth: isDesktop ? 150 : 120 }}
+                      style={[
+                        styles.tableHeaderCell,
+                        styles.tableHeaderCellDeptDesktop,
+                      ]}
                     >
-                      <Text className="text-center text-xs font-bold text-gray-800">
-                        Department
-                      </Text>
+                      <Text style={styles.tableHeaderText}>Department</Text>
                     </View>
                     <View
-                      className="items-center justify-center border-r border-gray-200 px-3 py-3"
-                      style={{ minWidth: isDesktop ? 150 : 120 }}
+                      style={[
+                        styles.tableHeaderCell,
+                        styles.tableHeaderCellElemDesktop,
+                      ]}
                     >
-                      <Text className="text-center text-xs font-bold text-gray-800">
-                        Elements
-                      </Text>
+                      <Text style={styles.tableHeaderText}>Elements</Text>
                     </View>
                     {months.map((month) => (
                       <View
                         key={month}
-                        className="items-center justify-center border-r border-gray-200 px-2 py-3"
-                        style={{
-                          minWidth: isDesktop ? 60 : 45,
-                          flex: isDesktop ? 1 : 0,
-                        }}
+                        style={[
+                          styles.tableHeaderCell,
+                          styles.tableHeaderCellMonthDesktop,
+                        ]}
                       >
-                        <Text className="text-[10px] font-bold text-gray-700">
+                        <Text style={styles.tableHeaderTextSmall}>
                           {monthDisplay[month].substring(0, 3)}
                         </Text>
                       </View>
                     ))}
                   </View>
 
-                  {/* Table Body */}
                   {departments.map((dept: any, idx: number) => {
                     const hasSelected = dept.months?.some(
                       (m: any) => m.selectedElements?.length > 0,
@@ -275,67 +403,70 @@ const DeptPlanDetailsModal = ({
                     return (
                       <View
                         key={idx}
-                        className={`flex-row border-b border-gray-200 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
-                        style={{ width: "100%" }}
+                        style={[
+                          styles.tableRow,
+                          idx % 2 === 0
+                            ? styles.tableRowEven
+                            : styles.tableRowOdd,
+                        ]}
                       >
                         <View
-                          className="justify-center border-r border-gray-200 px-3 py-3"
-                          style={{ minWidth: isDesktop ? 150 : 120 }}
+                          style={[
+                            styles.tableCell,
+                            styles.tableCellDeptDesktop,
+                          ]}
                         >
-                          <Text
-                            className="text-xs font-medium text-gray-800"
-                            numberOfLines={2}
-                          >
+                          <Text style={styles.tableCellText} numberOfLines={2}>
                             {dept.department}
                           </Text>
                         </View>
                         <View
-                          className="justify-center border-r border-gray-200 px-3 py-3"
-                          style={{ minWidth: isDesktop ? 150 : 120 }}
+                          style={[
+                            styles.tableCell,
+                            styles.tableCellElemDesktop,
+                          ]}
                         >
                           {hasSelected ? (
-                            <View className="flex-row items-center gap-1">
-                              <CheckCircle size={12} color="#16a34a" />
-                              <Text className="text-xs text-green-600">
-                                Selected
-                              </Text>
+                            <View style={styles.selectedRow}>
+                              <CheckCircle size={12} color={COLORS.primary} />
+                              <Text style={styles.selectedText}>Selected</Text>
                             </View>
                           ) : (
-                            <Text className="text-xs text-gray-400">—</Text>
+                            <Text style={styles.tableCellMuted}>—</Text>
                           )}
                         </View>
                         {dept.months?.map((month: any, mIdx: number) => (
                           <View
                             key={mIdx}
-                            className="items-center justify-center border-r border-gray-200 px-2 py-3"
-                            style={{
-                              minWidth: isDesktop ? 60 : 45,
-                              flex: isDesktop ? 1 : 0,
-                            }}
+                            style={[
+                              styles.tableCell,
+                              styles.tableCellCentered,
+                              styles.tableCellMonthDesktop,
+                            ]}
                           >
                             {month.status === "COMPLETED" && (
-                              <View className="h-6 w-6 items-center justify-center rounded bg-green-100">
-                                <Text className="text-xs font-bold text-green-700">
+                              <View style={styles.cellBadgeCompleted}>
+                                <Text style={styles.cellBadgeCompletedText}>
                                   C
                                 </Text>
                               </View>
                             )}
                             {month.status === "PLANNED" && (
-                              <View className="h-6 w-6 items-center justify-center rounded bg-blue-100">
-                                <Text className="text-xs font-bold text-blue-700">
+                              <View style={styles.cellBadgePlanned}>
+                                <Text style={styles.cellBadgePlannedText}>
                                   P
                                 </Text>
                               </View>
                             )}
                             {month.status === "RESCHEDULED" && (
-                              <View className="h-6 w-6 items-center justify-center rounded bg-orange-100">
-                                <Text className="text-xs font-bold text-orange-700">
+                              <View style={styles.cellBadgeRescheduled}>
+                                <Text style={styles.cellBadgeRescheduledText}>
                                   R
                                 </Text>
                               </View>
                             )}
                             {!month.status && (
-                              <Text className="text-lg text-gray-300">—</Text>
+                              <Text style={styles.tableCellMutedLg}>—</Text>
                             )}
                           </View>
                         ))}
@@ -343,131 +474,246 @@ const DeptPlanDetailsModal = ({
                     );
                   })}
                 </View>
-              </ScrollView>
+              ) : (
+                /* ── MOBILE: horizontal scroll — table width = exact content width ── */
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={true}
+                  contentContainerStyle={{ flexGrow: 0 }}
+                >
+                  <View
+                    style={{
+                      width: MOBILE_TABLE_WIDTH,
+                      flexDirection: "column",
+                    }}
+                  >
+                    <View style={styles.tableHeader}>
+                      <View
+                        style={[
+                          styles.tableHeaderCell,
+                          styles.tableHeaderCellDeptMobile,
+                        ]}
+                      >
+                        <Text style={styles.tableHeaderText}>Department</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.tableHeaderCell,
+                          styles.tableHeaderCellElemMobile,
+                        ]}
+                      >
+                        <Text style={styles.tableHeaderText}>Elements</Text>
+                      </View>
+                      {months.map((month) => (
+                        <View
+                          key={month}
+                          style={[
+                            styles.tableHeaderCell,
+                            styles.tableHeaderCellMonthMobile,
+                          ]}
+                        >
+                          <Text style={styles.tableHeaderTextSmall}>
+                            {monthDisplay[month].substring(0, 3)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    {departments.map((dept: any, idx: number) => {
+                      const hasSelected = dept.months?.some(
+                        (m: any) => m.selectedElements?.length > 0,
+                      );
+                      return (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.tableRow,
+                            idx % 2 === 0
+                              ? styles.tableRowEven
+                              : styles.tableRowOdd,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.tableCell,
+                              styles.tableCellDeptMobile,
+                            ]}
+                          >
+                            <Text
+                              style={styles.tableCellText}
+                              numberOfLines={2}
+                            >
+                              {dept.department}
+                            </Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.tableCell,
+                              styles.tableCellElemMobile,
+                            ]}
+                          >
+                            {hasSelected ? (
+                              <View style={styles.selectedRow}>
+                                <CheckCircle size={12} color={COLORS.primary} />
+                                <Text style={styles.selectedText}>
+                                  Selected
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.tableCellMuted}>—</Text>
+                            )}
+                          </View>
+                          {dept.months?.map((month: any, mIdx: number) => (
+                            <View
+                              key={mIdx}
+                              style={[
+                                styles.tableCell,
+                                styles.tableCellCentered,
+                                styles.tableCellMonthMobile,
+                              ]}
+                            >
+                              {month.status === "COMPLETED" && (
+                                <View style={styles.cellBadgeCompleted}>
+                                  <Text style={styles.cellBadgeCompletedText}>
+                                    C
+                                  </Text>
+                                </View>
+                              )}
+                              {month.status === "PLANNED" && (
+                                <View style={styles.cellBadgePlanned}>
+                                  <Text style={styles.cellBadgePlannedText}>
+                                    P
+                                  </Text>
+                                </View>
+                              )}
+                              {month.status === "RESCHEDULED" && (
+                                <View style={styles.cellBadgeRescheduled}>
+                                  <Text style={styles.cellBadgeRescheduledText}>
+                                    R
+                                  </Text>
+                                </View>
+                              )}
+                              {!month.status && (
+                                <Text style={styles.tableCellMutedLg}>—</Text>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              )}
             </View>
 
-            {/* Review Decision Section (Only for Pending) */}
-            {selectedPlan.approvalStatus === "PENDING_APPROVAL" && (
-              <View className="border-t border-gray-200 pt-3">
-                <Text className="mb-2 text-sm font-bold text-gray-800">
-                  Review Decision
-                </Text>
-                <View className="gap-2">
-                  {/* ✅ CRITICAL FIX: TextInput configuration */}
+            {/* ═══ PENDING → Review Decision Section ═══ */}
+            {isPending && (
+              <View style={styles.reviewSection}>
+                <Text style={styles.reviewTitle}>Review Decision</Text>
+                <View style={{ gap: 12 }}>
+                  <Text style={styles.actionsLabel}>
+                    Approval Comments (Optional)
+                  </Text>
                   <TextInput
-                    className="w-full rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-900"
-                    style={{ minHeight: 80, textAlignVertical: "top" }}
+                    style={styles.reviewInput}
                     multiline
                     numberOfLines={3}
                     value={approvalComment}
                     onChangeText={(text) => setApprovalComment(text)}
                     placeholder="Add any comments about this plan..."
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={COLORS.gray400}
                     editable={true}
-                    pointerEvents="auto" // 🔑 Guarantees this element can receive touches
+                    pointerEvents="auto"
                     blurOnSubmit={false}
                   />
 
-                  {/* Buttons */}
                   <View
-                    className={`${isDesktop ? "flex-row justify-end gap-3" : "flex-row gap-2"}`}
+                    style={
+                      isDesktop
+                        ? styles.footerButtons
+                        : styles.footerButtonsMobile
+                    }
                   >
-                    <TouchableOpacity
+                    <OutlineButton
+                      title="Reject Plan"
+                      icon={X}
                       onPress={onReject}
-                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 rounded-lg bg-red-600 py-2.5 active:bg-red-700`}
-                    >
-                      <X size={16} color="#ffffff" />
-                      <Text
-                        className="text-sm font-semibold text-white"
-                        numberOfLines={1}
-                      >
-                        Reject Plan
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
+                      disabled={submitting}
+                    />
+                    <OutlineButton
+                      title="Approve Plan"
+                      icon={Check}
                       onPress={onApprove}
                       disabled={submitting}
-                      className={`${isDesktop ? "px-6" : "flex-1 px-2"} flex-row items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 active:bg-green-700 disabled:opacity-50`}
-                    >
-                      {submitting ? (
-                        <ActivityIndicator color="#ffffff" size="small" />
-                      ) : (
-                        <Check size={16} color="#ffffff" />
-                      )}
-                      <Text
-                        className="text-sm font-semibold text-white"
-                        numberOfLines={1}
-                      >
-                        Approve Plan
-                      </Text>
-                    </TouchableOpacity>
+                      loading={submitting}
+                    />
                   </View>
                 </View>
               </View>
             )}
 
-            {/* Status Summary for Approved / Rejected */}
-            {selectedPlan.approvalStatus !== "PENDING_APPROVAL" && (
+            {/* ═══ APPROVED / REJECTED SUMMARY ═══ */}
+            {!isPending && (
               <View
-                className="mt-4 rounded-xl border p-4"
-                style={{
-                  borderColor:
-                    selectedPlan.approvalStatus === "APPROVED"
-                      ? "#bbf7d0"
-                      : "#fecaca",
-                  backgroundColor:
-                    selectedPlan.approvalStatus === "APPROVED"
-                      ? "#f0fdf4"
-                      : "#fef2f2",
-                }}
+                style={[
+                  styles.statusBanner,
+                  isApproved
+                    ? styles.statusBannerApproved
+                    : styles.statusBannerRejected,
+                ]}
               >
-                <View className="mb-2 flex-row items-center gap-2">
-                  {selectedPlan.approvalStatus === "APPROVED" ? (
-                    <CheckCircle size={20} color="#166534" />
+                <View style={styles.statusBannerHeader}>
+                  {isApproved ? (
+                    <CheckCircle size={20} color={COLORS.primary} />
                   ) : (
-                    <AlertCircle size={20} color="#991b1b" />
+                    <AlertCircle size={20} color={COLORS.primaryDark} />
                   )}
-                  <Text className="text-base font-bold text-slate-800">
-                    Plan{" "}
-                    {selectedPlan.approvalStatus === "APPROVED"
-                      ? "Approved"
-                      : "Rejected"}
+                  <Text style={styles.statusBannerTitle}>
+                    Plan {isApproved ? "Approved" : "Rejected"}
                   </Text>
                 </View>
-                <Text className="text-sm leading-5 text-slate-700">
-                  {selectedPlan.approvalStatus === "APPROVED"
+                <Text style={styles.statusBannerText}>
+                  {isApproved
                     ? "This department audit plan has been fully approved and is ready for execution."
                     : "This department audit plan was rejected. Please review the rejection reason provided below."}
                 </Text>
-                {selectedPlan.approvalStatus === "APPROVED" &&
-                  selectedPlan.approvedBy && (
-                    <Text className="mt-3 text-xs font-medium text-slate-500">
-                      Approved by: {selectedPlan.approvedBy}
-                      {selectedPlan.approvedAt
-                        ? ` • ${new Date(selectedPlan.approvedAt).toLocaleDateString()}`
-                        : ""}
-                    </Text>
-                  )}
+                {isApproved && selectedPlan.approvedBy && (
+                  <Text style={styles.statusBannerMeta}>
+                    Approved by: {selectedPlan.approvedBy}
+                    {selectedPlan.approvedAt
+                      ? ` • ${new Date(
+                          selectedPlan.approvedAt,
+                        ).toLocaleDateString()}`
+                      : ""}
+                  </Text>
+                )}
               </View>
             )}
 
-            {/* Rejection Reason Section */}
-            {selectedPlan.approvalStatus === "REJECTED" &&
-              selectedPlan.rejectionReason && (
-                <View className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4">
-                  <View className="mb-2 flex-row items-center gap-2">
-                    <AlertCircle size={18} color="#991b1b" />
-                    <Text className="text-sm font-bold text-red-800">
-                      Rejection Reason
-                    </Text>
-                  </View>
-                  <Text className="text-sm leading-5 text-red-700">
-                    {selectedPlan.rejectionReason}
+            {/* ═══ REJECTION REASON ═══ */}
+            {isRejected && selectedPlan.rejectionReason && (
+              <View style={styles.rejectionReason}>
+                <View style={styles.rejectionReasonHeader}>
+                  <AlertCircle size={18} color={COLORS.primaryDark} />
+                  <Text style={styles.rejectionReasonTitle}>
+                    Rejection Reason
                   </Text>
                 </View>
-              )}
+                <Text style={styles.rejectionReasonText}>
+                  {selectedPlan.rejectionReason}
+                </Text>
+              </View>
+            )}
           </ScrollView>
+
+          {/* ═══ FOOTER — Close button ═══ */}
+          <View style={isDesktop ? styles.footer : styles.footerMobile}>
+            <OutlineButton
+              title="Close"
+              onPress={onClose}
+              disabled={submitting}
+            />
+          </View>
         </View>
       </View>
     </Modal>
@@ -475,3 +721,602 @@ const DeptPlanDetailsModal = ({
 };
 
 export default DeptPlanDetailsModal;
+
+// ═══ STYLES — Monochromatic Blue ═══
+const styles: any = {
+  overlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    padding: 8,
+  },
+  modalContainer: {
+    width: "100%",
+    overflow: "hidden",
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+
+  // ═══ DESKTOP HEADER (UNCHANGED) ═══
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  headerLeft: {
+    flex: 1,
+    paddingRight: 12,
+    justifyContent: "center",
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 0,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.3,
+  },
+
+  // ═══ MOBILE HEADER (STACKED) ═══
+  headerMobile: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    gap: 10,
+  },
+  headerMobileTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  headerTitleMobile: {
+    flex: 1,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "700",
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  headerMobileBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "nowrap",
+  },
+  headerSubTextMobile: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+  },
+
+  headerSubText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+  },
+  closeIconButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.bg,
+    flexShrink: 0,
+  },
+
+  scrollView: { flex: 1 },
+
+  // ═══ Status pills ═══
+  statusPillApproved: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  statusPillApprovedText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  statusPillPending: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  statusPillPendingText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+  statusPillRejected: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  statusPillRejectedText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  statusPillDraft: {
+    borderRadius: 20,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  statusPillDraftText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+  },
+
+  // ═══ DESKTOP KPI (UNCHANGED) ═══
+  kpiRow: { flexDirection: "row", gap: 12, marginBottom: 20 },
+  kpiCard: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  kpiCardBlue: {
+    backgroundColor: COLORS.blue50,
+    borderColor: COLORS.blue200,
+  },
+  kpiCardBlueLight: {
+    backgroundColor: COLORS.blue100,
+    borderColor: COLORS.blue200,
+  },
+  kpiCardBlueSoft: {
+    backgroundColor: COLORS.blue50,
+    borderColor: COLORS.blue200,
+  },
+  kpiCardBlueDeep: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primaryBorder,
+  },
+  kpiLabelBlue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.blue800,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
+  kpiValueBlue: { fontSize: 26, fontWeight: "800", color: COLORS.blue800 },
+  kpiLabelBlueLight: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.blue800,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
+  kpiValueBlueLight: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.blue800,
+  },
+  kpiLabelBlueSoft: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.blue900,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
+  kpiValueBlueSoft: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.blue900,
+  },
+  kpiLabelBlueDeep: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.primaryDark,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
+  kpiValueBlueDeep: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: COLORS.primaryDark,
+  },
+
+  // ═══ MOBILE KPI (2×2 compact) ═══
+  kpiGridMobile: {
+    marginBottom: 16,
+    gap: 8,
+  },
+  kpiRowMobile: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  kpiCardMobile: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  kpiLabelMobile: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.blue800,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  kpiValueMobile: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: COLORS.blue800,
+    textAlign: "center",
+  },
+
+  // ═══ Table ═══
+  tableContainer: {
+    marginBottom: 20,
+    overflow: "hidden",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    width: "100%",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+  },
+  tableHeaderCell: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRightWidth: 1,
+    borderRightColor: COLORS.border,
+    paddingHorizontal: 8,
+    paddingVertical: 14,
+  },
+  tableHeaderText: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.textValue,
+  },
+  tableHeaderTextSmall: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textValue,
+  },
+
+  // ── Desktop column widths (Department fixed, Elements fixed, months flex) ──
+  tableHeaderCellDeptDesktop: {
+    flex: 0,
+    width: 180,
+    minWidth: 180,
+    alignItems: "flex-start",
+  },
+  tableHeaderCellElemDesktop: {
+    flex: 0,
+    width: 130,
+    minWidth: 130,
+  },
+  tableHeaderCellMonthDesktop: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
+
+  // ── Mobile column widths (fixed px, table scrolls horizontally) ──
+  tableHeaderCellDeptMobile: {
+    width: MOBILE_DEPT_WIDTH,
+    minWidth: MOBILE_DEPT_WIDTH,
+    alignItems: "flex-start",
+  },
+  tableHeaderCellElemMobile: {
+    width: MOBILE_ELEM_WIDTH,
+    minWidth: MOBILE_ELEM_WIDTH,
+  },
+  tableHeaderCellMonthMobile: {
+    width: MOBILE_MONTH_WIDTH,
+    minWidth: MOBILE_MONTH_WIDTH,
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    width: "100%",
+  },
+  tableRowEven: { backgroundColor: COLORS.card },
+  tableRowOdd: { backgroundColor: COLORS.bg },
+  tableCell: {
+    justifyContent: "center",
+    borderRightWidth: 1,
+    borderRightColor: COLORS.border,
+    paddingHorizontal: 8,
+    paddingVertical: 14,
+  },
+  tableCellCentered: { alignItems: "center" },
+
+  // Mirror column widths for body cells
+  tableCellDeptDesktop: {
+    flex: 0,
+    width: 180,
+    minWidth: 180,
+  },
+  tableCellElemDesktop: {
+    flex: 0,
+    width: 130,
+    minWidth: 130,
+  },
+  tableCellMonthDesktop: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
+  tableCellDeptMobile: {
+    width: MOBILE_DEPT_WIDTH,
+    minWidth: MOBILE_DEPT_WIDTH,
+  },
+  tableCellElemMobile: {
+    width: MOBILE_ELEM_WIDTH,
+    minWidth: MOBILE_ELEM_WIDTH,
+  },
+  tableCellMonthMobile: {
+    width: MOBILE_MONTH_WIDTH,
+    minWidth: MOBILE_MONTH_WIDTH,
+  },
+
+  tableCellText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: COLORS.text,
+  },
+  tableCellMuted: { fontSize: 13, color: COLORS.gray400 },
+  tableCellMutedLg: { fontSize: 16, color: COLORS.gray300 },
+
+  selectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  selectedText: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
+
+  // Cell badges — all blue
+  cellBadgeCompleted: {
+    height: 28,
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: COLORS.blue200,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  cellBadgeCompletedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  cellBadgePlanned: {
+    height: 28,
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+  },
+  cellBadgePlannedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  cellBadgeRescheduled: {
+    height: 28,
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: COLORS.blue100,
+    borderWidth: 1,
+    borderColor: COLORS.blue200,
+  },
+  cellBadgeRescheduledText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.blue800,
+  },
+
+  // ═══ Review section (pending) ═══
+  reviewSection: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 16,
+    marginTop: 4,
+  },
+  reviewTitle: {
+    marginBottom: 12,
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  actionsLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.textValue,
+    marginBottom: 4,
+  },
+  reviewInput: {
+    width: "100%",
+    minHeight: 80,
+    textAlignVertical: "top",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+    padding: 12,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  footerButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 8,
+  },
+  footerButtonsMobile: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    marginTop: 8,
+  },
+
+  // ═══ Approved / Rejected summary banner ═══
+  statusBanner: {
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+  },
+  statusBannerApproved: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primaryBorder,
+  },
+  statusBannerRejected: {
+    backgroundColor: COLORS.blue50,
+    borderColor: COLORS.primaryBorder,
+  },
+  statusBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  statusBannerTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  statusBannerText: {
+    fontSize: 14,
+    color: COLORS.textValue,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  statusBannerMeta: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: "500",
+  },
+
+  // ═══ Rejection reason box ═══
+  rejectionReason: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    backgroundColor: COLORS.blue50,
+    padding: 16,
+  },
+  rejectionReasonHeader: {
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  rejectionReasonTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  rejectionReasonText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.primaryDark,
+  },
+
+  // ═══ DESKTOP footer (UNCHANGED) ═══
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    gap: 12,
+  },
+  // ═══ MOBILE footer ═══
+  footerMobile: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    gap: 8,
+  },
+};

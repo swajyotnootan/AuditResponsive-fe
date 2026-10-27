@@ -10,9 +10,10 @@ import {
   AlertTriangle,
   ArrowLeft,
   Award,
-  BookOpen,
+  Building,
   Calendar,
   CheckCircle,
+  ClipboardList,
   Clock,
   Download,
   FileText,
@@ -37,58 +38,115 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAuth } from "../../../context/AuthContext"; // Adjust path if needed
-import { useToast } from "../../../context/ToastContext"; // Adjust path if needed
+import { useAuth } from "../../../context/AuthContext";
+import { useToast } from "../../../context/ToastContext";
 
 // MANUFACTURING PROCESS CHECK SHEET ID = 1
 const MANUFACTURING_CHECK_SHEET_ID = 1;
 
-// ============================================================================
-// MNC PROFESSIONAL COLOR PALETTE
-// ============================================================================
-const NAVBAR_COLORS = {
-  primary: "#00529B",
-  secondary: "#3b82f6",
-  dark: "#1e3a8a",
-  light: "#60a5fa",
-  lighter: "#93c5fd",
-  bg: "#eff6ff",
-  white: "#ffffff",
+// ═════ STRICT MONOCHROMATIC MNC PALETTE (Blue & Slate Only) ═════
+const COLORS = {
+  primary: "#2563EB",
+  primaryLight: "#EFF6FF",
+  primaryBorder: "#DBEAFE",
+  primaryDark: "#1E3A8A",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
+  border: "#E2E8F0",
+  text: "#0F172A",
+  textValue: "#334155",
+  textMuted: "#64748B",
+  stateSuccessBg: "#EFF6FF",
+  stateErrorBg: "#F1F5F9",
+  stateWarningBg: "#F8FAFC",
+  stateErrorText: "#475569",
+  stateWarningText: "#64748B",
 };
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-const getStatusBadge = (status: string) => {
-  const badges: Record<string, string> = {
-    DRAFT: "bg-slate-100 text-slate-700 border border-slate-200",
-    IN_PROGRESS: "bg-blue-50 text-blue-700 border border-blue-200",
-    SUBMITTED: "bg-indigo-50 text-indigo-700 border border-indigo-200",
-    APPROVED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    REJECTED: "bg-rose-50 text-rose-700 border border-rose-200",
-    CLOSED: "bg-slate-50 text-slate-700 border border-slate-200",
-  };
+
+const formatConsiderationAsNumberedList = (text: string) => {
+  if (!text || text === "No documents specified") return "-";
+  let items: string[] = [];
+  if (text.includes("\n")) items = text.split("\n");
+  else if (text.includes(",")) items = text.split(",");
+  else items = [text];
+
+  const cleanItems = items
+    .map((item: string) =>
+      item
+        .replace(/^\d+\.\s*/, "")
+        .replace(/[•●○▪▫-]\s*/, "")
+        .trim(),
+    )
+    .filter((item: string) => item.length > 0);
+
+  return cleanItems
+    .map((item: string, idx: number) => `${idx + 1}. ${item}`)
+    .join("\n");
+};
+
+// ✅ REUSABLE OUTLINE BUTTON WITH HOVER EFFECT
+const OutlineButton = ({
+  title,
+  icon: Icon,
+  onPress,
+  disabled = false,
+  loading = false,
+}: any) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const isHoveredAndEnabled = isHovered && !disabled;
+
+  const borderColor = isHoveredAndEnabled ? "#2563EB" : "#D1D5DB";
+  const textColor = isHoveredAndEnabled ? "#2563EB" : "#111827";
+  const iconColor = isHoveredAndEnabled ? "#2563EB" : "#6B7280";
+  const backgroundColor = isHoveredAndEnabled
+    ? "rgba(37, 99, 235, 0.1)"
+    : "transparent";
+
+  const webHoverProps =
+    Platform.OS === "web"
+      ? {
+          // @ts-ignore
+          onMouseEnter: () => !disabled && setIsHovered(true),
+          // @ts-ignore
+          onMouseLeave: () => setIsHovered(false),
+        }
+      : {};
+
   return (
-    badges[status?.toUpperCase()] ||
-    "bg-slate-100 text-slate-700 border border-slate-200"
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => !disabled && setIsHovered(true)}
+      onPressOut={() => !disabled && setIsHovered(false)}
+      {...webHoverProps}
+      disabled={disabled || loading}
+      className="flex-row items-center gap-2 rounded-lg border px-4 py-2.5"
+      style={{
+        borderColor,
+        backgroundColor,
+        borderWidth: 1,
+        opacity: disabled ? 0.5 : 1,
+        transitionProperty: "all",
+        transitionDuration: "150ms",
+        transitionTimingFunction: "ease-in-out",
+      }}
+      activeOpacity={0.8}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color="#2563EB" />
+      ) : Icon ? (
+        <Icon size={16} color={iconColor} />
+      ) : null}
+
+      <Text className="text-sm font-semibold" style={{ color: textColor }}>
+        {title}
+      </Text>
+    </TouchableOpacity>
   );
-};
-
-const getStatusClass = (status: string) => {
-  if (status === "COMPLIANT")
-    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  if (status === "MINOR_NC")
-    return "bg-amber-50 text-amber-700 border border-amber-200";
-  if (status === "MAJOR_NC")
-    return "bg-rose-50 text-rose-700 border border-rose-200";
-  return "bg-slate-50 text-slate-700 border border-slate-200";
-};
-
-const getStatusText = (status: string) => {
-  if (status === "COMPLIANT") return "Compliant";
-  if (status === "MINOR_NC") return "Minor";
-  if (status === "MAJOR_NC") return "Major";
-  return status || "Not Rated";
 };
 
 // ============================================================================
@@ -133,17 +191,13 @@ export default function ManufacturingProcessView({
     pdfData: "",
     fileName: "",
   });
-  // ✅ 1. Add state for users
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  // ✅ 2. Fetch users on mount
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/users`, {
           headers: { Accept: "application/json" },
-          // Add auth header if your API needs it:
-          // 'Authorization': `Bearer ${token}`,
         });
         if (response.ok) {
           const data = await response.json();
@@ -219,7 +273,7 @@ export default function ManufacturingProcessView({
       const response = await auditScheduleApi.getAuditResponse(
         parseInt(id as string),
       );
-      const auditData = response.data; // ✅ Directly access .data
+      const auditData = response.data;
 
       if (!auditData) {
         addToast("Failed to load audit data: Empty response", "error");
@@ -595,9 +649,11 @@ export default function ManufacturingProcessView({
     }
   };
 
+  // ============================================================================
+  // CALCULATIONS
+  // ============================================================================
   const currentStatus = audit?.status || "SUBMITTED";
   const statusUpper = currentStatus?.toUpperCase?.() || "";
-  const isSubmitted = statusUpper === "SUBMITTED";
   const isApproved = statusUpper === "APPROVED";
   const isRejected = statusUpper === "REJECTED";
 
@@ -608,7 +664,7 @@ export default function ManufacturingProcessView({
     currentUserRole === "auditee" ||
     audit?.auditeeId === user?.id ||
     (audit?.auditeeName && audit?.auditeeName === user?.name);
-  const showAuditeeActions = isAuditee && isSubmitted;
+  const showAuditeeActions = isAuditee && !isApproved && !isRejected;
 
   const responses = answers.responses || {};
   const observations = answers.observations || {};
@@ -623,43 +679,46 @@ export default function ManufacturingProcessView({
     (r: any) => r === "MAJOR_NC",
   ).length;
 
+  const percentage = answers.score || 0;
+  const finalPercentage =
+    percentage > 0
+      ? percentage
+      : totalQuestions > 0
+        ? Math.round((compliantCount / totalQuestions) * 100)
+        : 0;
+
+  // ============================================================================
+  // RENDER STATES
+  // ============================================================================
   if (loading) {
     return (
-      <View
-        className="flex-1 items-center justify-center"
-        style={{ backgroundColor: NAVBAR_COLORS.bg }}
-      >
-        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <ActivityIndicator
-            size="large"
-            color={NAVBAR_COLORS.primary}
-            className="mb-4"
-          />
-          <Text className="text-sm font-medium text-slate-500">
-            Loading audit report...
-          </Text>
-        </View>
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text className="mt-3 text-sm font-medium text-slate-500">
+          Loading audit report...
+        </Text>
       </View>
     );
   }
 
   if (!audit) {
     return (
-      <View
-        className="flex-1 items-center justify-center"
-        style={{ backgroundColor: NAVBAR_COLORS.bg }}
-      >
-        <View className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <XCircle size={48} color="#f43f5e" className="mx-auto mb-4" />
-          <Text className="text-lg font-bold text-slate-800">
+      <View className="flex-1 items-center justify-center bg-slate-50 p-6">
+        <View className="w-full max-w-md items-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <AlertCircle
+            size={48}
+            color={COLORS.stateErrorText}
+            className="mb-4"
+          />
+          <Text className="text-lg font-bold text-slate-900">
             Audit not found
           </Text>
           <TouchableOpacity
             onPress={() => (onClose ? onClose() : router.back())}
-            className="mt-4 rounded-xl px-5 py-2.5 shadow-md"
-            style={{ backgroundColor: NAVBAR_COLORS.primary }}
+            className="mt-6 rounded-xl bg-blue-600 px-6 py-3"
+            activeOpacity={0.8}
           >
-            <Text className="text-sm font-medium text-white">Go Back</Text>
+            <Text className="text-sm font-semibold text-white">Go Back</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -667,359 +726,479 @@ export default function ManufacturingProcessView({
   }
 
   return (
-    <ScrollView
-      className="flex-1"
-      style={{ backgroundColor: NAVBAR_COLORS.bg }}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    >
-      <View
-        className="p-4"
-        style={{ maxWidth: 1200, alignSelf: "center", width: "100%" }}
+    <View className="flex-1 bg-slate-50">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
-          <View className="flex-1 flex-row items-center gap-3">
-            <TouchableOpacity
-              onPress={() => (onClose ? onClose() : router.back())}
-              className="flex-shrink-0 flex-row items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
-            >
-              <ArrowLeft size={18} color="#334155" />
-              <Text className="text-sm font-medium text-slate-700">Back</Text>
-            </TouchableOpacity>
-            <View className="flex-1">
-              <Text
-                className="text-lg font-bold text-slate-800"
-                numberOfLines={1}
-              >
-                Manufacturing Process Audit
-              </Text>
-              <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-                View audit details and findings
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            onPress={handleDownloadPDF}
-            disabled={downloading}
-            className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
-            style={{ backgroundColor: NAVBAR_COLORS.primary }}
-          >
-            {downloading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Download size={16} color="#ffffff" />
-            )}
-            <Text className="text-sm font-medium text-white">
-              {downloading ? "Generating..." : "Download PDF"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleViewPDF}
-            disabled={downloading}
-            className="flex-shrink-0 flex-row items-center justify-center gap-2 rounded-xl px-4 py-2.5 shadow-md disabled:opacity-50"
-            style={{ backgroundColor: "#8B5CF6" }}
-          >
-            {downloading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <FileText size={16} color="#ffffff" />
-            )}
-            <Text className="text-sm font-medium text-white">View PDF</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Banners */}
-        {isApproved && (
-          <View className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-            <View className="flex-row items-center justify-center gap-2">
-              <CheckCircle size={20} color="#047857" />
-              <Text className="text-lg font-bold text-emerald-800">
-                ✓ Audit Approved by Auditee
-              </Text>
-            </View>
-            {answers.auditeeComment && (
-              <View className="mt-2">
-                <Text className="text-sm text-emerald-700">
-                  <Text className="font-semibold">Comment: </Text>
-                  {answers.auditeeComment}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {isRejected && (
-          <View className="mb-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-center">
-            <View className="flex-row items-center justify-center gap-2">
-              <XCircle size={20} color="#be123c" />
-              <Text className="text-lg font-bold text-rose-800">
-                ✗ Audit Rejected - Corrections Required
-              </Text>
-            </View>
-            {answers.auditeeComment && (
-              <View className="mt-2">
-                <Text className="text-sm text-rose-700">
-                  <Text className="font-semibold">Reason: </Text>
-                  {answers.auditeeComment}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Main Banner */}
         <View
-          className="mb-6 rounded-2xl p-4 text-center shadow-md"
-          style={{ backgroundColor: NAVBAR_COLORS.primary }}
+          style={{
+            maxWidth: 1200,
+            alignSelf: "center",
+            width: "100%",
+            padding: 16,
+          }}
         >
-          <View className="mb-1 flex-row items-center justify-center gap-2">
-            <FileText size={24} color="#ffffff" />
-            <Text className="text-xl font-bold text-white">
-              MANUFACTURING PROCESS AUDIT CHECK SHEET
-            </Text>
-          </View>
-          <Text className="text-center text-sm text-blue-100">
-            IATF 16949:2016 | Process Audit Compliance
-          </Text>
-        </View>
-
-        {/* Document Control Information */}
-        <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <View className="mb-4 flex-row items-center gap-2">
-            <Hash size={18} color={NAVBAR_COLORS.primary} />
-            <Text className="text-base font-bold text-slate-800">
-              Document Control Information
-            </Text>
-          </View>
-          <View className="-mx-2 flex-row flex-wrap">
-            {[
-              {
-                icon: Hash,
-                label: "Doc No.",
-                value: answers.documentNumber || "-",
-              },
-              {
-                icon: Calendar,
-                label: "W.e.f. (Date)",
-                value: answers.wefDate || "-",
-              },
-              { icon: Hash, label: "Rev No.", value: answers.revNo || "00" },
-              {
-                icon: Calendar,
-                label: "Rev Date",
-                value: answers.revDate || "-",
-              },
-              {
-                icon: Calendar,
-                label: "Issue Date",
-                value: answers.issueDate || "-",
-              },
-            ].map((item, idx) => (
-              <View
-                key={idx}
-                className="mb-4 w-full px-2 md:w-1/2 lg:w-1/3 xl:w-1/5"
+          {/* Header with Actions */}
+          <View className="mb-6 flex-row flex-wrap items-center justify-between gap-3">
+            <View className="flex-1 flex-row items-center gap-3">
+              <TouchableOpacity
+                onPress={() => (onClose ? onClose() : router.back())}
+                className="h-10 w-10 items-center justify-center rounded-xl bg-slate-100"
+                activeOpacity={0.7}
               >
-                <View className="flex-row items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <item.icon size={16} color="#94a3b8" />
-                  <View>
-                    <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      {item.label}
-                    </Text>
-                    <Text className="text-sm font-semibold text-slate-800">
-                      {item.value}
-                    </Text>
-                  </View>
+                <ArrowLeft size={20} color="#475569" />
+              </TouchableOpacity>
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-blue-50">
+                <FileText size={20} color={COLORS.primary} />
+              </View>
+              <View className="flex-1">
+                <Text
+                  className="text-xl font-bold text-slate-900"
+                  numberOfLines={1}
+                >
+                  Manufacturing Process Audit
+                </Text>
+                <Text
+                  className="mt-0.5 text-sm font-medium text-slate-500"
+                  numberOfLines={1}
+                >
+                  IATF 16949:2016 | Process Audit Compliance
+                </Text>
+              </View>
+            </View>
+
+            <View className="flex-row items-center gap-3">
+              <OutlineButton
+                title="View PDF"
+                icon={FileText}
+                onPress={handleViewPDF}
+                disabled={downloading}
+                loading={downloading}
+              />
+
+              <OutlineButton
+                title="Download PDF"
+                icon={Download}
+                onPress={handleDownloadPDF}
+                disabled={downloading}
+                loading={downloading}
+              />
+            </View>
+          </View>
+
+          {/* Status Banners */}
+          {isApproved && (
+            <View
+              className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+              style={{
+                backgroundColor: COLORS.stateSuccessBg,
+                borderColor: COLORS.primaryBorder,
+              }}
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-white bg-white">
+                <CheckCircle size={20} color={COLORS.primary} />
+              </View>
+              <View className="flex-1 justify-center">
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: COLORS.primaryDark }}
+                >
+                  Audit Approved by Auditee
+                </Text>
+                {answers.auditeeComment && (
+                  <Text
+                    className="mt-1 text-sm leading-5"
+                    style={{ color: COLORS.primaryDark, opacity: 0.9 }}
+                  >
+                    Comment: {answers.auditeeComment}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          {isRejected && (
+            <View
+              className="mb-6 flex-row gap-4 rounded-2xl border p-5"
+              style={{
+                backgroundColor: COLORS.stateErrorBg,
+                borderColor: COLORS.border,
+              }}
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white">
+                <XCircle size={20} color={COLORS.stateErrorText} />
+              </View>
+              <View className="flex-1 justify-center">
+                <Text
+                  className="text-sm font-bold"
+                  style={{ color: COLORS.stateErrorText }}
+                >
+                  Audit Rejected - Corrections Required
+                </Text>
+                {answers.auditeeComment && (
+                  <Text
+                    className="mt-1 text-sm leading-5"
+                    style={{ color: COLORS.stateErrorText, opacity: 0.9 }}
+                  >
+                    Reason: {answers.auditeeComment}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Main Banner */}
+          <View
+            className="mb-6 items-center justify-center overflow-hidden rounded-2xl border p-6"
+            style={{
+              backgroundColor: COLORS.primaryLight,
+              borderColor: COLORS.primaryBorder,
+            }}
+          >
+            <View className="mb-2 flex-row items-center justify-center gap-2">
+              <FileText size={22} color={COLORS.primary} />
+              <Text
+                className="text-center text-lg font-bold"
+                style={{ color: COLORS.primaryDark }}
+              >
+                Manufacturing Process Audit Check Sheet
+              </Text>
+            </View>
+            <Text
+              className="text-center text-sm"
+              style={{ color: COLORS.primaryDark, opacity: 0.8 }}
+            >
+              IATF 16949:2016 | Process Audit Compliance
+            </Text>
+            {departmentName && (
+              <View className="mt-4 w-full flex-row flex-wrap items-center justify-center gap-2 border-t border-blue-200 pt-4">
+                <View className="flex-row items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5">
+                  <Building size={12} color={COLORS.primary} />
+                  <Text
+                    className="text-xs font-semibold"
+                    style={{ color: COLORS.primaryDark }}
+                  >
+                    {departmentName}
+                  </Text>
                 </View>
               </View>
-            ))}
+            )}
           </View>
-        </View>
 
-        {/* Audit Information */}
-        {/* Audit Information */}
-        {/* Audit Information */}
-        <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <View className="mb-4 flex-row items-center gap-2">
-            <Settings size={18} color={NAVBAR_COLORS.primary} />
-            <Text className="text-base font-bold text-slate-800">
-              Audit Information
-            </Text>
+          {/* Document Control Information */}
+          <View
+            className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <Hash size={18} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Document Control Information
+                </Text>
+              </View>
+            </View>
+            <View className="flex-row flex-wrap p-3">
+              {[
+                {
+                  icon: Hash,
+                  label: "Doc No.",
+                  value: answers.documentNumber || "-",
+                },
+                {
+                  icon: Calendar,
+                  label: "W.e.f. (Date)",
+                  value: answers.wefDate || "-",
+                },
+                {
+                  icon: Hash,
+                  label: "Rev No.",
+                  value: answers.revNo || "00",
+                },
+                {
+                  icon: Calendar,
+                  label: "Rev Date",
+                  value: answers.revDate || "-",
+                },
+                {
+                  icon: Calendar,
+                  label: "Issue Date",
+                  value: answers.issueDate || "-",
+                },
+              ].map((item, idx) => (
+                <View
+                  key={idx}
+                  className="mb-2 w-full px-2 md:w-1/2 lg:w-1/3 xl:w-1/5"
+                >
+                  <View className="flex-row items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <item.icon size={16} color="#94A3B8" className="mt-0.5" />
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {item.label}
+                      </Text>
+                      <Text
+                        className="mt-1 text-sm font-semibold text-slate-800"
+                        numberOfLines={2}
+                      >
+                        {item.value}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
-          <View className="-mx-2 flex-row flex-wrap">
-            {[
-              {
-                icon: Settings,
-                label: "Department Name",
-                value: departmentName || answers.department || "-",
-              },
-              {
-                icon: Package,
-                label: "Part Name & Number",
-                value: answers.partNumber || "-",
-              },
-              {
-                icon: Wrench,
-                label: "Machine",
-                value: answers.machine || "-",
-              },
-              {
-                icon: User,
-                label: "Auditor Name",
-                value: auditorName || answers.auditorName || "N/A",
-              },
-              {
-                icon: User,
-                label: "Auditee Name",
-                value: auditeeName || answers.auditeeName || "N/A",
-              },
-              {
-                icon: MapPin,
-                label: "Location",
-                value: answers.location || "-",
-              },
-              {
-                icon: Settings,
-                label: "Shift",
-                value: audit.shift || answers.shift || "-",
-              },
-              {
-                icon: Calendar,
-                label: "Date",
-                value: answers.date || formatDate(audit.auditDate),
-              },
-              {
-                icon: Clock,
-                label: "Time",
-                value: answers.time || "-",
-              },
-            ].map((item, idx) => (
-              <View key={idx} className="mb-4 w-full px-2 md:w-1/2 lg:w-1/3">
-                <View className="min-h-[60px] flex-row items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <item.icon
-                    size={16}
-                    color="#94a3b8"
-                    className="mt-0.5 flex-shrink-0"
-                  />
+
+          {/* Audit Information */}
+          <View
+            className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <Settings size={18} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Audit Information
+                </Text>
+              </View>
+            </View>
+            <View className="flex-row flex-wrap p-3">
+              {[
+                {
+                  icon: Building,
+                  label: "Department Name",
+                  value: departmentName || answers.department || "-",
+                },
+                {
+                  icon: Package,
+                  label: "Part Name & Number",
+                  value: answers.partNumber || "-",
+                },
+                {
+                  icon: Wrench,
+                  label: "Machine",
+                  value: answers.machine || "-",
+                },
+                {
+                  icon: User,
+                  label: "Auditor Name",
+                  value: auditorName || answers.auditorName || "N/A",
+                },
+                {
+                  icon: User,
+                  label: "Auditee Name",
+                  value: auditeeName || answers.auditeeName || "N/A",
+                },
+                {
+                  icon: MapPin,
+                  label: "Location",
+                  value: answers.location || "-",
+                },
+                {
+                  icon: Clock,
+                  label: "Shift",
+                  value: audit.shift || answers.shift || "-",
+                },
+                {
+                  icon: Calendar,
+                  label: "Date",
+                  value: answers.date || formatDate(audit.auditDate),
+                },
+                {
+                  icon: Clock,
+                  label: "Time",
+                  value: answers.time || "-",
+                },
+              ].map((item, idx) => (
+                <View key={idx} className="mb-2 w-full px-2 md:w-1/2 lg:w-1/3">
+                  <View className="flex-row items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <item.icon size={16} color="#94A3B8" className="mt-0.5" />
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {item.label}
+                      </Text>
+                      <Text
+                        className="mt-1 text-sm font-semibold text-slate-800"
+                        numberOfLines={2}
+                      >
+                        {item.value}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* Status Field */}
+              <View className="mb-2 w-full px-2 md:w-1/2 lg:w-1/3">
+                <View className="flex-row items-start gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <Settings size={16} color="#94A3B8" className="mt-0.5" />
                   <View className="min-w-0 flex-1">
                     <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      {item.label}
+                      Status
                     </Text>
-                    <Text
-                      className="text-sm font-semibold text-slate-800"
-                      numberOfLines={2}
-                      ellipsizeMode="tail"
-                    >
-                      {item.value}
-                    </Text>
+                    <View className="mt-1 flex-row">
+                      <View
+                        className="self-start rounded-md border px-2 py-1"
+                        style={{
+                          backgroundColor:
+                            statusUpper === "APPROVED"
+                              ? COLORS.stateSuccessBg
+                              : statusUpper === "REJECTED"
+                                ? COLORS.stateErrorBg
+                                : COLORS.primaryLight,
+                          borderColor:
+                            statusUpper === "APPROVED"
+                              ? COLORS.primaryBorder
+                              : statusUpper === "REJECTED"
+                                ? COLORS.border
+                                : COLORS.primaryBorder,
+                        }}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{
+                            color:
+                              statusUpper === "APPROVED"
+                                ? COLORS.primaryDark
+                                : statusUpper === "REJECTED"
+                                  ? COLORS.stateErrorText
+                                  : COLORS.primary,
+                          }}
+                        >
+                          {currentStatus || "DRAFT"}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Score Summary Cards */}
+          <View className="mb-6 flex-row flex-wrap gap-3">
+            {[
+              {
+                label: "Total",
+                value: totalQuestions.toString(),
+                color: COLORS.text,
+                bg: "#FFFFFF",
+                border: COLORS.border,
+              },
+              {
+                label: "Compliant (O)",
+                value: compliantCount.toString(),
+                color: COLORS.primary,
+                bg: COLORS.stateSuccessBg,
+                border: COLORS.primaryBorder,
+              },
+              {
+                label: "Minor (Mi)",
+                value: minorNCCount.toString(),
+                color: COLORS.stateWarningText,
+                bg: COLORS.stateWarningBg,
+                border: COLORS.border,
+              },
+              {
+                label: "Major (Ma)",
+                value: majorNCCount.toString(),
+                color: COLORS.stateErrorText,
+                bg: COLORS.stateErrorBg,
+                border: COLORS.border,
+              },
+              {
+                label: "Score",
+                value: `${finalPercentage}%`,
+                color: COLORS.primaryDark,
+                bg: COLORS.primaryLight,
+                border: COLORS.primaryBorder,
+              },
+            ].map((item, idx) => (
+              <View key={idx} style={{ flex: 1, minWidth: 120 }}>
+                <View
+                  className="rounded-2xl border p-4"
+                  style={{ backgroundColor: item.bg, borderColor: item.border }}
+                >
+                  <Text
+                    className="text-2xl font-bold"
+                    style={{ color: item.color }}
+                  >
+                    {item.value}
+                  </Text>
+                  <Text className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {item.label}
+                  </Text>
                 </View>
               </View>
             ))}
-            <View className="mb-4 w-full px-2 md:w-1/2 lg:w-1/3">
-              <View className="min-h-[60px] flex-row items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <View className="h-4 w-4 flex-shrink-0" />
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    Status
-                  </Text>
-                  <View
-                    className={`self-start rounded-lg border px-2.5 py-1 ${getStatusBadge(currentStatus)}`}
-                  >
-                    <Text className="text-xs font-medium">
-                      {currentStatus || "DRAFT"}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Summary Cards */}
-        <View className="-mx-2 mb-6 flex-row flex-wrap">
-          {[
-            {
-              label: "Total Checkpoints",
-              value: totalQuestions.toString(),
-              color: "text-slate-800",
-            },
-            {
-              label: "Compliant",
-              value: compliantCount.toString(),
-              color: "text-emerald-600",
-            },
-            {
-              label: "Minor NC",
-              value: minorNCCount.toString(),
-              color: "text-amber-600",
-            },
-            {
-              label: "Major NC",
-              value: majorNCCount.toString(),
-              color: "text-rose-600",
-            },
-          ].map((item, idx) => (
-            <View key={idx} className="mb-4 w-1/2 px-2 md:w-1/4">
-              <View className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-                <Text className={`text-2xl font-bold ${item.color}`}>
-                  {item.value}
-                </Text>
-                <Text className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {item.label}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Audit Findings Table - MOBILE OPTIMIZED */}
-        <View className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <View className="mb-4 flex-row items-center gap-2">
-            <BookOpen size={20} color={NAVBAR_COLORS.primary} />
-            <Text className="text-base font-bold text-slate-800">
-              Audit Findings
-            </Text>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={true}
-            contentContainerStyle={{ flexGrow: 1 }}
+          {/* Audit Findings Table */}
+          <View
+            className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
           >
-            {/* ✅ minWidth set to 880 to perfectly fit the new explicit column widths (48+256+256+224+96) */}
-            <View style={{ minWidth: 880, width: "100%" }}>
-              {/* ✅ TABLE HEADER (Fixed Widths + flex-shrink-0) */}
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <ClipboardList size={20} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Audit Findings
+                </Text>
+              </View>
+            </View>
+
+            {/* Removed horizontal ScrollView and used flex percentages to fit container exactly */}
+            <View className="w-full">
+              {/* Table Header */}
               <View className="flex-row border-b-2 border-slate-200 bg-slate-50">
-                <View className="w-12 flex-shrink-0 items-center justify-center px-2 py-3">
-                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
+                <View className="w-[8%] items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     S.No.
                   </Text>
                 </View>
-                <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
-                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
+                <View className="w-[27%] justify-start px-3 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     Check Point
                   </Text>
                 </View>
-                <View className="w-64 flex-shrink-0 justify-start bg-slate-100/50 px-2 py-3">
-                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
+                <View className="w-[25%] justify-start bg-slate-100/50 px-3 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     Consideration
                   </Text>
                 </View>
-                <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
-                  <Text className="text-left text-[10px] font-bold uppercase text-slate-600">
+                <View className="w-[28%] justify-start px-3 py-3">
+                  <Text className="text-left text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     Observations
                   </Text>
                 </View>
-                {/* ✅ Decreased Status width to w-24 (96px) */}
-                <View className="w-24 flex-shrink-0 items-center justify-center px-2 py-3">
-                  <Text className="text-center text-[10px] font-bold uppercase text-slate-600">
+                <View className="w-[12%] items-center justify-center px-2 py-3">
+                  <Text className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     Status
                   </Text>
                 </View>
               </View>
 
-              {/* ✅ TABLE BODY */}
+              {/* Table Body */}
               {questions.length > 0 ? (
                 questions.map((q: any, idx: number) => {
                   const questionKey = q.slNo || idx + 1;
@@ -1029,53 +1208,67 @@ export default function ManufacturingProcessView({
                     observations[questionKey] ||
                     observations[String(questionKey)];
 
-                  let consideration = q.consideration || "-";
-                  if (typeof consideration === "string") {
-                    consideration = consideration
-                      .replace(/\\n/g, "\n")
-                      .replace(/(\d+)\.\s/g, "\n• ");
+                  const formattedConsideration =
+                    formatConsiderationAsNumberedList(q.consideration);
+
+                  let complianceBadgeClass =
+                    "bg-slate-50 text-slate-700 border-slate-200";
+                  let complianceText = response || "Pending";
+
+                  if (response === "MAJOR_NC") {
+                    complianceBadgeClass =
+                      "bg-rose-50 text-rose-700 border-rose-200";
+                    complianceText = "MAJOR NC";
+                  } else if (response === "MINOR_NC") {
+                    complianceBadgeClass =
+                      "bg-amber-50 text-amber-700 border-amber-200";
+                    complianceText = "MINOR NC";
+                  } else if (response === "COMPLIANT") {
+                    complianceBadgeClass =
+                      "bg-emerald-50 text-emerald-700 border-emerald-200";
+                    complianceText = "Compliant";
                   }
 
                   return (
                     <View
                       key={idx}
-                      className="flex-row border-b border-slate-100"
+                      className="flex-row border-b border-slate-100 hover:bg-slate-50/50"
                     >
-                      <View className="w-12 flex-shrink-0 items-center justify-start px-2 py-3">
+                      <View className="w-[8%] flex-shrink-0 items-center justify-start px-2 py-4">
                         <Text className="text-center text-xs font-medium text-slate-600">
                           {questionKey}
                         </Text>
                       </View>
-                      <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
+                      <View className="w-[27%] flex-shrink-0 justify-start px-3 py-4">
                         <Text
-                          className="text-xs text-slate-800"
-                          numberOfLines={4}
+                          className="text-xs leading-5 text-slate-800"
+                          numberOfLines={5}
                         >
                           {q.checkpoint}
                         </Text>
                       </View>
-                      <View className="w-64 flex-shrink-0 justify-start bg-slate-50/50 px-2 py-3">
+                      <View className="w-[25%] flex-shrink-0 justify-start bg-slate-50/50 px-3 py-4">
                         <Text
-                          className="text-xs text-slate-600"
-                          numberOfLines={4}
+                          className="text-xs leading-5 text-slate-600"
+                          numberOfLines={5}
                         >
-                          {consideration}
+                          {formattedConsideration}
                         </Text>
                       </View>
-                      <View className="w-64 flex-shrink-0 justify-start px-2 py-3">
+                      <View className="w-[28%] flex-shrink-0 justify-start px-3 py-4">
                         <Text
-                          className="text-xs text-slate-600"
-                          numberOfLines={4}
+                          className="text-xs leading-5 text-slate-600"
+                          numberOfLines={5}
                         >
                           {observation || "-"}
                         </Text>
                       </View>
-                      <View className="w-24 flex-shrink-0 items-center justify-center px-2 py-3">
+                      <View className="w-[12%] flex-shrink-0 items-center justify-start px-2 py-3">
                         <View
-                          className={`rounded-lg border px-2 py-1.5 ${getStatusClass(response)}`}
+                          className={`rounded-md border px-2 py-1.5 ${complianceBadgeClass}`}
                         >
-                          <Text className="text-center text-[10px] font-medium">
-                            {getStatusText(response)}
+                          <Text className="text-center text-[10px] font-bold uppercase tracking-wider">
+                            {complianceText}
                           </Text>
                         </View>
                       </View>
@@ -1083,9 +1276,9 @@ export default function ManufacturingProcessView({
                   );
                 })
               ) : (
-                <View className="items-center justify-center py-8">
-                  <BookOpen size={32} color="#cbd5e1" className="mb-2" />
-                  <Text className="text-sm font-medium text-slate-500">
+                <View className="items-center justify-center py-12">
+                  <ClipboardList size={32} color="#94A3B8" />
+                  <Text className="mt-3 text-sm text-slate-500">
                     No questions loaded from the database
                   </Text>
                   <Text className="mt-1 text-xs text-slate-400">
@@ -1095,290 +1288,355 @@ export default function ManufacturingProcessView({
                 </View>
               )}
             </View>
-          </ScrollView>
-        </View>
-        {/* Signature Section */}
-        <View className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <View className="mb-4 flex-row items-center gap-2">
-            <Award size={18} color={NAVBAR_COLORS.primary} />
-            <Text className="text-base font-bold text-slate-800">
-              Signatures & Comments
-            </Text>
           </View>
-          <View className="-mx-2 flex-row flex-wrap">
-            {/* AUDITOR SIGNATURE SECTION */}
-            <View className="mb-4 w-full px-2 md:w-1/2">
-              <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Auditor Signature
+
+          {/* Signature Section */}
+          <View
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View className="border-b border-slate-100 p-5">
+              <View className="flex-row items-center gap-2">
+                <Award size={18} color={COLORS.primary} />
+                <Text className="text-base font-bold text-slate-900">
+                  Signatures & Comments
                 </Text>
-                <View className="mt-3">
-                  {loadingSignatures ? (
-                    <View className="items-center justify-center p-4">
-                      <ActivityIndicator
-                        size="small"
-                        color={NAVBAR_COLORS.primary}
+              </View>
+            </View>
+
+            <View className="flex-row flex-wrap p-4">
+              {/* Auditor Signature */}
+              <View className="mb-4 w-full px-2 md:w-1/2">
+                <View className="h-full rounded-xl border border-slate-200 bg-slate-50 p-5">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Auditor Signature
+                  </Text>
+                  <View className="mt-4">
+                    {loadingSignatures ? (
+                      <View className="items-center justify-center py-6">
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.primary}
+                        />
+                      </View>
+                    ) : auditorSignatureUrl ? (
+                      <Image
+                        source={{ uri: auditorSignatureUrl }}
+                        className="rounded-lg border border-slate-200 bg-white p-3"
+                        style={{ height: 96, width: "100%" }}
+                        resizeMode="contain"
                       />
-                    </View>
-                  ) : auditorSignatureUrl ? (
-                    <Image
-                      source={{ uri: auditorSignatureUrl }}
-                      className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
-                      style={{ height: 96, width: "100%" }}
-                      resizeMode="contain"
-                    />
-                  ) : (
-                    <View className="flex-row items-center gap-2">
-                      <AlertTriangle size={16} color="#94a3b8" />
-                      <Text className="text-sm font-medium text-slate-400">
-                        No signature uploaded
+                    ) : (
+                      <View className="flex-row items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-white p-4">
+                        <AlertTriangle size={16} color="#94A3B8" />
+                        <Text className="text-sm font-medium text-slate-400">
+                          No signature uploaded
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text className="mt-4 text-sm font-semibold text-slate-800">
+                    Name: {auditorName}
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-500">
+                    Date:{" "}
+                    {auditorSignedAt
+                      ? formatDateTime(auditorSignedAt)
+                      : answers.date || formatDate(audit.auditDate) || "-"}
+                  </Text>
+                  {answers.auditorComment && (
+                    <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                      <Text className="text-xs leading-5 text-slate-600">
+                        <Text className="font-bold text-slate-800">
+                          Comment:{" "}
+                        </Text>
+                        {answers.auditorComment}
                       </Text>
                     </View>
                   )}
                 </View>
-                <Text className="mt-3 text-sm font-semibold text-slate-700">
-                  Name: {auditorName}
-                </Text>
-                <Text className="mt-0.5 text-xs text-slate-500">
-                  Date:{" "}
-                  {auditorSignedAt
-                    ? formatDateTime(auditorSignedAt)
-                    : answers.date || formatDate(audit.auditDate) || "-"}
-                </Text>
-                {answers.auditorComment && (
-                  <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                    <Text className="text-xs text-slate-600">
-                      <Text className="font-bold">Comment:</Text>{" "}
-                      {answers.auditorComment}
-                    </Text>
-                  </View>
-                )}
               </View>
-            </View>
 
-            {/* AUDITEE SIGNATURE SECTION */}
-            <View className="mb-4 w-full px-2 md:w-1/2">
-              <View className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                {showAuditeeActions ? (
-                  <>
-                    <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Your Electronic Signature
-                    </Text>
-                    <View className="mt-3">
-                      {!auditeeSignatureUrl && !auditeeSignature ? (
-                        <View>
-                          <View className="mb-2 flex-row items-center gap-2">
-                            <AlertTriangle size={16} color="#94a3b8" />
-                            <Text className="text-sm font-medium text-slate-400">
-                              No signature uploaded in profile
-                            </Text>
-                          </View>
-                          <TextInput
-                            value={auditeeSignature}
-                            onChangeText={setAuditeeSignature}
-                            placeholder="Type your full name as signature (fallback)"
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"
-                          />
-                        </View>
-                      ) : (
-                        <View>
-                          {auditeeSignatureUrl && (
-                            <Image
-                              source={{ uri: auditeeSignatureUrl }}
-                              className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
-                              style={{ height: 96, width: "100%" }}
-                              resizeMode="contain"
-                            />
-                          )}
-                          <Text className="mt-2 text-xs font-medium text-emerald-600">
-                            ✓ Signature loaded from your profile
-                          </Text>
-                          <Text className="mt-1 text-xs text-slate-500">
-                            Name: {auditeeName}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    <Text className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Comments / Remarks
-                    </Text>
-                    <TextInput
-                      value={auditeeComment}
-                      onChangeText={setAuditeeComment}
-                      placeholder="Enter your comments (required for rejection)"
-                      multiline
-                      numberOfLines={3}
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                      style={{ textAlignVertical: "top" }}
-                    />
-
-                    <View className="mt-4 flex-row gap-3">
-                      <TouchableOpacity
-                        onPress={handleApprove}
-                        disabled={
-                          submitting ||
-                          (!auditeeSignatureUrl && !auditeeSignature.trim())
-                        }
-                        className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 shadow-md disabled:opacity-50"
-                      >
-                        <ThumbsUp size={16} color="#ffffff" />
-                        <Text className="text-sm font-medium text-white">
-                          {submitting ? "Processing..." : "Approve & Sign"}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={handleReject}
-                        disabled={submitting}
-                        className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 shadow-md disabled:opacity-50"
-                      >
-                        <ThumbsDown size={16} color="#ffffff" />
-                        <Text className="text-sm font-medium text-white">
-                          Reject
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Auditee Signature
-                    </Text>
-                    <View className="mt-3">
-                      {isApproved || isRejected ? (
-                        auditeeSignatureUrl ? (
-                          <Image
-                            source={{ uri: auditeeSignatureUrl }}
-                            className="rounded-lg border border-slate-200 bg-white object-contain p-3 shadow-sm"
-                            style={{ height: 96, width: "100%" }}
-                            resizeMode="contain"
-                          />
-                        ) : auditeeSignature ? (
-                          <View className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                            <Text className="text-sm font-semibold text-slate-800">
-                              {auditeeSignature}
-                            </Text>
-                          </View>
-                        ) : (
-                          <View className="flex-row items-center gap-2">
-                            <AlertTriangle size={16} color="#94a3b8" />
-                            <Text className="text-sm font-medium text-slate-400">
-                              No signature available
-                            </Text>
-                          </View>
-                        )
-                      ) : (
-                        <View className="items-center justify-center rounded-xl border-2 border-dashed border-amber-200 bg-amber-50 p-6">
-                          <Clock size={32} color="#f59e0b" className="mb-2" />
-                          <Text className="text-sm font-bold text-amber-700">
-                            Waiting for Approval
-                          </Text>
-                          <Text className="mt-0.5 text-center text-xs text-amber-600">
-                            Signature will appear after auditee approval
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text className="mt-3 text-sm font-semibold text-slate-700">
-                      Name: {auditeeName}
-                    </Text>
-                    <Text className="mt-0.5 text-xs text-slate-500">
-                      Date:{" "}
-                      {auditeeSignedAt
-                        ? formatDateTime(auditeeSignedAt)
-                        : isApproved || isRejected
-                          ? formatDateTime(audit.updatedAt)
-                          : "-"}
-                    </Text>
-
-                    {(answers.auditeeComment || auditeeComment) &&
-                      (isApproved || isRejected) && (
-                        <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-                          <Text className="text-xs text-slate-600">
-                            <Text className="font-bold">Comment:</Text>{" "}
-                            {answers.auditeeComment || auditeeComment}
-                          </Text>
-                        </View>
-                      )}
-
-                    <View className="mt-4">
+              {/* Auditee Signature */}
+              <View className="mb-4 w-full px-2 md:w-1/2">
+                <View className="h-full rounded-xl border border-slate-200 bg-slate-50 p-5">
+                  {showAuditeeActions ? (
+                    <>
                       <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Status
+                        Your Electronic Signature
                       </Text>
-                      <View className="mt-2">
-                        {isApproved ? (
-                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5">
-                            <CheckCircle size={12} color="#047857" />
-                            <Text className="text-xs font-semibold text-emerald-700">
-                              Approved
-                            </Text>
-                          </View>
-                        ) : isRejected ? (
-                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5">
-                            <XCircle size={12} color="#be123c" />
-                            <Text className="text-xs font-semibold text-rose-700">
-                              Rejected
-                            </Text>
+                      <View className="mt-4">
+                        {!auditeeSignatureUrl && !auditeeSignature ? (
+                          <View>
+                            <View className="mb-2 flex-row items-center gap-2">
+                              <AlertTriangle size={16} color="#94A3B8" />
+                              <Text className="text-sm font-medium text-slate-400">
+                                No signature uploaded in profile
+                              </Text>
+                            </View>
+                            <TextInput
+                              value={auditeeSignature}
+                              onChangeText={setAuditeeSignature}
+                              placeholder="Type your full name as signature"
+                              placeholderTextColor="#94A3B8"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                            />
                           </View>
                         ) : (
-                          <View className="flex-row items-center gap-1.5 self-start rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5">
-                            <AlertCircle size={12} color="#b45309" />
-                            <Text className="text-xs font-semibold text-amber-700">
-                              Pending Approval
+                          <View>
+                            {auditeeSignatureUrl && (
+                              <Image
+                                source={{ uri: auditeeSignatureUrl }}
+                                className="rounded-lg border border-slate-200 bg-white p-3"
+                                style={{ height: 96, width: "100%" }}
+                                resizeMode="contain"
+                              />
+                            )}
+                            <Text className="mt-2 text-xs font-medium text-blue-600">
+                              ✓ Signature loaded from your profile
+                            </Text>
+                            <Text className="mt-1 text-xs text-slate-500">
+                              Name: {auditeeName}
                             </Text>
                           </View>
                         )}
                       </View>
-                    </View>
-                  </>
-                )}
+
+                      <Text className="mt-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Comments / Remarks
+                      </Text>
+                      <TextInput
+                        value={auditeeComment}
+                        onChangeText={setAuditeeComment}
+                        placeholder="Enter your comments (required for rejection)"
+                        placeholderTextColor="#94A3B8"
+                        multiline
+                        numberOfLines={3}
+                        className="mt-2 min-h-[80px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                        style={{ textAlignVertical: "top" }}
+                      />
+
+                      <View className="mt-4 flex-row gap-3">
+                        <TouchableOpacity
+                          onPress={handleApprove}
+                          disabled={
+                            submitting ||
+                            (!auditeeSignatureUrl && !auditeeSignature.trim())
+                          }
+                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3"
+                          activeOpacity={0.8}
+                          style={{
+                            opacity:
+                              submitting ||
+                              (!auditeeSignatureUrl && !auditeeSignature.trim())
+                                ? 0.5
+                                : 1,
+                          }}
+                        >
+                          <ThumbsUp size={16} color="#ffffff" />
+                          <Text className="text-sm font-semibold text-white">
+                            {submitting ? "Processing..." : "Approve & Sign"}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={handleReject}
+                          disabled={submitting}
+                          className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                          activeOpacity={0.8}
+                          style={{ opacity: submitting ? 0.5 : 1 }}
+                        >
+                          <ThumbsDown size={16} color={COLORS.stateErrorText} />
+                          <Text
+                            className="text-sm font-semibold"
+                            style={{ color: COLORS.stateErrorText }}
+                          >
+                            Reject
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Auditee Signature
+                      </Text>
+                      <View className="mt-4">
+                        {isApproved || isRejected ? (
+                          auditeeSignatureUrl ? (
+                            <Image
+                              source={{ uri: auditeeSignatureUrl }}
+                              className="rounded-lg border border-slate-200 bg-white p-3"
+                              style={{ height: 96, width: "100%" }}
+                              resizeMode="contain"
+                            />
+                          ) : auditeeSignature ? (
+                            <View className="rounded-lg border border-slate-200 bg-white p-4">
+                              <Text className="text-sm font-semibold text-slate-800">
+                                {auditeeSignature}
+                              </Text>
+                            </View>
+                          ) : (
+                            <View className="flex-row items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-white p-4">
+                              <AlertTriangle size={16} color="#94A3B8" />
+                              <Text className="text-sm font-medium text-slate-400">
+                                No signature available
+                              </Text>
+                            </View>
+                          )
+                        ) : (
+                          <View className="items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-white p-6">
+                            <Clock size={28} color="#94A3B8" className="mb-2" />
+                            <Text className="text-sm font-bold text-slate-700">
+                              Waiting for Approval
+                            </Text>
+                            <Text className="mt-1 text-center text-xs text-slate-500">
+                              Signature will appear after auditee approval
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text className="mt-4 text-sm font-semibold text-slate-800">
+                        Name: {auditeeName}
+                      </Text>
+                      <Text className="mt-1 text-xs text-slate-500">
+                        Date:{" "}
+                        {auditeeSignedAt
+                          ? formatDateTime(auditeeSignedAt)
+                          : isApproved || isRejected
+                            ? formatDateTime(audit.updatedAt)
+                            : "-"}
+                      </Text>
+
+                      {(answers.auditeeComment || auditeeComment) &&
+                        (isApproved || isRejected) && (
+                          <View className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                            <Text className="text-xs leading-5 text-slate-600">
+                              <Text className="font-bold text-slate-800">
+                                Comment:{" "}
+                              </Text>
+                              {answers.auditeeComment || auditeeComment}
+                            </Text>
+                          </View>
+                        )}
+
+                      <View className="mt-4">
+                        <Text className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          Status
+                        </Text>
+                        <View className="mt-2">
+                          {isApproved ? (
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateSuccessBg,
+                                borderColor: COLORS.primaryBorder,
+                              }}
+                            >
+                              <CheckCircle size={12} color={COLORS.primary} />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.primary }}
+                              >
+                                Approved
+                              </Text>
+                            </View>
+                          ) : isRejected ? (
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateErrorBg,
+                                borderColor: COLORS.border,
+                              }}
+                            >
+                              <XCircle
+                                size={12}
+                                color={COLORS.stateErrorText}
+                              />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.stateErrorText }}
+                              >
+                                Rejected
+                              </Text>
+                            </View>
+                          ) : (
+                            <View
+                              className="flex-row items-center gap-1.5 self-start rounded-full border px-3 py-1.5"
+                              style={{
+                                backgroundColor: COLORS.stateWarningBg,
+                                borderColor: COLORS.border,
+                              }}
+                            >
+                              <AlertCircle
+                                size={12}
+                                color={COLORS.stateWarningText}
+                              />
+                              <Text
+                                className="text-xs font-semibold"
+                                style={{ color: COLORS.stateWarningText }}
+                              >
+                                Pending Approval
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </View>
               </View>
             </View>
           </View>
-        </View>
 
-        {/* Footer */}
-        <View className="mt-8 items-center pb-6">
-          <Text className="text-center text-xs text-slate-400">
-            Manufacturing Process Audit Report | Generated on{" "}
-            {formatDate(new Date().toISOString())}
-          </Text>
-          <Text className="mt-1 text-center text-xs text-slate-400">
-            This is an electronic document and does not require a physical
-            signature
-          </Text>
-        </View>
+          {/* Footer */}
+          <View className="mt-8 items-center pb-6">
+            <Text className="text-center text-xs text-slate-400">
+              Manufacturing Process Audit Report | Generated on{" "}
+              {formatDate(new Date().toISOString())}
+            </Text>
+            <Text className="mt-1 text-center text-xs text-slate-400">
+              This is an electronic document and does not require a physical
+              signature
+            </Text>
+          </View>
 
-        <PDFViewer
-          visible={pdfViewer.visible}
-          pdfData={pdfViewer.pdfData}
-          fileName={pdfViewer.fileName}
-          auditId={String(audit?.id || "")}
-          auditNumber={`Mfg-${audit?.id || ""}`}
-          pdfType="manufacturing"
-          forumGroups={[
-            {
-              id: `AUDIT-${audit?.auditScheduleId || audit?.scheduleId || ""}`,
-              name: `📋 Manufacturing Audit ${audit?.auditScheduleId || audit?.scheduleId || ""}`,
-              type: "Audit",
-            },
-            {
-              id: "AUDIT-general-forum",
-              name: "📢 General Discussion",
-              type: "General",
-            },
-          ]}
-          onClose={() =>
-            setPDFViewer({ visible: false, pdfData: "", fileName: "" })
-          }
-          onShareComplete={(forumId?: string) => {
-            addToast("PDF shared to forum successfully!", "success");
-            setPDFViewer({ visible: false, pdfData: "", fileName: "" });
-          }}
-          currentUser={user}
-          allUsers={allUsers}
-        />
-      </View>
-    </ScrollView>
+          <PDFViewer
+            visible={pdfViewer.visible}
+            pdfData={pdfViewer.pdfData}
+            fileName={pdfViewer.fileName}
+            auditId={String(audit?.id || "")}
+            auditNumber={`Mfg-${audit?.id || ""}`}
+            pdfType="manufacturing"
+            forumGroups={[
+              {
+                id: `AUDIT-${audit?.auditScheduleId || audit?.scheduleId || ""}`,
+                name: `📋 Manufacturing Audit ${audit?.auditScheduleId || audit?.scheduleId || ""}`,
+                type: "Audit",
+              },
+              {
+                id: "AUDIT-general-forum",
+                name: "📢 General Discussion",
+                type: "General",
+              },
+            ]}
+            onClose={() =>
+              setPDFViewer({ visible: false, pdfData: "", fileName: "" })
+            }
+            onShareComplete={(forumId?: string) => {
+              addToast("PDF shared to forum successfully!", "success");
+              setPDFViewer({ visible: false, pdfData: "", fileName: "" });
+            }}
+            currentUser={user}
+            allUsers={allUsers}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
