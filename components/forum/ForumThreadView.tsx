@@ -85,6 +85,12 @@ const numberInputStyle = {
   backgroundColor: "#fff",
 };
 
+const toYMD = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
 // ============================================================================
 // CROSS-PLATFORM DATE FIELD
 //   - Web:     native <input type="date">
@@ -119,12 +125,12 @@ function DateField({
     }
   }, []);
 
-  const toYMD = (d: Date) => {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
+  // const toYMD = (d: Date) => {
+  //   const yyyy = d.getFullYear();
+  //   const mm = String(d.getMonth() + 1).padStart(2, "0");
+  //   const dd = String(d.getDate()).padStart(2, "0");
+  //   return `${yyyy}-${mm}-${dd}`;
+  // };
 
   // ---- WEB ----
   if (Platform.OS === "web") {
@@ -425,7 +431,28 @@ export default function ForumThreadView({
   const [showManage, setShowManage] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
 
-  // ?? ADD: is current user the group admin?
+  // ✅ FIX 2A — Clear date fields whenever the scope changes away from "range"
+  useEffect(() => {
+    if (exportScope !== "range") {
+      setExportFromDate("");
+      setExportToDate("");
+    }
+  }, [exportScope]);
+
+  // ✅ FIX 2B — Auto-correct To-date if it falls behind From-date
+  useEffect(() => {
+    if (exportScope !== "range") return;
+    if (!exportFromDate || !exportToDate) return;
+
+    const from = new Date(exportFromDate + "T00:00:00");
+    const to = new Date(exportToDate + "T00:00:00");
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return;
+
+    if (to < from) {
+      // Bump To-date up to From-date instead of silently rejecting
+      setExportToDate(exportFromDate);
+    }
+  }, [exportFromDate, exportToDate, exportScope]);
 
   // ---- Keyboard Listeners ----
   useEffect(() => {
@@ -1577,46 +1604,105 @@ export default function ForumThreadView({
   }, []);
 
   const confirmExport = async () => {
+    console.log("🚀 [confirmExport] START", {
+      exportScope,
+      exportFormat,
+      exportFromDate,
+      exportToDate,
+      exportDaysInput,
+      exportLimitInput,
+      groupId: String(groupId),
+      requester: currentUserEmail,
+    });
+
     try {
       // ---- Validate ----
       if (exportScope === "days") {
         const days = parseInt(exportDaysInput, 10);
+        console.log("🔍 [confirmExport] days validation →", days);
         if (!Number.isFinite(days) || days <= 0 || days > 3650) {
+          console.warn("❌ [confirmExport] days invalid → abort");
           Alert.alert("Invalid days", "Enter a number between 1 and 3650.");
           return;
         }
       }
       if (exportScope === "limit") {
         const lim = parseInt(exportLimitInput, 10);
+        console.log("🔍 [confirmExport] limit validation →", lim);
         if (!Number.isFinite(lim) || lim <= 0 || lim > 100000) {
+          console.warn("❌ [confirmExport] limit invalid → abort");
           Alert.alert("Invalid count", "Enter a number between 1 and 100000.");
           return;
         }
       }
+
       if (exportScope === "range") {
+        console.log("🔍 [confirmExport] range validation →", {
+          exportFromDate,
+          exportToDate,
+        });
         if (!exportFromDate || !exportToDate) {
+          console.warn("❌ [confirmExport] missing dates → abort");
           Alert.alert("Missing dates", "Please pick both From and To dates.");
           return;
         }
-        const from = new Date(exportFromDate + "T00:00:00");
-        const to = new Date(exportToDate + "T23:59:59");
+
+        let from = new Date(exportFromDate + "T00:00:00");
+        let to = new Date(exportToDate + "T23:59:59");
         const now = new Date();
 
-        if (from > to) {
-          Alert.alert("Invalid range", "'From' must be before 'To'.");
+        if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+          console.warn("❌ [confirmExport] invalid date objects → abort", {
+            from,
+            to,
+          });
+          Alert.alert("Invalid dates", "Please enter valid From and To dates.");
           return;
         }
 
-        // 👇 NEW: block future end dates
-        if (to.getTime() > now.getTime()) {
+        if (from > to) {
+          console.warn("🔁 [confirmExport] swapping inverted range", {
+            fromBefore: from.toISOString(),
+            toBefore: to.toISOString(),
+          });
+          [from, to] = [to, from];
+          setExportFromDate(toYMD(from));
+          setExportToDate(toYMD(to));
+          console.log("🔁 [confirmExport] swapped to", {
+            fromAfter: from.toISOString(),
+            toAfter: to.toISOString(),
+          });
+        }
+
+        // ✅ Compare against END OF TODAY (local), not the current instant.
+        // "Today at 23:59:59" must be allowed; only "tomorrow or later" is future.
+        const todayEnd = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          23,
+          59,
+          59,
+          999,
+        );
+
+        if (to.getTime() > todayEnd.getTime()) {
+          console.warn("❌ [confirmExport] To-date in future → abort", {
+            to: to.toISOString(),
+            todayEnd: todayEnd.toISOString(),
+            now: now.toISOString(),
+          });
           Alert.alert(
             "Invalid range",
             "'To' date cannot be in the future. Please pick today or earlier.",
           );
           return;
         }
+
+        console.log("✅ [confirmExport] To-date is today or earlier — OK");
       }
 
+      console.log("✅ [confirmExport] validation passed → closing modal");
       setShowExportModal(false);
 
       const opts: {
@@ -1642,11 +1728,29 @@ export default function ForumThreadView({
         opts.toDate = exportToDate;
       }
 
+      console.log("📤 [confirmExport] calling exportGroupThreads", {
+        groupId: String(groupId),
+        opts,
+        platform: Platform.OS,
+      });
+
+      const t0 = Date.now();
+
       if (Platform.OS === "web") {
-        await exportGroupThreads(String(groupId), opts);
+        const result = await exportGroupThreads(String(groupId), opts);
+        console.log("📥 [confirmExport] exportGroupThreads returned", {
+          ms: Date.now() - t0,
+          resultType: typeof result,
+          result,
+        });
       } else {
         const url = await exportGroupThreads(String(groupId), opts);
-        if (typeof url !== "string") return;
+        console.log("📥 [confirmExport] mobile export URL", { url });
+
+        if (typeof url !== "string") {
+          console.warn("❌ [confirmExport] mobile export returned non-string");
+          return;
+        }
 
         const FileSystem = require("expo-file-system");
         const Sharing = require("expo-sharing");
@@ -1654,12 +1758,31 @@ export default function ForumThreadView({
         const localUri =
           FileSystem.documentDirectory +
           `forum-${groupId}-${exportScope}.${exportFormat}`;
+        console.log("⬇️ [confirmExport] downloading to", localUri);
+
         const result = await FileSystem.downloadAsync(url, localUri);
-        if (result?.uri) await Sharing.shareAsync(result.uri);
+        console.log("✅ [confirmExport] downloaded", result);
+
+        if (result?.uri) {
+          console.log("📤 [confirmExport] sharing", result.uri);
+          await Sharing.shareAsync(result.uri);
+          console.log("✅ [confirmExport] share done");
+        }
       }
+
+      console.log("🎉 [confirmExport] DONE");
     } catch (err: any) {
-      console.error("Export failed", err);
-      Alert.alert("Export failed", err?.message || "Unknown error");
+      console.error("❌ [confirmExport] EXCEPTION", {
+        name: err?.name,
+        message: err?.message,
+        status: err?.status,
+        stack: err?.stack,
+        raw: err,
+      });
+      Alert.alert(
+        "Export failed",
+        err?.message || err?.toString() || "Unknown error (see console)",
+      );
     }
   };
 
