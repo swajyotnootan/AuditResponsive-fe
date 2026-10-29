@@ -77,7 +77,7 @@ export const AnimatedGlassCard: React.FC<{
 };
 
 // ============================================================
-// BAR CHART — Blue active bars
+// BAR CHART — Clean MNC style, proper Y-axis, baseline
 // ============================================================
 export const CustomBarChart = ({
   data = [],
@@ -92,7 +92,10 @@ export const CustomBarChart = ({
 }) => {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const safeData = data || [];
-  const maxValue = Math.max(...safeData.map((d) => d.value), 1);
+  const rawMax = Math.max(...safeData.map((d) => d.value), 1);
+  // Round max to a nice number for the y-axis so ticks are integers
+  const tickStep = Math.max(1, Math.ceil(rawMax / 4));
+  const axisMax = tickStep * 4;
   const hasData = safeData.some((d) => d.value > 0);
   const totalAudits = safeData.reduce((sum, d) => sum + d.value, 0);
 
@@ -116,11 +119,15 @@ export const CustomBarChart = ({
     ).start();
   }, [safeData.length]);
 
+  const chartHeight = isDesktop ? 200 : 160;
+  const yTicks = [4, 3, 2, 1, 0]; // top-to-bottom
+
   return (
     <AnimatedGlassCard style={{ flex: 1, width: "100%" }} delay={100}>
       <View style={styles.chartInnerPadding}>
+        {/* Header */}
         <View style={styles.chartHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.cardTitle}>{title}</Text>
             <Text style={styles.cardSubtitle}>{subtitle}</Text>
           </View>
@@ -129,99 +136,190 @@ export const CustomBarChart = ({
             <Text style={styles.chartTotalValue}>{totalAudits}</Text>
           </View>
         </View>
+
         {!hasData ? (
           <View style={styles.emptyChart}>
             <Text style={styles.emptyText}>No data available</Text>
           </View>
         ) : (
-          <View style={[styles.barChartContainer, { overflow: "visible" }]}>
-            {safeData.map((item, idx) => {
-              const heightPercent = Math.max((item.value / maxValue) * 100, 4);
-              const isActive = activeIndex === idx;
-              const animVal = animatedValues[idx] || new Animated.Value(1);
-              return (
-                <Pressable
-                  key={idx}
-                  style={[styles.barColumn, { zIndex: isActive ? 10 : 1 }]}
-                  onHoverIn={() => setActiveIndex(idx)}
-                  onHoverOut={() => setActiveIndex(null)}
-                  onPressIn={() => setActiveIndex(idx)}
-                  onPressOut={() => setActiveIndex(null)}
+          <View style={{ flexDirection: "row", marginTop: 4 }}>
+            {/* Y-axis labels + gridlines */}
+            <View
+              style={{
+                width: 28,
+                height: chartHeight,
+                justifyContent: "space-between",
+                alignItems: "flex-end",
+                paddingRight: 6,
+              }}
+            >
+              {yTicks.map((t) => (
+                <Text
+                  key={t}
+                  style={{
+                    fontSize: 10,
+                    color: COLORS.textMuted,
+                    fontWeight: "500",
+                    lineHeight: 12,
+                  }}
                 >
-                  {isActive && (
-                    <View
+                  {Math.round((t / 4) * axisMax)}
+                </Text>
+              ))}
+            </View>
+
+            {/* Chart area */}
+            <View style={{ flex: 1 }}>
+              {/* Gridlines behind bars */}
+              <View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: chartHeight,
+                  justifyContent: "space-between",
+                  pointerEvents: "none",
+                }}
+              >
+                {yTicks.map((t) => (
+                  <View
+                    key={t}
+                    style={{
+                      height: 1,
+                      backgroundColor:
+                        t === 0 ? COLORS.border : COLORS.borderLight,
+                      opacity: t === 0 ? 1 : 0.6,
+                    }}
+                  />
+                ))}
+              </View>
+
+              {/* Bars */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "flex-end",
+                  height: chartHeight,
+                  gap: isDesktop ? 6 : 3,
+                  zIndex: 1,
+                }}
+              >
+                {safeData.map((item, idx) => {
+                  const targetPct = (item.value / axisMax) * 100;
+                  const isActive = activeIndex === idx;
+                  const dimmed = activeIndex !== null && !isActive;
+                  const animVal = animatedValues[idx];
+
+                  return (
+                    <Pressable
+                      key={idx}
+                      onHoverIn={() => setActiveIndex(idx)}
+                      onHoverOut={() => setActiveIndex(null)}
+                      onPressIn={() => setActiveIndex(idx)}
+                      onPressOut={() => setActiveIndex(null)}
                       style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        marginBottom: 8,
-                        backgroundColor: COLORS.primary,
-                        borderRadius: 6,
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        shadowColor: "#0F172A",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.12,
-                        shadowRadius: 6,
-                        elevation: 3,
+                        flex: 1,
+                        height: "100%",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        position: "relative",
                       }}
                     >
-                      <Text
+                      {/* Tooltip */}
+                      {isActive && (
+                        <View
+                          pointerEvents="none"
+                          style={{
+                            position: "absolute",
+                            bottom: `${targetPct}%`,
+                            marginBottom: 6,
+                            backgroundColor: COLORS.primary,
+                            borderRadius: 6,
+                            paddingVertical: 4,
+                            paddingHorizontal: 8,
+                            minWidth: 48,
+                            alignItems: "center",
+                            zIndex: 50,
+                            elevation: 6,
+                            shadowColor: "#0F172A",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 6,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#FFF",
+                              fontSize: 12,
+                              fontWeight: "700",
+                            }}
+                          >
+                            {item.value}
+                          </Text>
+                          <Text
+                            style={{
+                              color: "#BFDBFE",
+                              fontSize: 10,
+                              fontWeight: "500",
+                            }}
+                          >
+                            {item.label}
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Bar */}
+                      <Animated.View
                         style={{
-                          color: "#FFFFFF",
-                          fontSize: 12,
-                          fontWeight: "600",
+                          width: "100%",
+                          maxWidth: 48, // ← cap the bar thickness
+                          alignSelf: "center", // ← center the capped bar in its column
+                          height: animVal.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0%", `${targetPct}%`],
+                          }),
+                          backgroundColor: isActive
+                            ? COLORS.primaryDark
+                            : COLORS.primary,
+                          borderRadius: 4,
+                          opacity: dimmed ? 0.35 : 1,
+                          minHeight: item.value > 0 ? 2 : 0,
                         }}
-                      >
-                        {item.value}
-                      </Text>
-                      <Text
-                        style={{
-                          color: "#BFDBFE",
-                          fontSize: 10,
-                          fontWeight: "500",
-                          textAlign: "center",
-                        }}
-                      >
-                        {item.label}
-                      </Text>
-                    </View>
-                  )}
-                  <View
-                    style={{
-                      flex: 1,
-                      justifyContent: "flex-end",
-                      width: "100%",
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <Animated.View
+                      />
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* X-axis labels */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  marginTop: 8,
+                  gap: isDesktop ? 6 : 3,
+                }}
+              >
+                {safeData.map((item, idx) => {
+                  const isActive = activeIndex === idx;
+                  return (
+                    <Text
+                      key={idx}
+                      numberOfLines={1}
                       style={{
-                        height: animVal.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ["0%", `${heightPercent}%`],
-                        }),
-                        // Default is a soft grayish-blue. Hovered is primary.
-                        backgroundColor: isActive ? COLORS.primary : "#679be0",
-                        borderRadius: 6, // Slightly smaller radius for a sleeker look
-                        opacity: activeIndex !== null && !isActive ? 0.3 : 1,
-                      }}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.barLabel,
-                      {
-                        color: isActive ? COLORS.primary : COLORS.textSub,
+                        flex: 1,
+                        fontSize: 10,
+                        textAlign: "center",
+                        color: isActive ? COLORS.primary : COLORS.textMuted,
                         fontWeight: isActive ? "600" : "500",
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  );
+                })}
+              </View>
+            </View>
           </View>
         )}
       </View>

@@ -359,7 +359,7 @@ export default function FinalPreview({
   const [approvalComment, setApprovalComment] = useState<string>("");
   const [memberError, setMemberError] = useState<string | null>(null);
   const [memberSuccess, setMemberSuccess] = useState<string | null>(null);
-
+  const [authToken, setAuthToken] = useState<string | null>(null);
   // State to track broken images
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
 
@@ -431,6 +431,36 @@ export default function FinalPreview({
       }
     };
     getUserRole();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadToken = async () => {
+      try {
+        // Try separate token key first
+        let token = await AsyncStorage.getItem("token");
+
+        // Fallback: pull it from the stored user object
+        if (!token) {
+          const userStr = await AsyncStorage.getItem("user");
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            token = user?.token ?? null;
+          }
+        }
+
+        if (!cancelled) setAuthToken(token);
+      } catch (err) {
+        console.error("Failed to load auth token:", err);
+        if (!cancelled) setAuthToken(null);
+      }
+    };
+
+    loadToken();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const startEditingTeamMembers = () => {
@@ -1295,12 +1325,6 @@ export default function FinalPreview({
                         const isImage = file.fileType === "IMAGE";
                         const isBroken = brokenImages[file.id];
 
-                        // Retrieve token to pass to the Image component
-                        const token =
-                          typeof window !== "undefined"
-                            ? localStorage.getItem("token")
-                            : null;
-
                         return (
                           <TouchableOpacity
                             key={file.id}
@@ -1319,8 +1343,8 @@ export default function FinalPreview({
                                 <Image
                                   source={{
                                     uri: getEightDFileUrl(file.id),
-                                    headers: token
-                                      ? { Authorization: `Bearer ${token}` }
+                                    headers: authToken
+                                      ? { Authorization: `Bearer ${authToken}` }
                                       : {},
                                   }}
                                   style={{ width: "100%", height: "100%" }}

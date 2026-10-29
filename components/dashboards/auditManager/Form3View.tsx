@@ -10,7 +10,6 @@ import {
   Calendar,
   Check,
   CheckCircle,
-  Clock,
   Eye,
   FileText,
   MessageSquare,
@@ -29,32 +28,25 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-
-// ════ STRICT MONOCHROMATIC MNC PALETTE ═════
-const COLORS = {
-  primary: "#2563EB",
-  primaryLight: "#EFF6FF",
-  primaryBorder: "#DBEAFE",
-  primaryDark: "#1E3A8A",
-  bg: "#F8FAFC",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
-  text: "#0F172A",
-  textValue: "#334155",
-  textMuted: "#64748B",
-  stateSuccessBg: "#EFF6FF",
-  stateErrorBg: "#F1F5F9",
-  stateWarningBg: "#F8FAFC",
-  stateErrorText: "#475569",
-  stateWarningText: "#64748B",
-};
+import {
+  ActionModal,
+  AlertBanner,
+  Card,
+  COLORS,
+  ConfirmModal,
+  MarqueeText,
+  MonthCellTooltip,
+  OutlineButton,
+  PlanStatusBadge,
+  ScheduleDetailsModal,
+  StatusBadge,
+} from "./form3Components";
 
 interface MonthData {
   month: string;
@@ -79,777 +71,6 @@ interface PlanInfo {
   rejectedBy: string;
   rejectionReason: string;
 }
-
-// ═════ REUSABLE UI COMPONENTS ═════
-const Card = ({ children, className = "" }: any) => (
-  <View
-    className={`mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white ${className}`}
-    style={{
-      shadowColor: "#0F172A",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.03,
-      shadowRadius: 4,
-      elevation: 1,
-    }}
-  >
-    {children}
-  </View>
-);
-
-const AlertBanner = ({ type, title, message, footer, icon: Icon }: any) => {
-  const stylesMap: any = {
-    error: {
-      bg: COLORS.stateErrorBg,
-      border: COLORS.border,
-      color: COLORS.stateErrorText,
-      iconColor: COLORS.stateErrorText,
-      iconBg: "#E2E8F0",
-    },
-    warning: {
-      bg: COLORS.stateWarningBg,
-      border: COLORS.border,
-      color: COLORS.stateWarningText,
-      iconColor: COLORS.stateWarningText,
-      iconBg: "#F1F5F9",
-    },
-    success: {
-      bg: COLORS.stateSuccessBg,
-      border: COLORS.primaryBorder,
-      color: COLORS.primaryDark,
-      iconColor: COLORS.primary,
-      iconBg: "#FFFFFF",
-    },
-  };
-  const s = stylesMap[type] || stylesMap.error;
-  return (
-    <View
-      className="mb-6 flex-row gap-4 rounded-2xl border p-5"
-      style={{ backgroundColor: s.bg, borderColor: s.border }}
-    >
-      <View
-        className="h-10 w-10 items-center justify-center rounded-xl"
-        style={{
-          backgroundColor: s.iconBg,
-          borderColor: s.border,
-          borderWidth: 1,
-        }}
-      >
-        <Icon size={20} color={s.iconColor} />
-      </View>
-      <View className="flex-1 justify-center">
-        <Text className="text-sm font-bold" style={{ color: s.color }}>
-          {title}
-        </Text>
-        <Text
-          className="mt-1 text-sm leading-5 opacity-90"
-          style={{ color: s.color }}
-        >
-          {message}
-        </Text>
-        {footer && (
-          <Text
-            className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-70"
-            style={{ color: s.color }}
-          >
-            {footer}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-};
-
-const PlanStatusBadge = ({ status }: { status: string }) => {
-  const sMap: any = {
-    APPROVED: {
-      bg: COLORS.stateSuccessBg,
-      color: COLORS.primaryDark,
-      border: COLORS.primaryBorder,
-      text: "Approved",
-      icon: CheckCircle,
-    },
-    PENDING_APPROVAL: {
-      bg: COLORS.primaryLight,
-      color: COLORS.primary,
-      border: COLORS.primaryBorder,
-      text: "Pending Approval",
-      icon: Clock,
-    },
-    REJECTED: {
-      bg: COLORS.stateErrorBg,
-      color: COLORS.stateErrorText,
-      border: COLORS.border,
-      text: "Rejected",
-      icon: X,
-    },
-    CHANGE_REQUESTED: {
-      bg: COLORS.stateWarningBg,
-      color: COLORS.stateWarningText,
-      border: COLORS.border,
-      text: "Changes Requested",
-      icon: MessageSquare,
-    },
-  };
-  const s = sMap[status] || {
-    bg: "#F1F5F9",
-    color: "#475569",
-    border: "#E2E8F0",
-    text: "Draft",
-    icon: FileText,
-  };
-  return (
-    <View
-      className="flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
-      style={{ backgroundColor: s.bg, borderColor: s.border }}
-    >
-      <s.icon size={14} color={s.color} />
-      <Text
-        className="text-xs font-bold uppercase tracking-wide"
-        style={{ color: s.color }}
-      >
-        {s.text}
-      </Text>
-    </View>
-  );
-};
-
-const StatusBadge = ({
-  status,
-  count = 0,
-}: {
-  status: string;
-  count?: number;
-}) => {
-  const base = (
-    <View
-      className={`h-7 w-7 items-center justify-center rounded-full border ${status === "COMPLETED" ? "border-blue-200 bg-blue-50" : status === "PLANNED" ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-slate-100"}`}
-    >
-      {status === "COMPLETED" ? (
-        <Check size={14} color={COLORS.primary} />
-      ) : status === "PLANNED" ? (
-        <Clock size={14} color={COLORS.primary} />
-      ) : (
-        <Text className="text-[11px] font-bold text-slate-400">—</Text>
-      )}
-    </View>
-  );
-  if (count <= 0) return base;
-  return (
-    <View className="relative">
-      {base}
-      <View
-        style={{
-          position: "absolute",
-          top: -6,
-          right: -6,
-          minWidth: 16,
-          height: 16,
-          paddingHorizontal: 3,
-          borderRadius: 8,
-          backgroundColor: COLORS.primaryDark,
-          borderWidth: 1.5,
-          borderColor: "#FFFFFF",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 9,
-            fontWeight: "800",
-            color: "#FFFFFF",
-            lineHeight: 11,
-          }}
-        >
-          {count > 99 ? "99+" : count}
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-const ActionModal = ({
-  isOpen,
-  onClose,
-  title,
-  description,
-  icon: Icon,
-  iconColor,
-  iconBg,
-  value,
-  setValue,
-  placeholder,
-  onSubmit,
-  submitLabel,
-  submitBg,
-  submitting,
-}: any) => {
-  if (!isOpen) return null;
-  return (
-    <Modal
-      visible={isOpen}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        className="flex-1 items-center justify-center bg-slate-900/30 p-6"
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          className="w-full max-w-md overflow-hidden rounded-3xl bg-white"
-          style={{
-            shadowColor: "#0F172A",
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.05,
-            shadowRadius: 20,
-            elevation: 10,
-          }}
-        >
-          <View className="flex-row items-center gap-4 border-b border-slate-100 p-6">
-            <View
-              className="h-12 w-12 items-center justify-center rounded-2xl border border-slate-100"
-              style={{ backgroundColor: iconBg }}
-            >
-              <Icon size={22} color={iconColor} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-lg font-bold text-slate-900">{title}</Text>
-              <Text className="mt-1 text-sm text-slate-500">{description}</Text>
-            </View>
-          </View>
-          <View className="p-6">
-            <TextInput
-              className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800"
-              value={value}
-              onChangeText={setValue}
-              multiline
-              numberOfLines={5}
-              placeholder={placeholder}
-              placeholderTextColor="#94A3B8"
-              textAlignVertical="top"
-            />
-          </View>
-          <View className="flex-row justify-end gap-3 border-t border-slate-100 bg-slate-50/50 p-6">
-            <TouchableOpacity
-              onPress={onClose}
-              className="h-11 justify-center rounded-xl border border-slate-200 bg-white px-6"
-              activeOpacity={0.7}
-            >
-              <Text className="text-sm font-semibold text-slate-600">
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onSubmit}
-              disabled={!value.trim() || submitting}
-              className="h-11 flex-row items-center justify-center gap-2 rounded-xl px-6"
-              style={{
-                backgroundColor:
-                  !value.trim() || submitting ? "#CBD5E1" : submitBg,
-                opacity: !value.trim() || submitting ? 0.7 : 1,
-              }}
-              activeOpacity={0.8}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Icon size={16} color="#FFF" />
-              )}
-              <Text className="text-sm font-semibold text-white">
-                {submitLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-};
-
-const StatusChip = ({ status }: { status: string }) => {
-  const map: any = {
-    DRAFT: { bg: "#F1F5F9", color: "#475569" },
-    PENDING_LA_CONFIRMATION: { bg: "#FEF3C7", color: "#92400E" },
-    PENDING_APPROVAL: { bg: "#FEF3C7", color: "#92400E" },
-    CONFIRMED_BY_LA: { bg: "#DBEAFE", color: "#1E40AF" },
-    APPROVED: { bg: "#DCFCE7", color: "#166534" },
-    REJECTED: { bg: "#FEE2E2", color: "#991B1B" },
-    FEASIBILITY_REJECTED: { bg: "#FEE2E2", color: "#991B1B" },
-    CHANGE_REQUESTED: { bg: "#FEF3C7", color: "#92400E" },
-  };
-  const s = map[status] || { bg: "#F1F5F9", color: "#475569" };
-  return (
-    <View
-      style={{
-        backgroundColor: s.bg,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-      }}
-    >
-      <Text style={{ color: s.color, fontSize: 10, fontWeight: "700" }}>
-        {status?.replace(/_/g, " ")}
-      </Text>
-    </View>
-  );
-};
-
-const ScheduleCard = ({ item }: { item: any }) => {
-  const formatDate = (d: any) => {
-    if (!d) return "—";
-    try {
-      return new Date(d).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return String(d);
-    }
-  };
-  const teamNames = Array.isArray(item.coAuditorNames)
-    ? item.coAuditorNames.filter((n: string) => n !== item.auditorName)
-    : [];
-  const auditeeNames = Array.isArray(item.auditeeNames)
-    ? item.auditeeNames
-    : item.auditeeName
-      ? [item.auditeeName]
-      : [];
-
-  return (
-    <View className="mb-3 rounded-xl border border-slate-200 bg-white p-4">
-      <View className="mb-2 flex-row items-start justify-between gap-2">
-        <View className="flex-1">
-          <Text className="text-sm font-bold text-slate-900">
-            {item.department || "—"}
-          </Text>
-          <Text className="mt-0.5 text-xs text-slate-500">
-            {item.auditType || "General Audit"}
-          </Text>
-        </View>
-        <StatusChip status={item.detailedApprovalStatus || item.status} />
-      </View>
-      <View className="mt-2 gap-1.5">
-        <View className="flex-row items-center gap-2">
-          <Calendar size={13} color="#64748B" />
-          <Text className="text-xs text-slate-600">
-            {formatDate(item.scheduledDate)}
-            {item.week ? `  •  ${item.week}` : ""}
-          </Text>
-        </View>
-        {(item.startTime || item.endTime) && (
-          <View className="flex-row items-center gap-2">
-            <Clock size={13} color="#64748B" />
-            <Text className="text-xs text-slate-600">
-              {item.startTime || "—"} – {item.endTime || "—"}
-            </Text>
-          </View>
-        )}
-        <View className="flex-row items-center gap-2">
-          <Text className="text-[11px] font-semibold text-slate-500">
-            AUDITOR:
-          </Text>
-          <Text className="flex-1 text-xs text-slate-700">
-            {item.auditorName || "—"}
-          </Text>
-        </View>
-        {teamNames.length > 0 && (
-          <View className="flex-row items-center gap-2">
-            <Text className="text-[11px] font-semibold text-slate-500">
-              TEAM:
-            </Text>
-            <Text className="flex-1 text-xs text-slate-700">
-              {teamNames.join(", ")}
-            </Text>
-          </View>
-        )}
-        {auditeeNames.length > 0 && (
-          <View className="flex-row items-center gap-2">
-            <Text className="text-[11px] font-semibold text-slate-500">
-              AUDITEE:
-            </Text>
-            <Text className="flex-1 text-xs text-slate-700">
-              {auditeeNames.join(", ")}
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
-
-const ScheduleDetailsModal = ({
-  visible,
-  onClose,
-  auditElement,
-  month,
-  year,
-  loading,
-  error,
-  schedules,
-}: any) => {
-  if (!visible) return null;
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        className="flex-1 items-center justify-center bg-slate-900/40 p-4"
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white"
-          style={{
-            maxHeight: "85%",
-            shadowColor: "#0F172A",
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.15,
-            shadowRadius: 20,
-            elevation: 12,
-          }}
-        >
-          <View className="flex-row items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
-            <View className="flex-1">
-              <Text className="text-base font-bold text-slate-900">
-                {auditElement}
-              </Text>
-              <Text className="mt-0.5 text-xs text-slate-500">
-                {month} {year} · {schedules.length} schedule
-                {schedules.length !== 1 ? "s" : ""}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={onClose}
-              className="h-9 w-9 items-center justify-center rounded-lg bg-white"
-              activeOpacity={0.7}
-            >
-              <X size={18} color="#475569" />
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            className="px-5 py-4"
-            style={{ maxHeight: 520 }}
-            showsVerticalScrollIndicator={true}
-          >
-            {loading && (
-              <View className="items-center py-10">
-                <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text className="mt-3 text-sm text-slate-500">
-                  Loading schedules...
-                </Text>
-              </View>
-            )}
-            {!loading && error && (
-              <View className="items-center py-10">
-                <AlertCircle size={32} color="#94A3B8" />
-                <Text className="mt-3 text-sm text-slate-500">{error}</Text>
-              </View>
-            )}
-            {!loading && !error && schedules.length === 0 && (
-              <View className="items-center py-10">
-                <FileText size={32} color="#CBD5E1" />
-                <Text className="mt-3 text-sm font-medium text-slate-500">
-                  No schedules yet
-                </Text>
-                <Text className="mt-1 px-6 text-center text-xs text-slate-400">
-                  No detailed schedules for this audit element in {month}.
-                  Create them from Form 5 (Daily Schedule).
-                </Text>
-              </View>
-            )}
-            {!loading &&
-              !error &&
-              schedules.map((s: any) => <ScheduleCard key={s.id} item={s} />)}
-          </ScrollView>
-          <View className="border-t border-slate-200 bg-slate-50 px-5 py-3">
-            <TouchableOpacity
-              onPress={onClose}
-              className="h-10 items-center justify-center rounded-lg bg-slate-900"
-              activeOpacity={0.8}
-            >
-              <Text className="text-sm font-semibold text-white">Close</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-};
-
-const OutlineButton = ({
-  title,
-  icon: Icon,
-  onPress,
-  disabled = false,
-  loading = false,
-}: any) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const isH = isHovered && !disabled;
-  const webHoverProps =
-    Platform.OS === "web"
-      ? {
-          onMouseEnter: () => !disabled && setIsHovered(true),
-          onMouseLeave: () => setIsHovered(false),
-        }
-      : {};
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      onPressIn={() => !disabled && setIsHovered(true)}
-      onPressOut={() => !disabled && setIsHovered(false)}
-      {...webHoverProps}
-      disabled={disabled || loading}
-      className="flex-row items-center gap-2 rounded-lg border px-2 py-2.5"
-      style={{
-        borderColor: isH ? "#2563EB" : "#D1D5DB",
-        backgroundColor: isH ? "rgba(37, 99, 235, 0.1)" : "transparent",
-        borderWidth: 1,
-        opacity: disabled ? 0.5 : 1,
-      }}
-      activeOpacity={0.8}
-    >
-      {loading ? (
-        <ActivityIndicator size="small" color="#2563EB" />
-      ) : Icon ? (
-        <Icon size={16} color={isH ? "#2563EB" : "#6B7280"} />
-      ) : null}
-      <Text
-        className="text-sm font-semibold"
-        style={{ color: isH ? "#2563EB" : "#111827" }}
-      >
-        {title}
-      </Text>
-    </TouchableOpacity>
-  );
-};
-
-const MarqueeText = ({ text, style }: { text: string; style?: any }) => {
-  const [offset, setOffset] = useState(0);
-  const [textWidth, setTextWidth] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
-  useEffect(() => {
-    if (
-      textWidth === 0 ||
-      containerWidth === 0 ||
-      textWidth <= containerWidth
-    ) {
-      setOffset(0);
-      return;
-    }
-    const cycle = textWidth + 60;
-    const interval = setInterval(
-      () => setOffset((prev) => (prev - 0.6 <= -cycle ? 0 : prev - 0.6)),
-      16,
-    );
-    return () => clearInterval(interval);
-  }, [textWidth, containerWidth]);
-  return (
-    <View
-      style={[
-        {
-          width: "100%",
-          height: 30,
-          overflow: "hidden",
-          justifyContent: "center",
-        },
-        style,
-      ]}
-      onLayout={(e) => {
-        const w = e.nativeEvent.layout.width;
-        if (w > 0 && Math.abs(w - containerWidth) > 1) setContainerWidth(w);
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          transform: [{ translateX: offset }],
-        }}
-      >
-        <Text
-          numberOfLines={1}
-          allowFontScaling={false}
-          style={{
-            fontSize: 20,
-            fontWeight: "bold",
-            color: "#0F172A",
-            marginRight: 60,
-            flexShrink: 0,
-          }}
-          onLayout={(e) => {
-            const w = e.nativeEvent.layout.width;
-            if (w > 0 && Math.abs(w - textWidth) > 1) setTextWidth(w);
-          }}
-        >
-          {text}
-        </Text>
-        <Text
-          numberOfLines={1}
-          allowFontScaling={false}
-          style={{
-            fontSize: 20,
-            fontWeight: "bold",
-            color: "#0F172A",
-            marginRight: 60,
-            flexShrink: 0,
-          }}
-        >
-          {text}
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-const MonthCellTooltip = ({
-  visible,
-  month,
-  year,
-  status,
-  auditElement,
-  count,
-  anchor,
-}: any) => {
-  if (!visible || !anchor || Platform.OS !== "web") return null;
-
-  const W = 240;
-  const [tooltipHeight, setTooltipHeight] = useState(0);
-  const TAIL = 12;
-  const GAP = 12;
-  const viewportWidth =
-    typeof window !== "undefined" ? window.innerWidth : 1024;
-
-  // Center the tooltip over the hovered cell while keeping it on-screen.
-  const left = Math.max(8, Math.min(anchor.x - W / 2, viewportWidth - W - 8));
-
-  // Keep the pointer aligned with the hovered cell.
-  const tailX = Math.max(20, Math.min(W - 20, anchor.x - left));
-
-  const statusColor =
-    status === "COMPLETED" ? COLORS.primaryDark : COLORS.primary;
-  const statusBg =
-    status === "COMPLETED" ? COLORS.stateSuccessBg : COLORS.primaryLight;
-
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: "fixed" as any,
-        left,
-        // Show the tooltip below the hovered cell.
-        top: Math.max(8, anchor.y - tooltipHeight - GAP - TAIL),
-        width: W,
-        zIndex: 999999,
-        elevation: 20,
-      }}
-    >
-      {/* Pointer border */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: -TAIL,
-          left: tailX - TAIL,
-          width: 0,
-          height: 0,
-          borderLeftWidth: TAIL,
-          borderRightWidth: TAIL,
-          borderTopWidth: TAIL,
-          borderLeftColor: "transparent",
-          borderRightColor: "transparent",
-          borderTopColor: COLORS.border,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: -TAIL + 1,
-          left: tailX - TAIL + 1,
-          width: 0,
-          height: 0,
-          borderLeftWidth: TAIL - 1,
-          borderRightWidth: TAIL - 1,
-          borderTopWidth: TAIL - 1,
-          borderLeftColor: "transparent",
-          borderRightColor: "transparent",
-          borderTopColor: "#FFFFFF",
-        }}
-      />
-
-      {/* Tooltip card */}
-      <View
-        onLayout={(event) => {
-          setTooltipHeight(event.nativeEvent.layout.height);
-        }}
-        style={{
-          backgroundColor: "#FFFFFF",
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: COLORS.border,
-          padding: 12,
-          shadowColor: "#000000",
-          shadowOpacity: 0.12,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: 5,
-        }}
-      >
-        <View className="mb-2 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-1.5">
-            <Calendar size={13} color={COLORS.primary} />
-            <Text className="text-[13px] font-bold text-slate-900">
-              {month} {year}
-            </Text>
-          </View>
-
-          <View
-            style={{
-              backgroundColor: statusBg,
-              paddingHorizontal: 6,
-              paddingVertical: 2,
-              borderRadius: 5,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 9,
-                fontWeight: "700",
-                color: statusColor,
-              }}
-            >
-              {status === "COMPLETED" ? "Completed" : "Planned"}
-            </Text>
-          </View>
-        </View>
-
-        <Text
-          className="text-[11px] font-semibold text-slate-500"
-          numberOfLines={2}
-        >
-          {auditElement}
-        </Text>
-
-        <View className="mt-2 flex-row items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5">
-          <Clock size={13} color={COLORS.primary} />
-          <Text className="text-[11px] font-bold text-blue-800">
-            {count} audit schedule{count !== 1 ? "s" : ""}
-          </Text>
-        </View>
-
-        <Text className="mt-2 text-[10px] text-slate-400">
-          Click to view schedules
-        </Text>
-      </View>
-    </View>
-  );
-};
 
 // ═════ MAIN COMPONENT ═════
 export default function Form3View({
@@ -882,7 +103,6 @@ export default function Form3View({
   const [showYearModal, setShowYearModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
 
-  // ✅ FIXED TYPES HERE
   const [detailsModal, setDetailsModal] = useState<{
     visible: boolean;
     auditElement: string;
@@ -898,6 +118,12 @@ export default function Form3View({
     schedules: [],
     error: null,
   });
+
+  // ═════ CONFIRM MODAL STATE (for PLANNED → COMPLETED) ═════
+  const [pendingComplete, setPendingComplete] = useState<{
+    elementIndex: number;
+    month: string;
+  } | null>(null);
 
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -1223,17 +449,51 @@ export default function Form3View({
     }
   };
 
+  // ═════ CLICK-TO-EDIT: cycle status with confirm for irreversible COMPLETED ═════
   const handleStatusChange = (elementIndex: number, monthName: string) => {
     if (!canEdit) return;
-    const newPlanData = [...planData];
-    const element = newPlanData[elementIndex];
+    const element = planData[elementIndex];
     if (!element) return;
     const mIdx = element.months.findIndex((m) => m.month === monthName);
     if (mIdx === -1) return;
-    const c = element.months[mIdx].status;
-    element.months[mIdx].status =
-      c === "" ? "PLANNED" : c === "PLANNED" ? "COMPLETED" : "";
+
+    const current = element.months[mIdx].status;
+
+    // Require confirmation before marking COMPLETED (irreversible-ish)
+    if (current === "PLANNED") {
+      setPendingComplete({ elementIndex, month: monthName });
+      return;
+    }
+
+    // Empty → PLANNED, or COMPLETED → "" : apply directly
+    const newPlanData = [...planData];
+    const nextStatus = current === "COMPLETED" ? "" : "PLANNED";
+    newPlanData[elementIndex].months[mIdx].status = nextStatus;
     setPlanData(newPlanData);
+
+    addToast(
+      nextStatus === "PLANNED"
+        ? `Marked ${monthName} as PLANNED`
+        : `Cleared ${monthName}`,
+      "info",
+    );
+  };
+
+  const confirmMarkCompleted = () => {
+    if (!pendingComplete) return;
+    const { elementIndex, month } = pendingComplete;
+    const newPlanData = [...planData];
+    const mIdx = newPlanData[elementIndex].months.findIndex(
+      (m) => m.month === month,
+    );
+    if (mIdx === -1) {
+      setPendingComplete(null);
+      return;
+    }
+    newPlanData[elementIndex].months[mIdx].status = "COMPLETED";
+    setPlanData(newPlanData);
+    setPendingComplete(null);
+    addToast(`Marked ${month} as COMPLETED`, "success");
   };
 
   const handleApprove = async () => {
@@ -1379,6 +639,13 @@ export default function Form3View({
       planStatus === "CHANGE_REQUESTED");
   const canSubmit = canEdit && totalPlanned > 0;
   const canApprove = isTopManagement && planStatus === "PENDING_APPROVAL";
+
+  // ═════ Safety: if plan becomes editable, kill any visible tooltip ═════
+  useEffect(() => {
+    if (canEdit && tooltip.visible) {
+      setTooltip((p) => ({ ...p, visible: false }));
+    }
+  }, [canEdit]);
 
   if (loading)
     return (
@@ -1724,23 +991,16 @@ export default function Form3View({
                       const count =
                         scheduleCounts[element.auditElement]?.[month] || 0;
 
-                      // 🖥️ Web hover logic
+                      const isPlanning = canEdit;
+
+                      // Hover/tooltip ONLY in locked (read-only) mode
                       const webProps =
-                        Platform.OS === "web"
+                        Platform.OS === "web" && !isPlanning
                           ? {
                               // @ts-ignore
                               onMouseEnter: (e: any) => {
-                                if (count === 0) {
-                                  setTooltip((prev) => ({
-                                    ...prev,
-                                    visible: false,
-                                  }));
-                                  return;
-                                }
-
                                 const rect =
                                   e.currentTarget?.getBoundingClientRect?.();
-
                                 if (rect) {
                                   setTooltip({
                                     visible: true,
@@ -1755,33 +1015,74 @@ export default function Form3View({
                                   });
                                 }
                               },
-
                               // @ts-ignore
-                              onMouseLeave: (e: any) => {
-                                // Only hide if we are leaving THIS exact cell
-                                if (count > 0)
-                                  setTooltip((p: any) =>
-                                    p.month === month &&
-                                    p.auditElement === element.auditElement
-                                      ? { ...p, visible: false }
-                                      : p,
-                                  );
+                              onMouseLeave: () => {
+                                setTooltip((p: any) =>
+                                  p.month === month &&
+                                  p.auditElement === element.auditElement
+                                    ? { ...p, visible: false }
+                                    : p,
+                                );
                               },
                             }
                           : {};
 
+                      // Click = edit in planning mode, drill-down in locked mode
+                      const onCellClick = () => {
+                        if (isPlanning) {
+                          handleStatusChange(elementIndex, month);
+                        } else {
+                          handleCellPress(element.auditElement, month);
+                        }
+                      };
+
+                      // Keyboard a11y (web) — works in both modes
+                      const keyboardProps =
+                        Platform.OS === "web"
+                          ? {
+                              // @ts-ignore
+                              tabIndex: 0,
+                              // @ts-ignore
+                              onKeyDown: (e: any) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  onCellClick();
+                                }
+                              },
+                            }
+                          : {};
+
+                      const a11yLabel = isPlanning
+                        ? `${element.auditElement}, ${month}: ${
+                            status || "not planned"
+                          }. Activate to change status.`
+                        : `${element.auditElement}, ${month}: ${
+                            status || "not planned"
+                          }. ${count} schedule${
+                            count !== 1 ? "s" : ""
+                          }. Activate to view schedules.`;
+
                       return (
                         <TouchableOpacity
                           key={month}
-                          className={`w-[72.5px] items-center justify-center p-3 ${idx === 11 ? "" : "border-r border-slate-200"}`}
-                          onPress={() =>
-                            handleCellPress(element.auditElement, month)
+                          className={`w-[72.5px] items-center justify-center p-3 ${
+                            idx === 11 ? "" : "border-r border-slate-200"
+                          }`}
+                          style={
+                            isPlanning
+                              ? {
+                                  cursor:
+                                    Platform.OS === "web"
+                                      ? ("pointer" as any)
+                                      : undefined,
+                                }
+                              : undefined
                           }
-                          onLongPress={() =>
-                            handleStatusChange(elementIndex, month)
-                          }
-                          delayLongPress={350}
+                          onPress={onCellClick}
                           {...webProps}
+                          {...keyboardProps}
+                          accessibilityRole="button"
+                          accessibilityLabel={a11yLabel}
                           activeOpacity={0.7}
                         >
                           <StatusBadge status={status} count={count} />
@@ -1839,6 +1140,14 @@ export default function Form3View({
                 </View>
                 <Text className="text-sm text-slate-600">
                   Schedules scheduled
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-2">
+                <Eye size={13} color={COLORS.primary} />
+                <Text className="text-xs text-slate-500">
+                  {canEdit
+                    ? "Click a cell to change status"
+                    : "Click a cell to view schedules · Hover for details"}
                 </Text>
               </View>
             </View>
@@ -2110,6 +1419,20 @@ export default function Form3View({
         submitting={submitting}
       />
 
+      {/* Confirm: PLANNED → COMPLETED */}
+      <ConfirmModal
+        isOpen={!!pendingComplete}
+        onClose={() => setPendingComplete(null)}
+        onConfirm={confirmMarkCompleted}
+        title="Mark as Completed?"
+        message={`This will mark ${
+          pendingComplete?.month || ""
+        } as COMPLETED. You can still clear it later, but Completed usually means the audit has been performed.`}
+        confirmLabel="Mark Completed"
+        confirmBg={COLORS.primary}
+        icon={CheckCircle}
+      />
+
       <ScheduleDetailsModal
         visible={detailsModal.visible}
         onClose={() =>
@@ -2130,15 +1453,18 @@ export default function Form3View({
         schedules={detailsModal.schedules}
       />
 
-      <MonthCellTooltip
-        visible={tooltip.visible}
-        month={tooltip.month}
-        year={selectedYear}
-        status={tooltip.status}
-        auditElement={tooltip.auditElement}
-        count={tooltip.count}
-        anchor={tooltip.anchor}
-      />
+      {/* Tooltip only renders in locked (read-only) mode */}
+      {!canEdit && (
+        <MonthCellTooltip
+          visible={tooltip.visible}
+          month={tooltip.month}
+          year={selectedYear}
+          status={tooltip.status}
+          auditElement={tooltip.auditElement}
+          count={tooltip.count}
+          anchor={tooltip.anchor}
+        />
+      )}
 
       <Modal
         visible={showYearModal}

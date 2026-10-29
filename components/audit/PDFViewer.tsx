@@ -1891,12 +1891,20 @@ export default function PDFViewer({
 
   const displayForums = userForums.length > 0 ? userForums : forumGroups;
 
-  // ---- PDF URI ----
   const getPDFUri = (): string => {
     if (!pdfData) return "";
-    if (pdfData.startsWith("data:application/pdf")) return pdfData;
-    if (pdfData.startsWith("http")) return pdfData;
-    return `data:application/pdf;base64,${pdfData}`;
+
+    const s = String(pdfData);
+
+    // ✅ NEW: only pass-through blob URLs on web
+    if (Platform.OS === "web" && s.startsWith("blob:")) return s;
+    // ✅ NEW: only pass-through file URIs on native
+    if (Platform.OS !== "web" && s.startsWith("file://")) return s;
+
+    // ⬇️ EVERYTHING BELOW IS EXACTLY AS BEFORE — untouched
+    if (s.startsWith("data:application/pdf")) return s;
+    if (s.startsWith("http")) return s;
+    return `data:application/pdf;base64,${s}`;
   };
 
   // In PDFViewer.tsx - Updated getShareableLink

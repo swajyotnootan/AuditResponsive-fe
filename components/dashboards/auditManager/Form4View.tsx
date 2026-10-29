@@ -21,7 +21,6 @@ import {
   MoreVertical,
   Plus,
   RefreshCw,
-  Repeat,
   Save,
   Send,
   Star,
@@ -359,34 +358,65 @@ const PlanStatusBadge = ({ status }: { status: string }) => {
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
-  if (status === "COMPLETED") {
-    return (
-      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
-        <Check size={14} color={COLORS.primary} />
-      </View>
-    );
-  }
-  if (status === "PLANNED") {
-    return (
-      <View className="h-7 w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
-        <Clock size={14} color={COLORS.primary} />
-      </View>
-    );
-  }
-  if (status === "RESCHEDULED") {
-    return (
-      <View className="h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
-        <Repeat size={14} color={COLORS.textMuted} />
-      </View>
-    );
-  }
+  const isPlanned = status === "PLANNED";
+  const isCompleted = status === "COMPLETED";
+  const isRescheduled = status === "RESCHEDULED";
+
+  // Exact match to Form3View / PlanDetailsModal styles
+  const badgeStyle = isCompleted
+    ? {
+        backgroundColor: "#BFDBFE", // COLORS.blue200
+        borderColor: "#2563EB", // COLORS.primary
+      }
+    : isPlanned
+      ? {
+          backgroundColor: "#EFF6FF", // COLORS.primaryLight
+          borderColor: "#DBEAFE", // COLORS.primaryBorder
+        }
+      : isRescheduled
+        ? {
+            backgroundColor: "#F1F5F9", // Gray for Rescheduled
+            borderColor: "#E2E8F0",
+          }
+        : {
+            backgroundColor: "#F8FAFC", // COLORS.bg
+            borderColor: "#E2E8F0", // COLORS.border
+          };
+
   return (
-    <View className="h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
-      <Text className="text-[11px] font-bold text-slate-400">—</Text>
+    <View
+      style={[
+        {
+          width: 28,
+          height: 28,
+          borderRadius: 6,
+          borderWidth: 1,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        badgeStyle,
+      ]}
+    >
+      {isCompleted ? (
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E3A8A" }}>
+          C
+        </Text>
+      ) : isPlanned ? (
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#1E3A8A" }}>
+          P
+        </Text>
+      ) : isRescheduled ? (
+        <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748B" }}>
+          R
+        </Text>
+      ) : (
+        <Text style={{ fontSize: 14, fontWeight: "500", color: "#94A3B8" }}>
+          —
+        </Text>
+      )}
     </View>
   );
 };
-
 const ActionModal = ({
   isOpen,
   onClose,
@@ -2206,20 +2236,79 @@ export default function Form4View({
               </Text>
               <View className="flex-row flex-wrap gap-4">
                 <View className="flex-row items-center gap-2">
-                  <View className="h-4 w-4 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
-                    <Clock size={10} color={COLORS.primary} />
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      borderWidth: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#EFF6FF",
+                      borderColor: "#DBEAFE",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: "#1E3A8A",
+                      }}
+                    >
+                      P
+                    </Text>
                   </View>
                   <Text className="text-sm text-slate-600">P - Planned</Text>
                 </View>
+
                 <View className="flex-row items-center gap-2">
-                  <View className="h-4 w-4 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
-                    <Check size={10} color={COLORS.primary} />
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      borderWidth: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#BFDBFE",
+                      borderColor: "#2563EB",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: "#1E3A8A",
+                      }}
+                    >
+                      C
+                    </Text>
                   </View>
                   <Text className="text-sm text-slate-600">C - Completed</Text>
                 </View>
+
                 <View className="flex-row items-center gap-2">
-                  <View className="h-4 w-4 items-center justify-center rounded-full border border-slate-200 bg-slate-100">
-                    <Repeat size={10} color={COLORS.textMuted} />
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      borderWidth: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#F1F5F9",
+                      borderColor: "#E2E8F0",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: "#64748B",
+                      }}
+                    >
+                      R
+                    </Text>
                   </View>
                   <Text className="text-sm text-slate-600">
                     R - Rescheduled

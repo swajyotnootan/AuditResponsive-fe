@@ -1415,7 +1415,7 @@ export default function LoginScreen() {
       "@logout_reason",
       "You have been automatically logged out due to 15 minutes of inactivity.",
     );
-    router.replace("/(auth)/login" as any);
+    router.replace("/auth/login" as any);
   }, []);
 
   const resetTimer = useCallback(() => {

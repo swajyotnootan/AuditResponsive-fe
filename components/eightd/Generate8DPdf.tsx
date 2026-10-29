@@ -182,12 +182,16 @@ export default function Generate8DPdf({
     }
   };
 
+  // src/eightd/Generate8DPdf.tsx  (or wherever this file lives)
+
   const handleViewPDF = async () => {
     if (!eventId) {
       Alert.alert("Error", "Event ID is missing.");
       return;
     }
+
     setGenerating(true);
+
     try {
       const payload = {
         title: title || "8D_Report",
@@ -195,6 +199,31 @@ export default function Generate8DPdf({
         formData: formData || {},
       };
 
+      const fileName = `${title || "8D_Report"}.pdf`;
+
+      // ════════════════════════════════════════════════════════════
+      // WEB — keep the existing blob-URL flow, it works perfectly
+      // ════════════════════════════════════════════════════════════
+      if (Platform.OS === "web") {
+        const response = await axios.post(
+          `${API_BASE_URL}/api/eightd/generate-pdf`,
+          payload,
+          { responseType: "blob" },
+        );
+
+        const blobUrl = URL.createObjectURL(response.data);
+
+        setPDFViewer({
+          visible: true,
+          pdfData: blobUrl,
+          fileName,
+        });
+        return;
+      }
+
+      // ════════════════════════════════════════════════════════════
+      // NATIVE (Android / iOS) — no Blob, write to disk instead
+      // ════════════════════════════════════════════════════════════
       const response = await axios.post(
         `${API_BASE_URL}/api/eightd/generate-pdf`,
         payload,
@@ -203,7 +232,7 @@ export default function Generate8DPdf({
 
       const buffer: ArrayBuffer = response.data;
 
-      // ✅ Verify it's a real PDF
+      // ✅ Sanity check: verify it's a real PDF
       const head = new TextDecoder("utf-8").decode(buffer.slice(0, 5));
       console.log("🔎 [8D] PDF header:", head);
       if (!head.startsWith("%PDF-")) {
@@ -213,18 +242,71 @@ export default function Generate8DPdf({
         return;
       }
 
-      // ✅ Blob URL (no base64, no data: URI size limits, no encoding drift)
-      const blob = new Blob([buffer], { type: "application/pdf" });
-      const blobUrl = URL.createObjectURL(blob);
-      console.log("✅ [8D] Blob URL:", blobUrl, "size:", blob.size);
+      // ✅ Convert ArrayBuffer → base64 (no Blob involved)
+      const uint8Array = new Uint8Array(buffer);
+      let binary = "";
+      const chunkSize = 0x8000; // avoid call-stack overflow for large PDFs
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(
+          null,
+          Array.from(uint8Array.subarray(i, i + chunkSize)) as any,
+        );
+      }
+      const base64 = btoa(binary);
 
+      // ✅ Write to a real file:  file:///...
+      const fs = FileSystem as any;
+      const directory = fs.cacheDirectory || fs.documentDirectory;
+      if (!directory) {
+        Alert.alert("Error", "Storage not available.");
+        return;
+      }
+      const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const fileUri = `${directory}8D_${eventId}_${safeName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, base64, {
+        encoding: "base64" as any,
+      });
+
+      // ✅ Verify the file exists
+      const info = await FileSystem.getInfoAsync(fileUri);
+      if (!info.exists || (info as any).size === 0) {
+        Alert.alert("Error", "PDF file was not created.");
+        return;
+      }
+
+      console.log("✅ [8D] Saved PDF to:", fileUri);
+
+      // ✅ Pass file:// URI — PDFViewer.getPDFUri already returns it untouched
       setPDFViewer({
         visible: true,
-        pdfData: blobUrl, // ← now a blob: URL
-        fileName: `${title || "8D_Report"}.pdf`,
+        pdfData: fileUri,
+        fileName,
       });
     } catch (error: any) {
       console.error("Error viewing PDF:", error);
+
+      // Keep the detailed backend-error logging you already had
+      if (error?.response) {
+        try {
+          if (error.response.data instanceof Blob) {
+            const errorText = await error.response.data.text();
+            console.error("❌ JAVA BACKEND STACK TRACE:", errorText);
+            Alert.alert("Backend Crashed (500)", errorText.substring(0, 300));
+            return;
+          }
+          if (error.response.data instanceof ArrayBuffer) {
+            const decoder = new TextDecoder("utf-8");
+            const errorText = decoder.decode(error.response.data);
+            console.error("❌ JAVA BACKEND STACK TRACE:", errorText);
+            Alert.alert("Backend Crashed (500)", errorText.substring(0, 300));
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+
       Alert.alert("Error", "Failed to load PDF");
     } finally {
       setGenerating(false);

@@ -3,9 +3,12 @@ import { Platform, StyleSheet } from "react-native";
 export const COLORS = {
   primary: "#2563EB",
   primaryLight: "#EFF6FF",
-  textMain: "#0F172A", // Very dark blue/black
-  textSub: "#64748B", // Cool gray
+  primaryDark: "#1E3A8A",
+  textValue: "#334155",
+  textMain: "#0F172A",
+  textSub: "#64748B",
   textMuted: "#94A3B8",
+
   bg: "#F8FAFC", // Almost pure white background
   surface: "#FFFFFF",
   border: "#E2E8F0",
@@ -35,7 +38,7 @@ export const styles = StyleSheet.create({
   background: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   scrollView: { flex: 1 },
   scrollContent: { flexGrow: 1 },
-  content: { padding: 24, paddingBottom: 32 },
+  content: { padding: 14, paddingBottom: 32 },
   contentDesktop: {
     maxWidth: 1400,
     width: "100%",
@@ -145,7 +148,7 @@ export const styles = StyleSheet.create({
   },
 
   // Charts
-  chartInnerPadding: { padding: 24 },
+  chartInnerPadding: { padding: 16 },
   chartHeader: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -1,6 +1,5 @@
 // src/screens/LandingPage.tsx
 import { API_BASE_URL } from "@/config/apiConfig";
-import { Picker } from "@react-native-picker/picker";
 import {
   useFocusEffect,
   useNavigation,
@@ -57,6 +56,113 @@ import ForumThreadView from "../forum/ForumThreadView";
 console.log("🚀 LandingPage API Base URL being used:", API_BASE_URL);
 
 const steps = ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"];
+
+// ── Custom dropdown (replaces @react-native-picker/picker) ──
+const SimpleSelect = ({
+  selectedValue,
+  onValueChange,
+  items,
+  placeholder,
+}: {
+  selectedValue: string;
+  onValueChange: (v: string) => void;
+  items: { label: string; value: string }[];
+  placeholder?: string;
+}) => {
+  const [open, setOpen] = useState(false);
+  const current = items.find((i) => i.value === selectedValue);
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+        style={{
+          height: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 12,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          borderRadius: 12,
+          backgroundColor: COLORS.card,
+        }}
+      >
+        <Text
+          style={{ fontSize: 12, color: COLORS.text, flex: 1 }}
+          numberOfLines={1}
+        >
+          {current ? current.label : placeholder || "Select"}
+        </Text>
+        <Text style={{ fontSize: 10, color: COLORS.textMuted, marginLeft: 6 }}>
+          ▼
+        </Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOpen(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "center",
+            padding: 40,
+          }}
+          activeOpacity={1}
+          onPress={() => setOpen(false)}
+        >
+          <View
+            style={{
+              backgroundColor: COLORS.card,
+              borderRadius: 16,
+              maxHeight: 400,
+              overflow: "hidden",
+            }}
+          >
+            <FlatList
+              data={items}
+              keyExtractor={(i) => i.value}
+              renderItem={({ item }) => {
+                const isSelected = item.value === selectedValue;
+                return (
+                  <TouchableOpacity
+                    onPress={() => {
+                      onValueChange(item.value);
+                      setOpen(false);
+                    }}
+                    style={{
+                      padding: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: COLORS.border,
+                      backgroundColor: isSelected
+                        ? COLORS.primaryLight
+                        : COLORS.card,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: isSelected ? COLORS.primary : COLORS.text,
+                        fontWeight: isSelected ? "700" : "500",
+                      }}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </>
+  );
+};
 
 // ═══════════ LEAD AUDITOR DASHBOARD PALETTE (matched) ═══════════
 const COLORS = {
@@ -1932,99 +2038,51 @@ export default function LandingPage({ type }: LandingPageProps) {
                 </View>
 
                 {/* Status Filter */}
-                <View
-                  className="overflow-hidden rounded-xl border"
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: COLORS.card,
-                    borderColor: COLORS.border,
-                  }}
-                >
-                  <Picker
+                <View style={{ flex: 1 }}>
+                  <SimpleSelect
                     selectedValue={statusFilter}
                     onValueChange={setStatusFilter}
-                    mode="dropdown"
-                    style={
-                      {
-                        height: 44,
-                        borderWidth: 0,
-                        backgroundColor: "transparent",
-                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
-                      } as any
-                    }
-                  >
-                    <Picker.Item label="All Status" value="All" />
-                    <Picker.Item label="In Progress" value="In Progress" />
-                    <Picker.Item label="Rejected" value="Rejected" />
-                    <Picker.Item
-                      label="Awaiting Approval"
-                      value="Approval Pending"
-                    />
-                    <Picker.Item label="D0 Approved" value="D0 Approved" />
-                    <Picker.Item label="Closed" value="Closed" />
-                  </Picker>
+                    placeholder="Status"
+                    items={[
+                      { label: "All Status", value: "All" },
+                      { label: "In Progress", value: "In Progress" },
+                      { label: "Rejected", value: "Rejected" },
+                      { label: "Awaiting Approval", value: "Approval Pending" },
+                      { label: "D0 Approved", value: "D0 Approved" },
+                      { label: "Closed", value: "Closed" },
+                    ]}
+                  />
                 </View>
 
                 {/* Step Sort Filter */}
-                <View
-                  className="overflow-hidden rounded-xl border"
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: COLORS.card,
-                    borderColor: COLORS.border,
-                  }}
-                >
-                  <Picker
+                {/* Step Sort Filter */}
+                <View style={{ flex: 1 }}>
+                  <SimpleSelect
                     selectedValue={stepSort}
                     onValueChange={setStepSort}
-                    mode="dropdown"
-                    style={
-                      {
-                        height: 44,
-                        borderWidth: 0,
-                        backgroundColor: "transparent",
-                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
-                      } as any
-                    }
-                  >
-                    <Picker.Item label="All Steps" value="None" />
-                    <Picker.Item label="Sort by Step" value="StepSort" />
-                    {steps.map((s) => (
-                      <Picker.Item key={s} label={s} value={s} />
-                    ))}
-                  </Picker>
+                    placeholder="Step"
+                    items={[
+                      { label: "All Steps", value: "None" },
+                      { label: "Sort by Step", value: "StepSort" },
+                      ...steps.map((s) => ({ label: s, value: s })),
+                    ]}
+                  />
                 </View>
 
                 {/* View Limit Filter */}
-                <View
-                  className="overflow-hidden rounded-xl border"
-                  style={{
-                    flex: 1,
-                    height: 44,
-                    backgroundColor: COLORS.card,
-                    borderColor: COLORS.border,
-                  }}
-                >
-                  <Picker
+                {/* View Limit Filter */}
+                <View style={{ flex: 1 }}>
+                  <SimpleSelect
                     selectedValue={viewLimit}
                     onValueChange={setViewLimit}
-                    mode="dropdown"
-                    style={
-                      {
-                        height: 44,
-                        borderWidth: 0,
-                        backgroundColor: "transparent",
-                        outlineStyle: "none", // ✅ Cast to any below to fix TS error
-                      } as any
-                    }
-                  >
-                    <Picker.Item label="All Events" value="All" />
-                    <Picker.Item label="Last 10" value="10" />
-                    <Picker.Item label="Last 20" value="20" />
-                    <Picker.Item label="Last 50" value="50" />
-                  </Picker>
+                    placeholder="Limit"
+                    items={[
+                      { label: "All Events", value: "All" },
+                      { label: "Last 10", value: "10" },
+                      { label: "Last 20", value: "20" },
+                      { label: "Last 50", value: "50" },
+                    ]}
+                  />
                 </View>
               </View>
             ) : (
@@ -2096,34 +2154,13 @@ export default function LandingPage({ type }: LandingPageProps) {
                       ],
                     },
                   ].map((picker, idx) => (
-                    <View
-                      key={idx}
-                      className="min-w-[140px] overflow-hidden rounded-xl border"
-                      style={{
-                        backgroundColor: COLORS.card,
-                        borderColor: COLORS.border,
-                      }}
-                    >
-                      <Picker
+                    <View key={idx} style={{ minWidth: 140 }}>
+                      <SimpleSelect
                         selectedValue={picker.selectedValue}
                         onValueChange={picker.onValueChange}
-                        mode="dropdown"
-                        style={
-                          {
-                            borderWidth: 0,
-                            backgroundColor: "transparent",
-                            outlineStyle: "none",
-                          } as any
-                        }
-                      >
-                        {picker.items.map((it) => (
-                          <Picker.Item
-                            key={it.value}
-                            label={it.label}
-                            value={it.value}
-                          />
-                        ))}
-                      </Picker>
+                        placeholder="Select"
+                        items={picker.items}
+                      />
                     </View>
                   ))}
                 </ScrollView>

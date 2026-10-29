@@ -21,6 +21,7 @@ import {
   SafeAreaView,
   ScrollView,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -61,14 +62,9 @@ import { COLORS, styles } from "./auditManager/AuditManagerStyles";
 import { useAuditManagerData } from "./auditManager/useAuditManagerData";
 
 // ============================================================
-// Holographic Workflow Step Card
+// Workflow Step Card (inline — stays in this file)
 // ============================================================
-// Replace ONLY the WorkflowStepCard component in your AuditManagerDashboard.tsx
-
-// Replace the WorkflowStepCard component in AuditManagerDashboard.tsx
-
 const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
-  const [hovered, setHovered] = useState(false);
   const isLocked = step.isLocked;
   const isApproved = step.status === "approved";
   const isPending = step.status === "pending";
@@ -83,20 +79,20 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
     statusLabel = "Locked";
     StatusIcon = Lock;
   } else if (isApproved) {
-    statusColor = "#059669"; // Darker green for text contrast
-    statusBg = "#ECFDF5";
+    statusColor = COLORS.primary;
+    statusBg = COLORS.primaryLight;
     statusLabel = "Approved";
     StatusIcon = CheckCircle;
-    iconColor = COLORS.success;
+    iconColor = COLORS.primary;
   } else if (isPending) {
-    statusColor = "#D97706"; // Darker orange for text contrast
-    statusBg = "#FFFBEB";
+    statusColor = COLORS.primary;
+    statusBg = COLORS.primaryLight;
     statusLabel = "Pending";
     StatusIcon = Clock;
-    iconColor = COLORS.warning;
+    iconColor = COLORS.primary;
   } else {
     statusColor = COLORS.primary;
-    statusBg = "#EFF6FF";
+    statusBg = COLORS.primaryLight;
     statusLabel = "Ready";
     StatusIcon = ArrowRightCircle;
     iconColor = COLORS.primary;
@@ -105,20 +101,17 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
   const IconComponent = step.icon;
 
   return (
-    <Pressable
+    <TouchableOpacity
+      activeOpacity={0.7}
       disabled={isLocked}
       onPress={step.action}
-      onHoverIn={() => setHovered(true)}
-      onHoverOut={() => setHovered(false)}
       style={[
         styles.workflowCard,
         isLocked && styles.workflowCardLocked,
         isApproved && styles.workflowCardApproved,
-        hovered && !isLocked && styles.workflowCardHover,
         { width: isDesktop ? "23.5%" : isTablet ? "48%" : "100%" },
       ]}
     >
-      {/* Top Row: Status Badge (No heavy accent bar anymore) */}
       <View style={styles.cardTopRow}>
         <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
           <StatusIcon size={12} color={statusColor} />
@@ -128,7 +121,6 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
         </View>
       </View>
 
-      {/* Clean Icon (No vibrant background) */}
       <View style={styles.cardIconWrapper}>
         <IconComponent
           size={24}
@@ -136,7 +128,6 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
         />
       </View>
 
-      {/* Content */}
       <Text
         style={[
           styles.workflowCardTitle,
@@ -153,7 +144,6 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
         {step.desc}
       </Text>
 
-      {/* Action */}
       {!isLocked && (
         <View style={styles.cardAction}>
           <Text style={[styles.cardActionText, { color: statusColor }]}>
@@ -162,7 +152,7 @@ const WorkflowStepCard = ({ step, isDesktop, isTablet }: any) => {
           <ChevronRight size={16} color={statusColor} />
         </View>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 
