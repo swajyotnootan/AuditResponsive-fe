@@ -173,8 +173,29 @@ export const useAuth = (): UseAuthReturn => {
     try {
       console.log("📡 [enrich] Fetching /api/users/me");
 
-      // ✅ FIX: Removed manual token retrieval. Global fetchSetup handles it.
-      const response = await fetch(`${API_BASE_URL}/api/users/me`);
+      // ✅ FIX: Manually grab the token from AsyncStorage and send it in the headers
+      const token =
+        (await AsyncStorage.getItem("authToken")) || targetUser?.token;
+      const userId =
+        (await AsyncStorage.getItem("userId")) ||
+        (targetUser?.id != null ? String(targetUser.id) : null);
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (userId) headers["X-User-Id"] = String(userId);
+
+      // 1. Try /api/users/me
+      let response = await fetch(`${API_BASE_URL}/api/users/me`, { headers });
+
+      // 2. Fallback to /api/users/{id} if /me fails (e.g., 403 or 404)
+      if (!response.ok && targetUser?.id) {
+        console.log("⚠️ /me failed, trying /api/users/" + targetUser.id);
+        response = await fetch(`${API_BASE_URL}/api/users/${targetUser.id}`, {
+          headers,
+        });
+      }
 
       if (response.ok) {
         const profile = await response.json();
@@ -204,7 +225,6 @@ export const useAuth = (): UseAuthReturn => {
         console.warn("⚠️ [enrich] Profile fetch failed:", response.status);
       }
     } catch (err) {
-      // If the global interceptor caught a 401, it will have already kicked the user out.
       console.warn("⚠️ [enrich] Could not fetch profile:", err);
     }
 
@@ -579,6 +599,9 @@ export const useAuth = (): UseAuthReturn => {
       const rawUser = result.user;
       const normalizedRole = normalizeRole(rawUser.role) || "AUDITOR";
 
+      // ✅ CRITICAL — write the token BEFORE login(userData)
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, result.token);
+
       const userData: User = {
         id: rawUser.id || "1",
         role: normalizedRole,
@@ -594,6 +617,14 @@ export const useAuth = (): UseAuthReturn => {
             ? `${API_BASE_URL}/api/users/${rawUser.id}/profile-photo`
             : ""),
         token: result.token,
+
+        // ✅ Also carry plant/company fields
+        companyId: rawUser.companyId ?? null,
+        companyName: rawUser.companyName ?? null,
+        companyCode: rawUser.companyCode ?? null,
+        plantId: rawUser.plantId ?? null,
+        plantName: rawUser.plantName ?? null,
+        plantCode: rawUser.plantCode ?? null,
       };
 
       await login(userData);
@@ -626,6 +657,10 @@ export const useAuth = (): UseAuthReturn => {
       const rawUser = result.user;
       const normalizedRole = normalizeRole(rawUser.role) || "AUDITOR";
 
+      // ✅ CRITICAL — write the token BEFORE login(userData) so the
+      //    downstream enrichUserWithPlant() fetch('/me') call is authenticated.
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, result.token);
+
       const userData: User = {
         id: rawUser.id || "1",
         role: normalizedRole,
@@ -641,6 +676,15 @@ export const useAuth = (): UseAuthReturn => {
             ? `${API_BASE_URL}/api/users/${rawUser.id}/profile-photo`
             : ""),
         token: result.token,
+
+        // ✅ ALSO copy plant/company fields if the API returns them
+        //    (harmless when null — enrichUserWithPlant fills them)
+        companyId: rawUser.companyId ?? null,
+        companyName: rawUser.companyName ?? null,
+        companyCode: rawUser.companyCode ?? null,
+        plantId: rawUser.plantId ?? null,
+        plantName: rawUser.plantName ?? null,
+        plantCode: rawUser.plantCode ?? null,
       };
 
       await login(userData);
