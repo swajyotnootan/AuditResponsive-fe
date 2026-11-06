@@ -931,10 +931,25 @@ export default function AddScheduleModal({
     });
   };
 
+  // ==========================================================
+  // ✅ AVAILABLE AUDITORS — three-tier fallback
+  //   1. Team-scoped (from basic schedule)
+  //   2. All competent auditors
+  //   3. All department auditors
+  // ==========================================================
+
   const availableAuditors: User[] = useMemo(() => {
     const teamIds = departmentTeamInfo.teamAuditorIds;
     const teamNames = departmentTeamInfo.teamAuditorNames || [];
 
+    const sortUsers = (arr: User[]) =>
+      [...arr].sort((a, b) => {
+        const nA = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase();
+        const nB = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase();
+        return nA.localeCompare(nB);
+      });
+
+    // 1. Team-scoped (preferred)
     if (teamIds.length > 0) {
       const result: User[] = [];
       const seen = new Set<number>();
@@ -943,116 +958,128 @@ export default function AddScheduleModal({
         if (seen.has(id)) return;
         seen.add(id);
 
-        // 1. Try departmentAuditors
         const fromDept = departmentAuditors.find((u) => Number(u.id) === id);
-        if (fromDept) {
-          result.push(fromDept);
-          return;
-        }
-
-        // 2. Try competentAuditors
         const fromComp = competentAuditors.find((u) => Number(u.id) === id);
-        if (fromComp) {
-          result.push(fromComp);
-          return;
+        const found = fromDept || fromComp;
+
+        if (found) {
+          result.push(found);
+        } else {
+          // Synthetic fallback from teamNames — better than "Auditor 5"
+          const fallbackName = teamNames[idx] || `Auditor ${id}`;
+          const parts = String(fallbackName).trim().split(/\s+/);
+          result.push({
+            id,
+            firstName: parts[0] || "Auditor",
+            lastName: parts.slice(1).join(" ") || String(id),
+            role: "AUDITOR",
+          } as User);
         }
-
-        // 3. Synthetic fallback from teamNames
-        const fallbackName = teamNames[idx] || `Auditor ${id}`;
-        const parts = String(fallbackName).trim().split(/\s+/);
-        result.push({
-          id,
-          firstName: parts[0] || "Auditor",
-          lastName: parts.slice(1).join(" ") || String(id),
-          role: "AUDITOR",
-        } as User);
       });
 
-      return result.sort((a, b) => {
-        const nA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        const nB = `${b.firstName} ${b.lastName}`.toLowerCase();
-        return nA.localeCompare(nB);
-      });
+      if (result.length > 0) {
+        return sortUsers(result);
+      }
     }
 
+    // 2. Fallback: all competent auditors
     if (competentAuditors.length > 0) {
-      return [...competentAuditors].sort((a, b) => {
-        const nA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        const nB = `${b.firstName} ${b.lastName}`.toLowerCase();
-        return nA.localeCompare(nB);
-      });
+      return sortUsers(competentAuditors);
+    }
+
+    // 3. Fallback: all department auditors
+    if (departmentAuditors.length > 0) {
+      return sortUsers(departmentAuditors);
     }
 
     return [];
   }, [
     departmentTeamInfo.teamAuditorIds,
-    departmentTeamInfo.teamAuditorNames, // ← ADD
+    departmentTeamInfo.teamAuditorNames,
     departmentAuditors,
     competentAuditors,
   ]);
 
   // ==========================================================
-  // ✅ AUDITEE LIST (team-aware)
+  // ✅ AVAILABLE AUDITEES — three-tier fallback (same pattern)
   // ==========================================================
 
   const availableAuditees: User[] = useMemo(() => {
     const teamIds = departmentTeamInfo.auditeeIds;
+    const teamNames = departmentTeamInfo.auditeeNames || [];
 
-    console.log("🟨 [availableAuditors] INPUT", {
+    const sortUsers = (arr: User[]) =>
+      [...arr].sort((a, b) => {
+        const nA = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase();
+        const nB = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase();
+        return nA.localeCompare(nB);
+      });
+
+    console.log("🟨 [availableAuditees] INPUT", {
       teamIds,
-      deptAuditorsCount: departmentAuditors.length,
-      deptAuditorIds: departmentAuditors.map((u) => Number(u.id)),
-      deptAuditorNames: departmentAuditors.map(
-        (u) => `${u.firstName} ${u.lastName}`,
+      teamNames,
+      deptAuditeesCount: departmentAuditees.length,
+      deptAuditeeIds: departmentAuditees.map((u) => Number(u.id)),
+      deptAuditeeNames: departmentAuditees.map((u) =>
+        `${u.firstName || ""} ${u.lastName || ""}`.trim(),
       ),
-      competentAuditorsCount: competentAuditors.length,
-      competentAuditorIds: competentAuditors.map((u) => Number(u.id)),
-      competentAuditorNames: competentAuditors.map(
-        (u) => `${u.firstName} ${u.lastName}`,
+      competentAuditeesCount: competentAuditees.length,
+      competentAuditeeIds: competentAuditees.map((u) => Number(u.id)),
+      competentAuditeeNames: competentAuditees.map((u) =>
+        `${u.firstName || ""} ${u.lastName || ""}`.trim(),
       ),
     });
 
+    // 1. Team-scoped (preferred)
     if (teamIds.length > 0) {
       const result: User[] = [];
       const seen = new Set<number>();
 
-      for (const a of departmentAuditees) {
-        const id = Number(a.id);
-        if (teamIds.includes(id) && !seen.has(id)) {
-          seen.add(id);
-          result.push(a);
-        }
-      }
+      teamIds.forEach((id, idx) => {
+        if (seen.has(id)) return;
+        seen.add(id);
 
-      for (const id of teamIds) {
-        if (!seen.has(id)) {
-          const fromCompetent = competentAuditees.find(
-            (a) => Number(a.id) === id,
-          );
-          if (fromCompetent) {
-            seen.add(id);
-            result.push(fromCompetent);
-          }
-        }
-      }
+        const fromDept = departmentAuditees.find((u) => Number(u.id) === id);
+        const fromComp = competentAuditees.find((u) => Number(u.id) === id);
+        const found = fromDept || fromComp;
 
-      return result.sort((a, b) => {
-        const nA = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase();
-        const nB = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase();
-        return nA.localeCompare(nB);
+        if (found) {
+          result.push(found);
+        } else {
+          // Synthetic fallback from teamNames
+          const fallbackName = teamNames[idx] || `Auditee ${id}`;
+          const parts = String(fallbackName).trim().split(/\s+/);
+          result.push({
+            id,
+            firstName: parts[0] || "Auditee",
+            lastName: parts.slice(1).join(" ") || String(id),
+            role: "AUDITEE",
+          } as User);
+        }
       });
+
+      if (result.length > 0) {
+        return sortUsers(result);
+      }
     }
 
+    // 2. Fallback: all competent auditees
     if (competentAuditees.length > 0) {
-      return [...competentAuditees].sort((a, b) => {
-        const nA = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase();
-        const nB = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase();
-        return nA.localeCompare(nB);
-      });
+      return sortUsers(competentAuditees);
+    }
+
+    // 3. Fallback: all department auditees
+    if (departmentAuditees.length > 0) {
+      return sortUsers(departmentAuditees);
     }
 
     return [];
-  }, [departmentTeamInfo.auditeeIds, departmentAuditees, competentAuditees]);
+  }, [
+    departmentTeamInfo.auditeeIds,
+    departmentTeamInfo.auditeeNames,
+    departmentAuditees,
+    competentAuditees,
+  ]);
 
   // ==========================================================
   // SELECT OPTIONS
@@ -1099,7 +1126,7 @@ export default function AddScheduleModal({
             label:
               departmentTeamInfo.teamAuditorIds.length > 0
                 ? "No matching auditors in team"
-                : "No competent auditors found",
+                : "No auditors found for this department",
             value: "",
             disabled: true,
           },
@@ -1120,7 +1147,7 @@ export default function AddScheduleModal({
             label:
               departmentTeamInfo.auditeeIds.length > 0
                 ? "No matching auditees in team"
-                : "No matching auditees found",
+                : "No auditees found for this department",
             value: "",
             disabled: true,
           },
@@ -1397,7 +1424,7 @@ export default function AddScheduleModal({
                         emptyMessage={
                           loadingCompetentAuditors
                             ? "Loading..."
-                            : "No competent auditors found for these audit elements"
+                            : "No auditors found for this department"
                         }
                       />
                     </View>
@@ -1425,7 +1452,7 @@ export default function AddScheduleModal({
                         emptyMessage={
                           loadingCompetentAuditors
                             ? "Loading..."
-                            : "No competent auditees found for this department"
+                            : "No auditees found for this department"
                         }
                       />
                     </View>
@@ -1591,7 +1618,7 @@ export default function AddScheduleModal({
                         }))
                       }
                       searchable
-                      emptyMessage="No team auditors assigned"
+                      emptyMessage="No auditors found for this department"
                     />
                   </View>
 
@@ -1610,7 +1637,7 @@ export default function AddScheduleModal({
                         }))
                       }
                       searchable
-                      emptyMessage="No matching auditees found"
+                      emptyMessage="No auditees found for this department"
                     />
                   </View>
                 </View>

@@ -252,7 +252,7 @@ export const getNavigationByRole = (role: string): NavigationItem[] => {
         },
       ];
 
-    case UserRole.TOP_MANAGEMENT:
+    case UserRole.PLANT_HEAD:
       return [
         {
           route: "/(app)/(tabs)/today-work",

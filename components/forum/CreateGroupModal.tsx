@@ -1,4 +1,5 @@
 // components/forum/CreateGroupModal.tsx
+import { Ionicons } from "@expo/vector-icons";
 import { Check, Search, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -61,6 +62,9 @@ export default function CreateGroupModal({
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // 👇 NEW: Group Type State
+  const [groupType, setGroupType] = useState<"CHAT" | "ANNOUNCEMENT">("CHAT");
 
   const myEmail = currentUser?.email || "";
   const role = String(currentUser?.role || "").toUpperCase();
@@ -127,7 +131,8 @@ export default function CreateGroupModal({
       if (!u.email || u.email === myEmail) return false;
 
       // Company filter (Master only)
-      if (effectiveCompanyId && u.companyId != null) {
+      if (effectiveCompanyId) {
+        if (u.companyId == null) return false;
         if (String(u.companyId) !== String(effectiveCompanyId)) return false;
       }
 
@@ -164,6 +169,7 @@ export default function CreateGroupModal({
     setSaving(false);
     setScope("plant");
     setPickedPlantId(plantId != null ? String(plantId) : null);
+    setGroupType("CHAT"); // 👈 Reset type
   };
 
   const handleClose = () => {
@@ -231,8 +237,7 @@ export default function CreateGroupModal({
         adminEmail: myEmail,
         plantId: finalPlantId,
         plantName: finalPlantName,
-        // If backend supports it:
-        // companyId: finalCompanyId,
+        groupType: groupType, // 👈 Pass type to backend
       });
 
       const newGroup = {
@@ -246,6 +251,7 @@ export default function CreateGroupModal({
         plantName: finalPlantName,
         companyId: finalCompanyId,
         isAdmin: true,
+        groupType: groupType, // 👈 Pass type to UI
       };
 
       resetForm();
@@ -303,6 +309,84 @@ export default function CreateGroupModal({
                 editable={!saving}
               />
             </View>
+
+            {/* 👇 GROUP TYPE SELECTOR 👇 */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Group Type *</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setGroupType("CHAT")}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: groupType === "CHAT" ? "#00529B" : "#E2E8F0",
+                    backgroundColor:
+                      groupType === "CHAT" ? "#EFF6FF" : "#FFFFFF",
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={18}
+                    color={groupType === "CHAT" ? "#00529B" : "#64748B"}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: groupType === "CHAT" ? "#00529B" : "#64748B",
+                    }}
+                  >
+                    Two-Way Chat
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setGroupType("ANNOUNCEMENT")}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor:
+                      groupType === "ANNOUNCEMENT" ? "#B45309" : "#E2E8F0",
+                    backgroundColor:
+                      groupType === "ANNOUNCEMENT" ? "#FEF3C7" : "#FFFFFF",
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="megaphone-outline"
+                    size={18}
+                    color={groupType === "ANNOUNCEMENT" ? "#B45309" : "#64748B"}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color:
+                        groupType === "ANNOUNCEMENT" ? "#B45309" : "#64748B",
+                    }}
+                  >
+                    Announcement-Only
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 11, color: "#64748B", marginTop: 6 }}>
+                {groupType === "CHAT"
+                  ? "Everyone can send messages and reply."
+                  : "Only admins can send messages. Members can only read and acknowledge."}
+              </Text>
+            </View>
+            {/* 👆 END OF GROUP TYPE SELECTOR 👆 */}
 
             {/* ── COMPANY DROPDOWN (Master only, when >1 company) ── */}
             {isMaster && availableCompanies.length > 1 && (

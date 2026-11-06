@@ -2,6 +2,7 @@ import PDFViewer from "@/components/audit/PDFViewer";
 import YearFilter from "@/components/common/YearFilter";
 import { apiClient } from "@/services/api";
 import { pdfService } from "@/services/pdfService";
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   AlertCircle,
@@ -825,7 +826,8 @@ export default function Form4View({
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const { addToast } = useToast();
-
+const { selectedPlantId } = usePlantFilter();
+const plantIdParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -977,7 +979,7 @@ export default function Form4View({
         });
       });
       setPlanData(newPlanData);
-      await apiClient.post(`/api/department-plan/save?userId=${user?.id}`, {
+await apiClient.post(`/api/department-plan/save?userId=${user?.id}${plantIdParam}`, {
         planYear: selectedYear,
         planItems: newPlanData,
         approvalStatus: "DRAFT",
@@ -1046,7 +1048,7 @@ export default function Form4View({
         });
       });
       setPlanData(newPlanData);
-      await apiClient.post(`/api/department-plan/save?userId=${user?.id}`, {
+await apiClient.post(`/api/department-plan/save?userId=${user?.id}${plantIdParam}`, {
         planYear: selectedYear,
         planItems: newPlanData,
         approvalStatus: "DRAFT",
@@ -1099,7 +1101,7 @@ export default function Form4View({
         });
       });
       setPlanData(newPlanData);
-      await apiClient.post(`/api/department-plan/save?userId=${user?.id}`, {
+await apiClient.post(`/api/department-plan/save?userId=${user?.id}${plantIdParam}`, {
         planYear: selectedYear,
         planItems: newPlanData,
         approvalStatus: "DRAFT",
@@ -1124,7 +1126,7 @@ export default function Form4View({
     if (!user?.id) return;
     try {
       const response = await apiClient.get(
-        `/api/audit-plan/${selectedYear}?userId=${user.id}`,
+  `/api/audit-plan/${selectedYear}?userId=${user.id}${plantIdParam}`,
       );
       const data = response.data || response;
       const elementsByMonth: Record<string, string[]> = {};
@@ -1163,7 +1165,7 @@ export default function Form4View({
     try {
       setLoading(true);
       const response = await apiClient.get(
-        `/api/department-plan/${selectedYear}?userId=${user.id}`,
+  `/api/department-plan/${selectedYear}?userId=${user.id}${plantIdParam}`,
       );
       const data = response.data || response;
       if (data?.planItems?.length > 0) {
@@ -1313,7 +1315,7 @@ export default function Form4View({
     }
     setSaving(true);
     try {
-      await apiClient.post(`/api/department-plan/save?userId=${user?.id}`, {
+await apiClient.post(`/api/department-plan/save?userId=${user?.id}${plantIdParam}`, {
         planYear: selectedYear,
         planItems: planData,
         approvalStatus: "DRAFT",
@@ -1348,7 +1350,7 @@ export default function Form4View({
     }
     setSubmitting(true);
     try {
-      await apiClient.post(`/api/department-plan/save?userId=${user?.id}`, {
+await apiClient.post(`/api/department-plan/save?userId=${user?.id}${plantIdParam}`, {
         planYear: selectedYear,
         planItems: planData,
         approvalStatus: "PENDING_APPROVAL",
@@ -1359,7 +1361,7 @@ export default function Form4View({
         preparedBy: planInfo.preparedBy,
       });
       await apiClient.post(
-        `/api/department-plan/${selectedYear}/submit?userId=${user?.id}`,
+  `/api/department-plan/${selectedYear}/submit?userId=${user?.id}${plantIdParam}`,
         {},
       );
       addToast("Plan submitted for approval successfully!", "success");
@@ -1379,7 +1381,7 @@ export default function Form4View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/department-plan/${selectedYear}/approve?userId=${user?.id}`,
+  `/api/department-plan/${selectedYear}/approve?userId=${user?.id}${plantIdParam}`,
         { comments: tempApprovalComment },
       );
       setPlanStatus("APPROVED");
@@ -1408,7 +1410,7 @@ export default function Form4View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/department-plan/${selectedYear}/reject?userId=${user?.id}`,
+  `/api/department-plan/${selectedYear}/reject?userId=${user?.id}${plantIdParam}`,
         { reason: tempRejectionReason },
       );
       setPlanStatus("REJECTED");
@@ -1438,7 +1440,7 @@ export default function Form4View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/department-plan/${selectedYear}/request-changes?userId=${user?.id}`,
+  `/api/department-plan/${selectedYear}/request-changes?userId=${user?.id}${plantIdParam}`,
         { reason: changeRequestReason },
       );
       addToast(`Change request submitted for ${selectedYear}`, "warning");

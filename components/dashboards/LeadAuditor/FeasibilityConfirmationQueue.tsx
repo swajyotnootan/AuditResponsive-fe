@@ -117,6 +117,7 @@ interface MonthGroup {
 
 interface Props {
   selectedYear: number;
+  plantId?: number | null; // ← ADD
   onNavigateToForm5?: (year: number, month: string) => void;
 }
 
@@ -145,7 +146,10 @@ const normalizeNames = (raw: any): string[] => {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
+const FeasibilityConfirmationQueue: React.FC<Props> = ({
+  selectedYear,
+  plantId,
+}) => {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { width } = useWindowDimensions();
@@ -193,7 +197,12 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/week-feasibility-queue/${selectedYear}`,
-        { params: { userId: user.id } },
+        {
+          params: {
+            userId: user.id,
+            ...(plantId != null ? { plantId } : {}),
+          },
+        },
       );
       const data: ScheduleDto[] = Array.isArray(res.data) ? res.data : [];
       setSchedules(data);
@@ -208,7 +217,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedYear, addToast, user?.id]);
+  }, [selectedYear, addToast, user?.id, plantId]);
 
   useEffect(() => {
     setLoading(true);
@@ -285,9 +294,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       const results = await Promise.allSettled(
         byStatus.pending.map((s) =>
           axios.post(
-            `${API_BASE_URL}/api/audit-schedule/schedule/${s.id}/confirm-feasibility?userId=${user.id}`,
+            `${API_BASE_URL}/api/audit-schedule/schedule/${s.id}/confirm-feasibility`,
             { comments: bulkComments || "" },
-            {},
+            {
+              params: {
+                userId: user.id,
+                ...(plantId != null ? { plantId } : {}),
+              },
+            },
           ),
         ),
       );
@@ -330,9 +344,14 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
       const results = await Promise.allSettled(
         byStatus.pending.map((s) =>
           axios.post(
-            `${API_BASE_URL}/api/audit-schedule/schedule/${s.id}/reject-feasibility?userId=${user.id}`,
+            `${API_BASE_URL}/api/audit-schedule/schedule/${s.id}/reject-feasibility`,
             { reason: bulkRejectReason },
-            {},
+            {
+              params: {
+                userId: user.id,
+                ...(plantId != null ? { plantId } : {}),
+              },
+            },
           ),
         ),
       );
@@ -459,13 +478,18 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({ selectedYear }) => {
     setSubmitting(true);
     try {
       await axios.post(
-        `${API_BASE_URL}/api/audit-schedule/schedule/${reassignSchedule.id}/reassign?userId=${user.id}`,
+        `/api/audit-schedule/schedule/${reassignSchedule.id}/reassign`,
         {
           auditorId: newPrimaryAuditorId,
           coAuditorIds: newCoAuditorIds,
           auditeeIds: newAuditeeIds,
         },
-        {},
+        {
+          params: {
+            userId: user.id,
+            ...(plantId != null ? { plantId } : {}),
+          },
+        },
       );
       addToast("Schedule reassigned successfully", "success");
       setReassignSchedule(null);

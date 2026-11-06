@@ -1,4 +1,5 @@
-﻿import { useLocalSearchParams, useRouter } from "expo-router";
+﻿import { usePlantFilter } from "@/components/context/PlantFilterContext";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Archive,
   Calendar,
@@ -88,9 +89,21 @@ export default function TopManagementDashboard() {
   // ═══════════════════════════════════════════════════════════════════════
   // PLANT FILTER
   // ═══════════════════════════════════════════════════════════════════════
-  const [selectedPlant, setSelectedPlant] = useState<string | number | null>(
-    () => (user as any)?.plantId ?? null,
-  );
+  // ✅ ADD THIS:
+  const { selectedPlantId } = usePlantFilter();
+  const plantParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
+
+  // ✅ ADD THIS: Instantly close stale modals when plant filter changes
+  useEffect(() => {
+    setShowPlanDetails(false);
+    setShowDeptPlanDetails(false);
+    setShowForm5Details(false);
+    setShowDetailedDetails(false);
+    setSelectedPlan(null);
+    setSelectedDeptPlan(null);
+    setSelectedForm5Plan(null);
+    setSelectedDetailedPlan(null);
+  }, [selectedPlantId]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // DATA
@@ -121,7 +134,7 @@ export default function TopManagementDashboard() {
     refetchDeptPlans,
     refetchWeekSchedules,
     refetchDailySchedules,
-  } = useDashboardData(user, selectedPlant, activeSection);
+  } = useDashboardData(user, selectedPlantId, activeSection);
 
   // ═══════════════════════════════════════════════════════════════════════
   // UI-ONLY STATE
@@ -212,7 +225,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/approve?userId=${user.id}`,
+        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/approve?userId=${user.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -246,7 +259,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-plan/${selectedPlan.year}/reject?userId=${user?.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -281,7 +294,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/approve?userId=${user?.id}`,
+        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/approve?userId=${user?.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -314,7 +327,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/department-plan/${selectedDeptPlan.year}/reject?userId=${user?.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -351,7 +364,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/approve?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/approve?userId=${user?.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -385,7 +398,7 @@ export default function TopManagementDashboard() {
     setSubmitting(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/reject?userId=${user?.id}`,
+        `${API_BASE_URL}/api/audit-schedule/${selectedForm5Plan.year}/${selectedForm5Plan.month}/reject?userId=${user?.id}${plantParam}`, // 👈 ADDED
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -526,34 +539,34 @@ export default function TopManagementDashboard() {
     }
   };
 
-  const handleRequestChangesForSchedule = async () => {
-    if (!selectedScheduleForAction) return;
-    if (!changeRequestReason.trim()) {
-      toast.error("Please provide a reason for change request");
-      return;
-    }
-    if (!user?.id) {
-      toast.error("User session missing. Please log in again.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await auditScheduleApi.requestChanges(
-        selectedScheduleForAction.id,
-        user.id,
-        changeRequestReason,
-      );
-      toast.success("Change request submitted");
-      setShowChangeRequestModal(false);
-      setChangeRequestReason("");
-      setSelectedScheduleForAction(null);
-      fetchDetailedPlans();
-    } catch (error) {
-      toast.error("Failed to request changes");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+const handleRequestChangesForSchedule = async () => {
+  if (!selectedScheduleForAction) return;
+  if (!changeRequestReason.trim()) {
+    toast.error("Please provide a reason for change request");
+    return;
+  }
+  if (!user?.id) {
+    toast.error("User session missing. Please log in again.");
+    return;
+  }
+  setSubmitting(true);
+  try {
+    await auditScheduleApi.requestChangesForSchedule(
+      selectedScheduleForAction.id,   // ← scheduleId
+      user.id,                        // ← userId
+      changeRequestReason,            // ← reason
+    );
+    toast.success("Change request submitted");
+    setShowChangeRequestModal(false);
+    setChangeRequestReason("");
+    setSelectedScheduleForAction(null);
+    fetchDetailedPlans();
+  } catch (error) {
+    toast.error("Failed to request changes");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const doesScheduleMatchFilter = useCallback(
     (schedule: any, filterValue: string) => {

@@ -58,6 +58,14 @@ import {
   WebVideoPlayer,
 } from "./ThreadCardShared";
 
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === "web") {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
@@ -74,6 +82,7 @@ export default function ThreadCard({
   onEdit,
   onDelete,
   onUndoDelete,
+  isGroupAdmin = false, // 👈 ADD
 }: ThreadCardProps) {
   // ── ALL HOOKS FIRST (never early-return before hooks) ──
   const [imageModal, setImageModal] = useState({ open: false, url: "" });
@@ -114,7 +123,41 @@ export default function ThreadCard({
   const [showUndo, setShowUndo] = useState(false);
   const [showReadBy, setShowReadBy] = useState(false);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
-
+  const [acking, setAcking] = useState(false);
+  const [ackReport, setAckReport] = useState<{
+    open: boolean;
+    loading: boolean;
+    error: string | null;
+    data: {
+      ackCount: number;
+      totalMembers: number;
+      seenCount: number;
+      deliveredCount: number;
+      pendingAck: string[];
+      acknowledgedBy: string[];
+    } | null;
+  }>({
+    open: false,
+    loading: false,
+    error: null,
+    data: null,
+  });
+  const [ackState, setAckState] = useState<{
+    acked: boolean;
+    ackCount: number;
+  }>({
+    acked: (thread?.broadcastAcknowledgedBy || [])
+      .map((e: string) => e.toLowerCase())
+      .includes(
+        String(currentUser?.email || currentUsername || "")
+          .trim()
+          .toLowerCase(),
+      ),
+    ackCount: (thread?.broadcastAcknowledgedBy || []).filter(
+      (e: string) =>
+        e.toLowerCase() !== String(thread?.createdBy || "").toLowerCase(),
+    ).length,
+  });
   useEffect(() => {
     if (!thread?.attachments?.length) return;
     thread.attachments.forEach(async (att) => {
@@ -292,6 +335,137 @@ export default function ThreadCard({
     .toLowerCase();
   const isOwnMessage = thread.createdBy === currentEmail;
   const isDeleted = thread.isDeleted === true;
+
+  const isBroadcast = thread.messageType === "BROADCAST";
+  const iAcked = (thread.broadcastAcknowledgedBy || [])
+    .map((e) => e.toLowerCase())
+    .includes(currentEmail.toLowerCase());
+
+  const handleAcknowledge = async () => {
+    if (!thread.id || acking || ackState.acked) return;
+    setAcking(true);
+
+    // Optimistic
+    setAckState((prev) => ({
+      acked: true,
+      ackCount: prev.ackCount + 1,
+    }));
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/forum/8d/broadcast/${thread.id}/acknowledge?requester=${encodeURIComponent(currentEmail)}`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        // Rollback
+        setAckState((prev) => ({
+          acked: false,
+          ackCount: Math.max(0, prev.ackCount - 1),
+        }));
+        console.error("Ack failed:", await res.text());
+        return;
+      }
+      const updated: any = await res.json();
+      setAckState({
+        acked: true,
+        ackCount: (updated.broadcastAcknowledgedBy || []).length,
+      });
+    } catch (e) {
+      console.error(e);
+      setAckState((prev) => ({
+        acked: false,
+        ackCount: Math.max(0, prev.ackCount - 1),
+      }));
+    } finally {
+      setAcking(false);
+    }
+  };
+
+  // Sender report
+  // Sender report — MODAL version
+  const showAckReport = async () => {
+    if (!thread.id) return;
+
+    // Open modal in loading state
+    setAckReport({
+      open: true,
+      loading: true,
+      error: null,
+      data: null,
+    });
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/forum/8d/broadcast/${thread.id}/report?requester=${encodeURIComponent(currentEmail)}`,
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Report fetch failed:", res.status, errText);
+        setAckReport({
+          open: true,
+          loading: false,
+          error:
+            res.status === 403
+              ? "Only the group admin can view the acknowledgement report."
+              : errText || `Failed to load (HTTP ${res.status})`,
+          data: null,
+        });
+        return;
+      }
+
+      const report: any = await res.json();
+
+      setAckReport({
+        open: true,
+        loading: false,
+        error: null,
+        data: {
+          ackCount: report.ackCount ?? 0,
+          totalMembers: report.totalMembers ?? 0,
+          seenCount: report.seenCount ?? 0,
+          deliveredCount: report.deliveredCount ?? 0,
+          pendingAck: report.pendingAck ?? [],
+          acknowledgedBy: report.acknowledgedBy ?? [],
+        },
+      });
+    } catch (e: any) {
+      console.error("Report exception:", e);
+      setAckReport({
+        open: true,
+        loading: false,
+        error: e?.message || "Network error. Please try again.",
+        data: null,
+      });
+    }
+  };
+
+  const BROADCAST_STYLES = {
+    NORMAL: {
+      bg: "#EFF6FF",
+      border: "#BFDBFE",
+      chipBg: "#DBEAFE",
+      chipText: "#1E40AF",
+      label: "ANNOUNCEMENT",
+    },
+    HIGH: {
+      bg: "#FEF3C7",
+      border: "#FCD34D",
+      chipBg: "#FDE68A",
+      chipText: "#92400E",
+      label: "IMPORTANT",
+    },
+    CRITICAL: {
+      bg: "#FEE2E2",
+      border: "#FCA5A5",
+      chipBg: "#FECACA",
+      chipText: "#991B1B",
+      label: "CRITICAL",
+    },
+  };
+  const broadcastStyle = isBroadcast
+    ? BROADCAST_STYLES[thread.broadcastPriority || "NORMAL"]
+    : null;
 
   const canEditNow = isOwnMessage && editAllowed;
   const canDeleteNow = isOwnMessage && deleteAllowed;
@@ -1574,6 +1748,348 @@ export default function ThreadCard({
         </Pressable>
       </Modal>
 
+      {/* ACKNOWLEDGEMENT REPORT MODAL */}
+      <Modal
+        visible={ackReport.open}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setAckReport({
+            open: false,
+            loading: false,
+            error: null,
+            data: null,
+          })
+        }
+      >
+        <Pressable
+          style={styles.readByBackdrop}
+          onPress={() =>
+            setAckReport({
+              open: false,
+              loading: false,
+              error: null,
+              data: null,
+            })
+          }
+        >
+          <Pressable
+            style={[styles.readBySheet, { maxHeight: "85%" }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.readByHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.readByTitle}>Acknowledgement Report</Text>
+                {ackReport.data && (
+                  <Text
+                    style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}
+                  >
+                    {ackReport.data.ackCount} of {ackReport.data.totalMembers}{" "}
+                    acknowledged
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                onPress={() =>
+                  setAckReport({
+                    open: false,
+                    loading: false,
+                    error: null,
+                    data: null,
+                  })
+                }
+                style={styles.readByClose}
+              >
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {ackReport.loading ? (
+              <View style={{ padding: 40, alignItems: "center" }}>
+                <ActivityIndicator size="large" color="#00529B" />
+                <Text style={{ marginTop: 12, color: "#64748B", fontSize: 13 }}>
+                  Loading report…
+                </Text>
+              </View>
+            ) : ackReport.error ? (
+              <View style={{ padding: 24, alignItems: "center" }}>
+                <Text style={{ fontSize: 32, marginBottom: 8 }}>⚠️</Text>
+                <Text
+                  style={{
+                    color: "#DC2626",
+                    fontSize: 13,
+                    textAlign: "center",
+                  }}
+                >
+                  {ackReport.error}
+                </Text>
+              </View>
+            ) : ackReport.data ? (
+              <ScrollView
+                style={{ maxHeight: 480 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Progress bar */}
+                <View style={{ paddingHorizontal: 4, marginTop: 12 }}>
+                  <View
+                    style={{
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: "#E2E8F0",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View
+                      style={{
+                        height: "100%",
+                        width: `${
+                          ackReport.data.totalMembers > 0
+                            ? Math.min(
+                                100,
+                                (ackReport.data.ackCount /
+                                  ackReport.data.totalMembers) *
+                                  100,
+                              )
+                            : 0
+                        }%`,
+                        backgroundColor:
+                          ackReport.data.ackCount ===
+                          ackReport.data.totalMembers
+                            ? "#16A34A"
+                            : "#00529B",
+                        borderRadius: 5,
+                      }}
+                    />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: "#64748B",
+                      marginTop: 6,
+                      textAlign: "center",
+                    }}
+                  >
+                    {ackReport.data.totalMembers > 0
+                      ? Math.round(
+                          (ackReport.data.ackCount /
+                            ackReport.data.totalMembers) *
+                            100,
+                        )
+                      : 0}
+                    % complete
+                  </Text>
+                </View>
+
+                {/* Stats grid */}
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#DCFCE7",
+                      borderRadius: 10,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <CheckCheck size={20} color="#16A34A" />
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "800",
+                        color: "#16A34A",
+                        marginTop: 4,
+                      }}
+                    >
+                      {ackReport.data.ackCount}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: "#64748B",
+                        fontWeight: "600",
+                        marginTop: 2,
+                        textAlign: "center",
+                      }}
+                    >
+                      Acknowledged
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#DBEAFE",
+                      borderRadius: 10,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Eye size={20} color="#3B82F6" />
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "800",
+                        color: "#3B82F6",
+                        marginTop: 4,
+                      }}
+                    >
+                      {ackReport.data.seenCount}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: "#64748B",
+                        fontWeight: "600",
+                        marginTop: 2,
+                        textAlign: "center",
+                      }}
+                    >
+                      Seen
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#F1F5F9",
+                      borderRadius: 10,
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Mail size={20} color="#64748B" />
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "800",
+                        color: "#64748B",
+                        marginTop: 4,
+                      }}
+                    >
+                      {ackReport.data.deliveredCount}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: "#64748B",
+                        fontWeight: "600",
+                        marginTop: 2,
+                        textAlign: "center",
+                      }}
+                    >
+                      Delivered
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Pending list */}
+                {ackReport.data.pendingAck.length > 0 && (
+                  <>
+                    <Text style={styles.readBySectionLabel}>
+                      PENDING ({ackReport.data.pendingAck.length})
+                    </Text>
+                    {ackReport.data.pendingAck.map((email) => {
+                      const u = (allUsers || []).find(
+                        (x: any) =>
+                          (x.email || "").toLowerCase() === email.toLowerCase(),
+                      );
+                      const name =
+                        `${u?.firstName || ""} ${u?.lastName || ""}`.trim() ||
+                        email;
+                      const initial = (name[0] || "?").toUpperCase();
+                      return (
+                        <View key={email} style={styles.readByRow}>
+                          <View
+                            style={[
+                              styles.readByAvatar,
+                              { backgroundColor: "#FEF3C7" },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.readByAvatarText,
+                                { color: "#92400E" },
+                              ]}
+                            >
+                              {initial}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.readByName}>{name}</Text>
+                            <Text style={styles.readByEmail}>{email}</Text>
+                          </View>
+                          <Clock size={16} color="#D97706" />
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* Acknowledged list */}
+                {ackReport.data.acknowledgedBy.length > 0 && (
+                  <>
+                    <Text style={styles.readBySectionLabel}>
+                      ACKNOWLEDGED ({ackReport.data.acknowledgedBy.length})
+                    </Text>
+                    {ackReport.data.acknowledgedBy.map((email) => {
+                      const u = (allUsers || []).find(
+                        (x: any) =>
+                          (x.email || "").toLowerCase() === email.toLowerCase(),
+                      );
+                      const name =
+                        `${u?.firstName || ""} ${u?.lastName || ""}`.trim() ||
+                        email;
+                      const initial = (name[0] || "?").toUpperCase();
+                      return (
+                        <View key={email} style={styles.readByRow}>
+                          <View style={styles.readByAvatar}>
+                            <Text style={styles.readByAvatarText}>
+                              {initial}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.readByName}>{name}</Text>
+                            <Text style={styles.readByEmail}>{email}</Text>
+                          </View>
+                          <CheckCheck size={16} color="#16A34A" />
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+
+                {ackReport.data.pendingAck.length === 0 &&
+                  ackReport.data.acknowledgedBy.length > 0 && (
+                    <View
+                      style={{
+                        marginTop: 16,
+                        marginBottom: 8,
+                        padding: 12,
+                        backgroundColor: "#DCFCE7",
+                        borderRadius: 10,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#16A34A",
+                          fontWeight: "700",
+                          fontSize: 13,
+                        }}
+                      >
+                        🎉 Everyone has acknowledged
+                      </Text>
+                    </View>
+                  )}
+              </ScrollView>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <View
         style={[
           styles.messageRow,
@@ -1639,6 +2155,13 @@ export default function ThreadCard({
           style={[
             styles.messageBubble,
             isOwnMessage ? styles.myMessage : styles.otherMessage,
+            isBroadcast &&
+              broadcastStyle && {
+                backgroundColor: broadcastStyle.bg,
+                borderColor: broadcastStyle.border,
+                borderWidth: 1,
+                maxWidth: "92%",
+              },
           ]}
         >
           {!isOwnMessage && (
@@ -1661,6 +2184,179 @@ export default function ThreadCard({
                   renderAttachment(attachment, index),
                 )}
 
+              {isBroadcast && broadcastStyle && (
+                <View style={{ marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: broadcastStyle.chipBg,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "800",
+                          color: broadcastStyle.chipText,
+                        }}
+                      >
+                        📢 {broadcastStyle.label}
+                      </Text>
+                    </View>
+                    {thread.broadcastRequiresAck && (
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: broadcastStyle.chipText,
+                          fontWeight: "600",
+                        }}
+                      >
+                        • Acknowledgement required
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Acknowledge button (non-sender) */}
+                  {thread.broadcastRequiresAck &&
+                    !isOwnMessage &&
+                    !ackState.acked && (
+                      <TouchableOpacity
+                        onPress={handleAcknowledge}
+                        disabled={acking}
+                        style={{
+                          marginTop: 6,
+                          paddingVertical: 10,
+                          paddingHorizontal: 16,
+                          backgroundColor: acking ? "#94A3B8" : "#16A34A",
+                          borderRadius: 10,
+                          alignItems: "center",
+                          flexDirection: "row",
+                          justifyContent: "center",
+                          gap: 8,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        {acking ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <>
+                            <CheckCheck size={16} color="#fff" />
+                            <Text
+                              style={{
+                                color: "#fff",
+                                fontSize: 13,
+                                fontWeight: "700",
+                              }}
+                            >
+                              Acknowledge
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                  {/* Acked confirmation */}
+                  {ackState.acked && !isOwnMessage && (
+                    <View
+                      style={{
+                        marginTop: 6,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        backgroundColor: "#DCFCE7",
+                        borderRadius: 8,
+                        alignSelf: "flex-start",
+                      }}
+                    >
+                      <CheckCheck size={14} color="#16A34A" />
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "700",
+                          color: "#16A34A",
+                        }}
+                      >
+                        You acknowledged this
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Sender: tap to see report */}
+                  {isOwnMessage &&
+                    isGroupAdmin && // 👈 ONLY ADMINS
+                    thread.broadcastRequiresAck &&
+                    ackState.ackCount > 0 && (
+                      <TouchableOpacity
+                        onPress={showAckReport}
+                        style={{
+                          marginTop: 6,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          backgroundColor: "#DBEAFE",
+                          borderRadius: 8,
+                          alignSelf: "flex-start",
+                        }}
+                      >
+                        <CheckCheck size={14} color="#1E40AF" />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: "#1E40AF",
+                          }}
+                        >
+                          {ackState.ackCount} acknowledged{" "}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#1E40AF" }}>
+                          ·
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "600",
+                            color: "#1E40AF",
+                            textDecorationLine: "underline",
+                          }}
+                        >
+                          View report
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                </View>
+              )}
+
+              {/* 👇 ADD TITLE HERE 👇 */}
+              {isBroadcast &&
+                thread.title &&
+                thread.title !== "Announcement" && (
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "800",
+                      color: "#111827",
+                      marginBottom: 6,
+                      marginTop: 2,
+                    }}
+                  >
+                    {thread.title}
+                  </Text>
+                )}
+              {/* 👆 END OF TITLE 👆 */}
+
               {thread.content && thread.messageType !== "EVENT" && (
                 <MessageContent
                   content={thread.content}
@@ -1681,9 +2377,13 @@ export default function ThreadCard({
             </Text>
             {thread.isEdited && !isDeleted && (
               <Text style={styles.editedText}>
-                {thread.updatedAt || thread.editedAt
-                  ? `(edited · ${formatEditedTime(thread.updatedAt || thread.editedAt)})`
-                  : "(edited)"}
+                {(() => {
+                  const editedStamp =
+                    thread.updatedAt ?? thread.editedAt ?? undefined;
+                  return editedStamp
+                    ? `(edited · ${formatEditedTime(editedStamp)})`
+                    : "(edited)";
+                })()}
               </Text>
             )}
 

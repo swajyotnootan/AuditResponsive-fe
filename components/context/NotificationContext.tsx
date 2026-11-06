@@ -369,7 +369,7 @@ const getDefaultRouteForRole = (role: string | null): string => {
   const roleUpper = (role || "").toUpperCase();
 
   switch (roleUpper) {
-    case "TOP_MANAGEMENT":
+    case "PLANT_HEAD":
       return "/(app)/(tabs)/top-management?tab=overview";
     case "AUDIT_MANAGER":
       return "/(app)/(tabs)/audit-manager?tab=dashboard";
@@ -415,7 +415,7 @@ const mapBackendRouteToExpoRouter = (
     console.log("   → Routing to Today's Work");
     return "/(app)/(tabs)/today-work";
   }
-  if (roleUpper === "TOP_MANAGEMENT") {
+  if (roleUpper === "PLANT_HEAD") {
     console.log(
       "📍 Top Management route mapping for:",
       backendRoute,
@@ -764,6 +764,7 @@ const mapBackendRouteToExpoRouter = (
           "daily-feasibility",
           "checksheets-ncrs",
           "stakeholders",
+          "requests",
         ];
         if (validTabs.includes(tab)) {
           console.log(`   → Preserving existing tab: ${tab}`);
@@ -816,10 +817,22 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
   const currentUserIdRef = useRef<string | null>(null);
 
   // Safe access to user properties
+  // Safe access to user properties
   const userId = user?.id ?? null;
   const userRole = user?.role ?? null;
 
+  // ✅ Resolve plantId defensively (handles snake_case, nested plant, etc.)
+  const userPlantId: number | null = (() => {
+    const u = user as any;
+    const raw =
+      u?.plantId ?? u?.plant_id ?? u?.plant?.id ?? u?.plant?.plantId ?? null;
+    if (raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  })();
+
   // ✅ ROLE-BASED FILTERING: Check if notification is for this user
+  // ✅ ROLE + PLANT FILTERING
   const hasRoleAccess = useCallback(
     (notification: Notification): boolean => {
       if (!userRole) {
@@ -829,33 +842,46 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
 
       const normalizedUserRole = userRole.toUpperCase().trim();
 
-      if (!notification.role && !notification.targetRoles) {
-        return true;
-      }
+      // ── 1. Role check ──────────────────────────────────────────
+      let roleOk = true;
 
       if (notification.role) {
-        const normalizedNotifRole = notification.role.toUpperCase().trim();
-        const hasAccess = normalizedNotifRole === normalizedUserRole;
-        console.log(
-          `🔍 Role check: ${notification.role} vs ${userRole} = ${hasAccess}`,
+        roleOk = notification.role.toUpperCase().trim() === normalizedUserRole;
+      } else if (
+        Array.isArray(notification.targetRoles) &&
+        notification.targetRoles.length > 0
+      ) {
+        roleOk = notification.targetRoles.some(
+          (t) => t.toUpperCase().trim() === normalizedUserRole,
         );
-        return hasAccess;
       }
 
-      if (notification.targetRoles && Array.isArray(notification.targetRoles)) {
-        const hasAccess = notification.targetRoles.some((targetRole) => {
-          const normalizedTargetRole = targetRole.toUpperCase().trim();
-          return normalizedTargetRole === normalizedUserRole;
-        });
+      if (!roleOk) {
         console.log(
-          `🔍 Multi-role check: ${JSON.stringify(notification.targetRoles)} vs ${userRole} = ${hasAccess}`,
+          `🚫 Dropped (role mismatch): "${notification.title}" ` +
+            `[notif=${notification.role || notification.targetRoles} user=${userRole}]`,
         );
-        return hasAccess;
+        return false;
+      }
+
+      // ── 2. Plant check (defense-in-depth) ──────────────────────
+      const notifPlantId =
+        (notification as any).plantId ?? (notification as any).plant_id ?? null;
+
+      if (userPlantId != null && notifPlantId != null) {
+        const same = String(notifPlantId) === String(userPlantId);
+        if (!same) {
+          console.log(
+            `🚫 Dropped (plant mismatch): "${notification.title}" ` +
+              `[notif=${notifPlantId} user=${userPlantId}]`,
+          );
+        }
+        return same;
       }
 
       return true;
     },
-    [userRole],
+    [userRole, userPlantId],
   );
 
   // ✅ Initialize sound system
@@ -884,6 +910,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
       console.log("👤 User logged in:", {
         id: userId,
         role: userRole,
+        plantId: userPlantId, // ⬅️ added
       });
 
       if (notificationSound.current) {
@@ -894,7 +921,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
 
       currentUserIdRef.current = String(userId);
     }
-  }, [userId, userRole, initSoundSystem]);
+  }, [userId, userRole, userPlantId, initSoundSystem]);
 
   // Get sound type based on notification title
   const getNotificationSoundType = (title: string | undefined): string => {
@@ -999,9 +1026,12 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
           `📥 Received ${notificationsData.length} total notifications from backend`,
         );
 
-        notificationsData.forEach((n: Notification, idx: number) => {
+        notificationsData.forEach((n: any, idx: number) => {
           console.log(
-            `   [${idx}] ${n.title} | role: ${n.role} | targetRoles: ${JSON.stringify(n.targetRoles)} | read: ${n.read} | navigateTo: ${n.navigateTo}`,
+            `   [${idx}] "${n.title}" | role=${n.role} | ` +
+              `targetRoles=${JSON.stringify(n.targetRoles)} | ` +
+              `plantId=${n.plantId ?? n.plant_id ?? "∅"} | ` +
+              `read=${n.read} | navigateTo=${n.navigateTo}`,
           );
         });
 
@@ -1258,14 +1288,33 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
     showToastNotification(title, message, type);
 
     // ✅ Send to backend with role targeting
+    // ✅ Send to backend with role targeting
     if (userId) {
-      // ✅ NEW — resolve plantId from the current user
-      const currentPlantId = (user as any)?.plantId ?? null;
+      // ✅ Use the normalized value computed at the top of the provider
+      const currentPlantId = userPlantId;
 
       if (effectiveTargetRoles && effectiveTargetRoles.length > 0) {
+        // 🚨 HARD GUARD — never broadcast role notifications without a plant
+        if (currentPlantId == null) {
+          console.error(
+            "🚨 BLOCKED role notification — userPlantId is null. " +
+              "Sending this would broadcast to ALL plants. " +
+              "Fix AuthContext/user enrichment so user.plantId is populated.",
+            {
+              title,
+              effectiveTargetRoles,
+              userId,
+              userRole,
+            },
+          );
+          // Show locally to the sender but skip the backend fan-out
+          return newNotification;
+        }
+
         effectiveTargetRoles.forEach((targetRole) => {
           console.log(
-            `📡 Sending notification to role: ${targetRole} for plant: ${currentPlantId ?? "ALL"} with navigateTo: ${finalNavigateTo}`,
+            `📡 sendToRole(${targetRole}) plantId=${currentPlantId} ` +
+              `title="${title}" navigateTo="${finalNavigateTo}"`,
           );
 
           notificationAPI
@@ -1276,7 +1325,7 @@ export const NotificationProvider: FC<{ children: React.ReactNode }> = ({
               type,
               finalNavigateTo || "",
               location || "",
-              currentPlantId, // ✅ pass plantId
+              currentPlantId,
             )
             .catch((err) =>
               console.error(`Failed to send to role ${targetRole}:`, err),

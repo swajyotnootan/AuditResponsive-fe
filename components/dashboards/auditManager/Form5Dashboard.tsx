@@ -32,7 +32,8 @@ import {
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-
+// add near your other context imports
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 // ═════ STRICT MONOCHROMATIC MNC PALETTE ════
 const COLORS = {
   primary: "#2563EB",
@@ -244,7 +245,8 @@ export default function Form5Dashboard({
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams();
   const { addToast } = useToast();
-
+  const { selectedPlantId } = usePlantFilter();
+  const plantIdParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
   const isDesktop = width >= 768;
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
@@ -277,12 +279,28 @@ export default function Form5Dashboard({
     }
     setLoading(true);
     try {
+      console.log("🟢 [FORM 5 DEBUG] Fetching months for:", {
+        year: selectedYear,
+        userId: user.id,
+        plantId: selectedPlantId || user?.plantId,
+      });
+
       const response = await auditScheduleApi.getAvailableMonths(
         selectedYear,
         user.id,
+        selectedPlantId,
       );
       const months = Array.isArray(response) ? response : response?.data || [];
+
+      console.log("🟢 [FORM 5 DEBUG] Backend returned months:", months);
+
+      // Look at what valid months are found
       const validMonths = months.filter((m: any) => m.hasPlannedAudits);
+      console.log(
+        "🟢 [FORM 5 DEBUG] Filtered valid months (hasPlannedAudits=true):",
+        validMonths,
+      );
+
       const counts: Record<string, number> = {};
       await Promise.all(
         validMonths.map(async (m: any) => {
@@ -291,31 +309,50 @@ export default function Form5Dashboard({
               selectedYear,
               m.month,
               user?.id,
+              selectedPlantId,
             );
             const allSchedules = Array.isArray(res) ? res : res?.data || [];
+
+            console.log(
+              `🟢 [FORM 5 DEBUG] Schedules for ${m.month}:`,
+              allSchedules.length,
+            );
+
             const plantScopedSchedules = filterByPlant(
               allSchedules,
-              user?.plantId,
+              selectedPlantId ?? user?.plantId,
             );
             const weekSchedules = plantScopedSchedules.filter(
               (s: any) => !s.scheduledDate,
             );
             counts[m.month] = weekSchedules.length;
           } catch (error: any) {
+            console.error(
+              `❌ [FORM 5 DEBUG] Failed fetching schedules for ${m.month}:`,
+              error,
+            );
             counts[m.month] = 0;
           }
         }),
       );
-      setAvailableMonths(
-        months.map((m: any) => ({ ...m, scheduleCount: counts[m.month] || 0 })),
+
+      const mappedMonths = months.map((m: any) => ({
+        ...m,
+        scheduleCount: counts[m.month] || 0,
+      }));
+      console.log(
+        "🟢 [FORM 5 DEBUG] Final Available Months state:",
+        mappedMonths,
       );
+
+      setAvailableMonths(mappedMonths);
     } catch (error: any) {
       console.error("❌ ERROR in fetchData:", error.message);
       addToast("Failed to load schedule data. Please try again.", "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, addToast, user?.id, user?.plantId]);
+  }, [selectedYear, addToast, user?.id, user?.plantId, selectedPlantId]);
 
   useEffect(() => {
     fetchData();
@@ -326,6 +363,9 @@ export default function Form5Dashboard({
   useEffect(() => {
     if (year) setSelectedYear(year);
   }, [year]);
+  useEffect(() => {
+    setAvailableMonths([]);
+  }, [selectedPlantId]);
 
   const handleMonthClick = (monthData: any) => {
     if (onMonthSelect) {
@@ -437,7 +477,10 @@ export default function Form5Dashboard({
     );
   }
 
-  const validMonths = financialMonths;
+  // ✅ FIX: Use the months returned by the backend that have plans
+  const validMonths = availableMonths
+    .filter((m) => m.hasPlannedAudits)
+    .map((m) => m.month);
 
   return (
     <View className="flex-1 bg-slate-50">

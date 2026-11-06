@@ -103,6 +103,7 @@ interface ThreadComposerProps {
   username?: string;
   editingPost?: any;
   onCancelEdit?: () => void;
+  isAdmin?: boolean; // 👈 ADD THIS
 }
 
 // ========== HELPER FUNCTIONS ==========
@@ -146,6 +147,7 @@ export default function ThreadComposer({
   username,
   editingPost,
   onCancelEdit,
+  isAdmin, // 👈 ADD THIS
 }: ThreadComposerProps) {
   // ---- State ----
   const [content, setContent] = useState("");
@@ -153,6 +155,7 @@ export default function ThreadComposer({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [audioRecordingTime, setAudioRecordingTime] = useState(0);
   const [micError, setMicError] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -990,18 +993,15 @@ export default function ThreadComposer({
         return;
       }
 
-      Alert.alert(
-        "Getting Live Location",
-        "Please wait while we get your exact GPS coordinates...",
-      );
-
-      console.log("Fetching current position with Highest accuracy...");
+      setLocating(true);
+      console.log("Fetching current position with High accuracy...");
 
       // ✅ FIX: Added mayShowUserSettingsDialog to prompt Android users to enable High Accuracy mode
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-        mayShowUserSettingsDialog: true, // Prompts user to enable high accuracy on Android
+        accuracy: Location.Accuracy.High,
+        mayShowUserSettingsDialog: true,
       });
+      setLocating(false);
 
       if (!location?.coords) {
         throw new Error("No location data received");
@@ -1048,8 +1048,7 @@ export default function ThreadComposer({
 
       const jsonString = JSON.stringify(locationData);
 
-      setContent("📍 Shared live location");
-
+      setContent((prev) => (prev.trim() ? prev : "📍 Shared live location"));
       setAttachments((prev) => [
         ...prev,
         {
@@ -1066,6 +1065,7 @@ export default function ThreadComposer({
       setShowAttachmentMenu(false);
       Alert.alert("Success", "Live location shared successfully!");
     } catch (err) {
+      setLocating(false);
       console.error("Location error details:", err);
 
       let errorMessage = "Failed to get live location";
@@ -1302,6 +1302,16 @@ export default function ThreadComposer({
 
     try {
       let messageType = "TEXT";
+
+      if (attachments.length > 0) {
+        const firstAtt = attachments[0];
+        if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
+        else if (firstAtt.attachmentType === "VIDEO") messageType = "VIDEO";
+        else if (firstAtt.attachmentType === "AUDIO") messageType = "AUDIO";
+        else if (firstAtt.attachmentType === "LOCATION")
+          messageType = "LOCATION";
+        else if (firstAtt.attachmentType === "EVENT") messageType = "EVENT";
+      }
       if (attachments.length > 0) {
         const firstAtt = attachments[0];
         if (firstAtt.attachmentType === "IMAGE") messageType = "IMAGE";
@@ -1371,7 +1381,7 @@ export default function ThreadComposer({
 
       const userEmail = username || "anonymous@jws.com";
       const payload: any = {
-        content: content.trim() || " ",
+        content: content.trim() || "",
         createdBy: userEmail,
         messageType,
         attachments: resolvedAttachments,
@@ -1900,8 +1910,10 @@ export default function ThreadComposer({
                     title: eventForm.title,
                     datetime: eventForm.datetime,
                   };
-                  setContent(
-                    `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
+                  setContent((prev) =>
+                    prev.trim()
+                      ? prev
+                      : `📅 ${eventForm.title} @ ${new Date(eventForm.datetime).toLocaleString()}`,
                   );
                   setAttachments((prev) => [
                     ...prev,
@@ -2092,10 +2104,15 @@ export default function ThreadComposer({
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => setShowAttachmentMenu(true)}
+          onPress={() => !locating && setShowAttachmentMenu(true)}
           style={styles.iconBtn}
+          disabled={locating}
         >
-          <Ionicons name="attach" size={22} color="#6b7280" />
+          {locating ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Ionicons name="attach" size={22} color="#6b7280" />
+          )}
         </TouchableOpacity>
 
         {/* ✅ FIXED: Emoji Button with Library */}

@@ -44,7 +44,7 @@ export default function DashboardScreen() {
         return <AuditManagerDashboard />;
       case UserRole.INITIATOR:
         return <InitiatorDashboard />;
-      case UserRole.TOP_MANAGEMENT:
+      case UserRole.PLANT_HEAD:
         return <TopManagementDashboard />;
       case UserRole.HR_ADMIN:
         return <HRAdminDashboard />;

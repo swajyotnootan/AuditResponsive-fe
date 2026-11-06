@@ -14,6 +14,7 @@ export interface User {
   plantId?: number | string | null;
   plantName?: string | null;
   plantCode?: string | null;
+    companyId?: number | string | null;
 }
 
 export interface Schedule {
@@ -47,6 +48,7 @@ export interface Schedule {
   // Plant
   plantId?: number | string | null;
   plantName?: string;
+    companyId?: number | string | null;
 }
 
 export interface NCR {
@@ -64,6 +66,7 @@ export interface NCR {
   plantId?: number | string | null;
   auditScheduleId?: string | number; // ← ADD
   scheduleId?: string | number; // ← ADD
+    companyId?: number | string | null;
 }
 
 export interface Response {
@@ -85,6 +88,7 @@ export interface Response {
   plantId?: number | string | null;
   auditScheduleId?: string | number; // ← ADD
   scheduleId?: string | number; // ← ADD
+    companyId?: number | string | null;
 }
 
 export interface Stats {

@@ -1,4 +1,6 @@
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { API_BASE_URL } from "@/config/apiConfig";
+import { ncrService } from "@/services/ncrService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
@@ -1443,6 +1445,8 @@ export default function AuditorDashboard() {
   const [raisedNCRs, setRaisedNCRs] = useState<any[]>([]);
   const [ncrLoading, setNcrLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { selectedPlantId } = usePlantFilter();
+  const effectivePlantId = (user as any)?.plantId ?? selectedPlantId ?? null;
 
   // ? ADD THIS: Calculate NCR Stats dynamically
   const ncrStats = useMemo(
@@ -1479,23 +1483,33 @@ export default function AuditorDashboard() {
     try {
       setNcrLoading(true);
 
-      const raw = await apiFetch("/ncr/all").catch(() => []);
+      // ✅ NEW: get schedules so we can look up plantId by auditId
+      let schedulePlantMap = new Map<number, number>();
+      try {
+        const schedulesResp = await apiFetch(
+          `/audit-schedule/auditor/${user?.id}/schedules-with-status`,
+        );
+        (schedulesResp || []).forEach((item: any) => {
+          const s = item.schedule || item;
+          if (s?.id && s?.plantId != null) {
+            schedulePlantMap.set(Number(s.id), Number(s.plantId));
+          }
+        });
+      } catch (e) {
+        console.warn("Could not fetch schedules for plant lookup:", e);
+      }
 
-      // ✅ Handle Page<NCR> AND plain arrays
-      const allNcrs: any[] = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.content)
-          ? raw.content
-          : Array.isArray(raw?.data)
-            ? raw.data
-            : [];
+      const ncrResponse = await ncrService
+        .getAllNCRs(user?.id, 0, 1000)
+        .catch(() => ({ success: false, data: [] as any[] }));
+      const allNcrs: any[] = ncrResponse.success ? ncrResponse.data || [] : [];
 
       const myRaisedNcrs = allNcrs.filter(
         (ncr: any) => String(ncr.auditorId) === String(user?.id),
       );
 
-      // Filter by the selected Year
-      const filteredNCRs = myRaisedNcrs.filter((ncr: any) => {
+      // Year filter (unchanged)
+      const yearFilteredNCRs = myRaisedNcrs.filter((ncr: any) => {
         const ncrDate = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
         const ncrYear = ncrDate
           ? new Date(ncrDate).getFullYear()
@@ -1503,13 +1517,38 @@ export default function AuditorDashboard() {
         return ncrYear === year;
       });
 
+      // ✅ Plant filter — now with schedule lookup fallback
+      const filteredNCRs = yearFilteredNCRs.filter((ncr: any) => {
+        if (effectivePlantId == null) return true;
+
+        // 1. Try the NCR's own field first (in case backend adds it later)
+        let ncrPlant = ncr.plantId ?? ncr.plant?.id ?? ncr.plant_id ?? null;
+
+        // 2. If missing, look up by auditId via the schedule map
+        if (ncrPlant == null && ncr.auditId != null) {
+          ncrPlant = schedulePlantMap.get(Number(ncr.auditId)) ?? null;
+        }
+
+        // 3. If still missing, drop it (don't show under a wrong plant)
+        if (ncrPlant == null) return false;
+
+        return String(ncrPlant) === String(effectivePlantId);
+      });
+
       console.log(
-        "? [NCR DEBUG] Final filtered raised NCRs count:",
+        "🧪 [NCR DEBUG] total:",
+        myRaisedNcrs.length,
+        "| after year:",
+        yearFilteredNCRs.length,
+        "| after plant:",
         filteredNCRs.length,
+        "| effectivePlantId:",
+        effectivePlantId,
       );
+
       setRaisedNCRs(filteredNCRs);
     } catch (error) {
-      console.error("? [NCR DEBUG] Error fetching raised NCRs:", error);
+      console.error("❌ [NCR DEBUG] Error fetching raised NCRs:", error);
       addToast("Failed to load NCR list", "error");
       setRaisedNCRs([]);
     } finally {
@@ -1764,8 +1803,20 @@ export default function AuditorDashboard() {
         })
         .map((r: any) => {
           const answers = parseResponseAnswers(r);
+
+          // ✅ Look up the schedule's plantId from the schedulesData we already fetched
+          const parentItem = (schedulesData || []).find((it: any) => {
+            const s = it.schedule || it;
+            return Number(s.id) === Number(r.auditScheduleId);
+          });
+          const parentSchedule = parentItem
+            ? parentItem.schedule || parentItem
+            : null;
+
           return {
             responseId: r.id,
+            auditScheduleId: r.auditScheduleId, // ✅ keep it
+            plantId: parentSchedule?.plantId ?? null, // ✅ NEW
             auditReportNumber: getAuditReportNumber(answers, r),
             formName: answers.formName || r.checkSheet?.name || "Audit Form",
             department: r.department || answers.department || "Production",
@@ -1784,7 +1835,12 @@ export default function AuditorDashboard() {
           const notRaised = !existingNcrAuditIds.has(Number(item.responseId));
           const isCurrentYear = itemYear === year;
 
-          return hasFindings && notRaised && isCurrentYear;
+          // ✅ NEW: plant filter, same logic as "Raised NCRs"
+          if (!(hasFindings && notRaised && isCurrentYear)) return false;
+
+          if (effectivePlantId == null) return true; // no plant selected → show all
+          if (item.plantId == null) return true; // legacy row w/o plant → show
+          return String(item.plantId) === String(effectivePlantId);
         });
 
       setPendingNcrAudits(pendingNcrItems);
@@ -1802,9 +1858,21 @@ export default function AuditorDashboard() {
 
       let filteredSchedules = (schedulesData || []).filter((item: any) => {
         const schedule = item.schedule || item;
+        if (schedule.detailedApprovalStatus !== "APPROVED") return false;
 
-        // ? FIXED: Use the correct field name from your backend
-        return schedule.detailedApprovalStatus === "APPROVED";
+        // NEW: filter by effectivePlantId (corporate LA's plant selection)
+        if (effectivePlantId != null) {
+          const rowPlant = schedule.plantId ?? schedule.plant_id ?? null;
+          // Rows without a plantId → keep them (they belong to their auditor, who is you)
+          if (
+            rowPlant != null &&
+            String(rowPlant) !== String(effectivePlantId)
+          ) {
+            return false;
+          }
+        }
+
+        return true;
       });
 
       // ?? DEBUG: Check your console to see if the filter is working
@@ -2032,13 +2100,16 @@ export default function AuditorDashboard() {
         }),
       );
 
-      enhancedData.forEach((s) => {
-        console.log(
-          `?? Schedule ${s.schedule.id} | status=${s.schedule.status} | reschedReq=${s.schedule.rescheduleRequested} | extReq=${s.schedule.extensionRequested}`,
-        );
-      });
+      // ✅ DEBUG: Print the IDs we are about to save to state
+      const ids = enhancedData.map((s) => s.schedule.id);
+      console.log("🔵 SETTING SCHEDULES STATE TO:", ids);
 
-      setSchedules(enhancedData);
+      // ✅ CLEAN UP: Only keep valid, approved schedules
+      const finalValidSchedules = enhancedData.filter(
+        (s) => s.schedule.detailedApprovalStatus === "APPROVED",
+      );
+
+      setSchedules(finalValidSchedules);
 
       console.log(
         "? [TIME STATUS DEBUG] Current time:",
@@ -2085,7 +2156,8 @@ export default function AuditorDashboard() {
       fetchSchedulesWithStatus(selectedYear);
       fetchRaisedNCRs(selectedYear);
     }
-  }, [user?.id, selectedYear]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedYear, effectivePlantId]);
 
   useEffect(() => {
     if (activeTab === "ncr-list" && user?.id) {
@@ -2138,13 +2210,17 @@ export default function AuditorDashboard() {
     setAvailableYears(allYears.sort((a, b) => b - a));
   }, [schedules]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    fetchSchedulesWithStatus(selectedYear);
-    fetchRaisedNCRs(selectedYear);
-    addToast("Dashboard refreshed", "success");
-    // Add a small timeout to stop the spinner visually if needed
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      await Promise.all([
+        fetchSchedulesWithStatus(selectedYear),
+        fetchRaisedNCRs(selectedYear),
+      ]);
+      addToast("Dashboard refreshed", "success");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleViewForm = async (audit: any, form: any) => {
@@ -2677,7 +2753,8 @@ export default function AuditorDashboard() {
                 <View className="flex-row flex-wrap gap-4">
                   {filteredAudits.map((item: any, index: number) => (
                     <View
-                      key={item.schedule?.id || index}
+                      // ✅ FORCE REACT TO DESTROY AND RECREATE THE CARD
+                      key={`${item.schedule?.id}-${item.schedule?.startTime}-${item.schedule?.scheduledDate}`}
                       style={
                         isMobile
                           ? { width: "100%" }

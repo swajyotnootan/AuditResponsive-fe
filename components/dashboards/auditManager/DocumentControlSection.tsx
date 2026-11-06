@@ -311,7 +311,7 @@ const DocumentControlSection = ({
           />
         )}
 
-        {canSubmit && stats.totalSchedules > 0 && (
+        {canSubmit && (
           <OutlineButton
             title={`Submit`}
             icon={Send}

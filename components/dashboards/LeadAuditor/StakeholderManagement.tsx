@@ -771,12 +771,33 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
   }
 
   // ── Header (sub-tabs + filter) — extracted for FlatList header
+  // ── Tab counts — must match the cards that will render below ───
+  //    `stakeholders` is the source of truth for what the list shows:
+  //    - Auditors tab: regular auditors only (excludes LEAD_AUDITOR)
+  //    - Auditees tab: auditees filtered by the department dropdown
+  const regularAuditorCount = useMemo(
+    () =>
+      allAuditors.filter(
+        (a) =>
+          a.role !== "LEAD_AUDITOR" && !a.role?.toLowerCase().includes("lead"),
+      ).length,
+    [allAuditors],
+  );
+
+  const auditeeTabCount = useMemo(() => {
+    if (selectedDepartment === "ALL") return auditeesWithoutHOD.length;
+    return auditeesWithoutHOD.filter(
+      (a) => getDepartmentString(a.department) === selectedDepartment,
+    ).length;
+  }, [auditeesWithoutHOD, selectedDepartment]);
+
+  // ── Header (sub-tabs + filter) — extracted for FlatList header
   const listHeader = (
     <View style={{ paddingBottom: 16 }}>
       {/* Sub-tab switcher */}
       <View style={styles.subTabContainer}>
         <OutlineButton
-          title={`Auditors (${allAuditors.length})`}
+          title={`Auditors (${regularAuditorCount})`}
           icon={() => (
             <Icon
               name="users"
@@ -793,7 +814,7 @@ const StakeholderManagement: React.FC<StakeholderManagementProps> = ({
           }}
         />
         <OutlineButton
-          title={`Auditees (${allAuditees.length})`}
+          title={`Auditees (${auditeeTabCount})`}
           icon={() => (
             <Icon
               name="user-check"

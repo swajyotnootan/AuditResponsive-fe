@@ -1,4 +1,5 @@
 import PDFViewer from "@/components/audit/PDFViewer";
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import axios from "axios";
@@ -24,6 +25,7 @@ import {
   X,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -487,7 +489,7 @@ export default function Form5View({
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   const { addToast } = useToast();
-
+  const [resolvedPlantName, setResolvedPlantName] = useState<string>("");
   const urlYear = params?.year ? parseInt(params.year as string) : null;
   const preselectedYear = params?.preselectedYear
     ? parseInt(params.preselectedYear as string)
@@ -577,6 +579,8 @@ export default function Form5View({
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [showYearModal, setShowYearModal] = useState(false);
   const [showMonthModal, setShowMonthModal] = useState(false);
+  const { selectedPlantId } = usePlantFilter();
+  const plantIdParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
   const [pdfViewer, setPDFViewer] = useState({
     visible: false,
     pdfData: "",
@@ -622,6 +626,7 @@ export default function Form5View({
       const response = await auditScheduleApi.getAvailableMonths(
         selectedYear,
         user.id,
+        selectedPlantId, // ✅ NEW
       );
       const months = Array.isArray(response) ? response : response?.data || [];
       setAvailableMonths(months);
@@ -637,7 +642,7 @@ export default function Form5View({
     } catch (error: any) {
       showToast("Failed to load available months", "error");
     }
-  }, [selectedYear, selectedMonth, user?.id]);
+  }, [selectedYear, selectedMonth, user?.id, selectedPlantId]);
 
   const fetchAvailableDepartments = useCallback(async () => {
     if (!selectedMonth) return;
@@ -650,15 +655,18 @@ export default function Form5View({
         selectedYear,
         selectedMonth as any,
         user.id,
+        selectedPlantId, // ✅ PASS IT HERE
       );
       const departments = Array.isArray(response)
         ? response
         : response?.data || [];
+
+      console.log("🟢 [DEPTS DEBUG] Data from backend:", departments);
       setAvailableDepartments(departments);
     } catch (error: any) {
       setAvailableDepartments([]);
     }
-  }, [selectedYear, selectedMonth, user?.id]);
+  }, [selectedYear, selectedMonth, user?.id, selectedPlantId]);
 
   const fetchSchedules = useCallback(async () => {
     if (!selectedMonth) {
@@ -671,13 +679,14 @@ export default function Form5View({
         selectedYear,
         selectedMonth as any,
         user?.id,
+        selectedPlantId, // ✅ NEW
       );
       const allSchedules = Array.isArray(response)
         ? response
         : response?.data || [];
       const plantScopedSchedules = filterByPlant(
         allSchedules,
-        user?.plantId ?? null,
+        selectedPlantId ?? user?.plantId ?? null, // ✅ CHANGED
       );
       const weekSchedules = plantScopedSchedules.filter(
         (schedule: any) => !schedule.scheduledDate,
@@ -689,7 +698,7 @@ export default function Form5View({
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedMonth, user?.plantId]);
+  }, [selectedYear, selectedMonth, user?.plantId, selectedPlantId]);
 
   const fetchSummary = useCallback(async () => {
     if (!selectedMonth) return;
@@ -731,6 +740,7 @@ export default function Form5View({
         const response = await auditScheduleApi.getAvailableMonths(
           yearToFetch,
           user.id,
+          selectedPlantId, // ✅ NEW
         );
         const months = Array.isArray(response)
           ? response
@@ -757,7 +767,7 @@ export default function Form5View({
       }
     };
     loadData();
-  }, []);
+  }, [selectedPlantId]); // ✅ NEW — refetch when plant filter changes
 
   useEffect(() => {
     if (selectedMonth) {
@@ -774,6 +784,12 @@ export default function Form5View({
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
+    setAvailableMonths([]);
+    setSchedules([]);
+    setAvailableDepartments([]);
+  }, [selectedPlantId]);
+
+  useEffect(() => {
     if (!user?.id) return;
     const refetchMonths = async () => {
       setLoading(true);
@@ -781,6 +797,7 @@ export default function Form5View({
         const response = await auditScheduleApi.getAvailableMonths(
           selectedYear,
           user.id,
+          selectedPlantId, // ✅ NEW
         );
         const months = Array.isArray(response)
           ? response
@@ -809,7 +826,7 @@ export default function Form5View({
     };
     refetchMonths();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedYear, user?.id]);
+  }, [selectedYear, user?.id, selectedPlantId]); // ✅ NEW
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -817,6 +834,35 @@ export default function Form5View({
     for (let i = currentYear - 5; i <= currentYear + 5; i++) years.push(i);
     setAvailableYears(years);
   }, []);
+
+  // ✅ Fetch the real plant name based on the selected plant ID
+  useEffect(() => {
+    const fetchPlantName = async () => {
+      const targetPlantId = selectedPlantId || user?.plantId;
+      if (!targetPlantId) return;
+
+      // If the user context already has it, use it
+      if ((user as any)?.plantName) {
+        setResolvedPlantName((user as any).plantName);
+        return;
+      }
+
+      try {
+        const plants = await auditScheduleApi.getPlants();
+        const plant = plants.find(
+          (p: any) => String(p.id) === String(targetPlantId),
+        );
+        if (plant) {
+          setResolvedPlantName(plant.name);
+        }
+      } catch (error) {
+        console.warn("Could not fetch plant name:", error);
+        setResolvedPlantName(`Plant ${targetPlantId}`); // Fallback
+      }
+    };
+
+    fetchPlantName();
+  }, [selectedPlantId, user?.plantId, user?.plantName]);
 
   // ═════ HANDLERS ═════
   const handleRefresh = () => {
@@ -1092,6 +1138,7 @@ export default function Form5View({
       await auditScheduleApi.saveMonthDocument(
         saveData,
         user?.id as string | number,
+        selectedPlantId || user?.plantId || null, // ✅ ADD THIS
       );
       showToast(
         `${monthDisplay[selectedMonth]} schedule saved as DRAFT!`,
@@ -1099,8 +1146,13 @@ export default function Form5View({
       );
       await fetchSchedules();
       await fetchAvailableMonths();
-    } catch (error) {
-      showToast("Failed to save document", "error");
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to save document";
+      showToast(msg, "error");
     } finally {
       setSaving(false);
     }
@@ -1135,11 +1187,13 @@ export default function Form5View({
       await auditScheduleApi.saveMonthDocument(
         saveData,
         user?.id as string | number,
+        selectedPlantId || user?.plantId || null, // ✅ ADD THIS
       );
       await auditScheduleApi.submitMonth(
         selectedYear,
         selectedMonth as any,
         user?.id as string | number,
+        selectedPlantId || user?.plantId || null, // ← ADD
       );
       setPlanStatus((prev) => ({
         ...prev,
@@ -1151,8 +1205,13 @@ export default function Form5View({
       );
       await fetchSchedules();
       await fetchAvailableMonths();
-    } catch (error) {
-      showToast("Failed to submit plan", "error");
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to submit plan";
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -1945,7 +2004,8 @@ export default function Form5View({
               selectedYear={selectedYear}
               canEdit={canEdit}
               userRole={user?.role}
-              currentUserPlantId={user?.plantId}
+              currentUserPlantId={selectedPlantId} // ✅ MUST BE PASSED HERE
+
               onCellClick={(
                 department: string,
                 week: string,
@@ -1970,8 +2030,12 @@ export default function Form5View({
                 } else {
                   setEditingSchedule(null);
                   setFormData({
-                    plantId: user?.plantId || "",
-                    plantName: user?.plantName || "",
+                    plantId: selectedPlantId || user?.plantId || "",
+                    // ✅ PASS THE RESOLVED NAME
+                    plantName:
+                      resolvedPlantName ||
+                      user?.plantName ||
+                      `Plant ${selectedPlantId || user?.plantId || ""}`,
                     department,
                     month: selectedMonth,
                     week,
@@ -1997,8 +2061,12 @@ export default function Form5View({
                     onPress={() => {
                       setEditingSchedule(null);
                       setFormData({
-                        plantId: user?.plantId || "",
-                        plantName: user?.plantName || "",
+                        plantId: selectedPlantId || user?.plantId || "",
+                        // ✅ PASS THE RESOLVED NAME
+                        plantName:
+                          resolvedPlantName ||
+                          user?.plantName ||
+                          `Plant ${selectedPlantId || user?.plantId || ""}`,
                         department: "",
                         month: selectedMonth,
                         week: "",
@@ -2172,8 +2240,13 @@ export default function Form5View({
         saving={saving}
         selectedYear={selectedYear}
         allSchedules={schedules}
-        currentUserPlantId={user?.plantId}
-        currentUserPlantName={user?.plantName}
+        currentUserPlantId={selectedPlantId || user?.plantId || ""}
+        // ✅ USE THE RESOLVED PLANT NAME HERE
+        currentUserPlantName={
+          resolvedPlantName ||
+          user?.plantName ||
+          `Plant ${selectedPlantId || user?.plantId || ""}`
+        }
       />
 
       {/* Year Selection Modal */}

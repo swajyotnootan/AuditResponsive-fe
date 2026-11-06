@@ -719,10 +719,12 @@ const getNcrYear = (ncr: any): number | null => {
 
 export default function Form9View({
   onBack,
-  selectedYear, // 👈 ADD
+  selectedYear,
+  selectedPlantId, // 👈 ADD
 }: {
   onBack?: () => void;
-  selectedYear?: number; // 👈 ADD
+  selectedYear?: number;
+  selectedPlantId?: string | null; // 👈 ADD
 }) {
   const navigation = useNavigation<NavigationProp<any>>();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -760,12 +762,25 @@ export default function Form9View({
       }
 
       const rawList = (result.data || []) as RawNCR[];
-      const ncrList: RawNCR[] = selectedYear
+
+      // ✅ Plant filter (client-side fallback in case backend doesn't scope by plant)
+      const plantScoped = selectedPlantId
         ? rawList.filter((ncr: any) => {
+            const ncrPlant =
+              ncr.plantId ?? ncr.plant?.id ?? ncr.plant_id ?? null;
+            return (
+              ncrPlant != null && String(ncrPlant) === String(selectedPlantId)
+            );
+          })
+        : rawList;
+
+      // ✅ Year filter (existing logic)
+      const ncrList: RawNCR[] = selectedYear
+        ? plantScoped.filter((ncr: any) => {
             const y = getNcrYear(ncr);
             return y === null || y === selectedYear;
           })
-        : rawList;
+        : plantScoped;
       const transformedRows: NCRRow[] = ncrList.map((ncr, index) => {
         const isClosed = isClosedNcrStatus(ncr.status);
         const correctiveAction = getCorrectiveActionText(ncr);
@@ -808,12 +823,12 @@ export default function Form9View({
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, selectedYear, selectedPlantId]);
 
   useEffect(() => {
     if (!user?.id) return;
     fetchNCRSummary();
-  }, [user?.id, fetchNCRSummary, selectedYear]);
+  }, [user?.id, fetchNCRSummary, selectedYear, selectedPlantId]); // 👈 ADD selectedPlantId
 
   const filteredRows = useMemo(() => {
     const {
@@ -1006,6 +1021,19 @@ export default function Form9View({
             {/* Left Side: Back Button & Title */}
             <View style={{ flex: 1, minWidth: 200 }}>
               <View className="flex-row items-center" style={{ gap: 12 }}>
+                {selectedPlantId && (
+                  <View className="flex-row items-center rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2">
+                    <Feather
+                      name="home"
+                      size={14}
+                      color={T.accent}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text className="text-xs font-semibold text-[#1E40AF]">
+                      Plant: {selectedPlantId}
+                    </Text>
+                  </View>
+                )}
                 <Pressable
                   onPress={() => {
                     if (onBack) {

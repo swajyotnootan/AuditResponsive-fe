@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 import { useAuth } from "../context/AuthContext";
+import { usePlantFilter } from "../context/PlantFilterContext";
 import { CalendarEvent, EventFilter, ViewType } from "./CalendarTypes";
 import {
   buildMarkedDates,
@@ -40,7 +41,6 @@ import EventModal from "./EventModal";
 import { useResponsive } from "./Responsive";
 import UserAvatar from "./UserAvatar";
 import YearView from "./YearView";
-
 // Configure calendar locale
 LocaleConfig.locales["en"] = {
   monthNames: [
@@ -304,6 +304,7 @@ const CalendarEventComponent = ({ event }: any) => {
 export default function CalendarView() {
   const { user } = useAuth();
   const responsive = useResponsive();
+  const { selectedPlantId } = usePlantFilter();
   const { isMobile, sidebarWidth, fontLarge, fontMedium, fontSmall } =
     responsive;
 
@@ -342,9 +343,7 @@ export default function CalendarView() {
     const role = (user?.role || "").toUpperCase();
 
     if (
-      ["AUDIT_MANAGER", "TOP_MANAGEMENT", "LEAD_AUDITOR", "AUDITEE"].includes(
-        role,
-      )
+      ["AUDIT_MANAGER", "PLANT_HEAD", "LEAD_AUDITOR", "AUDITEE"].includes(role)
     ) {
       return role;
     }
@@ -400,9 +399,7 @@ export default function CalendarView() {
   useEffect(() => {
     const role = user?.role?.toUpperCase() || "";
     if (
-      ["AUDIT_MANAGER", "TOP_MANAGEMENT", "LEAD_AUDITOR", "AUDITEE"].includes(
-        role,
-      )
+      ["AUDIT_MANAGER", "PLANT_HEAD", "LEAD_AUDITOR", "AUDITEE"].includes(role)
     ) {
       setUserRole(role);
     } else {
@@ -432,20 +429,25 @@ export default function CalendarView() {
         "User-Email": user?.email || "", // ✅ missing in your RN code
       };
 
-      let url: string;
+      const fromDate = moment(currentDate)
+        .startOf("month")
+        .format("YYYY-MM-DD");
+      const toDate = moment(currentDate).endOf("month").format("YYYY-MM-DD");
 
-      if (userRoleForAPI === "AUDITOR") {
-        url = `${API_BASE_URL}/api/audit-schedule/auditor/${user.id}/schedules-with-status`;
-      } else {
-        // ✅ WINDOWED FETCH — only the month the user is viewing.
-        // Server returns only schedules whose date falls inside this range.
-        const fromDate = moment(currentDate)
-          .startOf("month")
-          .format("YYYY-MM-DD");
-        const toDate = moment(currentDate).endOf("month").format("YYYY-MM-DD");
-        url = `${API_BASE_URL}/api/audit-schedule/window?userId=${user.id}&from=${fromDate}&to=${toDate}`;
-      }
+      const plantParam = selectedPlantId
+        ? `&plantId=${encodeURIComponent(selectedPlantId)}`
+        : "";
 
+      const url = `${API_BASE_URL}/api/audit-schedule/window?userId=${user.id}&from=${fromDate}&to=${toDate}${plantParam}`;
+
+      console.log(
+        "🌱 [DBG-PLANT] role =",
+        userRoleForAPI,
+        "| selectedPlantId =",
+        selectedPlantId ?? "(none — company-wide)",
+        "→",
+        url,
+      );
       console.log("📡 Fetching schedules from:", url);
 
       const response = await fetch(url, {
@@ -762,7 +764,7 @@ export default function CalendarView() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, getApiRole, leadAuditorDepartment, currentDate]);
+  }, [user, getApiRole, leadAuditorDepartment, currentDate, selectedPlantId]);
 
   // Initial load
   useEffect(() => {

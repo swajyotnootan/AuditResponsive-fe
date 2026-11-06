@@ -453,24 +453,31 @@ const ScheduleModal = ({
   // ✅ Auto-fill plant
   useEffect(() => {
     if (!isOpen) return;
-    if (
-      editingSchedule?.plantId &&
-      formData.plantId !== editingSchedule.plantId
-    ) {
-      setFormData((prev: any) => ({
-        ...prev,
-        plantId: editingSchedule.plantId,
-        plantName:
-          editingSchedule.plantName || `Plant ${editingSchedule.plantId}`,
-      }));
+
+    // 1. If editing an existing schedule, use its plant
+    if (editingSchedule?.plantId) {
+      const name =
+        editingSchedule.plantName || `Plant ${editingSchedule.plantId}`;
+      if (formData.plantId !== editingSchedule.plantId || !formData.plantName) {
+        setFormData((prev: any) => ({
+          ...prev,
+          plantId: editingSchedule.plantId,
+          plantName: name,
+        }));
+      }
       return;
     }
-    if (currentUserPlantId && formData.plantId !== currentUserPlantId) {
-      setFormData((prev: any) => ({
-        ...prev,
-        plantId: currentUserPlantId,
-        plantName: currentUserPlantName || `Plant ${currentUserPlantId}`,
-      }));
+
+    // 2. If creating a new schedule, use the current user's plant
+    if (currentUserPlantId) {
+      const name = currentUserPlantName || `Plant ${currentUserPlantId}`;
+      if (formData.plantId !== currentUserPlantId || !formData.plantName) {
+        setFormData((prev: any) => ({
+          ...prev,
+          plantId: currentUserPlantId,
+          plantName: name,
+        }));
+      }
     }
   }, [
     isOpen,
@@ -478,6 +485,7 @@ const ScheduleModal = ({
     currentUserPlantName,
     editingSchedule,
     formData.plantId,
+    formData.plantName,
     setFormData,
   ]);
 
@@ -529,19 +537,28 @@ const ScheduleModal = ({
           selectedYear,
           selectedMonth,
           plantId,
-          formData.auditType,
+          undefined, // excludeAuditorId
+          undefined, // auditType
+          formData.department, // ✅ ADD THIS
         );
+
         const fullyCompetentAuditors = extractData(response);
+        console.log("🟢 [AUDITORS DEBUG] Fetched:", fullyCompetentAuditors);
+
         setFullyCompetentTeamAuditors(
           Array.isArray(fullyCompetentAuditors) ? fullyCompetentAuditors : [],
         );
       } catch (error: any) {
+        console.error(
+          "❌ [AUDITORS DEBUG] Error:",
+          error.response?.data || error.message,
+        );
         setFullyCompetentTeamAuditors([]);
       } finally {
         setLoadingCompetent(false);
       }
     },
-    [selectedYear, selectedMonth, formData.auditType],
+    [selectedYear, selectedMonth, formData.auditType, formData.department], // ✅ Add to deps
   );
 
   useEffect(() => {
@@ -1088,8 +1105,13 @@ const ScheduleModal = ({
                         </Text>
                       ) : (
                         <Text>
-                          No auditors are competent for all{" "}
+                          No auditors have valid competency records for{" "}
                           {formData.auditElements.length} element(s).
+                          {"\n"}Ask your QMS Admin to add competency in{" "}
+                          <Text style={{ fontWeight: "bold" }}>
+                            Auditor Master
+                          </Text>
+                          .
                         </Text>
                       )}
                     </Text>
@@ -1147,7 +1169,9 @@ const ScheduleModal = ({
                     >
                       {formData.plantName ||
                         currentUserPlantName ||
-                        "Loading..."}
+                        (formData.plantId
+                          ? `Plant ${formData.plantId}`
+                          : "N/A")}
                     </Text>
                   </View>
                 </View>
@@ -1734,23 +1758,13 @@ const ScheduleModal = ({
         }
         title="Select Auditees"
       />
-      <AuditElementsDropdown
-        isOpen={showDepartmentModal}
-        onClose={() => setShowDepartmentModal(false)}
-        options={departments}
-        selected={formData.department || ""}
-        onChange={(dept: string) => {
-          handleDepartmentChange(dept);
-          setShowDepartmentModal(false);
-        }}
-        title="Select Department"
-      />
+
       <AuditElementsDropdown
         isOpen={showElementsModal}
         onClose={() => setShowElementsModal(false)}
         options={availableAuditElements}
         selected={formData.auditElements?.[0] || ""}
-        onChange={(element: string) => {
+        onChange={async (element: string) => {
           setSelectedTeamAuditors([]);
           setTeamAuditorNames([]);
           setSelectedCoAuditors([]);
@@ -1758,8 +1772,15 @@ const ScheduleModal = ({
           setSelectedAuditees([]);
           setSelectedAuditeeNames([]);
           setFullyCompetentTeamAuditors([]);
-          setFormData({ ...formData, auditElements: element ? [element] : [] });
+
+          const newElements = element ? [element] : [];
+          setFormData({ ...formData, auditElements: newElements });
           setShowElementsModal(false);
+
+          // ✅ Manually trigger the fetch with the exact array
+          if (formData.plantId && newElements.length > 0) {
+            await fetchFullyCompetentAuditors(newElements, formData.plantId);
+          }
         }}
         title="Select Audit Element"
       />

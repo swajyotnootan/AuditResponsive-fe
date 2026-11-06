@@ -1,4 +1,12 @@
-﻿import { LinearGradient } from "expo-linear-gradient";
+﻿import Form3View from "@/components/dashboards/auditManager/Form3View";
+import Form4View from "@/components/dashboards/auditManager/Form4View";
+import Form5Dashboard from "@/components/dashboards/auditManager/Form5Dashboard";
+import Form5DetailedView from "@/components/dashboards/auditManager/Form5DetailedView";
+import Form5View from "@/components/dashboards/auditManager/Form5View";
+import Form9View from "@/components/dashboards/auditManager/Form9View";
+import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
+import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   AlertCircle,
   ArrowRightCircle,
@@ -26,19 +34,7 @@ import {
   View,
 } from "react-native";
 import YearFilter from "../common/YearFilter";
-
-import Form3View from "@/components/dashboards/auditManager/Form3View";
-import Form4View from "@/components/dashboards/auditManager/Form4View";
-import Form5Dashboard from "@/components/dashboards/auditManager/Form5Dashboard";
-import Form5DetailedView from "@/components/dashboards/auditManager/Form5DetailedView";
-import Form5View from "@/components/dashboards/auditManager/Form5View";
-import Form9View from "@/components/dashboards/auditManager/Form9View";
-import NCRDashboard from "@/components/dashboards/auditManager/NCRDashboard";
-import WeekSelectionView from "@/components/dashboards/auditManager/WeekSelectionView";
 import AuditCheckSheetNCRForumModal from "../modals/AuditCheckSheetNCRForumModal";
-import NCRPendingDashboard from "./auditManager/NCRPendingDashboard";
-import NCRViewManager from "./auditor/view/NCRViewManager";
-
 import {
   KpiCard,
   NcrCard,
@@ -59,7 +55,9 @@ import {
   ViewRequestModal,
 } from "./auditManager/AuditManagerModals";
 import { COLORS, styles } from "./auditManager/AuditManagerStyles";
+import NCRPendingDashboard from "./auditManager/NCRPendingDashboard";
 import { useAuditManagerData } from "./auditManager/useAuditManagerData";
+import NCRViewManager from "./auditor/view/NCRViewManager";
 
 // ============================================================
 // Workflow Step Card (inline — stays in this file)
@@ -175,6 +173,7 @@ export default function AuditManagerDashboard() {
     selectedYear,
     setSelectedYear,
     availableYears,
+    selectedPlantId,
     stats,
     allNcrs,
     pendingRequests,
@@ -188,7 +187,6 @@ export default function AuditManagerDashboard() {
     ncrPriorityData,
     recentActivities,
     refresh,
-    departmentTeamMembers,
     loadingTeamMembers,
     handleViewRequest,
     showForumModal,
@@ -197,6 +195,10 @@ export default function AuditManagerDashboard() {
     setSelectedAuditForForum,
     selectedRequest,
     setSelectedRequest,
+    // ✅ NEW exports from the updated hook
+    pendingOnly,
+    overdueOnly,
+    reassignOptions,
   } = useAuditManagerData();
 
   const [selectedForm5Month, setSelectedForm5Month] = useState<string | null>(
@@ -216,8 +218,6 @@ export default function AuditManagerDashboard() {
   };
 
   const displayName = user?.firstName || user?.name?.split(" ")[0] || "User";
-  const fullDisplayName =
-    `${user?.salutation || "Mr."} ${user?.firstName || ""} ${user?.lastName || ""}`.trim();
 
   const getWorkflowSteps = () => {
     const isForm3Approved = form3Status.status === "APPROVED";
@@ -348,6 +348,7 @@ export default function AuditManagerDashboard() {
       <NCRPendingDashboard
         onBack={() => setActiveSection("ncr")}
         selectedYear={selectedYear}
+        selectedPlantId={selectedPlantId}
       />
     );
   if (activeSection === "ncr-dashboard")
@@ -356,6 +357,7 @@ export default function AuditManagerDashboard() {
         onBack={() => setActiveSection("ncr")}
         onViewNcr={setActiveNcrViewId}
         selectedYear={selectedYear}
+        selectedPlantId={selectedPlantId}
       />
     );
   if (activeSection === "form9")
@@ -363,6 +365,7 @@ export default function AuditManagerDashboard() {
       <Form9View
         onBack={() => setActiveSection("ncr")}
         selectedYear={selectedYear}
+        selectedPlantId={selectedPlantId}
       />
     );
   if (activeNcrViewId)
@@ -371,6 +374,7 @@ export default function AuditManagerDashboard() {
         initialId={activeNcrViewId}
         initialType="form7"
         onClose={() => setActiveNcrViewId(null)}
+        selectedPlantId={selectedPlantId}
       />
     );
 
@@ -630,8 +634,10 @@ export default function AuditManagerDashboard() {
             {renderWorkflowSection()}
           </View>
         );
+
       case "schedules":
         return renderWorkflowSection();
+
       case "ncr":
         return (
           <View style={{ gap: 16 }}>
@@ -650,7 +656,7 @@ export default function AuditManagerDashboard() {
                 <NcrCard
                   title="CA Verification"
                   description="Verify corrective actions"
-                  icon={<CheckCircle size={22} />}
+                  icon={<CheckCircle size={22} color={COLORS.primary} />} // ✅ Added color
                   onPress={() => setActiveSection("ncr-pending")}
                   badgeText={`${stats.pendingCaVerification} Pending`}
                   isDesktop={isDesktop}
@@ -658,7 +664,7 @@ export default function AuditManagerDashboard() {
                 <NcrCard
                   title="NCR Report"
                   description="View all Non-Conformance Reports"
-                  icon={<AlertCircle size={22} />}
+                  icon={<AlertCircle size={22} color={COLORS.primary} />} // ✅ Added color
                   onPress={() => setActiveSection("ncr-dashboard")}
                   badgeText={`${stats.openNCRs} Open`}
                   isDesktop={isDesktop}
@@ -666,7 +672,7 @@ export default function AuditManagerDashboard() {
                 <NcrCard
                   title="NC Summary"
                   description="All NCRs at a glance"
-                  icon={<BarChart2 size={22} />}
+                  icon={<BarChart2 size={22} color={COLORS.primary} />} // ✅ Added color
                   onPress={() => setActiveSection("form9")}
                   badgeText={`${allNcrs.length} Total`}
                   isDesktop={isDesktop}
@@ -688,41 +694,170 @@ export default function AuditManagerDashboard() {
             </View>
           </View>
         );
+
+      // ✅ NEW: two-column layout (Pending Requests | Overdue — No Request)
       case "requests":
         return (
-          <AnimatedGlassCard style={styles.workflowSection}>
-            <Text style={styles.cardTitle}>Pending Auditor Requests</Text>
-            {pendingRequests.length > 0 ? (
-              <View style={{ gap: 12, marginTop: 16 }}>
-                {pendingRequests.map((req: any, i: number) => (
-                  <RequestCard
-                    key={i}
-                    request={req}
-                    onView={(r: any) => {
-                      setSelectedRequest(r);
-                      handleViewRequest(r);
-                      setShowRequestModal(true);
-                    }}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View style={{ alignItems: "center", padding: 24 }}>
-                <MessageSquare size={32} color={COLORS.textMuted} />
-                <Text
+          <View style={{ gap: 16 }}>
+            <View
+              style={{
+                flexDirection: isDesktop ? "row" : "column",
+                gap: 16,
+              }}
+            >
+              {/* ── Left: Pending Requests ── */}
+              <AnimatedGlassCard
+                style={[styles.workflowSection, isDesktop ? { flex: 1 } : {}]}
+              >
+                <View
                   style={{
-                    fontSize: 14,
-                    fontWeight: "500",
-                    color: COLORS.textMain,
-                    marginTop: 12,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
                   }}
                 >
-                  No pending requests
-                </Text>
-              </View>
-            )}
-          </AnimatedGlassCard>
+                  <View>
+                    <Text style={styles.cardTitle}>Pending Requests</Text>
+                    <Text style={styles.cardSubtitle}>
+                      Awaiting your approval
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: COLORS.primaryLight,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: COLORS.primary,
+                      }}
+                    >
+                      {pendingOnly.length}
+                    </Text>
+                  </View>
+                </View>
+
+                {pendingOnly.length > 0 ? (
+                  <View style={{ gap: 12, marginTop: 12 }}>
+                    {pendingOnly.map((req: any, i: number) => (
+                      <RequestCard
+                        key={`pending-${req.type}-${req.requestId ?? req.scheduleId}`}
+                        request={req}
+                        onView={(r: any) => {
+                          setSelectedRequest(r);
+                          handleViewRequest(r);
+                          setShowRequestModal(true);
+                        }}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: "center", padding: 24 }}>
+                    <MessageSquare size={32} color={COLORS.textMuted} />
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: COLORS.textMain,
+                        marginTop: 12,
+                      }}
+                    >
+                      No pending requests
+                    </Text>
+                  </View>
+                )}
+              </AnimatedGlassCard>
+
+              {/* ── Right: Overdue without a pending request ── */}
+              <AnimatedGlassCard
+                style={[styles.workflowSection, isDesktop ? { flex: 1 } : {}]}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <View>
+                    <Text style={styles.cardTitle}>Overdue — No Request</Text>
+                    <Text style={styles.cardSubtitle}>
+                      Act directly: reschedule or extend
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: COLORS.dangerBg,
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: COLORS.danger,
+                      }}
+                    >
+                      {overdueOnly.length}
+                    </Text>
+                  </View>
+                </View>
+
+                {overdueOnly.length > 0 ? (
+                  <View style={{ gap: 12, marginTop: 12 }}>
+                    {overdueOnly.map((s: any, i: number) => (
+                      <RequestCard
+                        key={`overdue-${s.id}-${s.updatedAt ?? s.scheduledDate}-${s.startTime ?? ""}`}
+                        request={{
+                          type: "OVERDUE",
+                          scheduleId: s.id,
+                          auditType: s.auditType,
+                          department: s.department,
+                          auditorName: s.auditorName,
+                          auditeeName: s.auditeeName,
+                          currentDate: s.scheduledDate,
+                          currentStartTime: s.startTime,
+                          currentEndTime: s.endTime,
+                          requestedAt: new Date().toISOString(),
+                          status: "OVERDUE",
+                        }}
+                        onView={(r: any) => {
+                          setSelectedRequest(r);
+                          handleViewRequest(r);
+                          setShowApproveModal(true);
+                        }}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{ alignItems: "center", padding: 24 }}>
+                    <CheckCircle size={32} color={COLORS.success} />
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: COLORS.textMain,
+                        marginTop: 12,
+                      }}
+                    >
+                      No overdue audits
+                    </Text>
+                  </View>
+                )}
+              </AnimatedGlassCard>
+            </View>
+          </View>
         );
+
       default:
         return (
           <View style={{ padding: 40, alignItems: "center" }}>
@@ -804,6 +939,8 @@ export default function AuditManagerDashboard() {
           setShowRejectModal(true);
         }}
       />
+
+      {/* ✅ CHANGED: pass reassignOptions instead of departmentTeamMembers */}
       <ApproveModal
         visible={showApproveModal}
         request={selectedRequest}
@@ -811,15 +948,15 @@ export default function AuditManagerDashboard() {
           setShowApproveModal(false);
           setSelectedRequest(null);
         }}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowApproveModal(false);
           setSelectedRequest(null);
-          refresh();
+          await refresh();
         }}
-        allUsersList={allUsersList}
-        departmentTeamMembers={departmentTeamMembers}
+        reassignOptions={reassignOptions}
         loadingTeamMembers={loadingTeamMembers}
       />
+
       <RejectModal
         visible={showRejectModal}
         request={selectedRequest}

@@ -1,5 +1,6 @@
 // Form5DetailedView.tsx
 import PDFViewer from "@/components/audit/PDFViewer";
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { API_BASE_URL } from "@/config/apiConfig";
 import { auditScheduleApi, User } from "@/services/auditScheduleApi";
 import { pdfService } from "@/services/pdfService";
@@ -848,6 +849,10 @@ export default function Form5DetailedView({
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, isAuditManager, isTopManagement, isLeadAuditor } = useAuth();
+  const { selectedPlantId } = usePlantFilter();
+  const rawPlantId = (user as any)?.plantId ?? selectedPlantId ?? null;
+  const effectivePlantId =
+    rawPlantId != null && rawPlantId !== "" ? Number(rawPlantId) : null;
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -984,68 +989,94 @@ export default function Form5DetailedView({
 
   const bulkAvailableAuditors: User[] = useMemo(() => {
     const teamIds = bulkDepartmentTeamInfo.teamAuditorIds;
+    const teamNames = bulkDepartmentTeamInfo.teamAuditorNames || [];
+    const sortUsers = (arr: User[]) =>
+      [...arr].sort((a, b) =>
+        `${a.firstName || ""} ${a.lastName || ""}`
+          .toLowerCase()
+          .localeCompare(
+            `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase(),
+          ),
+      );
 
     if (teamIds.length > 0) {
       const result: User[] = [];
       const seen = new Set<number>();
-      for (const a of bulkDepartmentAuditors) {
-        const id = Number(a.id);
-        if (teamIds.includes(id) && !seen.has(id)) {
-          seen.add(id);
-          result.push(a);
+      teamIds.forEach((id, idx) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        const found =
+          bulkDepartmentAuditors.find((a) => Number(a.id) === id) ||
+          bulkCompetentAuditors.find((a) => Number(a.id) === id);
+        if (found) {
+          result.push(found);
+        } else {
+          const name = teamNames[idx] || `Auditor ${id}`;
+          const parts = String(name).trim().split(/\s+/);
+          result.push({
+            id,
+            firstName: parts[0] || "Auditor",
+            lastName: parts.slice(1).join(" ") || String(id),
+            role: "AUDITOR",
+          } as User);
         }
-      }
-      for (const id of teamIds) {
-        if (!seen.has(id)) {
-          const fromCompetent = bulkCompetentAuditors.find(
-            (a) => Number(a.id) === id,
-          );
-          if (fromCompetent) {
-            seen.add(id);
-            result.push(fromCompetent);
-          }
-        }
-      }
-      return result;
+      });
+      if (result.length > 0) return sortUsers(result); // ✅ guard
     }
 
-    return bulkCompetentAuditors;
+    if (bulkCompetentAuditors.length > 0)
+      return sortUsers(bulkCompetentAuditors);
+    return sortUsers(bulkDepartmentAuditors); // ✅ final fallback
   }, [
     bulkDepartmentTeamInfo.teamAuditorIds,
+    bulkDepartmentTeamInfo.teamAuditorNames,
     bulkDepartmentAuditors,
     bulkCompetentAuditors,
   ]);
 
   const bulkAvailableAuditees: User[] = useMemo(() => {
     const teamIds = bulkDepartmentTeamInfo.auditeeIds;
+    const teamNames = bulkDepartmentTeamInfo.auditeeNames || [];
+    const sortUsers = (arr: User[]) =>
+      [...arr].sort((a, b) =>
+        `${a.firstName || ""} ${a.lastName || ""}`
+          .toLowerCase()
+          .localeCompare(
+            `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase(),
+          ),
+      );
 
     if (teamIds.length > 0) {
       const result: User[] = [];
       const seen = new Set<number>();
-      for (const a of bulkDepartmentAuditees) {
-        const id = Number(a.id);
-        if (teamIds.includes(id) && !seen.has(id)) {
-          seen.add(id);
-          result.push(a);
+      teamIds.forEach((id, idx) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        const found =
+          bulkDepartmentAuditees.find((a) => Number(a.id) === id) ||
+          bulkCompetentAuditees.find((a) => Number(a.id) === id);
+        if (found) {
+          result.push(found);
+        } else {
+          const name = teamNames[idx] || `Auditee ${id}`;
+          const parts = String(name).trim().split(/\s+/);
+          result.push({
+            id,
+            firstName: parts[0] || "Auditee",
+            lastName: parts.slice(1).join(" ") || String(id),
+            role: "AUDITEE",
+          } as User);
         }
-      }
-      for (const id of teamIds) {
-        if (!seen.has(id)) {
-          const fromCompetent = bulkCompetentAuditees.find(
-            (a) => Number(a.id) === id,
-          );
-          if (fromCompetent) {
-            seen.add(id);
-            result.push(fromCompetent);
-          }
-        }
-      }
-      return result;
+      });
+      if (result.length > 0) return sortUsers(result); // ✅ guard
     }
 
-    return bulkCompetentAuditees;
+    if (bulkCompetentAuditees.length > 0)
+      return sortUsers(bulkCompetentAuditees);
+    return sortUsers(bulkDepartmentAuditees); // ✅ final fallback
   }, [
     bulkDepartmentTeamInfo.auditeeIds,
+    bulkDepartmentTeamInfo.auditeeNames,
     bulkDepartmentAuditees,
     bulkCompetentAuditees,
   ]);
@@ -1911,25 +1942,33 @@ export default function Form5DetailedView({
       const weekSchedules = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
         selectedMonth as any,
+        user?.id,
+        effectivePlantId, // ✅ ADD
       );
       if (!user?.id) return;
       const dateSchedules = await auditScheduleApi.getDateSchedulesByMonth(
         selectedYear,
         selectedMonth as any,
         user.id,
+        effectivePlantId, // ✅ ADD
       );
 
       const rawAllSchedules = [
         ...(weekSchedules.data || []),
         ...(dateSchedules.data || []),
       ];
-
-      const allSchedules = filterByPlant(rawAllSchedules, user?.plantId);
-
+      const allSchedules = rawAllSchedules;
       setBasicSchedules(allSchedules);
 
       const hasApprovedSchedules = allSchedules.some(
-        (s: any) => s.approvalStatus === "APPROVED",
+        (s: any) =>
+          s.approvalStatus === "APPROVED" ||
+          s.detailedApprovalStatus === "CONFIRMED_BY_LA" ||
+          s.detailedApprovalStatus === "PENDING_LA_CONFIRMATION" ||
+          s.detailedApprovalStatus === "PENDING_APPROVAL" ||
+          s.detailedApprovalStatus === "APPROVED" ||
+          s.detailedApprovalStatus === "REJECTED" ||
+          s.detailedApprovalStatus === "CHANGE_REQUESTED",
       );
 
       if (hasApprovedSchedules) {
@@ -1990,7 +2029,7 @@ export default function Form5DetailedView({
       console.error("Error fetching basic schedules:", error);
       setApprovalStatus("ERROR");
     }
-  }, [selectedYear, selectedMonth, user?.id]);
+  }, [selectedYear, selectedMonth, user?.id, effectivePlantId]);
 
   const fetchDetailedSchedules = useCallback(async () => {
     if (!selectedMonth) return;
@@ -2000,12 +2039,11 @@ export default function Form5DetailedView({
         selectedYear,
         selectedMonth as any,
         user.id,
+        effectivePlantId, // ✅ ADD
       );
       const dateSchedules = response.data || [];
-
-      const plantScopedSchedules = filterByPlant(dateSchedules, user?.plantId);
-
-      const processedSchedules = plantScopedSchedules.map((schedule: any) => {
+      // Backend already scoped by plantId → no client filter needed
+      const processedSchedules = dateSchedules.map((schedule: any) => {
         if ((!schedule.startTime || !schedule.endTime) && schedule.remarks) {
           try {
             const remarks = JSON.parse(schedule.remarks);
@@ -2041,7 +2079,7 @@ export default function Form5DetailedView({
       console.error("Error fetching detailed schedules:", error);
       setAuditSchedules([]);
     }
-  }, [selectedYear, selectedMonth, user?.id]);
+  }, [selectedYear, selectedMonth, user?.id, effectivePlantId]);
 
   const checkTimeConflict = (
     date: string,
@@ -2241,7 +2279,7 @@ export default function Form5DetailedView({
         preparedByName:
           headerData.preparedBy || user?.name || user?.username || "",
         preparedByPosition: "Audit Manager",
-        plantId: (user as any)?.plantId ?? null,
+        plantId: effectivePlantId,
         plantName: (user as any)?.plantName ?? null,
       };
       if (formData.id) {
@@ -2367,7 +2405,7 @@ export default function Form5DetailedView({
           : bulkData.selectedDepartments || [],
         isSpecialEvent: bulkData.isSpecialEvent || false,
         specialEventType: bulkData.specialEventType || "",
-        plantId: (user as any)?.plantId ?? null,
+        plantId: effectivePlantId,
         plantName: (user as any)?.plantName ?? null,
         auditType: bulkData.auditType || globalAuditType,
         auditNumber: "",
@@ -2544,6 +2582,8 @@ export default function Form5DetailedView({
       await auditScheduleApi.confirmSingleDailyFeasibility(
         scheduleId,
         getUserIdAsNumber(),
+        undefined,
+        effectivePlantId, // ✅ ADD
       );
       showToast("✅ Daily schedule confirmed for feasibility!", "success");
       await fetchDetailedSchedules();
@@ -2744,6 +2784,8 @@ export default function Form5DetailedView({
           endDate: endDate || undefined,
           auditType: globalAuditType || undefined,
         },
+        user?.id,
+        effectivePlantId, // ✅ ADD both
       );
       const blob =
         response.data instanceof Blob
@@ -3017,7 +3059,12 @@ export default function Form5DetailedView({
     if (!bulkSelectedAuditDepartment) return;
     const elementsToUse =
       bulkData.selectedDepartments?.flatMap((d) => d.selectedElements) || [];
-    fetchBulkCompetentUsers(bulkSelectedAuditDepartment, elementsToUse);
+    fetchBulkCompetentUsers(
+      bulkSelectedAuditDepartment,
+      elementsToUse,
+      bulkDepartmentTeamInfo.teamAuditorIds, // ✅ add
+      bulkDepartmentTeamInfo.auditeeIds,
+    );
   }, [bulkData.selectedDepartments]);
 
   useEffect(() => {
@@ -3066,23 +3113,11 @@ export default function Form5DetailedView({
   useEffect(() => {
     const limits = getDateLimits();
     if (!limits) return;
-    if (!startDate && !endDate) {
+    // Always ensure we have a range — if the week filter yields nothing,
+    // fall back to the month range so the table isn't blank.
+    if (!startDate || !endDate) {
       setStartDate(limits.min);
       setEndDate(limits.max);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWeek, selectedMonth, selectedYear]);
-
-  useEffect(() => {
-    const limits = getDateLimits();
-    if (!limits) return;
-
-    if (startDate) {
-      if (startDate < limits.min) setStartDate(limits.min);
-      else if (startDate > limits.max) setStartDate(limits.max);
-    }
-    if (endDate) {
-      if (endDate < limits.min || endDate > limits.max) setEndDate("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeek, selectedMonth, selectedYear]);
@@ -3102,7 +3137,13 @@ export default function Form5DetailedView({
       setLoading(false);
     };
     loadData();
-  }, [fetchUsers, fetchBasicSchedules, fetchDetailedSchedules]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    fetchUsers,
+    fetchBasicSchedules,
+    fetchDetailedSchedules,
+    effectivePlantId,
+  ]);
 
   // ═════ COMPUTED VALUES ═════
 
@@ -3132,7 +3173,7 @@ export default function Form5DetailedView({
 
   const canEdit = isAuditManager && approvalStatus === "APPROVED";
   const canApprove = isTopManagement;
-  const hasSchedules = auditSchedules.length > 0;
+  const hasSchedules = filteredAuditSchedules.length > 0;
   const dateRange = generateDateRange();
 
   const getBulkDateLimits = useCallback(() => {

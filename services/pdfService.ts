@@ -31,6 +31,7 @@ export interface PDFGenerationOptions {
   auditType?: string;
   formVariant?: "form7" | "form8" | "ncr2";
   userId?: number | string;
+  plantId?: number | string | null; // 👈 ADD THIS LINE
 }
 
 // ============================================================
@@ -200,11 +201,16 @@ export class PDFService {
         console.log("📄 Using Form4 (Department Plan) endpoint:", endpoint);
       }
       // ✅ FOURTH: Form3
+      // ✅ FOURTH: Form3
       else if (typeStr === "form3") {
         if (!userId) {
           throw new Error("userId is required for Form3 PDF generation");
         }
-        endpoint = `${API_BASE_URL}/api/audit-plan/${year}/export-pdf?userId=${userId}`;
+        // 👇 ADD PLANT ID TO ENDPOINT IF IT EXISTS
+        const plantIdParam = options.plantId
+          ? `&plantId=${options.plantId}`
+          : "";
+        endpoint = `${API_BASE_URL}/api/audit-plan/${year}/export-pdf?userId=${userId}${plantIdParam}`;
         fileType = "form3";
         requestMethod = "GET";
         console.log("📄 Using Form3 (Annual Audit Plan) endpoint:", endpoint);

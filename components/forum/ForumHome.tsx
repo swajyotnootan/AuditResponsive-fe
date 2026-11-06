@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
   Easing,
   Image,
   Modal,
@@ -43,10 +44,10 @@ import RenameGroupModal from "./RenameGroupModal";
 /* ─── Lighter tokens ───────────────────────────────────────── */
 const C = {
   brand: "#00529B",
-  bg: "#FAFBFD", // even lighter than before
+  bg: "#FAFBFD",
   surface: "#FFFFFF",
   surfaceMuted: "#F4F7FB",
-  border: "#EFF3F8", // very soft
+  border: "#EFF3F8",
   borderSoft: "#F5F8FC",
   text: "#1E293B",
   textSub: "#64748B",
@@ -63,7 +64,7 @@ const C = {
   accentTint: "#EAF2FB",
 };
 
-/* ─── User helpers (same as before) ─────────────────────────── */
+/* ─── User helpers ─────────────────────────────────────────── */
 function getInitials(nameOrEmail?: string | null): string {
   if (!nameOrEmail) return "?";
   const s = String(nameOrEmail).trim();
@@ -279,6 +280,12 @@ export default function ForumHome({
   const [renameTarget, setRenameTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [plantFilterOpen, setPlantFilterOpen] = useState(false);
+
+  // ✅ NEW: Group type filter
+  const [groupTypeFilter, setGroupTypeFilter] = useState<
+    "all" | "chat" | "announcement"
+  >("all");
 
   const userEmail = currentUser?.email || "";
   const displayName = getDisplayName(currentUser);
@@ -323,6 +330,68 @@ export default function ForumHome({
     return () => clearInterval(interval);
   }, [isOpen, userEmail, loadGroups]);
 
+  // ✅ Android hardware back button — close modals in reverse order
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (!isOpen) return;
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (activeGroup) {
+        setActiveGroup(null);
+        return true;
+      }
+      if (menuGroup) {
+        setMenuGroup(null);
+        return true;
+      }
+      if (manageGroup) {
+        setManageGroup(null);
+        return true;
+      }
+      if (appearanceGroup) {
+        setAppearanceGroup(null);
+        return true;
+      }
+      if (renameTarget) {
+        setRenameTarget(null);
+        return true;
+      }
+      if (deleteTarget) {
+        setDeleteTarget(null);
+        return true;
+      }
+      if (showCreate) {
+        setShowCreate(false);
+        return true;
+      }
+      if (showHeaderMenu) {
+        setShowHeaderMenu(false);
+        return true;
+      }
+      if (plantFilterOpen) {
+        setPlantFilterOpen(false);
+        return true;
+      }
+
+      onClose();
+      return true;
+    });
+
+    return () => sub.remove();
+  }, [
+    isOpen,
+    activeGroup,
+    menuGroup,
+    manageGroup,
+    appearanceGroup,
+    renameTarget,
+    deleteTarget,
+    showCreate,
+    showHeaderMenu,
+    plantFilterOpen,
+    onClose,
+  ]);
+
   const { generalGroups, schedulePlanGroups, auditGroups, customGroups } =
     useMemo(() => {
       const general: any[] = [];
@@ -345,10 +414,41 @@ export default function ForumHome({
       };
     }, [groups]);
 
-  const matches = (g: any) =>
-    !search.trim() ||
-    g.groupName?.toLowerCase().includes(search.toLowerCase()) ||
-    g.groupId?.toLowerCase().includes(search.toLowerCase());
+  const canCreateForum = useMemo(() => {
+    const role = String(
+      currentUser?.role || currentUser?.roleName || currentUser?.userRole || "",
+    ).toUpperCase();
+
+    return (
+      role.includes("MASTER") ||
+      role.includes("AUDIT_MANAGER") ||
+      role.includes("AUDIT MANAGER") ||
+      role.includes("LEAD_AUDITOR") ||
+      role.includes("LEAD AUDITOR")
+    );
+  }, [currentUser]);
+
+  // ✅ UPDATED: Matches search + group type filter
+  const matches = (g: any) => {
+    // 1. Search query
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        g.groupName?.toLowerCase().includes(q) ||
+        g.groupId?.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
+
+    // 2. Group type
+    if (groupTypeFilter === "chat" && g.groupType === "ANNOUNCEMENT") {
+      return false;
+    }
+    if (groupTypeFilter === "announcement" && g.groupType !== "ANNOUNCEMENT") {
+      return false;
+    }
+
+    return true;
+  };
 
   /* ─── ACTIONS ───────────────────────────────────────────── */
   const handleLeaveGroup = (g: any) => {
@@ -361,7 +461,13 @@ export default function ForumHome({
         await loadGroups();
       } catch (e: any) {
         await loadGroups();
-        Alert.alert("Couldn't leave group", e?.message || "Please try again.");
+        if (Platform.OS === "web")
+          window.alert(e?.message || "Please try again.");
+        else
+          Alert.alert(
+            "Couldn't leave group",
+            e?.message || "Please try again.",
+          );
       }
     };
 
@@ -483,6 +589,7 @@ export default function ForumHome({
                 await loadGroups();
               }}
               isInDrawer={true}
+              groupType={activeGroup.groupType}
             />
           </View>
         </View>
@@ -566,7 +673,7 @@ export default function ForumHome({
             </View>
           </View>
 
-          {/* Search */}
+          {/* Search & Filter */}
           <View style={styles.searchWrap}>
             <View style={styles.searchBar}>
               <Ionicons name="search" size={16} color={C.textFaint} />
@@ -588,6 +695,54 @@ export default function ForumHome({
                   <Ionicons name="close-circle" size={16} color={C.textFaint} />
                 </TouchableOpacity>
               )}
+            </View>
+
+            {/* ✅ NEW: Group type filter tabs */}
+            <View style={styles.filterTabs}>
+              {[
+                {
+                  key: "all" as const,
+                  label: "All",
+                  icon: "apps-outline" as const,
+                },
+                {
+                  key: "chat" as const,
+                  label: "Two-Way",
+                  icon: "chatbubbles-outline" as const,
+                },
+                {
+                  key: "announcement" as const,
+                  label: "Announcements",
+                  icon: "megaphone-outline" as const,
+                },
+              ].map((tab) => {
+                const isActive = groupTypeFilter === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => setGroupTypeFilter(tab.key)}
+                    style={[
+                      styles.filterTab,
+                      isActive && styles.filterTabActive,
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={tab.icon}
+                      size={13}
+                      color={isActive ? C.brand : C.textSub}
+                    />
+                    <Text
+                      style={[
+                        styles.filterTabText,
+                        isActive && styles.filterTabTextActive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -670,11 +825,11 @@ export default function ForumHome({
                   </>
                 )}
 
-                {/* <SectionHeader
+                <SectionHeader
                   label="My Groups"
                   count={customGroups.filter(matches).length}
-                /> */}
-                {/* {customGroups.filter(matches).length === 0 ? (
+                />
+                {customGroups.filter(matches).length === 0 ? (
                   <TouchableOpacity
                     onPress={() => setShowCreate(true)}
                     style={styles.emptyCard}
@@ -704,7 +859,7 @@ export default function ForumHome({
                       </AnimatedRow>
                     ))}
                   </View>
-                )} */}
+                )}
               </>
             )}
           </ScrollView>
@@ -803,29 +958,31 @@ export default function ForumHome({
                 onPress={() => setShowHeaderMenu(false)}
               >
                 <View style={styles.headerMenuSheet}>
-                  {/* <TouchableOpacity
-                    style={styles.headerMenuRow}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setShowHeaderMenu(false);
-                      setTimeout(() => setShowCreate(true), 100);
-                    }}
-                  > */}
-                  {/* <View style={styles.headerMenuIcon}>
-                      <Ionicons name="add" size={20} color={C.brand} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.headerMenuLabel}>Create Group</Text>
-                      <Text style={styles.headerMenuSub}>
-                        Start a new conversation
-                      </Text>
-                    </View> */}
-                  {/* <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color={C.textFaint}
-                    />
-                  </TouchableOpacity> */}
+                  {canCreateForum && (
+                    <TouchableOpacity
+                      style={styles.headerMenuRow}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setShowHeaderMenu(false);
+                        setTimeout(() => setShowCreate(true), 100);
+                      }}
+                    >
+                      <View style={styles.headerMenuIcon}>
+                        <Ionicons name="add" size={20} color={C.brand} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.headerMenuLabel}>Create Group</Text>
+                        <Text style={styles.headerMenuSub}>
+                          Start a new conversation
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={C.textFaint}
+                      />
+                    </TouchableOpacity>
+                  )}
 
                   <View style={styles.headerMenuDivider} />
 
@@ -962,10 +1119,24 @@ function GroupRow({
           <Text style={styles.rowTitle} numberOfLines={1}>
             {displayName}
           </Text>
+
           {isAdmin && (
             <View style={styles.adminPill}>
               <Ionicons name="star" size={9} color="#B45309" />
               <Text style={styles.adminPillText}>Admin</Text>
+            </View>
+          )}
+
+          {/* ✅ NEW: Group type badge */}
+          {group.groupType === "ANNOUNCEMENT" ? (
+            <View style={styles.announcementPill}>
+              <Ionicons name="megaphone" size={9} color="#92400E" />
+              <Text style={styles.announcementPillText}>Read-only</Text>
+            </View>
+          ) : (
+            <View style={styles.chatPill}>
+              <Ionicons name="chatbubbles" size={9} color="#00529B" />
+              <Text style={styles.chatPillText}>Chat</Text>
             </View>
           )}
         </View>
@@ -1140,7 +1311,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
   },
 
-  /* Search */
+  /* Search & Filter */
   searchWrap: {
     paddingHorizontal: 12,
     paddingTop: 12,
@@ -1165,6 +1336,36 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   searchClear: { padding: 4 },
+  filterTabs: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  filterTabActive: {
+    backgroundColor: C.brand,
+    borderColor: C.brand,
+  },
+  filterTabText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: C.textSub,
+  },
+  filterTabTextActive: {
+    color: "#FFFFFF",
+  },
 
   /* Section */
   sectionWrap: {
@@ -1375,6 +1576,36 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   badgeText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.2 },
+  announcementPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  announcementPillText: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#92400E",
+    letterSpacing: 0.2,
+  },
+  chatPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  chatPillText: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: "#00529B",
+    letterSpacing: 0.2,
+  },
   unreadBadge: {
     minWidth: 22,
     height: 22,

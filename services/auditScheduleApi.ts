@@ -531,16 +531,32 @@ export const auditScheduleApi = {
     }),
 
   requestChanges: async (
-    scheduleId: string | number,
+    year: number,
+    month: string | number,
     userId: string | number,
     reason: string,
   ) => {
-    const response = await axios.post(
-      `/audit-schedule/${scheduleId}/request-changes`,
+    const response = await api.post(
+      `/audit-schedule/${year}/${month}/request-changes`,
       { reason },
       { params: { userId } },
     );
     return response.data;
+  },
+
+  requestChangesForSchedule: (
+    scheduleId: string | number,
+    userId: string | number,
+    reason: string,
+  ): ApiResponse<any> => {
+    if (!reason || !reason.trim()) {
+      return Promise.reject(new Error("Reason is required"));
+    }
+    return api.post(
+      `/audit-schedule/schedule/${scheduleId}/request-changes`,
+      { reason },
+      { params: { userId } },
+    );
   },
 
   // ========== DATE-WISE APPROVAL METHODS ==========
@@ -640,10 +656,14 @@ export const auditScheduleApi = {
   getDateSchedulesByMonth: (
     year: number,
     month: string | number,
-    userId: string | number,
+    userId?: string | number,
+    plantId?: string | number | null,
   ): ApiResponse<any> =>
     api.get(`/audit-schedule/date-schedules/${year}/${month}`, {
-      params: { userId },
+      params: {
+        ...(userId != null ? { userId } : {}),
+        ...(plantId != null ? { plantId } : {}),
+      },
     }),
 
   submitDetailedSchedule: (
@@ -687,11 +707,17 @@ export const auditScheduleApi = {
 
   downloadDetailedViewPdf: (
     year: number,
-    month: number,
+    month: number | string,
     params: any = {},
+    userId?: string | number,
+    plantId?: string | number | null,
   ): Promise<AxiosResponse<Blob>> =>
     api.get(`/audit-detailed-view/${year}/${month}/download`, {
-      params,
+      params: {
+        ...params,
+        ...(userId != null ? { userId } : {}),
+        ...(plantId != null ? { plantId } : {}),
+      },
       responseType: "blob",
     }),
 
@@ -701,18 +727,26 @@ export const auditScheduleApi = {
   getByYear: (
     year: number,
     userId?: string | number,
+    plantId?: string | number | null, // ✅ NEW
   ): ApiResponse<AuditSchedule[]> =>
     api.get(`/audit-schedule/year/${year}`, {
-      params: userId ? { userId } : undefined,
+      params: {
+        ...(userId ? { userId } : {}),
+        ...(plantId ? { plantId } : {}),
+      },
     }),
 
   getByYearAndMonth: (
     year: number,
     month: string | number,
     userId?: string | number,
+    plantId?: string | number | null, // ✅ NEW
   ): ApiResponse<AuditSchedule[]> =>
     api.get(`/audit-schedule/year/${year}/month/${month}`, {
-      params: userId ? { userId } : undefined,
+      params: {
+        ...(userId ? { userId } : {}),
+        ...(plantId ? { plantId } : {}), // ✅ only sent when present
+      },
     }),
   getByYearMonthAndDepartment: (
     year: number,
@@ -746,22 +780,29 @@ export const auditScheduleApi = {
   updateStatus: (id: string | number, status: string): ApiResponse<any> =>
     api.put(`/audit-schedule/${id}/status?status=${status}`, {}),
 
-  // ========== AVAILABLE DATA APIs ==========
-  // ========== AVAILABLE DATA APIs ==========
   getAvailableMonths: (
     year: number,
     userId: string | number,
+    plantId?: string | number | null, // ✅ NEW
   ): ApiResponse<any[]> =>
     api.get(`/audit-schedule/available-months/${year}`, {
-      params: { userId },
+      params: {
+        userId,
+        ...(plantId ? { plantId } : {}), // ✅ only sent when present
+      },
     }),
+
   getAvailableDepartments: (
     year: number,
     month: string | number,
     userId: string | number,
+    plantId?: string | number | null, // ✅ ADD
   ): ApiResponse<string[]> =>
     api.get(`/audit-schedule/available-departments/${year}/${month}`, {
-      params: { userId },
+      params: {
+        userId,
+        ...(plantId ? { plantId } : {}),
+      },
     }),
 
   getAuditElements: (
@@ -856,11 +897,10 @@ export const auditScheduleApi = {
   },
   getUsersByIds: async (ids: number[]): Promise<User[]> => {
     if (!ids || ids.length === 0) return [];
-    const params = new URLSearchParams();
-    ids.forEach((id) => params.append("ids", String(id)));
-    const res = await api.get(
-      `/api/audit-schedule/users/by-ids?${params.toString()}`,
-    );
+    const res = await api.get("/audit-schedule/users/by-ids", {
+      params: { ids },
+      paramsSerializer: { indexes: null },
+    });
     return Array.isArray(res.data) ? res.data : res.data?.data || [];
   },
 
@@ -885,7 +925,8 @@ export const auditScheduleApi = {
     month: string,
     plantId: string | number,
     excludeAuditorId?: string | number,
-    auditType?: string, // ✅ ADD
+    auditType?: string,
+    department?: string, // ✅ ADD THIS
   ): Promise<User[]> => {
     const response = await api.get(
       "/audit-schedule/fully-competent-auditors/for-schedule",
@@ -895,15 +936,12 @@ export const auditScheduleApi = {
           planYear,
           month,
           plantId,
+          ...(department ? { department } : {}), // ✅ ADD THIS
           ...(excludeAuditorId ? { excludeAuditorId } : {}),
-          ...(auditType ? { auditType } : {}), // ✅ ADD
+          ...(auditType ? { auditType } : {}),
         },
       },
     );
-
-    // ✅ SAFETY: Backend MUST return only competent auditors.
-    // If backend is buggy and returns everyone, filter defensively? NO —
-    // trust backend. But ensure we always return an array.
     return Array.isArray(response.data) ? response.data : [];
   },
 
@@ -925,8 +963,18 @@ export const auditScheduleApi = {
     year: number,
     month: string | number,
     userId: string | number,
+    plantId?: string | number | null,
   ): ApiResponse<any> =>
-    api.post(`/audit-schedule/${year}/${month}/submit?userId=${userId}`, {}),
+    api.post(
+      `/audit-schedule/${year}/${month}/submit`,
+      {},
+      {
+        params: {
+          userId,
+          ...(plantId != null ? { plantId } : {}),
+        },
+      },
+    ),
 
   approvePlan: (
     year: number,
@@ -963,11 +1011,30 @@ export const auditScheduleApi = {
     }),
 
   // ========== DOCUMENT OPERATIONS ==========
-  saveDocument: (data: any, userId: string | number): ApiResponse<any> =>
-    api.post(`/audit-schedule/save-document?userId=${userId}`, data),
+  // ========== DOCUMENT OPERATIONS ==========
+  saveDocument: (
+    data: any,
+    userId: string | number,
+    plantId?: string | number | null,
+  ): ApiResponse<any> =>
+    api.post("/audit-schedule/save-document", data, {
+      params: {
+        userId,
+        ...(plantId != null ? { plantId } : {}),
+      },
+    }),
 
-  saveMonthDocument: (data: any, userId: string | number): ApiResponse<any> =>
-    api.post(`/audit-schedule/save-month-document?userId=${userId}`, data),
+  saveMonthDocument: (
+    data: any,
+    userId: string | number,
+    plantId?: string | number | null,
+  ): ApiResponse<any> =>
+    api.post("/audit-schedule/save-month-document", data, {
+      params: {
+        userId,
+        ...(plantId != null ? { plantId } : {}),
+      },
+    }),
 
   // ========== AUDIT RESPONSE APIs (Check Sheet Forms) ==========
 
@@ -1264,11 +1331,17 @@ export const auditScheduleApi = {
     scheduleId: string | number,
     userId: string | number,
     comments?: string,
+    plantId?: string | number | null,
   ) => {
     const response = await api.post(
       `/audit-schedule/daily-schedule/${scheduleId}/confirm-feasibility`,
       { comments: comments || "" },
-      { params: { userId } },
+      {
+        params: {
+          userId,
+          ...(plantId != null ? { plantId } : {}),
+        },
+      },
     );
     return response.data;
   },
@@ -1278,6 +1351,7 @@ export const auditScheduleApi = {
     scheduleId: string | number,
     userId: string | number,
     reason: string,
+    plantId?: string | number | null,
   ) => {
     if (!reason || !reason.trim()) {
       throw new Error("Rejection reason is required");
@@ -1285,7 +1359,12 @@ export const auditScheduleApi = {
     const response = await api.post(
       `/audit-schedule/daily-schedule/${scheduleId}/reject-feasibility`,
       { reason },
-      { params: { userId } },
+      {
+        params: {
+          userId,
+          ...(plantId != null ? { plantId } : {}),
+        },
+      },
     );
     return response.data;
   },
@@ -1300,17 +1379,19 @@ export const auditScheduleApi = {
   },
 
   // ========== PLANTS API ==========
+  // ========== PLANTS API ==========
   getPlants: async (): Promise<any[]> => {
     try {
-      const response = await api.get("/plants");
+      const response = await api.get("/enterprise/plants"); // ✅ CORRECT
       return response.data;
     } catch (error: any) {
       console.warn("⚠️ /api/plants not found, using fallback plants list");
-      // Fallback: return hardcoded plants so UI still works
+      // ✅ FIXED: Correct IDs matching the actual `plants` table
+      // (id=1: Bangalore, id=2: Pune, id=3: Chennai)
       return [
         { id: 1, name: "Bangalore Plant", code: "PLT_BLR" },
-        { id: 2, name: "Chennai Plant", code: "PLT_CHN" },
-        { id: 3, name: "Pune Plant", code: "PLT_PUN" },
+        { id: 2, name: "Pune Plant", code: "PLT_PUN" },
+        { id: 3, name: "Chennai Plant", code: "PLT_CHN" },
       ];
     }
   },
@@ -1379,6 +1460,22 @@ export const auditPlanApi = {
       { reason },
       { params: { userId } },
     ),
+
+  // ========== PER-SCHEDULE CHANGE REQUEST ==========
+  requestChangesForSchedule: (
+    scheduleId: string | number,
+    userId: string | number,
+    reason: string,
+  ): ApiResponse<any> => {
+    if (!reason || !reason.trim()) {
+      return Promise.reject(new Error("Reason is required"));
+    }
+    return api.post(
+      `/audit-schedule/schedule/${scheduleId}/request-changes`,
+      { reason },
+      { params: { userId } },
+    );
+  },
 
   // ✅ RESUBMIT — userId required
   resubmitPlan: (year: number, userId: string | number): ApiResponse<any> =>

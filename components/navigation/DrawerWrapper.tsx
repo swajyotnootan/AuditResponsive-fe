@@ -17,7 +17,7 @@ export default function DrawerWrapper({
 
   const showDrawerButton =
     user &&
-    ["MASTER", "TOP_MANAGEMENT", "HR_ADMIN"].includes(user.role?.toUpperCase());
+    ["MASTER", "PLANT_HEAD", "HR_ADMIN"].includes(user.role?.toUpperCase());
 
   return (
     <View style={{ flex: 1 }}>

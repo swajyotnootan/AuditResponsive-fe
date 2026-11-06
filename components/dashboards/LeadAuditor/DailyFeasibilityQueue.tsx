@@ -169,6 +169,8 @@ interface ConflictInfo {
 
 interface Props {
   selectedYear: number;
+  plantId?: number | null; // ← ADD
+
   onNavigateToForm5?: (year: number, month: string) => void;
   initialStatusTab?: StatusTab;
 }
@@ -581,6 +583,7 @@ const MultiSelectModal = ({
 // ═════════════════════════════════════════════════════════════
 const DailyFeasibilityQueue: React.FC<Props> = ({
   selectedYear,
+  plantId,
   initialStatusTab,
 }) => {
   const { user } = useAuth();
@@ -653,15 +656,21 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/overdue-schedules/${selectedYear}`,
-        { params: { userId: user.id } },
+        {
+          params: {
+            userId: user.id,
+            ...(plantId != null ? { plantId } : {}),
+          },
+        },
       );
+
       const raw = Array.isArray(res.data) ? res.data : [];
       const ended = raw.filter((s: any) => hasEnded(s));
       setOverdueCount(ended.length);
     } catch (err) {
       console.error("Failed to fetch overdue count:", err);
     }
-  }, [selectedYear, user?.id]);
+  }, [selectedYear, user?.id, plantId]);
 
   const fetchPending = useCallback(async () => {
     if (!user?.id) {
@@ -671,7 +680,12 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/daily-feasibility-queue/${selectedYear}`,
-        { params: { userId: user.id } },
+        {
+          params: {
+            userId: user.id,
+            ...(plantId != null ? { plantId } : {}),
+          },
+        },
       );
       const raw = Array.isArray(res.data) ? res.data : [];
 
@@ -703,7 +717,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedYear, addToast, user?.id]);
+  }, [selectedYear, addToast, user?.id, plantId]);
 
   useEffect(() => {
     setLoading(true);
@@ -783,8 +797,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     if (!confirmSchedule || !user?.id) return;
     setSubmitting(true);
     try {
+      const plantParam = plantId != null ? `&plantId=${plantId}` : "";
       await axios.post(
-        `${API_BASE_URL}/api/audit-schedule/daily-schedule/${confirmSchedule.id}/confirm-feasibility?userId=${user.id}`,
+        `${API_BASE_URL}/api/audit-schedule/daily-schedule/${confirmSchedule.id}/confirm-feasibility?userId=${user.id}${plantParam}`,
         { comments: comments || "" },
         {},
       );
@@ -810,8 +825,9 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
     }
     setSubmitting(true);
     try {
+      const plantParam = plantId != null ? `&plantId=${plantId}` : "";
       await axios.post(
-        `${API_BASE_URL}/api/audit-schedule/daily-schedule/${rejectSchedule.id}/reject-feasibility?userId=${user.id}`,
+        `${API_BASE_URL}/api/audit-schedule/daily-schedule/${rejectSchedule.id}/reject-feasibility?userId=${user.id}${plantParam}`,
         { reason: rejectReason },
         {},
       );
@@ -1868,6 +1884,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
       {statusTab === "OVERDUE" ? (
         <OverdueScheduleQueue
           selectedYear={selectedYear}
+          plantId={plantId}
           onCountChange={setOverdueCount}
         />
       ) : visibleSchedules.length === 0 ? (

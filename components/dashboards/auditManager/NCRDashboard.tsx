@@ -1,9 +1,9 @@
-import { ncrService } from "@/services/ncrService";
-import { Feather } from "@expo/vector-icons";
-
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import ForumThreadView from "@/components/forum/ForumThreadView";
 import AuditCheckSheetNCRForumModal from "@/components/modals/AuditCheckSheetNCRForumModal";
 import { API_BASE_URL } from "@/config/apiConfig";
+import { ncrService } from "@/services/ncrService";
+import { Feather } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -266,15 +266,17 @@ const NCRDashboard = ({
   onBack,
   onViewNcr,
   selectedYear,
+  selectedPlantId: propSelectedPlantId, // 👈 ADD (renamed to avoid clash)
 }: {
   onBack?: () => void;
   onViewNcr?: (id: string) => void;
   selectedYear?: number;
+  selectedPlantId?: string | null; // 👈 ADD
 }) => {
   const [activeNcrViewConfig, setActiveNcrViewConfig] = useState<any>(null);
   const { user } = useAuth();
   const { addToast } = useToast();
-
+  // const { selectedPlantId } = usePlantFilter();
   const [loading, setLoading] = useState(true);
   const [ncrList, setNcrList] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -300,21 +302,23 @@ const NCRDashboard = ({
   const [totalPages, setTotalPages] = useState(1);
   // 🔧 FIX #4: capture totalElements for the real "Total NCRs" stat
   const [totalElements, setTotalElements] = useState(0);
-
+  const { selectedPlantId, clearFilter } = usePlantFilter();
   // Debounce — wait 300ms after user stops typing
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedTerm(searchTerm), 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // 🔧 FIX #3: extract the search fetch into a reusable callback so
-  // Refresh, sendTo8D completion, and modal close all go through it.
   const fetchNCRs = useCallback(() => {
     if (!user?.id) return;
     setLoading(true);
     setError(null);
 
-    fetch(`${API_BASE_URL}/api/ncr/all?page=${page}&size=20`, {
+    const plantParam = selectedPlantId
+      ? `&plantId=${encodeURIComponent(selectedPlantId)}`
+      : "";
+
+    fetch(`${API_BASE_URL}/api/ncr/all?page=${page}&size=20${plantParam}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -328,12 +332,19 @@ const NCRDashboard = ({
         return r.json();
       })
       .then((data) => {
-        // Spring returns Page<NCR> — extract .content
         let list: any[] = Array.isArray(data?.content)
           ? data.content
           : Array.isArray(data)
             ? data
             : [];
+
+        // 🔧 FALLBACK: If backend ignores plantId, filter it on the frontend
+        if (selectedPlantId) {
+          list = list.filter((ncr: any) => {
+            const ncrPlant = ncr.plantId ?? ncr.plant?.id;
+            return String(ncrPlant) === String(selectedPlantId);
+          });
+        }
 
         // Client-side year filter
         if (selectedYear) {
@@ -359,8 +370,11 @@ const NCRDashboard = ({
         }
 
         setNcrList(list);
-        setTotalPages(data?.totalPages ?? 1);
-        setTotalElements(data?.totalElements ?? list.length);
+        setTotalPages(selectedPlantId ? 1 : (data?.totalPages ?? 1)); // If filtering by plant on frontend, the list length is the true total for that plant
+        const isPlantFiltered = !!selectedPlantId;
+        setTotalElements(
+          isPlantFiltered ? list.length : (data?.totalElements ?? list.length),
+        );
       })
       .catch((e) => {
         console.error("❌ fetchNCRs failed:", e);
@@ -368,17 +382,15 @@ const NCRDashboard = ({
         setError(e?.message || "Failed to load NCRs");
       })
       .finally(() => setLoading(false));
-  }, [page, debouncedTerm, selectedYear, user?.id]);
-
+  }, [page, debouncedTerm, selectedYear, user?.id, selectedPlantId]); // 👈 ADD selectedPlantId
   // Single source of truth: whenever debouncedTerm / page / year / user changes
   useEffect(() => {
     fetchNCRs();
   }, [fetchNCRs]);
 
-  // Reset to page 0 when search term changes
   useEffect(() => {
     setPage(0);
-  }, [debouncedTerm]);
+  }, [debouncedTerm, selectedPlantId]); // 👈 add selectedPlantId
 
   const isAuditManager = user?.role === "AUDIT_MANAGER";
 
@@ -661,6 +673,27 @@ const NCRDashboard = ({
                   )}
                 </Pressable>
               </View>
+
+              {selectedPlantId && (
+                <View className="flex-row items-center rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2">
+                  <Feather
+                    name="home"
+                    size={14}
+                    color={T.accent}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text className="text-xs font-semibold text-[#1E40AF]">
+                    Plant: {selectedPlantId}
+                  </Text>
+                  <Pressable
+                    onPress={() => clearFilter()}
+                    className="ml-2"
+                    hitSlop={8}
+                  >
+                    <Feather name="x" size={14} color={T.accent} />
+                  </Pressable>
+                </View>
+              )}
             </View>
           </View>
         </View>

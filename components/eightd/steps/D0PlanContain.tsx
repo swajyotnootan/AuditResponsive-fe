@@ -873,6 +873,42 @@ export default function D0PlanContain({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempDate, setTempDate] = useState(new Date());
 
+  // 🔄 Fetch full user profile to get plantName
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+
+      // If we already have the plant name, no need to fetch
+      if ((user as any)?.plantName) {
+        setFormData((prev) => ({
+          ...prev,
+          plantLine: (user as any).plantName,
+        }));
+        return;
+      }
+
+      try {
+        // Fetch the full user object from the backend
+        const res = await axios.get(`${API_BASE_URL}/api/users/${user.id}`, {
+          headers: {
+            "X-User-Id": String(user.id),
+          },
+        });
+
+        if (res.data?.plantName) {
+          setFormData((prev) => ({
+            ...prev,
+            plantLine: res.data.plantName,
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch user plant:", err);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user?.id]);
+
   const isNcrBased8D = Boolean(
     initialIsNcrBased ||
     formData.isNcrBased ||
@@ -962,37 +998,62 @@ export default function D0PlanContain({
     if (!allUsers || allUsers.length === 0) return [];
 
     const myPlantId = (user as any)?.plantId ?? null;
-    const myCompanyId = (user as any)?.companyId ?? null;
+    const myDepartment = (user as any)?.department ?? null;
 
-    return (
-      allUsers
-        .filter((u): u is UserData => Boolean(u && (u.email || u.username)))
-        // ✅ Defense-in-depth: same plant (or same company if no plant)
-        .filter((u: any) => {
-          if (myPlantId != null && u.plantId != null) {
-            return u.plantId === myPlantId;
+    return allUsers
+      .filter((u): u is UserData => Boolean(u && (u.email || u.username)))
+      .filter((u: any) => {
+        // 1. Check if the user is an Audit Manager or Admin (Company-Wide)
+        const isCompanyWide =
+          u.role === "AUDIT_MANAGER" ||
+          u.role === "MASTER" ||
+          u.role === "QMS_ADMIN" ||
+          u.role === "HR_ADMIN" ||
+          u.username?.includes("audit.manager") ||
+          u.username?.includes("master") ||
+          u.username?.includes("qms.admin") ||
+          u.username?.includes("hr.admin");
+
+        if (isCompanyWide) {
+          // ✅ Audit Managers are company-wide, so we allow them
+          // ONLY if they belong to the same company (safety check)
+          if ((user as any)?.companyId && u.companyId) {
+            return u.companyId === (user as any).companyId;
           }
-          if (myCompanyId != null && u.companyId != null) {
-            return u.companyId === myCompanyId;
-          }
-          return true; // MASTER or un-scoped user — don't filter
-        })
-        .map((u) => ({
-          value: u.email || u.username || "",
-          label:
-            `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
-            u.username ||
-            u.email ||
-            "",
-          email: u.email,
-          username: u.username,
-          firstName: u.firstName,
-          lastName: u.lastName,
-          department: u.department,
-        }))
-        .filter((opt) => opt.value && opt.label)
-    );
-  }, [allUsers, (user as any)?.plantId, (user as any)?.companyId]);
+          return true;
+        }
+
+        // 2. For all other roles (HOD, INITIATOR, AUDITEE), they MUST match BOTH Plant and Department
+        if (myPlantId != null) {
+          if (u.plantId !== myPlantId) return false; // 👈 THIS IS THE CRITICAL FIX
+        }
+
+        if (myDepartment != null) {
+          return u.department === myDepartment;
+        }
+
+        return true;
+      })
+      .map((u) => ({
+        value: u.email || u.username || "",
+        label:
+          `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+          u.username ||
+          u.email ||
+          "",
+        email: u.email,
+        username: u.username,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        department: u.department,
+      }))
+      .filter((opt) => opt.value && opt.label);
+  }, [
+    allUsers,
+    (user as any)?.plantId,
+    (user as any)?.companyId,
+    (user as any)?.department,
+  ]);
 
   useEffect(() => {
     if (!user?.id) return; // wait for auth to load
@@ -1006,33 +1067,36 @@ export default function D0PlanContain({
       const myPlantId = (user as any)?.plantId ?? null;
       const myCompanyId = (user as any)?.companyId ?? null;
 
-      let users: UserData[];
+      let users: UserData[] = [];
 
-      if (myPlantId != null) {
-        // ✅ Server-scoped fetch: only same-plant users
+      if (myPlantId != null && myCompanyId != null) {
+        // ✅ Fetch plant users (HODs, Initiators, Auditees)
         console.log("🔍 [D0] Loading users for plantId:", myPlantId);
+        const plantUsers = (await userAPI.getUsersByPlant(
+          myPlantId,
+        )) as any as UserData[];
+
+        // ✅ Fetch company users (Audit Managers, Lead Auditors)
+        console.log("🔍 [D0] Loading users for companyId:", myCompanyId);
+        const companyUsers = (await userAPI.getUsersByCompany(
+          myCompanyId,
+        )) as any as UserData[];
+
+        // ✅ Merge them and remove duplicates
+        const mergedUsers = [...plantUsers, ...companyUsers];
+        const uniqueUserMap = new Map();
+        mergedUsers.forEach((u) => {
+          if (u && u.id) uniqueUserMap.set(u.id, u);
+        });
+
+        users = Array.from(uniqueUserMap.values());
+      } else if (myPlantId != null) {
         users = (await userAPI.getUsersByPlant(myPlantId)) as any as UserData[];
       } else {
-        // No plant (MASTER etc.) — fall back to all users, filter by company if available
-        console.log("🔍 [D0] No plantId — falling back to all users");
         users = (await userAPI.getAllUsers()) as any as UserData[];
-
-        if (myCompanyId != null) {
-          users = users.filter(
-            (u: any) => u.companyId == null || u.companyId === myCompanyId,
-          );
-        }
       }
 
-      console.log(`✅ [D0] Loaded ${users.length} users`);
-      console.log(
-        "   Sample:",
-        users.slice(0, 5).map((u: any) => ({
-          id: u.id,
-          email: u.email,
-          plantId: u.plantId,
-        })),
-      );
+      console.log(`✅ [D0] Loaded ${users.length} total users`);
 
       setAllUsers(users);
       setDepartments(extractDepartmentsFromUsers(users));
@@ -1139,6 +1203,8 @@ export default function D0PlanContain({
               ...prev,
               ...backendData,
               // ✅ Force the logo to be the fresh require() result if company name matches
+              plantLine:
+                backendData.plantLine || (user as any)?.plantName || "",
               companyLogo: savedCompany
                 ? savedCompany.logo
                 : backendData.companyLogo || "",
@@ -1194,7 +1260,7 @@ export default function D0PlanContain({
     if (!safeEventId) {
       setFormData({
         eventNo: "",
-        plantLine: "",
+        plantLine: (user as any)?.plantName || "",
         partName: "",
         lotSerial: "",
         defectCode: "",
@@ -1222,7 +1288,7 @@ export default function D0PlanContain({
       // Clear any lingering red error messages from the previous form
       setErrors({});
     }
-  }, [safeEventId, initialIsNcrBased]); // Triggers every time the eventId changes
+  }, [safeEventId, initialIsNcrBased, (user as any)?.plantName]); // Triggers every time the eventId changes
 
   const showDatepicker = () => {
     setShowDatePicker(true);
@@ -2101,29 +2167,56 @@ export default function D0PlanContain({
                     )}
                   </View>
 
-                  <CustomSelect
-                    label="Plant / Line"
-                    value={formData.plantLine}
-                    onChange={(val) =>
-                      handleChange({
-                        target: { name: "plantLine", value: val },
-                      })
-                    }
-                    options={[
-                      {
-                        value: "Pune Plant – Threading Line 1",
-                        label: "Pune Plant – Threading Line 1",
-                      },
-                      {
-                        value: "Pune Plant – Threading Line 2",
-                        label: "Pune Plant – Threading Line 2",
-                      },
-                    ]}
-                    placeholder="Select Plant Line"
-                    required
-                    error={errors.plantLine}
-                  />
+                  {/* Plant / Line - Auto-fetched & Read-Only */}
+                  <View style={{ marginBottom: 12 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "600",
+                          color: "#1F2937",
+                        }}
+                      >
+                        Plant
+                      </Text>
+                      <Text style={{ color: "#EF4444" }}>*</Text>
+                    </View>
 
+                    <TextInput
+                      value={formData.plantLine || ""}
+                      // editable={false}
+                      placeholder="Fetching plant..." // 👈 Only shows if formData.plantLine is empty
+                      style={{
+                        width: "100%",
+                        borderWidth: 1,
+                        borderColor: errors.plantLine ? "#EF4444" : "#D1D5DB",
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        fontSize: 14,
+                        color: "#111827",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 1,
+                      }}
+                    />
+                    {errors.plantLine && (
+                      <Text
+                        style={{ fontSize: 12, color: "#DC2626", marginTop: 4 }}
+                      >
+                        {errors.plantLine}
+                      </Text>
+                    )}
+                  </View>
                   <InputField
                     label="Part No. / Name"
                     name="partName"

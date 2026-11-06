@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { PlantFilterProvider } from "@/components/context/PlantFilterContext";
 
 if (Platform.OS === "android") {
   LogBox.ignoreLogs([
@@ -35,7 +36,9 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 export default function AppLayout() {
   return (
     <TodayWorkPopupProvider>
-      <AppLayoutInner />
+      <PlantFilterProvider>
+        <AppLayoutInner />
+      </PlantFilterProvider>
     </TodayWorkPopupProvider>
   );
 }

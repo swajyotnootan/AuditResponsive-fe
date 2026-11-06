@@ -36,8 +36,8 @@ export const getRoleDisplayName = (role: string | null | undefined): string => {
       return "HR Admin";
     case UserRole.QMS_ADMIN:
       return "QMS Admin";
-    case UserRole.TOP_MANAGEMENT:
-      return "Top Management";
+    case UserRole.PLANT_HEAD:
+      return "Plant Head";
     default:
       return role || "User";
   }
@@ -63,7 +63,7 @@ export const isHRAdmin = (role: string | null | undefined): boolean =>
 export const isQMSAdmin = (role: string | null | undefined): boolean =>
   normalizeRole(role) === UserRole.QMS_ADMIN;
 export const isTopManagement = (role: string | null | undefined): boolean =>
-  normalizeRole(role) === UserRole.TOP_MANAGEMENT;
+  normalizeRole(role) === UserRole.PLANT_HEAD;
 
 // Combined checkers
 export const isAuditTeam = (role: string | null | undefined): boolean => {
@@ -94,7 +94,7 @@ export const canApprovePlan = (role: string | null | undefined): boolean => {
   const normalized = normalizeRole(role);
   return (
     normalized === UserRole.AUDIT_MANAGER ||
-    normalized === UserRole.TOP_MANAGEMENT ||
+    normalized === UserRole.PLANT_HEAD ||
     normalized === UserRole.MASTER
   );
 };
@@ -124,7 +124,7 @@ export const getDashboardPath = (user: any): string => {
       return "/hr-admin";
     case UserRole.QMS_ADMIN:
       return "/qms-admin";
-    case UserRole.TOP_MANAGEMENT:
+    case UserRole.PLANT_HEAD:
       return "/top-management";
     default:
       return "/dashboard";
@@ -149,8 +149,8 @@ export const LOGIN_ROLE_OPTIONS = [
   { value: "auditee", label: "Auditee", role: UserRole.AUDITEE },
   { value: "hr_admin", label: "HR Admin", role: UserRole.HR_ADMIN },
   {
-    value: "top_management",
-    label: "Top Management",
-    role: UserRole.TOP_MANAGEMENT,
+    value: "plant_head",
+    label: "Plant Head",
+    role: UserRole.PLANT_HEAD,
   },
 ];

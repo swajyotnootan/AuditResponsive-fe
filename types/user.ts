@@ -11,7 +11,7 @@ export enum UserRole {
   AUDITEE = 'AUDITEE',
   HR_ADMIN = 'HR_ADMIN',
   QMS_ADMIN = 'QMS_ADMIN',
-  TOP_MANAGEMENT = 'TOP_MANAGEMENT',
+  PLANT_HEAD = 'PLANT_HEAD',     // ← TOP_MANAGEMENT removed, PLANT_HEAD added
 }
 
 export interface User {

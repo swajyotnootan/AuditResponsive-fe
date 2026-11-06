@@ -2,8 +2,8 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import { useLocalSearchParams } from "expo-router";
-import { FileText, RefreshCw, X } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import { Building2, FileText, RefreshCw, Users, X } from "lucide-react-native";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import YearFilter from "../common/YearFilter";
 import { useAuth } from "../context/AuthContext";
+import { usePlantFilter } from "../context/PlantFilterContext";
 import { ToastProvider, useToast } from "../context/ToastContext";
 import AuditsAndResponses from "./LeadAuditor/AuditsAndResponses";
 import DailyFeasibilityQueue from "./LeadAuditor/DailyFeasibilityQueue";
@@ -27,7 +28,7 @@ import FeasibilityConfirmationQueue from "./LeadAuditor/FeasibilityConfirmationQ
 import ResponseDetailModal from "./LeadAuditor/ResponseDetailModal";
 import StakeholderManagement from "./LeadAuditor/StakeholderManagement";
 import type { NCR, Response, Schedule, Stats, User } from "./LeadAuditor/types";
-import { normalizePlantId } from "./LeadAuditor/types"; // Types
+import { normalizePlantId } from "./LeadAuditor/types";
 
 const NAVBAR_COLORS = {
   primary: "#00529B",
@@ -39,11 +40,99 @@ const NAVBAR_COLORS = {
   white: "#ffffff",
 };
 
+// ────────────────────────────────────────────────────────────────
+// filterDataByPlant — typed, MNC-standard scope
+//   • plantId == null  → "All Plants" — nothing is plant-filtered
+//   • plantId != null  → plant-filter schedules/NCRs/responses/auditees
+//                        **auditors are always company-scoped**
+// ────────────────────────────────────────────────────────────────
+function buildSchedulePlantMap(
+  schedules: Schedule[],
+): Map<string, number | null> {
+  const map = new Map<string, number | null>();
+  schedules.forEach((s) => {
+    if (s.id != null) {
+      map.set(String(s.id), normalizePlantId(s.plantId));
+    }
+  });
+  return map;
+}
+
+function filterDataByPlant(
+  plantId: number | null,
+  companyId: number | null,
+  schedules: Schedule[],
+  ncrs: NCR[],
+  auditors: User[],
+  auditees: User[],
+  responses: Response[],
+): {
+  schedules: Schedule[];
+  ncrs: NCR[];
+  auditors: User[];
+  auditees: User[];
+  responses: Response[];
+} {
+  // ── Step 1: drop records provably belonging to another company ──
+  //    (defense in depth — the backend is authoritative)
+  const sameCompany = <T extends { companyId?: any }>(item: T) => {
+    if (companyId === null) return true; // no company → don't filter
+    const itemCompany = normalizePlantId(item.companyId);
+    if (itemCompany === null) return true; // unknown → keep
+    return itemCompany === companyId;
+  };
+
+  const coSchedules = schedules.filter(sameCompany);
+  const coNcrs = ncrs.filter(sameCompany);
+  const coAuditors = auditors.filter(sameCompany);
+  const coAuditees = auditees.filter(sameCompany);
+  const coResponses = responses.filter(sameCompany);
+
+  // ── Step 2: "All Plants" → no plant filter ──
+  if (plantId === null) {
+    return {
+      schedules: coSchedules,
+      ncrs: coNcrs,
+      auditors: coAuditors, // company-scoped, unchanged
+      auditees: coAuditees,
+      responses: coResponses,
+    };
+  }
+
+  const schedulePlantMap = buildSchedulePlantMap(coSchedules);
+
+  const resolvePlant = (item: any): number | null | undefined => {
+    const direct = normalizePlantId(item.plantId);
+    if (direct !== null) return direct;
+    const schedId =
+      item.auditScheduleId ?? item.scheduleId ?? item.auditSchedule?.id;
+    if (schedId != null) {
+      const viaSchedule = schedulePlantMap.get(String(schedId));
+      if (viaSchedule !== undefined) return viaSchedule;
+    }
+    return undefined;
+  };
+
+  return {
+    // Plant-scoped (physical location of the audit)
+    schedules: coSchedules.filter(
+      (s) => normalizePlantId(s.plantId) === plantId,
+    ),
+    ncrs: coNcrs.filter((n) => resolvePlant(n) === plantId),
+    responses: coResponses.filter((r) => resolvePlant(r) === plantId),
+
+    // Auditees are process owners at a plant → plant-scoped
+    auditees: coAuditees.filter((a) => normalizePlantId(a.plantId) === plantId),
+
+    // ✅ Auditors are COMPANY-SCOPED — do NOT filter by plant.
+    auditors: coAuditors,
+  };
+}
+
 const LeadAuditorDashboardContent: React.FC = () => {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
-  const isDesktop = width >= 1024;
 
   const params = useLocalSearchParams();
   const { user } = useAuth();
@@ -63,10 +152,10 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const [leadAuditorPlantName, setLeadAuditorPlantName] = useState<
     string | null
   >(null);
-  // ? NEW: company display name
   const [leadAuditorCompanyName, setLeadAuditorCompanyName] = useState<
     string | null
   >(null);
+
   const [allSchedules, setAllSchedules] = useState<Schedule[]>([]);
   const [allNCRs, setAllNCRs] = useState<NCR[]>([]);
   const [allAuditors, setAllAuditors] = useState<User[]>([]);
@@ -118,6 +207,22 @@ const LeadAuditorDashboardContent: React.FC = () => {
     new Date().getFullYear(),
   );
   const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const { selectedPlantId } = usePlantFilter();
+
+  // ─────────────────────────────────────────────────────────────
+  // Effective plant = user's own plant (if plant-scoped)
+  //                   OR the navbar selection (if corporate)
+  //                   OR null = "All Plants"
+  // ─────────────────────────────────────────────────────────────
+  const effectivePlantId = useMemo<number | null>(() => {
+    const ownPlant = normalizePlantId(user?.plantId);
+    if (ownPlant !== null) return ownPlant;
+    return normalizePlantId(selectedPlantId);
+  }, [user?.plantId, selectedPlantId]);
+
+  const effectiveCompanyId = useMemo<number | null>(() => {
+    return normalizePlantId(user?.companyId);
+  }, [user?.companyId]);
 
   const subtabParam =
     typeof params?.subtab === "string"
@@ -126,24 +231,10 @@ const LeadAuditorDashboardContent: React.FC = () => {
         ? (params.subtab[0] as "PENDING" | "CONFIRMED" | "REJECTED" | "OVERDUE")
         : undefined;
 
-  // Listen for tab param from drawer clicks
   useEffect(() => {
-    if (params?.tab) {
-      setActiveTab(params.tab as string);
-    }
+    if (params?.tab) setActiveTab(params.tab as string);
   }, [params?.tab]);
 
-  // Helper to get department string
-  const getDepartmentString = (dept: any): string => {
-    if (!dept) return "";
-    if (typeof dept === "string") return dept;
-    if (typeof dept === "object") {
-      return dept.displayName || dept.name || "";
-    }
-    return "";
-  };
-
-  /** Normalize any backend envelope into a plain array. */
   const unwrapArray = <T,>(raw: any): T[] => {
     if (Array.isArray(raw)) return raw;
     if (raw == null) return [];
@@ -157,140 +248,71 @@ const LeadAuditorDashboardContent: React.FC = () => {
     return [];
   };
 
-  const fetchLeadAuditorPlant = async () => {
+  // ─────────────────────────────────────────────────────────────
+  // Fetch plant + company display names for the header
+  // ─────────────────────────────────────────────────────────────
+  const fetchLeadAuditorPlant = async (): Promise<{
+    plantId: number | null;
+    plantName: string | null;
+    companyName: string | null;
+  }> => {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/users/${user?.id}`,
-        {},
-      );
+      // 1. Try to get the user record for company name
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user?.id}`);
       const userData = response.data;
 
-      let plantId = normalizePlantId(userData.plantId);
-      let plantName: string | null = userData.plantName || null;
-
-      // ? Try to read company name from user payload � cover the likely shapes
+      let plantName: string | null = userData?.plantName || null;
       let companyName: string | null =
-        userData.companyName ||
-        userData.company?.name ||
-        userData.plant?.company?.name ||
-        userData.plant?.companyName ||
+        userData?.companyName ||
+        userData?.company?.name ||
+        userData?.plant?.company?.name ||
+        userData?.plant?.companyName ||
         null;
 
-      // Fallback to user context
-      if (plantId === null && user?.plantId) {
-        plantId = normalizePlantId(user.plantId);
-        plantName = (user.plantName as string) || null;
-      }
-
-      // ? If company name still missing but we have a plantId, fetch the plant
-      if (!companyName && plantId !== null) {
+      // 2. If a specific plant is effective, fetch its display name
+      if (effectivePlantId !== null) {
         try {
           const plantRes = await axios.get(
-            `${API_BASE_URL}/api/plants/${plantId}`,
-            {},
+            `${API_BASE_URL}/api/plants/${effectivePlantId}`,
           );
           const plantData = plantRes.data;
+          plantName = plantData?.name || plantData?.plantName || plantName;
           companyName =
             plantData?.company?.name ||
             plantData?.companyName ||
             plantData?.company?.displayName ||
-            null;
+            companyName;
         } catch (plantErr) {
-          console.warn(
-            "Could not fetch plant detail for company name:",
-            plantErr,
-          );
+          console.warn("Could not fetch plant detail:", plantErr);
         }
       }
 
-      setLeadAuditorPlantId(plantId);
+      setLeadAuditorPlantId(effectivePlantId);
       setLeadAuditorPlantName(plantName);
       setLeadAuditorCompanyName(companyName);
 
-      console.log("?? Lead Auditor Plant:", {
-        plantId,
-        plantName,
-        companyName,
-      });
-      return { plantId, plantName, companyName };
+      return { plantId: effectivePlantId, plantName, companyName };
     } catch (error) {
-      console.error("Error fetching lead auditor plant:", error);
-
-      if (user?.plantId) {
-        const fallbackId = normalizePlantId(user.plantId);
-        setLeadAuditorPlantId(fallbackId);
-        setLeadAuditorPlantName((user.plantName as string) || null);
-        setLeadAuditorCompanyName(null);
-        return {
-          plantId: fallbackId,
-          plantName: user.plantName,
-          companyName: null,
-        };
-      }
-
-      return { plantId: null, plantName: null, companyName: null };
+      console.warn("Could not fetch user/plant metadata:", error);
+      // Fallback: derive from context
+      setLeadAuditorPlantId(effectivePlantId);
+      setLeadAuditorPlantName(
+        (user as any)?.plantName && effectivePlantId !== null
+          ? (user as any).plantName
+          : null,
+      );
+      setLeadAuditorCompanyName(null);
+      return {
+        plantId: effectivePlantId,
+        plantName: null,
+        companyName: null,
+      };
     }
   };
 
-  // Map scheduleId ? plantId (for records that lack plantId directly)
-  const buildSchedulePlantMap = (
-    schedules: Schedule[],
-  ): Map<string, number | null> => {
-    const map = new Map<string, number | null>();
-    schedules.forEach((s) => {
-      if (s.id != null) {
-        map.set(String(s.id), normalizePlantId(s.plantId));
-      }
-    });
-    return map;
-  };
-
-  const filterDataByPlant = (
-    plantId: number | null,
-    schedules: Schedule[],
-    ncrs: NCR[],
-    auditors: User[],
-    auditees: User[],
-    responses: Response[],
-  ) => {
-    if (plantId === null) {
-      return { schedules, ncrs, auditors, auditees, responses };
-    }
-
-    const schedulePlantMap = buildSchedulePlantMap(schedules);
-
-    // Resolve plantId for an NCR/Response: direct ? or via linked schedule
-    const resolvePlant = (item: any): number | null => {
-      const direct = normalizePlantId(item.plantId);
-      if (direct !== null) return direct;
-
-      // Fallbacks: try common foreign keys
-      const schedId =
-        item.auditScheduleId ?? item.scheduleId ?? item.auditSchedule?.id;
-      if (schedId != null) {
-        const viaSchedule = schedulePlantMap.get(String(schedId));
-        if (viaSchedule !== undefined) return viaSchedule;
-      }
-      return null;
-    };
-
-    return {
-      schedules: schedules.filter(
-        (s) => normalizePlantId(s.plantId) === plantId,
-      ),
-      ncrs: ncrs.filter((n) => {
-        const p = resolvePlant(n);
-        return p === null || p === plantId; // fail-open when unresolvable
-      }),
-      auditors: auditors.filter((a) => normalizePlantId(a.plantId) === plantId),
-      auditees: auditees.filter((a) => normalizePlantId(a.plantId) === plantId),
-      responses: responses.filter((r) => {
-        const p = resolvePlant(r);
-        return p === null || p === plantId;
-      }),
-    };
-  };
-
+  // ─────────────────────────────────────────────────────────────
+  // Apply filter + recompute stats
+  // ─────────────────────────────────────────────────────────────
   const updateFilteredData = (
     plantId: number | null,
     schedules: Schedule[],
@@ -301,6 +323,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
   ) => {
     const filtered = filterDataByPlant(
       plantId,
+      effectiveCompanyId, // ← ADD
       schedules,
       ncrs,
       auditors,
@@ -372,96 +395,67 @@ const LeadAuditorDashboardContent: React.FC = () => {
     });
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // Fetch all data
+  // ─────────────────────────────────────────────────────────────
   const fetchAllData = async (year: number = selectedYear) => {
     try {
       setLoading(true);
-      const { plantId } = await fetchLeadAuditorPlant();
+
+      await fetchLeadAuditorPlant();
+
+      const userParams = user?.id ? { userId: user.id } : {};
 
       const [schedulesRes, ncrRes, auditorsRes, auditeesRes, responsesRes] =
         await Promise.all([
-          axios.get(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {}),
+          axios.get(`${API_BASE_URL}/api/audit-schedule/year/${year}`, {
+            params: userParams,
+          }),
           axios
-            .get(`${API_BASE_URL}/api/ncr/all`, {})
+            .get(`${API_BASE_URL}/api/ncr/all`, { params: userParams })
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/audit-schedule/auditors`, {})
+            .get(`${API_BASE_URL}/api/audit-schedule/auditors`, {
+              params: userParams,
+            })
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/audit-schedule/auditees`, {})
+            .get(`${API_BASE_URL}/api/audit-schedule/auditees`, {
+              params: userParams,
+            })
             .catch(() => ({ data: [] })),
           axios
-            .get(`${API_BASE_URL}/api/templates/responses/all`, {})
+            .get(`${API_BASE_URL}/api/templates/responses/all`, {
+              params: userParams,
+            })
             .catch(() => ({ data: [] })),
         ]);
 
-      let schedules = unwrapArray<Schedule>(schedulesRes.data);
+      const schedules = unwrapArray<Schedule>(schedulesRes.data);
       let ncrs = unwrapArray<NCR>(ncrRes.data);
       const auditors = unwrapArray<User>(auditorsRes.data);
       const auditees = unwrapArray<User>(auditeesRes.data);
       let responses = unwrapArray<Response>(responsesRes.data);
 
-      // ============================================================
-      // ?? DEBUG LOGS � ADD THIS BLOCK
-      // ============================================================
-      console.log("?? leadAuditorPlantId:", plantId);
-      console.log("?? selectedYear:", year);
-      console.log(
-        "?? RAW schedules:",
-        schedules.length,
-        "sample plantIds:",
-        schedules.slice(0, 5).map((s: any) => s.plantId),
-      );
-      console.log("?? RAW NCRs:", ncrs.length, "sample:", ncrs.slice(0, 2));
-      console.log(
-        "?? NCR plantIds:",
-        ncrs.slice(0, 5).map((n: any) => n.plantId),
-      );
-      console.log(
-        "?? NCR dates:",
-        ncrs.slice(0, 5).map((n: any) => ({
-          createdAt: n.createdAt,
-          raisedDate: n.raisedDate,
-          dueDate: n.dueDate,
-        })),
-      );
-      console.log(
-        "?? RAW Responses:",
-        responses.length,
-        "sample:",
-        responses.slice(0, 2),
-      );
-      console.log(
-        "?? Response plantIds:",
-        responses.slice(0, 5).map((r: any) => r.plantId),
-      );
-      console.log(
-        "?? Response dates:",
-        responses.slice(0, 5).map((r: any) => r.createdAt),
-      );
-      // ============================================================
-
-      // Filter by year
-      ncrs = ncrs.filter((ncr: NCR) => {
-        const ncrDate = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
-        if (!ncrDate) return true; // ? keep if no date (was: return false)
+      // Year filter
+      ncrs = ncrs.filter((ncr) => {
+        const d = ncr.createdAt || ncr.raisedDate || ncr.dueDate;
+        if (!d) return true;
         try {
-          return new Date(ncrDate as string).getFullYear() === year;
-        } catch {
-          return true; // ? keep if unparseable
-        }
-      });
-
-      responses = responses.filter((response: Response) => {
-        if (!response.createdAt) return true; // ? keep if no date
-        try {
-          return new Date(response.createdAt as string).getFullYear() === year;
+          return new Date(d as string).getFullYear() === year;
         } catch {
           return true;
         }
       });
 
-      console.log("?? NCRs after year filter:", ncrs.length);
-      console.log("?? Responses after year filter:", responses.length);
+      responses = responses.filter((r) => {
+        if (!r.createdAt) return true;
+        try {
+          return new Date(r.createdAt as string).getFullYear() === year;
+        } catch {
+          return true;
+        }
+      });
 
       setAllSchedules(schedules);
       setAllNCRs(ncrs);
@@ -469,9 +463,8 @@ const LeadAuditorDashboardContent: React.FC = () => {
       setAllAuditees(auditees);
       setAllResponses(responses);
 
-      // ? Update filtered data using plantId instead of department
       updateFilteredData(
-        plantId,
+        effectivePlantId,
         schedules,
         ncrs,
         auditors,
@@ -495,17 +488,14 @@ const LeadAuditorDashboardContent: React.FC = () => {
   const handleViewResponse = (response: Response) => {
     console.log("View Response:", response.id);
   };
-
   const handleViewNCR = (ncr: NCR) => {
     console.log("View NCR:", ncr.id);
   };
-
   const handleReviewResponseClick = (response: Response) => {
     setReviewingResponse(response);
     setReviewApproved(true);
     setReviewComment("");
   };
-
   const handleViewResponseDetail = (response: Response) => {
     setSelectedResponseForDetail(response);
     setShowResponseDetailModal(true);
@@ -525,7 +515,6 @@ const LeadAuditorDashboardContent: React.FC = () => {
       await axios.put(
         `${API_BASE_URL}/api/templates/responses/${reviewingResponse.id}/${endpoint}`,
         { comment: reviewComment, signature: "Lead Auditor" },
-        {},
       );
       addToast(
         `Response ${reviewApproved ? "approved" : "rejected"} successfully!`,
@@ -546,17 +535,27 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
   useEffect(() => {
     const currentYear = new Date().getFullYear();
-    const years = [];
+    const years: number[] = [];
     for (let i = 2020; i <= currentYear + 5; i++) years.push(i);
     setAvailableYears(years.sort((a, b) => b - a));
   }, []);
 
+  // Refetch when year OR plant changes
   useEffect(() => {
     fetchAllData(selectedYear);
-  }, [selectedYear]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, effectivePlantId, effectiveCompanyId]);
 
-  const plantDisplayName =
-    leadAuditorCompanyName || leadAuditorPlantName || "All Plants";
+  // ─────────────────────────────────────────────────────────────
+  // MNC header strings
+  // ─────────────────────────────────────────────────────────────
+  const plantLabel =
+    leadAuditorPlantName && effectivePlantId !== null
+      ? leadAuditorPlantName
+      : "All Plants";
+
+  const auditorCount = filteredAuditors.length;
+  const auditeeCount = filteredAuditees.length;
 
   if (loading) {
     return (
@@ -600,7 +599,8 @@ const LeadAuditorDashboardContent: React.FC = () => {
         return (
           <FeasibilityConfirmationQueue
             selectedYear={selectedYear}
-            onNavigateToForm5={(year, month) => {
+            plantId={effectivePlantId}
+            onNavigateToForm5={(_year, _month) => {
               // Optional: navigate to Form5View
             }}
           />
@@ -609,13 +609,13 @@ const LeadAuditorDashboardContent: React.FC = () => {
         return (
           <DailyFeasibilityQueue
             selectedYear={selectedYear}
+            plantId={effectivePlantId}
             initialStatusTab={subtabParam}
-            onNavigateToForm5={(year, month) => {
+            onNavigateToForm5={(_year, _month) => {
               // Optional: navigate to Form5DetailedView
             }}
           />
         );
-      // ? MERGED: CheckSheets + NCRs in one tab
       case "checksheets-ncrs":
         return (
           <AuditsAndResponses
@@ -638,7 +638,6 @@ const LeadAuditorDashboardContent: React.FC = () => {
             leadAuditorDepartment={leadAuditorPlantName}
           />
         );
-      // ? MERGED: Auditors + Auditees in one tab
       case "stakeholders":
         return (
           <StakeholderManagement
@@ -680,7 +679,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
-      {/* ? RESPONSIVE HEADER */}
+      {/* ─────── HEADER ─────── */}
       <View
         style={{
           width: "100%",
@@ -729,17 +728,140 @@ const LeadAuditorDashboardContent: React.FC = () => {
                 <Text style={{ fontWeight: "600", color: "#334155" }}>
                   {user?.name || user?.username || "User"}
                 </Text>
-                {" | "}
-                <Text
-                  style={{ fontWeight: "500", color: NAVBAR_COLORS.primary }}
-                >
-                  🏢 {leadAuditorCompanyName || "Company"}
-                  {leadAuditorPlantName ? ` • 🏭 ${leadAuditorPlantName}` : ""}
-                </Text>
               </Text>
+
+              {/* ─────── MNC CHIPS: company · plant · counts ─────── */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 8,
+                }}
+              >
+                {/* Company chip */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: NAVBAR_COLORS.bg,
+                    borderWidth: 1,
+                    borderColor: "#DBEAFE",
+                  }}
+                >
+                  <Building2 size={11} color={NAVBAR_COLORS.primary} />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: NAVBAR_COLORS.primary,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {leadAuditorCompanyName || "Company"}
+                  </Text>
+                </View>
+
+                {/* Plant chip */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor:
+                      effectivePlantId !== null ? "#EFF6FF" : "#F1F5F9",
+                    borderWidth: 1,
+                    borderColor:
+                      effectivePlantId !== null ? "#BFDBFE" : "#E2E8F0",
+                  }}
+                >
+                  <Building2
+                    size={11}
+                    color={
+                      effectivePlantId !== null
+                        ? NAVBAR_COLORS.primary
+                        : "#64748B"
+                    }
+                  />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color:
+                        effectivePlantId !== null
+                          ? NAVBAR_COLORS.primary
+                          : "#64748B",
+                    }}
+                    numberOfLines={1}
+                  >
+                    {plantLabel}
+                  </Text>
+                </View>
+
+                {/* Auditor count chip — company-wide, does NOT change with plant */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: "#EFF6FF",
+                    borderWidth: 1,
+                    borderColor: "#BFDBFE",
+                  }}
+                >
+                  <Users size={11} color={NAVBAR_COLORS.primary} />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: NAVBAR_COLORS.primary,
+                    }}
+                  >
+                    {auditorCount} auditors (company-wide)
+                  </Text>
+                </View>
+
+                {/* Auditee count chip — plant-scoped */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                    backgroundColor: "#F1F5F9",
+                    borderWidth: 1,
+                    borderColor: "#E2E8F0",
+                  }}
+                >
+                  <Users size={11} color="#475569" />
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: "#475569",
+                    }}
+                  >
+                    {auditeeCount} auditees
+                    {effectivePlantId !== null ? " (this plant)" : ""}
+                  </Text>
+                </View>
+              </View>
             </View>
 
-            {/* Controls Section */}
+            {/* Controls */}
             <View
               style={{
                 flexDirection: "row",
@@ -788,7 +910,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
         </View>
       </View>
 
-      {/* ? RESPONSIVE SCROLLABLE CONTENT */}
+      {/* ─────── CONTENT ─────── */}
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -818,7 +940,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
         />
       )}
 
-      {/* ? RESPONSIVE REVIEW MODAL */}
+      {/* Review Modal */}
       {reviewingResponse && (
         <Modal
           visible={true}
@@ -838,7 +960,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
           >
             <View
               style={{
-                width: isMobile ? "100%" : "100%",
+                width: "100%",
                 maxWidth: isMobile ? 400 : 480,
                 backgroundColor: "#FFFFFF",
                 borderRadius: 24,
@@ -852,7 +974,6 @@ const LeadAuditorDashboardContent: React.FC = () => {
                 elevation: 10,
               }}
             >
-              {/* Header */}
               <View
                 style={{
                   flexDirection: "row",
@@ -949,7 +1070,7 @@ const LeadAuditorDashboardContent: React.FC = () => {
                 </View>
               </View>
 
-              {/* Approve / Reject Buttons */}
+              {/* Approve / Reject Toggle */}
               <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
                 <TouchableOpacity
                   style={{

@@ -1146,10 +1146,12 @@ const getNcrYear = (ncr: any): number | null => {
 
 const NCRPendingDashboard = ({
   onBack,
-  selectedYear, // 👈 ADD
+  selectedYear,
+  selectedPlantId, // 👈 ADD
 }: {
   onBack?: () => void;
-  selectedYear?: number; // 👈 ADD
+  selectedYear?: number;
+  selectedPlantId?: string | null; // 👈 ADD
 }) => {
   const navigation = useNavigation<any>();
   const { width } = useWindowDimensions(); // ✅ ADD THIS
@@ -1212,6 +1214,16 @@ const NCRPendingDashboard = ({
         return y === null || y === selectedYear;
       };
 
+      // ✅ Helper: only keep NCRs from the selected plant
+      const inSelectedPlant = (ncr: any) => {
+        if (!selectedPlantId) return true;
+        const ncrPlantId =
+          ncr?.plantId ?? ncr?.plant?.id ?? ncr?.plant_id ?? null;
+        return (
+          ncrPlantId != null && String(ncrPlantId) === String(selectedPlantId)
+        );
+      };
+
       if (!pendingResult.success) {
         setError(pendingResult.error);
         setVerificationQueue([]);
@@ -1233,7 +1245,8 @@ const NCRPendingDashboard = ({
                 (ncr.status === "IN_PROGRESS" ||
                   ncr.status === "NCR2_IN_PROGRESS"),
             )
-            .filter(inSelectedYear) // 👈 ADD
+            .filter(inSelectedYear)
+            .filter(inSelectedPlant) // 👈 ADD
             .sort(
               (a, b) =>
                 new Date(b.updatedAt || b.createdAt || 0).getTime() -
@@ -1255,7 +1268,8 @@ const NCRPendingDashboard = ({
                   ncr.ncr2Correction ||
                   ncr.ncr2CorrectiveAction),
             )
-            .filter(inSelectedYear), // 👈 ADD
+            .filter(inSelectedYear)
+            .filter(inSelectedPlant), // 👈 ADD
         );
       }
     } catch (err) {
@@ -1269,7 +1283,7 @@ const NCRPendingDashboard = ({
     if (!user?.id) return;
     loadData();
     fetchAllUsers();
-  }, [user?.id, selectedYear]);
+  }, [user?.id, selectedYear, selectedPlantId]); // 👈 ADD selectedPlantId
 
   const handleVerify = async (accepted: boolean, comment: string) => {
     setVerifyLoading(true);

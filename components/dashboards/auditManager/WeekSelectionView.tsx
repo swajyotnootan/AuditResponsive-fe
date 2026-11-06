@@ -26,6 +26,7 @@ import {
   View,
 } from "react-native";
 
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { auditScheduleApi } from "@/services/auditScheduleApi";
 import { useAuth } from "../../context/AuthContext";
 
@@ -98,6 +99,13 @@ const financialMonths = [
 ];
 
 const weeks = ["W-1", "W-2", "W-3", "W-4", "W-5", "W-6"];
+
+// ✅ Statuses that mean "this schedule row is real work, show it"
+const WORKABLE_STATUSES = new Set([
+  "APPROVED",
+  "CONFIRMED_BY_LA",
+  "PENDING_APPROVAL",
+]);
 
 const getQuarter = (month: string) => {
   const quarters: Record<string, string> = {
@@ -240,6 +248,7 @@ const StatusBadge = ({ status, count }: { status: string; count?: number }) => {
       </View>
     );
   }
+  // PENDING / MIXED / anything else
   return (
     <View
       style={{
@@ -258,7 +267,7 @@ const StatusBadge = ({ status, count }: { status: string; count?: number }) => {
       <Text
         style={{ fontSize: 11, fontWeight: "700", color: COLORS.textMuted }}
       >
-        Pending
+        {count !== undefined ? `${count} Schedules` : "Pending"}
       </Text>
     </View>
   );
@@ -372,7 +381,6 @@ const YearPickerModal = ({
             elevation: 10,
           }}
         >
-          {/* Modal Header */}
           <View
             style={{
               flexDirection: "row",
@@ -437,7 +445,6 @@ const YearPickerModal = ({
             </TouchableOpacity>
           </View>
 
-          {/* Year List */}
           <ScrollView
             style={{ maxHeight: 400 }}
             showsVerticalScrollIndicator={false}
@@ -507,6 +514,8 @@ export default function WeekSelectionView({
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuth();
+  const { selectedPlantId } = usePlantFilter();
+  const effectivePlantId = (user as any)?.plantId ?? selectedPlantId ?? null;
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -521,7 +530,7 @@ export default function WeekSelectionView({
   const [viewMode, setViewMode] = useState<"months" | "weeks">("months");
   const [filterStatus, setFilterStatus] = useState("all");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showYearPicker, setShowYearPicker] = useState(false); // ✅ New
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
   const availableYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -630,12 +639,14 @@ export default function WeekSelectionView({
       const response = await auditScheduleApi.getAvailableMonths(
         selectedYear,
         user.id,
+        effectivePlantId,
       );
       const months = Array.isArray(response) ? response : response?.data || [];
-      const plantScopedMonths = filterByPlant(months, user?.plantId);
+      const plantScopedMonths = filterByPlant(months, effectivePlantId);
       const approvedMonths = plantScopedMonths.filter(
         (month: any) =>
-          month.approvalStatus === "APPROVED" && month.hasPlannedAudits,
+          Boolean(month.hasApprovedSchedules) ||
+          month.approvalStatus === "APPROVED",
       );
       setAvailableMonths(approvedMonths);
     } catch (error) {
@@ -646,12 +657,16 @@ export default function WeekSelectionView({
     }
   };
 
+  // ═════ ✅ FIXED fetchWeeklyData ═════
   const fetchWeeklyData = async (month: string) => {
     setLoading(true);
     try {
+      // ✅ FIX #1: pass userId AND plantId so backend scopes correctly
       const response = await auditScheduleApi.getByYearAndMonth(
         selectedYear,
         month as any,
+        user?.id,
+        effectivePlantId,
       );
       let schedules: any[] = [];
       if (Array.isArray(response)) schedules = response;
@@ -659,9 +674,14 @@ export default function WeekSelectionView({
         if (Array.isArray(response.data)) schedules = response.data;
       }
 
-      const plantScopedSchedules = filterByPlant(schedules, user?.plantId);
+      // ✅ FIX #2: remove double plant filter — backend already scoped
+      const plantScopedSchedules = schedules;
+
+      // ✅ FIX #3: accept APPROVED / CONFIRMED_BY_LA / PENDING_APPROVAL
       const approvedSchedules = plantScopedSchedules.filter(
-        (s: any) => s.approvalStatus === "APPROVED",
+        (s: any) =>
+          s.approvalStatus != null &&
+          WORKABLE_STATUSES.has(String(s.approvalStatus).toUpperCase()),
       );
 
       const weekData: any = {};
@@ -669,6 +689,16 @@ export default function WeekSelectionView({
         const weekSchedules = approvedSchedules.filter(
           (s: any) => s.week === week,
         );
+        const allFullyApproved =
+          weekSchedules.length > 0 &&
+          weekSchedules.every(
+            (s: any) => String(s.approvalStatus).toUpperCase() === "APPROVED",
+          );
+        const anyConfirmed = weekSchedules.some(
+          (s: any) =>
+            String(s.approvalStatus).toUpperCase() === "CONFIRMED_BY_LA",
+        );
+
         weekData[week] = {
           scheduleCount: weekSchedules.length,
           departments: [
@@ -679,6 +709,8 @@ export default function WeekSelectionView({
             ),
           ],
           hasSchedules: weekSchedules.length > 0,
+          isFullyApproved: allFullyApproved,
+          isAwaitingFinalApproval: !allFullyApproved && anyConfirmed,
           schedules: weekSchedules,
         };
       });
@@ -693,16 +725,21 @@ export default function WeekSelectionView({
 
   useEffect(() => {
     fetchAvailableMonths();
-  }, [selectedYear, user?.plantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, effectivePlantId, user?.id]);
+
   useEffect(() => {
     if (selectedMonth) {
       fetchWeeklyData(selectedMonth);
       setViewMode("weeks");
     }
-  }, [selectedMonth, user?.plantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, effectivePlantId, user?.id]);
+
   useEffect(() => {
     if (params?.year) setSelectedYear(parseInt(params.year as string));
   }, [params?.year]);
+
   useEffect(() => {
     if (propYear) setSelectedYear(propYear);
   }, [propYear]);
@@ -718,6 +755,13 @@ export default function WeekSelectionView({
       Alert.alert(
         "Warning",
         `No schedules found for ${week}. Please add schedules in Form 5 first.`,
+      );
+      return;
+    }
+    if (!weekData.isFullyApproved) {
+      Alert.alert(
+        "Awaiting Approval",
+        `Schedules for ${week} exist but haven't been fully approved yet. Please complete the approval workflow in Form 5 before creating daily schedules.`,
       );
       return;
     }
@@ -798,13 +842,12 @@ export default function WeekSelectionView({
           backgroundColor: COLORS.card,
           paddingHorizontal: isDesktop ? 24 : 16,
           paddingVertical: 16,
-          zIndex: 100, // ✅ ensure header sits above content
-          elevation: 2, // ✅ Android
+          zIndex: 100,
+          elevation: 2,
         }}
       >
         <View style={{ width: "100%", maxWidth: 1400, alignSelf: "center" }}>
           {isDesktop ? (
-            /* ─────────── DESKTOP HEADER ─────────── */
             <View
               style={{
                 flexDirection: "row",
@@ -813,7 +856,6 @@ export default function WeekSelectionView({
                 gap: 16,
               }}
             >
-              {/* Left */}
               <View
                 style={{
                   flexDirection: "row",
@@ -879,7 +921,6 @@ export default function WeekSelectionView({
                 </View>
               </View>
 
-              {/* Right */}
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
               >
@@ -938,9 +979,7 @@ export default function WeekSelectionView({
               </View>
             </View>
           ) : (
-            /* ─────────── MOBILE HEADER (STACKED) ─────────── */
             <View style={{ gap: 12 }}>
-              {/* Row 1: Back + Icon + Title */}
               <View
                 style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
               >
@@ -1001,7 +1040,6 @@ export default function WeekSelectionView({
                 </View>
               </View>
 
-              {/* Row 2: Status + Menu */}
               <View
                 style={{
                   flexDirection: "row",
@@ -1038,7 +1076,7 @@ export default function WeekSelectionView({
         </View>
       </View>
 
-      {/* ═════ MOBILE DROPDOWN MENU (3 items only) ═════ */}
+      {/* ═════ MOBILE DROPDOWN MENU ═════ */}
       {showMobileMenu && !isDesktop && (
         <>
           <View
@@ -1060,11 +1098,10 @@ export default function WeekSelectionView({
               overflow: "hidden",
             }}
           >
-            {/* 1. Year Info Row → opens Year Picker Modal */}
             <TouchableOpacity
               onPress={() => {
                 setShowMobileMenu(false);
-                setShowYearPicker(true); // ✅ Open year modal
+                setShowYearPicker(true);
               }}
               style={{
                 flexDirection: "row",
@@ -1110,7 +1147,6 @@ export default function WeekSelectionView({
               <ArrowRight size={16} color="#94A3B8" />
             </TouchableOpacity>
 
-            {/* 2. Back to Months (only in weeks view) */}
             {viewMode === "weeks" && (
               <TouchableOpacity
                 onPress={() => {
@@ -1152,7 +1188,6 @@ export default function WeekSelectionView({
               </TouchableOpacity>
             )}
 
-            {/* 3. Refresh Data */}
             <TouchableOpacity
               onPress={() => {
                 setShowMobileMenu(false);
@@ -1189,7 +1224,6 @@ export default function WeekSelectionView({
             </TouchableOpacity>
           </View>
 
-          {/* Backdrop */}
           <TouchableOpacity
             style={{
               position: "absolute",
@@ -1235,7 +1269,6 @@ export default function WeekSelectionView({
         {/* ═════ MONTH GRID VIEW ═════ */}
         {viewMode === "months" && (
           <>
-            {/* Filter Bar */}
             <Card style={{ padding: 16 }}>
               <View
                 style={{
@@ -1340,17 +1373,19 @@ export default function WeekSelectionView({
                   const monthData = availableMonths.find(
                     (m: any) => m.month === month,
                   );
+                  if (!monthData) return null;
                   const isApproved = monthData?.approvalStatus === "APPROVED";
-                  const hasPlannedAudits = monthData?.hasPlannedAudits || false;
-                  if (!hasPlannedAudits) return null;
+                  const hasApproved =
+                    Boolean(monthData?.hasApprovedSchedules) || isApproved;
+                  const isMixed = hasApproved && !isApproved;
 
                   const monthTheme = monthThemeColors[month];
 
                   return (
                     <TouchableOpacity
                       key={month}
-                      onPress={() => isApproved && handleMonthClick(month)}
-                      disabled={!isApproved}
+                      onPress={() => hasApproved && handleMonthClick(month)}
+                      disabled={!hasApproved}
                       activeOpacity={0.8}
                       style={{
                         width: isDesktop ? "30%" : "100%",
@@ -1360,7 +1395,7 @@ export default function WeekSelectionView({
                         borderColor: COLORS.border,
                         backgroundColor: COLORS.card,
                         overflow: "hidden",
-                        opacity: isApproved ? 1 : 0.6,
+                        opacity: hasApproved ? 1 : 0.6,
                         shadowColor: "#0F172A",
                         shadowOffset: { width: 0, height: 1 },
                         shadowOpacity: 0.03,
@@ -1368,7 +1403,6 @@ export default function WeekSelectionView({
                         elevation: 1,
                       }}
                     >
-                      {/* Card Header */}
                       <View
                         style={{
                           flexDirection: "row",
@@ -1426,11 +1460,16 @@ export default function WeekSelectionView({
                           </View>
                         </View>
                         <StatusBadge
-                          status={isApproved ? "APPROVED" : "PENDING"}
+                          status={
+                            isApproved
+                              ? "APPROVED"
+                              : isMixed
+                                ? "PENDING"
+                                : "PENDING"
+                          }
                         />
                       </View>
 
-                      {/* Card Body */}
                       <View style={{ padding: 20 }}>
                         <View
                           style={{
@@ -1453,9 +1492,11 @@ export default function WeekSelectionView({
                           >
                             {isApproved
                               ? "Click to view weeks"
-                              : "Awaiting approval"}
+                              : isMixed
+                                ? "Mixed status — click to view weeks"
+                                : "Awaiting approval"}
                           </Text>
-                          {isApproved && (
+                          {hasApproved && (
                             <ChevronRight size={18} color={COLORS.primary} />
                           )}
                         </View>
@@ -1471,7 +1512,6 @@ export default function WeekSelectionView({
         {/* ═════ WEEK GRID VIEW ═════ */}
         {viewMode === "weeks" && selectedMonth && currentMonthTheme && (
           <>
-            {/* Month Header Card */}
             <Card
               style={{
                 backgroundColor: currentMonthTheme.bg,
@@ -1539,7 +1579,6 @@ export default function WeekSelectionView({
               </View>
             </Card>
 
-            {/* Weeks Grid */}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 20 }}>
               {weeks.map((week) => {
                 const weekNum = parseInt(week.split("-")[1]);
@@ -1554,10 +1593,13 @@ export default function WeekSelectionView({
                 );
                 const weekData = weeklyData[week] || {
                   hasSchedules: false,
+                  isFullyApproved: false,
+                  isAwaitingFinalApproval: false,
                   scheduleCount: 0,
                   departments: [],
                 };
                 const isScheduled = weekData.hasSchedules;
+                const isClickable = isScheduled && weekData.isFullyApproved;
 
                 if (weekNum > monthWeeksCount || !dateRange) return null;
 
@@ -1565,7 +1607,7 @@ export default function WeekSelectionView({
                   <TouchableOpacity
                     key={week}
                     onPress={() => handleWeekClick(week, weekData)}
-                    disabled={!isScheduled}
+                    disabled={!isClickable}
                     activeOpacity={0.8}
                     style={{
                       width: isDesktop ? "23%" : "100%",
@@ -1577,7 +1619,7 @@ export default function WeekSelectionView({
                         : COLORS.border,
                       backgroundColor: COLORS.card,
                       overflow: "hidden",
-                      opacity: isScheduled ? 1 : 0.7,
+                      opacity: isScheduled ? 1 : 0.6,
                       shadowColor: "#0F172A",
                       shadowOffset: { width: 0, height: 1 },
                       shadowOpacity: 0.03,
@@ -1585,7 +1627,6 @@ export default function WeekSelectionView({
                       elevation: 1,
                     }}
                   >
-                    {/* Week Header */}
                     <View
                       style={{
                         flexDirection: "row",
@@ -1611,12 +1652,17 @@ export default function WeekSelectionView({
                         {week}
                       </Text>
                       <StatusBadge
-                        status={isScheduled ? "APPROVED" : "EMPTY"}
+                        status={
+                          isClickable
+                            ? "APPROVED"
+                            : isScheduled
+                              ? "PENDING"
+                              : "EMPTY"
+                        }
                         count={isScheduled ? weekData.scheduleCount : undefined}
                       />
                     </View>
 
-                    {/* Date Range */}
                     <View style={{ padding: 20 }}>
                       <View
                         style={{
@@ -1653,7 +1699,6 @@ export default function WeekSelectionView({
                         </Text>
                       </View>
 
-                      {/* Departments */}
                       {isScheduled && weekData.departments.length > 0 && (
                         <View style={{ marginBottom: 16 }}>
                           <Text
@@ -1726,7 +1771,6 @@ export default function WeekSelectionView({
                         </View>
                       )}
 
-                      {/* Action Row */}
                       <View
                         style={{
                           flexDirection: "row",
@@ -1743,16 +1787,18 @@ export default function WeekSelectionView({
                           style={{
                             fontSize: 13,
                             fontWeight: "600",
-                            color: isScheduled
+                            color: isClickable
                               ? COLORS.primaryDark
                               : COLORS.textMuted,
                           }}
                         >
-                          {isScheduled
+                          {isClickable
                             ? "Create Daily Schedule"
-                            : "No schedules yet"}
+                            : isScheduled
+                              ? "Awaiting final approval"
+                              : "No schedules yet"}
                         </Text>
-                        {isScheduled && (
+                        {isClickable && (
                           <ChevronRight size={18} color={COLORS.primary} />
                         )}
                       </View>
@@ -1762,7 +1808,6 @@ export default function WeekSelectionView({
               })}
             </View>
 
-            {/* Legend */}
             <Card style={{ padding: 24 }}>
               <Text
                 style={{
@@ -1799,7 +1844,7 @@ export default function WeekSelectionView({
                     <CheckCircle size={12} color={COLORS.primary} />
                   </View>
                   <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
-                    Week has schedules - Click to create daily schedule
+                    Week has approved schedules - Click to create daily schedule
                   </Text>
                 </View>
                 <View
@@ -1822,6 +1867,31 @@ export default function WeekSelectionView({
                     }}
                   >
                     <Clock size={12} color={COLORS.textMuted} />
+                  </View>
+                  <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
+                    Schedules exist but pending final approval
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: COLORS.border,
+                      backgroundColor: "#F8FAFC",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Clock size={12} color="#CBD5E1" />
                   </View>
                   <Text style={{ fontSize: 13, color: COLORS.textMuted }}>
                     No schedules - Complete Form 5 first

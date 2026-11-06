@@ -128,6 +128,7 @@ interface WeekTeamInfo {
 
 interface Props {
   selectedYear: number;
+  plantId?: number | null; // ← ADD
   onCountChange?: (count: number) => void;
 }
 
@@ -191,6 +192,7 @@ const departmentDisplayToEnum: Record<string, string> = {
 // ─────────────────────────────────────────────────────────────
 const OverdueScheduleQueue: React.FC<Props> = ({
   selectedYear,
+  plantId,
   onCountChange,
 }) => {
   const { user } = useAuth();
@@ -285,7 +287,12 @@ const OverdueScheduleQueue: React.FC<Props> = ({
     try {
       const res = await axios.get(
         `${API_BASE_URL}/api/audit-schedule/overdue-schedules/${selectedYear}`,
-        { params: { userId: user.id } },
+        {
+          params: {
+            userId: user.id,
+            ...(plantId != null ? { plantId } : {}),
+          },
+        },
       );
 
       const raw = Array.isArray(res.data) ? res.data : [];
@@ -317,8 +324,14 @@ const OverdueScheduleQueue: React.FC<Props> = ({
     } finally {
       setOverdueLoading(false);
     }
-  }, [selectedYear, addToast, user?.id, expandedMonths.size, onCountChange]);
-
+  }, [
+    selectedYear,
+    addToast,
+    user?.id,
+    expandedMonths.size,
+    onCountChange,
+    plantId,
+  ]);
   useEffect(() => {
     fetchOverdue();
     // eslint-disable-next-line react-hooks/exhaustive-deps

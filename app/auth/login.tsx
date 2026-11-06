@@ -54,7 +54,7 @@ const ROLES: Role[] = [
   },
   {
     label: "Audit Manager",
-    username: "blr.audit.manager",
+    username: "corp.audit.manager", // ← fixed
     password: "user123",
     icon: "briefcase",
     bg: "bg-blue-50",
@@ -62,7 +62,7 @@ const ROLES: Role[] = [
   },
   {
     label: "Lead Auditor",
-    username: "blr.lead.auditor",
+    username: "corp.lead.auditor", // ← fixed
     password: "user123",
     icon: "user-check",
     bg: "bg-violet-50",
@@ -70,7 +70,7 @@ const ROLES: Role[] = [
   },
   {
     label: "Initiator",
-    username: "blr.initiator",
+    username: "blr.hr.initiator", // ✅ was "blr.initiator"
     password: "user123",
     icon: "file",
     bg: "bg-green-50",
@@ -78,7 +78,7 @@ const ROLES: Role[] = [
   },
   {
     label: "Auditor",
-    username: "blr.auditor1",
+    username: "corp.auditor1", // ← fixed
     password: "user123",
     icon: "users",
     bg: "bg-cyan-50",
@@ -86,7 +86,7 @@ const ROLES: Role[] = [
   },
   {
     label: "HOD",
-    username: "blr.hod",
+    username: "blr.hr.hod", // ✅ was "blr.hod"
     password: "user123",
     icon: "shield",
     bg: "bg-orange-50",
@@ -109,8 +109,8 @@ const ROLES: Role[] = [
     fg: "#DB2777",
   },
   {
-    label: "Top Management",
-    username: "blr.top.mgmt",
+    label: "Plant Head",
+    username: "blr.plant.head",
     password: "user123",
     icon: "briefcase",
     bg: "bg-amber-50",

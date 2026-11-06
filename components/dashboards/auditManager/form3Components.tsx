@@ -1,22 +1,22 @@
 import {
-    AlertCircle,
-    Calendar,
-    CheckCircle,
-    Clock,
-    FileText,
-    MessageSquare,
-    X,
+  AlertCircle,
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  MessageSquare,
+  X,
 } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Modal,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 // ════ STRICT MONOCHROMATIC MNC PALETTE ═════
@@ -799,16 +799,20 @@ export const MonthCellTooltip = ({
   count,
   anchor,
 }: any) => {
+  const [tooltipHeight, setTooltipHeight] = useState(0);
+
   if (!visible || !anchor || Platform.OS !== "web") return null;
 
   const W = 240;
-  const [tooltipHeight, setTooltipHeight] = useState(0);
   const TAIL = 12;
   const GAP = 12;
   const viewportWidth =
     typeof window !== "undefined" ? window.innerWidth : 1024;
 
+  // Center the tooltip over the hovered cell while keeping it on-screen.
   const left = Math.max(8, Math.min(anchor.x - W / 2, viewportWidth - W - 8));
+
+  // Keep the pointer aligned with the hovered cell.
   const tailX = Math.max(20, Math.min(W - 20, anchor.x - left));
 
   const statusColor =
@@ -901,11 +905,7 @@ export const MonthCellTooltip = ({
                 color: statusColor,
               }}
             >
-              {status === "COMPLETED"
-                ? "Completed"
-                : status === "PLANNED"
-                  ? "Planned"
-                  : "Not Planned"}
+              {status === "COMPLETED" ? "Completed" : "Planned"}
             </Text>
           </View>
         </View>
@@ -917,24 +917,15 @@ export const MonthCellTooltip = ({
           {auditElement}
         </Text>
 
-        {count > 0 ? (
-          <View className="mt-2 flex-row items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5">
-            <Clock size={13} color={COLORS.primary} />
-            <Text className="text-[11px] font-bold text-blue-800">
-              {count} audit schedule{count !== 1 ? "s" : ""}
-            </Text>
-          </View>
-        ) : (
-          <View className="mt-2 flex-row items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-            <FileText size={13} color={COLORS.textMuted} />
-            <Text className="text-[11px] font-semibold text-slate-600">
-              No schedules yet
-            </Text>
-          </View>
-        )}
+        <View className="mt-2 flex-row items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1.5">
+          <Clock size={13} color={COLORS.primary} />
+          <Text className="text-[11px] font-bold text-blue-800">
+            {count} audit schedule{count !== 1 ? "s" : ""}
+          </Text>
+        </View>
 
-        <Text className="mt-2 text-[10px] font-semibold text-slate-500">
-          {count > 0 ? "Click to view schedules" : "No schedules to view"}
+        <Text className="mt-2 text-[10px] text-slate-400">
+          Click to view schedules
         </Text>
       </View>
     </View>

@@ -6,9 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
-// ============================================
-// ✅ ROLE DEFINITIONS
-// ============================================
+export type RoleType = (typeof ROLES)[keyof typeof ROLES];
 
 export const ROLES = {
   MASTER: "MASTER",
@@ -19,15 +17,9 @@ export const ROLES = {
   AUDITEE: "AUDITEE",
   INITIATOR: "INITIATOR",
   HR_ADMIN: "HR_ADMIN",
-  TOP_MANAGEMENT: "TOP_MANAGEMENT",
+  PLANT_HEAD: "PLANT_HEAD", // ← was TOP_MANAGEMENT
   QMS_ADMIN: "QMS_ADMIN",
 } as const;
-
-export type RoleType = (typeof ROLES)[keyof typeof ROLES];
-
-// ============================================
-// ✅ ROLE-TO-NAVIGATION MAPPING
-// ============================================
 
 export const roleNavigationMap: Record<RoleType, string> = {
   MASTER: "/master-dashboard",
@@ -38,13 +30,9 @@ export const roleNavigationMap: Record<RoleType, string> = {
   AUDITEE: "/auditee",
   INITIATOR: "/initiator",
   HR_ADMIN: "/hr-admin",
-  TOP_MANAGEMENT: "/top-management",
+  PLANT_HEAD: "/top-management", // ← was TOP_MANAGEMENT; URL stays for now
   QMS_ADMIN: "/qms-admin",
 };
-
-// ============================================
-// ✅ ROLE-TO-LOCATION MAPPING
-// ============================================
 
 export const roleLocationMap: Record<RoleType, string> = {
   MASTER: "Master Dashboard",
@@ -55,13 +43,9 @@ export const roleLocationMap: Record<RoleType, string> = {
   AUDITEE: "Auditee Dashboard",
   INITIATOR: "Initiator Dashboard",
   HR_ADMIN: "HR Admin Dashboard",
-  TOP_MANAGEMENT: "Top Management Dashboard",
+  PLANT_HEAD: "Plant Head Dashboard", // ← was "Top Management Dashboard"
   QMS_ADMIN: "QMS Admin Dashboard",
 };
-
-// ============================================
-// ✅ ROLE-RELATED KEYWORDS FOR SMART FILTERING
-// ============================================
 
 export const roleKeywords: Record<RoleType, string[]> = {
   MASTER: ["master", "admin", "system"],
@@ -72,7 +56,7 @@ export const roleKeywords: Record<RoleType, string[]> = {
   AUDITEE: ["auditee", "audit schedule"],
   INITIATOR: ["initiator", "form submission"],
   HR_ADMIN: ["hr", "human resources", "admin"],
-  TOP_MANAGEMENT: ["top management", "director", "vp"],
+  PLANT_HEAD: ["plant head", "plant in-charge"], // ← was ["top management", "director", "vp"]
   QMS_ADMIN: ["qms", "quality"],
 };
 
@@ -445,7 +429,7 @@ export const fetchAllPages = async (
   while (!last && page < maxPages) {
     const sep = endpoint.includes("?") ? "&" : "?";
     const res = await apiClient.get<any>(
-      `${endpoint}${sep}page=${page}&size=${pageSize}`
+      `${endpoint}${sep}page=${page}&size=${pageSize}`,
     );
 
     if (Array.isArray(res)) return res;
@@ -460,11 +444,12 @@ export const fetchAllPages = async (
 
     all.push(...chunk);
 
-    last = typeof res?.last === "boolean"
-      ? res.last
-      : typeof res?.totalPages === "number"
-        ? page + 1 >= res.totalPages
-        : chunk.length < pageSize;
+    last =
+      typeof res?.last === "boolean"
+        ? res.last
+        : typeof res?.totalPages === "number"
+          ? page + 1 >= res.totalPages
+          : chunk.length < pageSize;
 
     page++;
   }
@@ -671,6 +656,14 @@ export const userAPI = {
 
   getUsersByPlant: async (plantId: number | string): Promise<User[]> => {
     const response = await apiClient.get(`/api/users/plant/${plantId}`);
+    const users = Array.isArray(response)
+      ? response
+      : (response as any)?.data || [];
+    return users.map((user: any) => normalizeUser(user));
+  },
+
+  getUsersByCompany: async (companyId: number | string): Promise<User[]> => {
+    const response = await apiClient.get(`/api/users/company/${companyId}`);
     const users = Array.isArray(response)
       ? response
       : (response as any)?.data || [];
@@ -1736,6 +1729,5 @@ export default {
   eightD: eightDAPI,
   forum: forumAPI,
   eightDPdf: eightDPdfAPI,
-    fetchAllPages,   // ← ADD
-
+  fetchAllPages, // ← ADD
 };

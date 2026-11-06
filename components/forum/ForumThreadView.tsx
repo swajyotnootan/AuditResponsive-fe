@@ -4,6 +4,7 @@
 import EmailNotificationModal from "@/components/comform/EmailNotificationModal";
 import { useAuth } from "@/components/context/AuthContext";
 import { API_BASE_URL } from "@/config/apiConfig";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio as ExpoAudio } from "expo-av";
 import {
@@ -13,8 +14,11 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  LockKeyhole,
   Mail,
+  Megaphone,
   MessageCircle,
+  MessageSquare,
   MoreVertical,
   Phone,
   RefreshCw,
@@ -56,6 +60,7 @@ import {
   fetchGroupThreads,
   sendCallNotification,
 } from "./Api/forumapi";
+import BroadcastComposerModal from "./BroadcastComposerModal";
 import ManageGroupMembersModal from "./ManageGroupMembersModal";
 import ThreadCard from "./ThreadCard";
 import ThreadComposer from "./ThreadComposer";
@@ -254,6 +259,7 @@ interface ForumThreadViewProps {
   memberEmails?: any[];
   onSeen?: () => void;
   groupAdminEmail?: string;
+  groupType?: string; // 👈 ADD THIS LINE
 }
 
 // ============================================================================
@@ -306,6 +312,7 @@ export default function ForumThreadView({
   onBack,
   memberEmails = [],
   onSeen,
+  groupType = "CHAT", // 👈 ADD THIS LINE
   groupAdminEmail, // ?? ADD
 }: ForumThreadViewProps) {
   const { user } = useAuth();
@@ -368,6 +375,7 @@ export default function ForumThreadView({
   // ---- Members State ----
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [showMembersSidebar, setShowMembersSidebar] = useState(false);
+  const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [pinnedMessages, setPinnedMessages] = useState<any[]>([]);
@@ -377,6 +385,7 @@ export default function ForumThreadView({
   // ---- Email & Settings ----
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [inspectionId, setInspectionId] = useState<string | null>(null);
   const [selectedMic, setSelectedMic] = useState("");
   const [selectedCamera, setSelectedCamera] = useState("");
@@ -1110,10 +1119,14 @@ export default function ForumThreadView({
 
     const userEmail = currentUser?.email || username || "";
     const tempId = `temp-msg-${Date.now()}-${Math.random()}`;
+    const isBroadcastMsg = newPostData.messageType === "BROADCAST";
 
     const optimisticMsg = {
       id: tempId,
-      title: newPostData.content?.substring(0, 30) || "New Message",
+      title:
+        newPostData.title ||
+        newPostData.content?.substring(0, 60) ||
+        "Announcement",
       content: newPostData.content,
       createdBy: userEmail,
       createdByName: displayName,
@@ -1121,35 +1134,51 @@ export default function ForumThreadView({
       messageType: newPostData.messageType || "TEXT",
       attachments: newPostData.attachments || [],
       deliveryStatus: "SENDING" as const,
+      broadcastPriority: isBroadcastMsg
+        ? newPostData.broadcastPriority || "NORMAL"
+        : undefined,
+      broadcastPinned: isBroadcastMsg ? true : undefined,
+      broadcastRequiresAck: isBroadcastMsg ? true : undefined,
+      broadcastAcknowledgedBy: isBroadcastMsg ? [userEmail] : undefined,
     };
 
-    // ? NEW: Force scroll to bottom after this send
+    // Force scroll to bottom after this send
     scrollToBottomAfterSendRef.current = true;
 
     setPosts((prev) => [...prev, optimisticMsg]);
 
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: newPostData.content?.substring(0, 30) || "New Message", // ? FIX: Backend requires title
-            content: newPostData.content,
-            createdBy: userEmail,
-            createdByName: displayName, // ? FIX: Include sender's name
-            messageType: newPostData.messageType || "TEXT",
-            parentId: newPostData.parentId || null,
-            attachments: newPostData.attachments || [],
-          }),
-        },
-      );
+      // 👇 Route to the correct endpoint based on message type
+      const url = isBroadcastMsg
+        ? `${API_BASE_URL}/api/forum/8d/groups/${groupId}/broadcast`
+        : `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:
+            newPostData.title ||
+            newPostData.content?.substring(0, 60) ||
+            "Announcement", // 👈 Use modal title
+          content: newPostData.content,
+          createdBy: userEmail,
+          createdByName: displayName,
+          messageType: newPostData.messageType || "TEXT",
+          parentId: newPostData.parentId || null,
+          attachments: newPostData.attachments || [],
+
+          // 👇 Use the values from the modal!
+          broadcastPriority: newPostData.broadcastPriority || "NORMAL",
+          broadcastPinned: newPostData.broadcastPinned ?? true,
+          broadcastRequiresAck: newPostData.broadcastRequiresAck ?? true,
+          broadcastExpiresAt: newPostData.broadcastExpiresAt || null,
+        }),
+      });
 
       if (res.ok) {
         const savedMsg = await res.json();
 
-        // ? Step 2: Server confirmed ? SENT (single gray check ?)
         setPosts((prev) =>
           prev.map((p) =>
             p.id === tempId
@@ -1167,8 +1196,7 @@ export default function ForumThreadView({
         playNotificationSound("send");
       } else {
         const errorText = await res.text();
-        console.error("? Send failed:", errorText);
-        // ? Mark as FAILED
+        console.error("❌ Send failed:", errorText);
         setPosts((prev) =>
           prev.map((p) =>
             p.id === tempId
@@ -1178,7 +1206,7 @@ export default function ForumThreadView({
         );
       }
     } catch (err) {
-      console.error("? Send failed:", err);
+      console.error("❌ Send failed:", err);
       setPosts((prev) =>
         prev.map((p) =>
           p.id === tempId
@@ -1531,21 +1559,7 @@ export default function ForumThreadView({
       );
 
       // 2. Clear from local-deleted ref
-      deletedPostIdsRef.current.delete(idStr);
-
-      // 3. Clear from cache
-      const cacheKey = String(groupId);
-      const cached = groupPostsCache.get(cacheKey);
-      if (cached) {
-        groupPostsCache.set(
-          cacheKey,
-          cached.map((p) =>
-            String(p.id) === idStr ? { ...p, isDeleted: false } : p,
-          ),
-        );
-      }
-
-      // 4. Call backend
+      // 2. Call backend FIRST
       const response = await fetch(
         `${API_BASE_URL}/api/forum/8d/groups/${groupId}/threads/${postId}/restore?requester=${encodeURIComponent(currentUserEmail)}`,
         { method: "POST" },
@@ -1555,7 +1569,7 @@ export default function ForumThreadView({
         const errText = await response.text();
         console.error("? Undo failed:", errText);
 
-        // Rollback
+        // Rollback optimistic UI
         setPosts((prev) =>
           prev.map((p) =>
             String(p.id) === idStr ? { ...p, isDeleted: true } : p,
@@ -1563,6 +1577,20 @@ export default function ForumThreadView({
         );
         deletedPostIdsRef.current.add(idStr);
         return;
+      }
+
+      // 3. Success — clear refs and cache
+      deletedPostIdsRef.current.delete(idStr);
+
+      const cacheKey = String(groupId);
+      const cached = groupPostsCache.get(cacheKey);
+      if (cached) {
+        groupPostsCache.set(
+          cacheKey,
+          cached.map((p) =>
+            String(p.id) === idStr ? { ...p, isDeleted: false } : p,
+          ),
+        );
       }
 
       console.log("? Undo successful for:", idStr);
@@ -2203,6 +2231,34 @@ export default function ForumThreadView({
     [displayPosts],
   );
 
+  const pinnedBroadcasts = useMemo(() => {
+    return visiblePosts
+      .filter(
+        (p) =>
+          p.messageType === "BROADCAST" &&
+          p.broadcastPinned === true &&
+          !p.broadcastRevokedAt &&
+          (!p.broadcastExpiresAt ||
+            new Date(p.broadcastExpiresAt) > new Date()),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ); // 👈 SORTS NEWEST FIRST
+  }, [visiblePosts]);
+
+  // Clamp index when the list of pinned broadcasts shrinks
+  useEffect(() => {
+    if (
+      currentPinnedIndex >= pinnedBroadcasts.length &&
+      pinnedBroadcasts.length > 0
+    ) {
+      setCurrentPinnedIndex(pinnedBroadcasts.length - 1);
+    }
+    if (pinnedBroadcasts.length === 0 && currentPinnedIndex !== 0) {
+      setCurrentPinnedIndex(0);
+    }
+  }, [pinnedBroadcasts.length, currentPinnedIndex]);
   // ? NEW: memoized reactions map   O(1) lookup per thread instead of O(n)
   const reactionsByParent = useMemo(() => {
     const map = new Map<string, any[]>();
@@ -2644,325 +2700,441 @@ export default function ForumThreadView({
               </TouchableOpacity>
             </View>
           ) : (
-            <FlatList
-              ref={flatListRef}
-              data={visiblePosts}
-              keyboardShouldPersistTaps="handled"
-              keyExtractor={(item, index) => item?.id || String(index)}
-              ListHeaderComponent={
-                <>
-                  {/* ? Button   only shows when older messages exist */}
-                  {hasMore && !isSearching && visiblePosts.length > 0 && (
-                    <View style={{ alignItems: "center", paddingVertical: 12 }}>
-                      <TouchableOpacity
-                        onPress={loadPreviousPosts}
-                        disabled={loadingMore}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 20,
-                          backgroundColor: loadingMore ? "#E5E7EB" : "#EFF6FF",
-                          borderWidth: 1,
-                          borderColor: "#BFDBFE",
-                        }}
-                      >
-                        {loadingMore ? (
-                          <>
-                            <ActivityIndicator size="small" color="#00529B" />
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: "#00529B",
-                                fontWeight: "600",
-                              }}
-                            >
-                              Loading
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <ChevronUp size={14} color="#00529B" />
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                color: "#00529B",
-                                fontWeight: "600",
-                              }}
-                            >
-                              Load previous messages
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {/* ? "Beginning of conversation" when no more exist */}
-                  {!hasMore && visiblePosts.length > 0 && !isSearching && (
-                    <View style={{ alignItems: "center", paddingVertical: 16 }}>
-                      <Text
-                        style={{
-                          color: "#CBD5E1",
-                          fontSize: 11,
-                          fontWeight: "500",
-                        }}
-                      >
-                        Beginning of conversation
-                      </Text>
-                    </View>
-                  )}
-                </>
-              }
-              renderItem={({ item, index }) => {
-                let dateLabel = null;
-                if (index === 0) {
-                  dateLabel = getDateLabel(item.createdAt);
-                } else {
-                  const prevItem = visiblePosts[index - 1];
-                  if (prevItem) {
-                    const prevDate = new Date(
-                      prevItem.createdAt,
-                    ).toDateString();
-                    const currDate = new Date(item.createdAt).toDateString();
-                    if (prevDate !== currDate) {
-                      dateLabel = getDateLabel(item.createdAt);
-                    }
-                  }
-                }
-
-                return (
-                  <>
-                    {dateLabel && (
-                      <View
-                        style={{ alignItems: "center", marginVertical: 12 }}
-                      >
-                        <View
-                          style={{
-                            backgroundColor: "#e5e7eb",
-                            paddingHorizontal: 12,
-                            paddingVertical: 4,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: "#6b7280",
-                              fontWeight: "500",
-                            }}
-                          >
-                            {dateLabel}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-
-                    {/* ? "New messages" divider   shown once, right after the last seen message */}
-                    {firstUnreadIndex !== -1 &&
-                      index === lastSeenIndex + 1 &&
-                      !isSearching && (
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            paddingHorizontal: 12,
-                            marginVertical: 12,
-                          }}
-                        >
-                          <View
-                            style={{
-                              flex: 1,
-                              height: 1,
-                              backgroundColor: "#25D366",
-                            }}
-                          />
-                          <Text
-                            style={{
-                              marginHorizontal: 12,
-                              fontSize: 11,
-                              fontWeight: "700",
-                              color: "#25D366",
-                              textTransform: "uppercase",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            New messages
-                          </Text>
-                          <View
-                            style={{
-                              flex: 1,
-                              height: 1,
-                              backgroundColor: "#25D366",
-                            }}
-                          />
-                        </View>
-                      )}
-
-                    <ThreadCard
-                      thread={item}
-                      currentUser={currentUser}
-                      currentUsername={currentUserEmail}
-                      allUsers={allUsers}
-                      memberEmails={
-                        Array.isArray(memberEmails)
-                          ? memberEmails
-                              .map((m: any) =>
-                                typeof m === "string" ? m : m?.email,
-                              )
-                              .filter(Boolean)
-                          : []
-                      }
-                      reactions={reactionsByParent.get(String(item.id)) || []}
-                      onReact={handleReactToPost}
-                      onEdit={setEditingPost}
-                      onDelete={handleDeletePost}
-                      onUndoDelete={handleUndoDelete}
-                      onRetry={handleRetry}
-                    />
-                  </>
-                );
-              }}
-              className="flex-1"
-              contentContainerStyle={{ paddingVertical: 8 }}
-              ListEmptyComponent={
+            <>
+              {pinnedBroadcasts.length > 0 && (
                 <View
                   style={{
-                    flex: 1,
-                    justifyContent: "center",
+                    backgroundColor: "#FFFBEB",
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#FCD34D",
+                    padding: 12,
+                    flexDirection: "row",
                     alignItems: "center",
-                    paddingVertical: 40,
+                    justifyContent: "space-between",
                   }}
                 >
-                  <MessageCircle size={48} color="#d1d5db" />
-                  <Text className="mt-3 text-gray-400">
-                    {isSearching ? "No messages found" : "No messages yet"}
-                  </Text>
-                </View>
-              }
-
-              ListFooterComponent={
-                typingUsers.length > 0 && !isSearching ? (
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
                     <View
                       style={{
-                        alignSelf: "flex-start",
-                        backgroundColor: "#f3f4f6",
-                        borderRadius: 16,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 6,
+                        marginBottom: 4,
                       }}
                     >
+                      <Ionicons name="pin" size={14} color="#B45309" />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "800",
+                          color: "#B45309",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Pinned Announcement
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "700",
+                        color: "#111827",
+                      }}
+                      numberOfLines={2}
+                    >
+                      {pinnedBroadcasts[currentPinnedIndex]?.title ||
+                        "Announcement"}
+                      :{pinnedBroadcasts[currentPinnedIndex]?.content}
+                    </Text>
+                  </View>
+
+                  {/* Navigation arrows (only show if more than 1) */}
+                  {pinnedBroadcasts.length > 1 && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <TouchableOpacity
+                        onPress={() =>
+                          setCurrentPinnedIndex((prev) =>
+                            prev > 0 ? prev - 1 : pinnedBroadcasts.length - 1,
+                          )
+                        }
+                        style={{
+                          padding: 4,
+                          backgroundColor: "#FDE68A",
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Ionicons
+                          name="chevron-back"
+                          size={16}
+                          color="#92400E"
+                        />
+                      </TouchableOpacity>
+
                       <Text
                         style={{
                           fontSize: 12,
-                          color: "#6b7280",
-                          fontStyle: "italic",
+                          fontWeight: "700",
+                          color: "#92400E",
                         }}
                       >
-                        {typingUsers.length === 1
-                          ? `${getDisplayName(typingUsers[0])} is typing`
-                          : `${typingUsers.length} people are typing`}
+                        {currentPinnedIndex + 1} / {pinnedBroadcasts.length}
                       </Text>
-                      <Text style={{ fontSize: 12, color: "#9ca3af" }}>
-                        •••
-                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() =>
+                          setCurrentPinnedIndex((prev) =>
+                            prev < pinnedBroadcasts.length - 1 ? prev + 1 : 0,
+                          )
+                        }
+                        style={{
+                          padding: 4,
+                          backgroundColor: "#FDE68A",
+                          borderRadius: 20,
+                        }}
+                      >
+                        <Ionicons
+                          name="chevron-forward"
+                          size={16}
+                          color="#92400E"
+                        />
+                      </TouchableOpacity>
                     </View>
+                  )}
+                </View>
+              )}
+              <FlatList
+                ref={flatListRef}
+                data={visiblePosts}
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={(item, index) => item?.id || String(index)}
+                ListHeaderComponent={
+                  <>
+                    {/* ? Button   only shows when older messages exist */}
+                    {hasMore && !isSearching && visiblePosts.length > 0 && (
+                      <View
+                        style={{ alignItems: "center", paddingVertical: 12 }}
+                      >
+                        <TouchableOpacity
+                          onPress={loadPreviousPosts}
+                          disabled={loadingMore}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                            borderRadius: 20,
+                            backgroundColor: loadingMore
+                              ? "#E5E7EB"
+                              : "#EFF6FF",
+                            borderWidth: 1,
+                            borderColor: "#BFDBFE",
+                          }}
+                        >
+                          {loadingMore ? (
+                            <>
+                              <ActivityIndicator size="small" color="#00529B" />
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  color: "#00529B",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Loading
+                              </Text>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronUp size={14} color="#00529B" />
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  color: "#00529B",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Load previous messages
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* ? "Beginning of conversation" when no more exist */}
+                    {!hasMore && visiblePosts.length > 0 && !isSearching && (
+                      <View
+                        style={{ alignItems: "center", paddingVertical: 16 }}
+                      >
+                        <Text
+                          style={{
+                            color: "#CBD5E1",
+                            fontSize: 11,
+                            fontWeight: "500",
+                          }}
+                        >
+                          Beginning of conversation
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                }
+                renderItem={({ item, index }) => {
+                  let dateLabel = null;
+                  if (index === 0) {
+                    dateLabel = getDateLabel(item.createdAt);
+                  } else {
+                    const prevItem = visiblePosts[index - 1];
+                    if (prevItem) {
+                      const prevDate = new Date(
+                        prevItem.createdAt,
+                      ).toDateString();
+                      const currDate = new Date(item.createdAt).toDateString();
+                      if (prevDate !== currDate) {
+                        dateLabel = getDateLabel(item.createdAt);
+                      }
+                    }
+                  }
+
+                  return (
+                    <>
+                      {dateLabel && (
+                        <View
+                          style={{ alignItems: "center", marginVertical: 12 }}
+                        >
+                          <View
+                            style={{
+                              backgroundColor: "#e5e7eb",
+                              paddingHorizontal: 12,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: "#6b7280",
+                                fontWeight: "500",
+                              }}
+                            >
+                              {dateLabel}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {/* ? "New messages" divider   shown once, right after the last seen message */}
+                      {firstUnreadIndex !== -1 &&
+                        index === lastSeenIndex + 1 &&
+                        !isSearching && (
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              paddingHorizontal: 12,
+                              marginVertical: 12,
+                            }}
+                          >
+                            <View
+                              style={{
+                                flex: 1,
+                                height: 1,
+                                backgroundColor: "#25D366",
+                              }}
+                            />
+                            <Text
+                              style={{
+                                marginHorizontal: 12,
+                                fontSize: 11,
+                                fontWeight: "700",
+                                color: "#25D366",
+                                textTransform: "uppercase",
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              New messages
+                            </Text>
+                            <View
+                              style={{
+                                flex: 1,
+                                height: 1,
+                                backgroundColor: "#25D366",
+                              }}
+                            />
+                          </View>
+                        )}
+
+                      <ThreadCard
+                        thread={item}
+                        currentUser={currentUser}
+                        currentUsername={currentUserEmail}
+                        allUsers={allUsers}
+                        memberEmails={
+                          Array.isArray(memberEmails)
+                            ? memberEmails
+                                .map((m: any) =>
+                                  typeof m === "string" ? m : m?.email,
+                                )
+                                .filter(Boolean)
+                            : []
+                        }
+                        reactions={reactionsByParent.get(String(item.id)) || []}
+                        onReact={handleReactToPost}
+                        onEdit={setEditingPost}
+                        onDelete={handleDeletePost}
+                        onUndoDelete={handleUndoDelete}
+                        onRetry={handleRetry}
+                        isGroupAdmin={isGroupAdmin}
+                      />
+                    </>
+                  );
+                }}
+                className="flex-1"
+                contentContainerStyle={{ paddingVertical: 8 }}
+                ListEmptyComponent={
+                  <View
+                    style={{
+                      flex: 1,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      paddingVertical: 40,
+                    }}
+                  >
+                    <MessageCircle size={48} color="#d1d5db" />
+                    <Text className="mt-3 text-gray-400">
+                      {isSearching ? "No messages found" : "No messages yet"}
+                    </Text>
                   </View>
-                ) : null
-              }
+                }
 
-              onContentSizeChange={() => {
-                if (isSearching) return;
+                ListFooterComponent={
+                  typingUsers.length > 0 && !isSearching ? (
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                      <View
+                        style={{
+                          alignSelf: "flex-start",
+                          backgroundColor: "#f3f4f6",
+                          borderRadius: 16,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: "#6b7280",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          {typingUsers.length === 1
+                            ? `${getDisplayName(typingUsers[0])} is typing`
+                            : `${typingUsers.length} people are typing`}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: "#9ca3af" }}>
+                          •••
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null
+                }
 
-                // ? PRIORITY 0: preserve scroll position after "Load previous"
-                if (pendingScrollAnchorRef.current !== null) {
-                  const anchor = pendingScrollAnchorRef.current;
-                  pendingScrollAnchorRef.current = null;
+                onContentSizeChange={() => {
+                  if (isSearching) return;
 
-                  requestAnimationFrame(() => {
+                  // ? PRIORITY 0: preserve scroll position after "Load previous"
+                  if (pendingScrollAnchorRef.current !== null) {
+                    const anchor = pendingScrollAnchorRef.current;
+                    pendingScrollAnchorRef.current = null;
+
+                    requestAnimationFrame(() => {
+                      try {
+                        flatListRef.current?.scrollToIndex({
+                          index: anchor,
+                          animated: false,
+                          viewPosition: 0,
+                        });
+                      } catch (err) {
+                        console.log("Anchor scroll failed:", err);
+                      }
+                    });
+                    return; // ?? important   skip everything else this cycle
+                  }
+
+                  if (scrollToBottomAfterSendRef.current) {
+                    scrollToBottomAfterSendRef.current = false;
+                    requestAnimationFrame(() =>
+                      flatListRef.current?.scrollToEnd({ animated: true }),
+                    );
+                    return;
+                  }
+
+                  if (keyboardVisible) return;
+
+                  // ---- Scroll-to-unread path (unchanged) ----
+                  if (firstUnreadIndex > 0) {
+                    if (initialScrollDoneRef.current) return;
                     try {
                       flatListRef.current?.scrollToIndex({
-                        index: anchor,
+                        index: Math.max(0, firstUnreadIndex - 1),
                         animated: false,
-                        viewPosition: 0,
+                        viewPosition: 0.1,
                       });
-                    } catch (err) {
-                      console.log("Anchor scroll failed:", err);
+                    } catch {
+                      flatListRef.current?.scrollToEnd({ animated: false });
                     }
-                  });
-                  return; // ?? important   skip everything else this cycle
-                }
-
-                if (scrollToBottomAfterSendRef.current) {
-                  scrollToBottomAfterSendRef.current = false;
-                  requestAnimationFrame(() =>
-                    flatListRef.current?.scrollToEnd({ animated: true }),
-                  );
-                  return;
-                }
-
-                if (keyboardVisible) return;
-
-                // ---- Scroll-to-unread path (unchanged) ----
-                if (firstUnreadIndex > 0) {
-                  if (initialScrollDoneRef.current) return;
-                  try {
-                    flatListRef.current?.scrollToIndex({
-                      index: Math.max(0, firstUnreadIndex - 1),
-                      animated: false,
-                      viewPosition: 0.1,
-                    });
-                  } catch {
-                    flatListRef.current?.scrollToEnd({ animated: false });
+                    initialScrollDoneRef.current = true;
+                    return;
                   }
-                  initialScrollDoneRef.current = true;
-                  return;
-                }
 
-                // ---- No unread: keep pinning to bottom until layout stops growing ----
-                if (initialScrollDoneRef.current) return;
-                if (visiblePosts.length === 0) return;
+                  // ---- No unread: keep pinning to bottom until layout stops growing ----
+                  if (initialScrollDoneRef.current) return;
+                  if (visiblePosts.length === 0) return;
 
-                // Pin to bottom on every content-size change until we've done it a few
-                // times without the size changing further.
-                flatListRef.current?.scrollToEnd({ animated: false });
-                stableScrollAttemptsRef.current += 1;
+                  // Pin to bottom on every content-size change until we've done it a few
+                  // times without the size changing further.
+                  flatListRef.current?.scrollToEnd({ animated: false });
+                  stableScrollAttemptsRef.current += 1;
 
-                // Stop after N attempts (layout is stable by then)
-                if (stableScrollAttemptsRef.current >= 4) {
-                  initialScrollDoneRef.current = true;
-                }
-              }}
-              onScrollToIndexFailed={(info) => {
-                // Retry with a small delay so the item can render
-                const { index } = info;
-                setTimeout(() => {
-                  try {
-                    flatListRef.current?.scrollToIndex({
-                      index,
-                      animated: false,
-                      viewPosition: 0.1,
-                    });
-                  } catch {}
-                }, 100);
-              }}
-              onScroll={handleScroll}
-              scrollEventThrottle={200}
-              initialNumToRender={25}
-              maxToRenderPerBatch={25}
-              windowSize={21}
-              removeClippedSubviews={false} // RN's clipping can re-fire onContentSizeChange late
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-                autoscrollToTopThreshold: 0,
-              }}
-            />
+                  // Stop after N attempts (layout is stable by then)
+                  if (stableScrollAttemptsRef.current >= 4) {
+                    initialScrollDoneRef.current = true;
+                  }
+                }}
+                onScrollToIndexFailed={(info) => {
+                  // Retry with a small delay so the item can render
+                  const { index } = info;
+                  setTimeout(() => {
+                    try {
+                      flatListRef.current?.scrollToIndex({
+                        index,
+                        animated: false,
+                        viewPosition: 0.1,
+                      });
+                    } catch {}
+                  }, 100);
+                }}
+                onScroll={handleScroll}
+                scrollEventThrottle={200}
+                initialNumToRender={25}
+                maxToRenderPerBatch={25}
+                windowSize={21}
+                removeClippedSubviews={false} // RN's clipping can re-fire onContentSizeChange late
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 0,
+                }}
+              />
+            </>
           )}
 
           {/* ? FIXED: Composer with dynamic bottom padding to prevent empty space */}
@@ -2980,15 +3152,54 @@ export default function ForumThreadView({
                 : Math.max(insets.bottom, 8),
             }}
           >
-            <ThreadComposer
-              groupId={groupId}
-              onThreadCreated={handleComposerSubmit}
-              onInputStart={handleTypingStart}
-              onInputEnd={handleTypingEnd}
-              username={currentUserEmail}
-              editingPost={editingPost}
-              onCancelEdit={() => setEditingPost(null)}
-            />
+            {/* 👇 REPLACE THE <ThreadComposer> BLOCK WITH THIS 👇 */}
+            {groupType === "ANNOUNCEMENT" && !isGroupAdmin ? (
+              <View
+                style={{
+                  padding: 16,
+                  backgroundColor: "#F8FAFC",
+                  borderTopWidth: 1,
+                  borderTopColor: "#E2E8F0",
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                <Ionicons name="lock-closed" size={16} color="#64748B" />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: "#64748B",
+                  }}
+                >
+                  Only admins can send messages in this announcement channel.
+                </Text>
+              </View>
+            ) : (
+              <View
+                style={{
+                  backgroundColor: "white",
+                  borderTopWidth: 1,
+                  borderTopColor: "#e5e7eb",
+                  paddingBottom: keyboardVisible
+                    ? keyboardHeight + 50
+                    : Math.max(insets.bottom, 8),
+                }}
+              >
+                <ThreadComposer
+                  groupId={groupId}
+                  onThreadCreated={handleComposerSubmit}
+                  onInputStart={handleTypingStart}
+                  onInputEnd={handleTypingEnd}
+                  username={currentUserEmail}
+                  editingPost={editingPost}
+                  onCancelEdit={() => setEditingPost(null)}
+                  isAdmin={isGroupAdmin}
+                />
+              </View>
+            )}
           </View>
         </View>
 
@@ -3449,6 +3660,51 @@ export default function ForumThreadView({
             }}
           >
             {[
+              // 👇 ADD THIS TO THE TOP OF THE MENU ARRAY 👇
+              ...(isGroupAdmin
+                ? [
+                    {
+                      icon: Megaphone,
+                      label: "Send Announcement ",
+                      onPress: () => setShowBroadcastModal(true),
+                    },
+                  ]
+                : []),
+              // 👆 END OF ANNOUNCEMENT BUTTON 👆
+
+              // 👇 KEEP YOUR TOGGLE 👇
+              ...(isGroupAdmin
+                ? [
+                    {
+                      icon: groupType === "CHAT" ? LockKeyhole : MessageSquare,
+
+                      label:
+                        groupType === "CHAT"
+                          ? "Lock to Announcement-Only"
+                          : "Allow Two-Way Chat",
+                      onPress: async () => {
+                        const newType =
+                          groupType === "CHAT" ? "ANNOUNCEMENT" : "CHAT";
+                        await fetch(
+                          `${API_BASE_URL}/api/forum/8d/groups/${groupId}/type`,
+                          {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              groupType: newType,
+                              requester: currentUserEmail,
+                            }),
+                          },
+                        );
+                        if (typeof window !== "undefined") {
+                          window.location.reload();
+                        }
+                      },
+                    },
+                  ]
+                : []),
+              // 👆 END OF TOGGLE 👆
+
               {
                 icon: Mail,
                 label: "Email Notifications",
@@ -3517,6 +3773,18 @@ export default function ForumThreadView({
           </View>
         </Pressable>
       </Modal>
+      <BroadcastComposerModal
+        isOpen={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        onSubmit={(data) => {
+          handleNewPost({
+            ...data,
+            messageType: "BROADCAST",
+            attachments: [],
+          });
+          setShowBroadcastModal(false);
+        }}
+      />
     </View>
   );
 }

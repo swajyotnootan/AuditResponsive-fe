@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuditee = userRole === "AUDITEE";
   const isMaster = userRole === "MASTER";
   const isAuditManager = userRole === "AUDIT_MANAGER";
-  const isTopManagement = userRole === "TOP_MANAGEMENT";
+const isTopManagement = userRole === "PLANT_HEAD";
   const isHRAdmin = userRole === "HR_ADMIN";
   const isQMSAdmin = userRole === "QMS_ADMIN";
 

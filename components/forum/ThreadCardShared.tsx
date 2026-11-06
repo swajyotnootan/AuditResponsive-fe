@@ -25,6 +25,8 @@ import {
 export type AttachmentType =
   "IMAGE" | "VIDEO" | "AUDIO" | "LOCATION" | "EVENT" | "DOCUMENT";
 
+export type BroadcastPriority = "NORMAL" | "HIGH" | "CRITICAL";
+
 export interface Attachment {
   id?: string | number;
   fileName?: string;
@@ -43,10 +45,29 @@ export interface Thread {
   createdByProfileImage?: string;
   isDeleted?: boolean;
   createdAt: string;
-  updatedAt?: string;
-  editedAt?: string;
-  messageType?: string;
+  title?: string | null;
+  updatedAt?: string | null;
+  editedAt?: string | null;
+  messageType?:
+    | "TEXT"
+    | "IMAGE"
+    | "VIDEO"
+    | "FILE"
+    | "LOCATION"
+    | "EVENT"
+    | "AUDIO"
+    | "REACTION"
+    | "SYSTEM"
+    | "BROADCAST"
+    | (string & {});
   failed?: boolean;
+  broadcastPriority?: BroadcastPriority;
+  broadcastPinned?: boolean;
+  broadcastRequiresAck?: boolean;
+  broadcastExpiresAt?: string;
+  broadcastRevokedAt?: string;
+  broadcastRevokedReason?: string;
+  broadcastAcknowledgedBy?: string[];
   attachments?: Attachment[];
   isEdited?: boolean;
   deliveryStatus?: "SENDING" | "SENT" | "DELIVERED" | "SEEN" | "FAILED";
@@ -70,6 +91,7 @@ export interface ThreadCardProps {
   onEdit?: (thread: Thread) => void;
   onDelete?: (threadId: string | number) => void;
   onUndoDelete?: (threadId: string | number) => void;
+  isGroupAdmin?: boolean; // 👈 ADD THIS
 }
 
 export interface UserProfile {

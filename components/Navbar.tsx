@@ -6,8 +6,7 @@ import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import {
   Bell,
   Building2,
-  Calendar,
-  ChevronRight,
+  Calendar, Check, ChevronDown, ChevronRight,
   LogOut,
   Mail,
   Menu,
@@ -15,7 +14,7 @@ import {
   MoreVertical,
   Shield,
   User,
-  X,
+  X
 } from "lucide-react-native";
 import React, { ReactNode, useEffect, useRef, useState } from "react";
 import {
@@ -41,6 +40,7 @@ import {
 import { useAuth } from "../components/context/AuthContext";
 import { getDashboardPath, getRoleDisplayName } from "../utils/roleUtils";
 import { useNotifications } from "./context/NotificationContext";
+import { usePlantFilter } from "./context/PlantFilterContext";
 import ForumHome from "./forum/ForumHome";
 import NotificationBell from "./NotificationBell";
 
@@ -119,6 +119,11 @@ const Navbar: React.FC<NavbarProps> = ({
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
   const { unreadCount, setIsOpen: setNotificationOpen } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const { selectedPlantId, setSelectedPlantId } = usePlantFilter();
+  const [plantFilterOpen, setPlantFilterOpen] = useState<boolean>(false);
+  const [availablePlants, setAvailablePlants] = useState<
+    Array<{ id: number; name: string }>
+  >([]);
   const [showForumHome, setShowForumHome] = useState<boolean>(false);
   const [forumUsers, setForumUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -242,6 +247,41 @@ const Navbar: React.FC<NavbarProps> = ({
     };
     loadForumUsers();
   }, []);
+
+  // ✅ NEW — Load available plants for corporate users (from user's company)
+  useEffect(() => {
+    if (!user?.companyId || user?.plantId != null) return;
+
+    const loadPlants = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/enterprise/plants/company/${user.companyId}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+        if (!response.ok) {
+          console.warn(
+            "Navbar: could not fetch plants, status:",
+            response.status,
+          );
+          return;
+        }
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setAvailablePlants(
+            data.map((p: any) => ({ id: p.id, name: p.name })),
+          );
+        }
+      } catch (e) {
+        console.warn("Navbar: failed to load plants:", e);
+      }
+    };
+
+    loadPlants();
+  }, [user?.companyId, user?.plantId]);
 
   const dashboardPath = getDashboardPath(user);
   const currentPath = pathname || "";
@@ -682,6 +722,59 @@ const Navbar: React.FC<NavbarProps> = ({
                         }}
                       />
                     </View>
+                  )}
+
+                  {/* ✅ NEW — Plant filter dropdown (corporate users only) */}
+                  {user && !user.plantId && availablePlants.length > 0 && (
+                    <HoverView className="mx-1">
+                      {(isHovered) => (
+                        <TouchableOpacity
+                          onPress={() => setPlantFilterOpen(true)}
+                          style={{
+                            backgroundColor: isHovered
+                              ? "rgba(255,255,255,0.12)"
+                              : "rgba(255,255,255,0.05)",
+                            borderWidth: 1,
+                            borderColor: isHovered
+                              ? "rgba(255,255,255,0.35)"
+                              : "rgba(255,255,255,0.15)",
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 9,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Building2
+                            size={16}
+                            color="#FFFFFF"
+                            strokeWidth={2}
+                          />
+                          <Text
+                            style={{
+                              color: "#FFFFFF",
+                              fontSize: 13,
+                              fontWeight: "600",
+                              maxWidth: 130,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {selectedPlantId
+                              ? availablePlants.find(
+                                  (p) => String(p.id) === selectedPlantId,
+                                )?.name || "Filter"
+                              : "All Plants"}
+                          </Text>
+                          <ChevronDown
+                            size={14}
+                            color="#FFFFFF"
+                            strokeWidth={2}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </HoverView>
                   )}
 
                   {/* ✅ Notification Bell - Hidden for HR_ADMIN and MASTER */}
@@ -1515,6 +1608,169 @@ const Navbar: React.FC<NavbarProps> = ({
         plantName={selectedPlantName}
         companyId={selectedCompanyId}
       />
+
+      {/* ✅ NEW — Plant filter modal */}
+      <Modal
+        visible={plantFilterOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlantFilterOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setPlantFilterOpen(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(15,23,42,0.5)",
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 20,
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  width: "100%",
+                  maxWidth: 400,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  maxHeight: "80%",
+                }}
+              >
+                {/* Header */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 20,
+                    paddingVertical: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#E2E8F0",
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundColor: "#EFF6FF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Building2 size={18} color={PRIMARY_COLOR} />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: "#0F172A",
+                      }}
+                    >
+                      Select Plant
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setPlantFilterOpen(false)}
+                    style={{
+                      padding: 8,
+                      borderRadius: 8,
+                      backgroundColor: "#F8FAFC",
+                    }}
+                  >
+                    <X size={16} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* List */}
+                <ScrollView style={{ maxHeight: 400 }}>
+                  {/* All Plants option */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedPlantId(null);
+                      setPlantFilterOpen(false);
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 20,
+                      paddingVertical: 16,
+                      backgroundColor:
+                        selectedPlantId === null ? "#EFF6FF" : "transparent",
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#F1F5F9",
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: selectedPlantId === null ? "700" : "500",
+                        color:
+                          selectedPlantId === null ? PRIMARY_COLOR : "#0F172A",
+                      }}
+                    >
+                      All Plants
+                    </Text>
+                    {selectedPlantId === null && (
+                      <Check size={16} color={PRIMARY_COLOR} />
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Plant options */}
+                  {availablePlants.map((plant) => {
+                    const isSelected = selectedPlantId === String(plant.id);
+                    return (
+                      <TouchableOpacity
+                        key={plant.id}
+                        onPress={() => {
+                          setSelectedPlantId(String(plant.id));
+                          setPlantFilterOpen(false);
+                        }}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: 20,
+                          paddingVertical: 16,
+                          backgroundColor: isSelected
+                            ? "#EFF6FF"
+                            : "transparent",
+                          borderBottomWidth: 1,
+                          borderBottomColor: "#F1F5F9",
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: isSelected ? "700" : "500",
+                            color: isSelected ? PRIMARY_COLOR : "#0F172A",
+                          }}
+                        >
+                          {plant.name}
+                        </Text>
+                        {isSelected && (
+                          <Check size={16} color={PRIMARY_COLOR} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };

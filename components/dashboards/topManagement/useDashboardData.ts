@@ -1,21 +1,6 @@
 import { apiClient } from "@/services/api";
 import { useCallback, useEffect, useState } from "react";
 
-const monthOrder = [
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-  "Jan",
-  "Feb",
-  "Mar",
-];
-
 export function useDashboardData(
   user: any,
   selectedPlant: string | number | null,
@@ -52,8 +37,12 @@ export function useDashboardData(
   const [approvedForm5Plans, setApprovedForm5Plans] = useState<any[]>([]);
   const [pendingDetailedPlans, setPendingDetailedPlans] = useState<any[]>([]);
   const [approvedDetailedPlans, setApprovedDetailedPlans] = useState<any[]>([]);
-
   const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({});
+
+  // ✅ CRITICAL FIX: Reset loaded tabs when plant filter changes so data refetches
+  useEffect(() => {
+    setLoadedTabs({});
+  }, [selectedPlant]);
 
   // ── Overview fetcher ──────────────────────────────────────────────────
   const fetchDashboardData = useCallback(
@@ -61,12 +50,10 @@ export function useDashboardData(
       if (!user?.id) return;
       if (!opts?.silent) setLoading(true);
       try {
+        const plantParam =
+          selectedPlant != null ? `&plantId=${selectedPlant}` : "";
         const res: any = await apiClient.get(
-          "/api/audit-schedule/top-management/overview",
-          {
-            userId: user.id,
-            ...(selectedPlant != null ? { plantId: selectedPlant } : {}),
-          },
+          `/api/audit-schedule/top-management/overview?userId=${user.id}${plantParam}`,
         );
         setStats(res?.stats || {});
         setMonthlyAuditData(res?.monthlyAuditData || []);
@@ -90,11 +77,14 @@ export function useDashboardData(
       try {
         const currentYear = new Date().getFullYear();
         const years = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+        const plantParam =
+          selectedPlant != null ? `&plantId=${selectedPlant}` : "";
+
         const rows = await Promise.all(
           years.map(async (y) => {
             try {
               const data: any = await apiClient.get(
-                `/api/audit-plan/${y}?userId=${user.id}`,
+                `/api/audit-plan/${y}?userId=${user.id}${plantParam}`,
               );
               if (!data) return null;
               return {
@@ -120,7 +110,7 @@ export function useDashboardData(
         console.error("annual load failed:", e);
       }
     },
-    [user?.id, loadedTabs.annual],
+    [user?.id, selectedPlant, loadedTabs.annual],
   );
 
   // ── Department Plans ──────────────────────────────────────────────────
@@ -131,11 +121,14 @@ export function useDashboardData(
       try {
         const currentYear = new Date().getFullYear();
         const years = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+        const plantParam =
+          selectedPlant != null ? `&plantId=${selectedPlant}` : "";
+
         const rows = await Promise.all(
           years.map(async (y) => {
             try {
               const data: any = await apiClient.get(
-                `/api/department-plan/${y}?userId=${user.id}`,
+                `/api/department-plan/${y}?userId=${user.id}${plantParam}`,
               );
               if (!data) return null;
               return {
@@ -161,7 +154,7 @@ export function useDashboardData(
         console.error("dept load failed:", e);
       }
     },
-    [user?.id, loadedTabs.dept],
+    [user?.id, selectedPlant, loadedTabs.dept],
   );
 
   // ── Week Schedules ────────────────────────────────────────────────────
@@ -172,11 +165,14 @@ export function useDashboardData(
       try {
         const currentYear = new Date().getFullYear();
         const years = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+        const plantParam =
+          selectedPlant != null ? `&plantId=${selectedPlant}` : "";
+
         const rows = await Promise.all(
           years.map(async (y) => {
             try {
               const data: any = await apiClient.get(
-                `/api/audit-schedule/year/${y}?userId=${user.id}`,
+                `/api/audit-schedule/year/${y}?userId=${user.id}${plantParam}`,
               );
               const list = Array.isArray(data) ? data : data?.data || [];
               const weekOnly = list.filter((s: any) => !s.scheduledDate);
@@ -206,13 +202,12 @@ export function useDashboardData(
         const all = rows.flat();
         setPendingForm5Plans(
           all.filter((m: any) =>
-            [
-              "PENDING_LA_CONFIRMATION",
-              "CONFIRMED_BY_LA",
-              "PARTIALLY_CONFIRMED_BY_LA",
-            ].includes((m.approvalStatus || "").toUpperCase()),
+            ["CONFIRMED_BY_LA"].includes(
+              (m.approvalStatus || "").toUpperCase(),
+            ),
           ),
         );
+
         setApprovedForm5Plans(
           all.filter((m: any) =>
             ["APPROVED", "REJECTED", "CHANGE_REQUESTED"].includes(
@@ -225,24 +220,22 @@ export function useDashboardData(
         console.error("week load failed:", e);
       }
     },
-    [user?.id, loadedTabs.week],
+    [user?.id, selectedPlant, loadedTabs.week],
   );
 
-  // ── Daily Schedules (Month-by-Month Fetch) ────────────────────────────
-  // ── Daily Schedules (1 request via summary endpoint) ──────────────────
+  // ── Daily Schedules ──────────────────────────────────────────────────
   const loadDailySchedules = useCallback(
     async (force = false) => {
       if (!user?.id) return;
       if (loadedTabs.daily && !force) return;
       try {
+        const plantParam =
+          selectedPlant != null ? `&plantId=${selectedPlant}` : "";
         const res: any = await apiClient.get(
-          "/api/audit-schedule/daily/summary",
-          { userId: user.id },
+          `/api/audit-schedule/daily/summary?userId=${user.id}${plantParam}`,
         );
-
         const pendingRows = Array.isArray(res?.pending) ? res.pending : [];
         const historyRows = Array.isArray(res?.history) ? res.history : [];
-
         setPendingDetailedPlans(pendingRows);
         setApprovedDetailedPlans(historyRows);
         setLoadedTabs((prev) => ({ ...prev, daily: true }));
@@ -250,7 +243,7 @@ export function useDashboardData(
         console.error("❌ daily load failed:", e);
       }
     },
-    [user?.id, loadedTabs.daily],
+    [user?.id, selectedPlant, loadedTabs.daily],
   );
 
   // ── Effects ───────────────────────────────────────────────────────────
@@ -287,6 +280,7 @@ export function useDashboardData(
     loadWeekSchedules,
     loadDailySchedules,
   ]);
+
   return {
     loading,
     refreshing,

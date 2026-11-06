@@ -574,18 +574,37 @@ export async function fetchUser8DGroups(
   plantId?: string | number | null,
 ) {
   if (!userEmail) return [];
-  const params = new URLSearchParams({ userEmail });
+
+  // ✅ FIX: Backend requires "userEmail" but ALSO accepts "email" as a fallback.
+  //    Send both so this works regardless of backend controller signature.
+  const params = new URLSearchParams({
+    userEmail,
+    email: userEmail,
+  });
   if (plantId != null && plantId !== "") {
     params.append("plantId", String(plantId));
   }
+
   const res = await fetchWithAuth(
     `${API_BASE_URL}/api/forum/8d/groups?${params.toString()}`,
   );
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(
+      "❌ fetchUser8DGroups failed:",
+      res.status,
+      text,
+      "URL:",
+      `${API_BASE_URL}/api/forum/8d/groups?${params.toString()}`,
+    );
     throw new Error(text || `Failed to load groups (${res.status})`);
   }
+
   const data = await res.json();
+  console.log(
+    `✅ fetchUser8DGroups: ${Array.isArray(data) ? data.length : 0} groups for ${userEmail}`,
+  );
   return Array.isArray(data) ? data : [];
 }
 
@@ -599,6 +618,7 @@ export async function createCustomGroup(payload: {
   plantId?: string | null;
   plantName?: string | null;
   companyId?: string | null;
+  groupType?: string; // 👈 ADD THIS LINE
 }) {
   const res = await fetchWithAuth(`${API_BASE_URL}/api/forum/8d/groups`, {
     method: "POST",

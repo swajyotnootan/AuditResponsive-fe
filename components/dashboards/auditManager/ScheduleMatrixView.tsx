@@ -136,39 +136,36 @@ const ScheduleMatrixView = ({
   const getSchedulesForCell = (department: string, week: string) => {
     if (!visibleSchedules || visibleSchedules.length === 0) return []; // ← was `schedules`
 
-    return visibleSchedules.filter(
-      (s: any) => {
-        // 1. Normalize Department (case-insensitive, trim spaces)
-        const scheduleDept = String(s.department || "")
-          .trim()
-          .toLowerCase();
-        const cellDept = String(department || "")
-          .trim()
-          .toLowerCase();
+    return visibleSchedules.filter((s: any) => {
+      // 1. Normalize Department (case-insensitive, trim spaces)
+      const scheduleDept = String(s.department || "")
+        .trim()
+        .toLowerCase();
+      const cellDept = String(department || "")
+        .trim()
+        .toLowerCase();
 
-        // 2. Normalize Week (extracts only numbers: "W-1" -> "1", "1" -> "1")
-        const scheduleWeek = String(s.week || "").replace(/[^0-9]/g, "");
-        const cellWeek = String(week || "").replace(/[^0-9]/g, "");
+      // 2. Normalize Week (extracts only numbers: "W-1" -> "1", "1" -> "1")
+      const scheduleWeek = String(s.week || "").replace(/[^0-9]/g, "");
+      const cellWeek = String(week || "").replace(/[^0-9]/g, "");
 
-        // 3. Normalize Month (handles "Apr" vs "April" vs "4")
-        const scheduleMonth = String(s.month || "")
-          .trim()
-          .toLowerCase();
-        const cellMonth = String(selectedMonth || "")
-          .trim()
-          .toLowerCase();
+      // 3. Normalize Month (handles "Apr" vs "April" vs "4")
+      const scheduleMonth = String(s.month || "")
+        .trim()
+        .toLowerCase();
+      const cellMonth = String(selectedMonth || "")
+        .trim()
+        .toLowerCase();
 
-        const isDeptMatch = scheduleDept === cellDept;
-        const isWeekMatch = scheduleWeek === cellWeek;
-        // Check if month matches exactly OR starts with the same 3 letters (Apr == April)
-        const isMonthMatch =
-          scheduleMonth === cellMonth ||
-          scheduleMonth.startsWith(cellMonth.substring(0, 3));
+      const isDeptMatch = scheduleDept === cellDept;
+      const isWeekMatch = scheduleWeek === cellWeek;
+      // Check if month matches exactly OR starts with the same 3 letters (Apr == April)
+      const isMonthMatch =
+        scheduleMonth === cellMonth ||
+        scheduleMonth.startsWith(cellMonth.substring(0, 3));
 
-        return isDeptMatch && isWeekMatch && isMonthMatch;
-      },
-      [visibleSchedules, selectedMonth],
-    );
+      return isDeptMatch && isWeekMatch && isMonthMatch;
+    });
   };
 
   const getAuditElementsForDept = (department: string) => {

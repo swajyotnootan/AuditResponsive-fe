@@ -119,15 +119,20 @@ export const ncrService = {
     size: number = 100,
   ) => {
     try {
+      // ✅ Fall back to stored user ID if caller didn't pass one
+      const effectiveUserId =
+        userId != null && String(userId).trim() !== ""
+          ? userId
+          : await getCurrentUserId();
+
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Timezone":
           Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",
       };
 
-      // ✅ Only send header if we have a user id
-      if (userId != null && String(userId).trim() !== "") {
-        headers["X-User-Id"] = String(userId);
+      if (effectiveUserId != null && String(effectiveUserId).trim() !== "") {
+        headers["X-User-Id"] = String(effectiveUserId);
       }
 
       // ✅ Added pagination query parameters

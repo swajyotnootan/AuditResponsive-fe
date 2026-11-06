@@ -1,5 +1,6 @@
 import PDFViewer from "@/components/audit/PDFViewer";
 import YearFilter from "@/components/common/YearFilter";
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { apiClient } from "@/services/api";
 import { pdfService } from "@/services/pdfService";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -10,6 +11,7 @@ import {
   Calendar,
   Check,
   CheckCircle,
+  Clock,
   Eye,
   FileText,
   MessageSquare,
@@ -34,6 +36,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+
 import {
   ActionModal,
   AlertBanner,
@@ -72,6 +75,120 @@ interface PlanInfo {
   rejectionReason: string;
 }
 
+// ═════ REUSABLE UI COMPONENTS ═════
+
+const StatusChip = ({ status }: { status: string }) => {
+  const map: any = {
+    DRAFT: { bg: "#F1F5F9", color: "#475569" },
+    PENDING_LA_CONFIRMATION: { bg: "#FEF3C7", color: "#92400E" },
+    PENDING_APPROVAL: { bg: "#FEF3C7", color: "#92400E" },
+    CONFIRMED_BY_LA: { bg: "#DBEAFE", color: "#1E40AF" },
+    APPROVED: { bg: "#DCFCE7", color: "#166534" },
+    REJECTED: { bg: "#FEE2E2", color: "#991B1B" },
+    FEASIBILITY_REJECTED: { bg: "#FEE2E2", color: "#991B1B" },
+    CHANGE_REQUESTED: { bg: "#FEF3C7", color: "#92400E" },
+  };
+  const s = map[status] || { bg: "#F1F5F9", color: "#475569" };
+  return (
+    <View
+      style={{
+        backgroundColor: s.bg,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+      }}
+    >
+      <Text style={{ color: s.color, fontSize: 10, fontWeight: "700" }}>
+        {status?.replace(/_/g, " ")}
+      </Text>
+    </View>
+  );
+};
+
+const ScheduleCard = ({ item }: { item: any }) => {
+  const formatDate = (d: any) => {
+    if (!d) return "—";
+    try {
+      return new Date(d).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(d);
+    }
+  };
+  const teamNames = Array.isArray(item.coAuditorNames)
+    ? item.coAuditorNames.filter((n: string) => n !== item.auditorName)
+    : [];
+  const auditeeNames = Array.isArray(item.auditeeNames)
+    ? item.auditeeNames
+    : item.auditeeName
+      ? [item.auditeeName]
+      : [];
+
+  return (
+    <View className="mb-3 rounded-xl border border-slate-200 bg-white p-4">
+      <View className="mb-2 flex-row items-start justify-between gap-2">
+        <View className="flex-1">
+          <Text className="text-sm font-bold text-slate-900">
+            {item.department || "—"}
+          </Text>
+          <Text className="mt-0.5 text-xs text-slate-500">
+            {item.auditType || "General Audit"}
+          </Text>
+        </View>
+        <StatusChip status={item.detailedApprovalStatus || item.status} />
+      </View>
+      <View className="mt-2 gap-1.5">
+        <View className="flex-row items-center gap-2">
+          <Calendar size={13} color="#64748B" />
+          <Text className="text-xs text-slate-600">
+            {formatDate(item.scheduledDate)}
+            {item.week ? `  •  ${item.week}` : ""}
+          </Text>
+        </View>
+        {(item.startTime || item.endTime) && (
+          <View className="flex-row items-center gap-2">
+            <Clock size={13} color="#64748B" />
+            <Text className="text-xs text-slate-600">
+              {item.startTime || "—"} – {item.endTime || "—"}
+            </Text>
+          </View>
+        )}
+        <View className="flex-row items-center gap-2">
+          <Text className="text-[11px] font-semibold text-slate-500">
+            AUDITOR:
+          </Text>
+          <Text className="flex-1 text-xs text-slate-700">
+            {item.auditorName || "—"}
+          </Text>
+        </View>
+        {teamNames.length > 0 && (
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[11px] font-semibold text-slate-500">
+              TEAM:
+            </Text>
+            <Text className="flex-1 text-xs text-slate-700">
+              {teamNames.join(", ")}
+            </Text>
+          </View>
+        )}
+        {auditeeNames.length > 0 && (
+          <View className="flex-row items-center gap-2">
+            <Text className="text-[11px] font-semibold text-slate-500">
+              AUDITEE:
+            </Text>
+            <Text className="flex-1 text-xs text-slate-700">
+              {auditeeNames.join(", ")}
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
+
 // ═════ MAIN COMPONENT ═════
 export default function Form3View({
   year: propYear,
@@ -103,6 +220,11 @@ export default function Form3View({
   const [showYearModal, setShowYearModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
 
+  const [pendingComplete, setPendingComplete] = useState<{
+    elementIndex: number;
+    month: string;
+  } | null>(null);
+  // ✅ FIXED TYPES HERE
   const [detailsModal, setDetailsModal] = useState<{
     visible: boolean;
     auditElement: string;
@@ -118,12 +240,6 @@ export default function Form3View({
     schedules: [],
     error: null,
   });
-
-  // ═════ CONFIRM MODAL STATE (for PLANNED → COMPLETED) ═════
-  const [pendingComplete, setPendingComplete] = useState<{
-    elementIndex: number;
-    month: string;
-  } | null>(null);
 
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
@@ -161,6 +277,7 @@ export default function Form3View({
     rejectedBy: "",
     rejectionReason: "",
   });
+  const { selectedPlantId } = usePlantFilter();
 
   const auditElements = [
     { id: 1, name: "System Audit (ISO9001)" },
@@ -191,11 +308,13 @@ export default function Form3View({
     if (propYear && propYear !== selectedYear) setSelectedYear(propYear);
   }, [propYear]);
 
+  const plantIdParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
+
   const fetchPlanData = async () => {
     try {
       setLoading(true);
       const res = await apiClient.get(
-        `/api/audit-plan/${selectedYear}?userId=${user?.id}`,
+        `/api/audit-plan/${selectedYear}?userId=${user?.id}${plantIdParam}`,
       );
       const data = res.data || res;
       if (data) {
@@ -239,7 +358,10 @@ export default function Form3View({
       setScheduleCounts({});
       return;
     }
-    const userPlantId = (user as any)?.plantId;
+
+    // Use the global selected plant, or fallback to user's plant
+    const activePlantId = selectedPlantId || (user as any)?.plantId;
+
     const counts: Record<string, Record<string, number>> = {};
     try {
       const monthlyData: Record<string, any[]> = {};
@@ -255,6 +377,7 @@ export default function Form3View({
           }
         }),
       );
+
       planData.forEach((element) => {
         const acceptedTypes = mapElementToAuditType(element.auditElement).map(
           (t) => t.toLowerCase(),
@@ -262,12 +385,13 @@ export default function Form3View({
         counts[element.auditElement] = {};
         financialMonths.forEach((month) => {
           const filtered = (monthlyData[month] || []).filter((s) => {
-            if (
-              userPlantId &&
-              s.plantId &&
-              String(s.plantId) !== String(userPlantId)
-            )
-              return false;
+            // STRICT PLANT FILTER: If activePlantId exists, schedule MUST match it
+            if (activePlantId) {
+              if (!s.plantId || String(s.plantId) !== String(activePlantId)) {
+                return false;
+              }
+            }
+
             let matchesElement = false;
             if (Array.isArray(s.auditElements) && s.auditElements.length > 0)
               matchesElement = s.auditElements.some((el: string) =>
@@ -297,7 +421,7 @@ export default function Form3View({
 
   useEffect(() => {
     fetchScheduleCounts();
-  }, [selectedYear, planData, user?.id]);
+  }, [selectedYear, planData, user?.id, selectedPlantId]);
 
   const handleCellPress = async (auditElement: string, month: string) => {
     setTooltip((prev) => ({ ...prev, visible: false }));
@@ -375,6 +499,7 @@ export default function Form3View({
           type: "form3",
           year: selectedYear,
           userId: user.id,
+          plantId: selectedPlantId, // Add this
         },
         (result) => {
           setPDFViewer({
@@ -398,10 +523,13 @@ export default function Form3View({
     }
     setSaving(true);
     try {
-      await apiClient.post(`/api/audit-plan/save?userId=${user?.id}`, {
-        planYear: selectedYear,
-        planItems: planData,
-      });
+      await apiClient.post(
+        `/api/audit-plan/save?userId=${user?.id}${plantIdParam}`,
+        {
+          planYear: selectedYear,
+          planItems: planData,
+        },
+      );
       addToast("Annual Audit Plan saved successfully!", "success");
       await fetchPlanData();
     } catch {
@@ -429,12 +557,15 @@ export default function Form3View({
     }
     setSubmitting(true);
     try {
-      await apiClient.post(`/api/audit-plan/save?userId=${user?.id}`, {
-        planYear: selectedYear,
-        planItems: planData,
-      });
       await apiClient.post(
-        `/api/audit-plan/${selectedYear}/submit?userId=${user?.id}`,
+        `/api/audit-plan/save?userId=${user?.id}${plantIdParam}`,
+        {
+          planYear: selectedYear,
+          planItems: planData,
+        },
+      );
+      await apiClient.post(
+        `/api/audit-plan/${selectedYear}/submit?userId=${user?.id}${plantIdParam}`,
         {},
       );
       addToast(
@@ -449,23 +580,26 @@ export default function Form3View({
     }
   };
 
-  // ═════ CLICK-TO-EDIT: cycle status with confirm for irreversible COMPLETED ═════
+  // ═════ CLICK-TO-EDIT: cycle status (confirm before COMPLETED) ═════
+  // ═════ CLICK-TO-EDIT: cycle status (confirm before COMPLETED) ═════
   const handleStatusChange = (elementIndex: number, monthName: string) => {
     if (!canEdit) return;
+
     const element = planData[elementIndex];
     if (!element) return;
+
     const mIdx = element.months.findIndex((m) => m.month === monthName);
     if (mIdx === -1) return;
 
     const current = element.months[mIdx].status;
 
-    // Require confirmation before marking COMPLETED (irreversible-ish)
+    // PLANNED → COMPLETED requires confirmation
     if (current === "PLANNED") {
       setPendingComplete({ elementIndex, month: monthName });
       return;
     }
 
-    // Empty → PLANNED, or COMPLETED → "" : apply directly
+    // Empty → PLANNED, or COMPLETED → "": apply directly
     const newPlanData = [...planData];
     const nextStatus = current === "COMPLETED" ? "" : "PLANNED";
     newPlanData[elementIndex].months[mIdx].status = nextStatus;
@@ -479,9 +613,11 @@ export default function Form3View({
     );
   };
 
+  // ═════ CONFIRM: PLANNED → COMPLETED ═════
   const confirmMarkCompleted = () => {
     if (!pendingComplete) return;
     const { elementIndex, month } = pendingComplete;
+
     const newPlanData = [...planData];
     const mIdx = newPlanData[elementIndex].months.findIndex(
       (m) => m.month === month,
@@ -490,6 +626,7 @@ export default function Form3View({
       setPendingComplete(null);
       return;
     }
+
     newPlanData[elementIndex].months[mIdx].status = "COMPLETED";
     setPlanData(newPlanData);
     setPendingComplete(null);
@@ -504,7 +641,7 @@ export default function Form3View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/audit-plan/${selectedYear}/approve?userId=${user?.id}`,
+        `/api/audit-plan/${selectedYear}/approve?userId=${user?.id}${plantIdParam}`,
         { comments: tempApprovalComment },
       );
       setPlanStatus("APPROVED");
@@ -533,7 +670,7 @@ export default function Form3View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/audit-plan/${selectedYear}/reject?userId=${user?.id}`,
+        `/api/audit-plan/${selectedYear}/reject?userId=${user?.id}${plantIdParam}`,
         { reason: tempRejectionReason },
       );
       setPlanStatus("REJECTED");
@@ -563,7 +700,7 @@ export default function Form3View({
     setSubmitting(true);
     try {
       await apiClient.post(
-        `/api/audit-plan/${selectedYear}/request-changes?userId=${user?.id}`,
+        `/api/audit-plan/${selectedYear}/request-changes?userId=${user?.id}${plantIdParam}`,
         { reason: changeRequestReason },
       );
       addToast(`Change request submitted for ${selectedYear}`, "warning");
@@ -609,10 +746,13 @@ export default function Form3View({
         }
       });
       setPlanData(newPlanData);
-      await apiClient.post(`/api/audit-plan/save?userId=${user?.id}`, {
-        planYear: selectedYear,
-        planItems: planData,
-      });
+      await apiClient.post(
+        `/api/audit-plan/save?userId=${user?.id}${plantIdParam}`,
+        {
+          planYear: selectedYear,
+          planItems: planData,
+        },
+      );
       addToast(`Demo mode: ${count} audits marked as PLANNED!`, "success");
       await fetchPlanData();
     } catch {
@@ -639,13 +779,6 @@ export default function Form3View({
       planStatus === "CHANGE_REQUESTED");
   const canSubmit = canEdit && totalPlanned > 0;
   const canApprove = isTopManagement && planStatus === "PENDING_APPROVAL";
-
-  // ═════ Safety: if plan becomes editable, kill any visible tooltip ═════
-  useEffect(() => {
-    if (canEdit && tooltip.visible) {
-      setTooltip((p) => ({ ...p, visible: false }));
-    }
-  }, [canEdit]);
 
   if (loading)
     return (
@@ -991,16 +1124,23 @@ export default function Form3View({
                       const count =
                         scheduleCounts[element.auditElement]?.[month] || 0;
 
-                      const isPlanning = canEdit;
-
-                      // Hover/tooltip ONLY in locked (read-only) mode
+                      // 🖥️ Web hover logic
                       const webProps =
-                        Platform.OS === "web" && !isPlanning
+                        Platform.OS === "web"
                           ? {
                               // @ts-ignore
                               onMouseEnter: (e: any) => {
+                                if (count === 0) {
+                                  setTooltip((prev) => ({
+                                    ...prev,
+                                    visible: false,
+                                  }));
+                                  return;
+                                }
+
                                 const rect =
                                   e.currentTarget?.getBoundingClientRect?.();
+
                                 if (rect) {
                                   setTooltip({
                                     visible: true,
@@ -1015,74 +1155,35 @@ export default function Form3View({
                                   });
                                 }
                               },
+
                               // @ts-ignore
-                              onMouseLeave: () => {
-                                setTooltip((p: any) =>
-                                  p.month === month &&
-                                  p.auditElement === element.auditElement
-                                    ? { ...p, visible: false }
-                                    : p,
-                                );
+                              onMouseLeave: (e: any) => {
+                                // Only hide if we are leaving THIS exact cell
+                                if (count > 0)
+                                  setTooltip((p: any) =>
+                                    p.month === month &&
+                                    p.auditElement === element.auditElement
+                                      ? { ...p, visible: false }
+                                      : p,
+                                  );
                               },
                             }
                           : {};
 
-                      // Click = edit in planning mode, drill-down in locked mode
                       const onCellClick = () => {
-                        if (isPlanning) {
+                        if (canEdit) {
                           handleStatusChange(elementIndex, month);
                         } else {
                           handleCellPress(element.auditElement, month);
                         }
                       };
 
-                      // Keyboard a11y (web) — works in both modes
-                      const keyboardProps =
-                        Platform.OS === "web"
-                          ? {
-                              // @ts-ignore
-                              tabIndex: 0,
-                              // @ts-ignore
-                              onKeyDown: (e: any) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  onCellClick();
-                                }
-                              },
-                            }
-                          : {};
-
-                      const a11yLabel = isPlanning
-                        ? `${element.auditElement}, ${month}: ${
-                            status || "not planned"
-                          }. Activate to change status.`
-                        : `${element.auditElement}, ${month}: ${
-                            status || "not planned"
-                          }. ${count} schedule${
-                            count !== 1 ? "s" : ""
-                          }. Activate to view schedules.`;
-
                       return (
                         <TouchableOpacity
                           key={month}
-                          className={`w-[72.5px] items-center justify-center p-3 ${
-                            idx === 11 ? "" : "border-r border-slate-200"
-                          }`}
-                          style={
-                            isPlanning
-                              ? {
-                                  cursor:
-                                    Platform.OS === "web"
-                                      ? ("pointer" as any)
-                                      : undefined,
-                                }
-                              : undefined
-                          }
+                          className={`w-[72.5px] items-center justify-center p-3 ${idx === 11 ? "" : "border-r border-slate-200"}`}
                           onPress={onCellClick}
                           {...webProps}
-                          {...keyboardProps}
-                          accessibilityRole="button"
-                          accessibilityLabel={a11yLabel}
                           activeOpacity={0.7}
                         >
                           <StatusBadge status={status} count={count} />
@@ -1140,14 +1241,6 @@ export default function Form3View({
                 </View>
                 <Text className="text-sm text-slate-600">
                   Schedules scheduled
-                </Text>
-              </View>
-              <View className="flex-row items-center gap-2">
-                <Eye size={13} color={COLORS.primary} />
-                <Text className="text-xs text-slate-500">
-                  {canEdit
-                    ? "Click a cell to change status"
-                    : "Click a cell to view schedules · Hover for details"}
                 </Text>
               </View>
             </View>
@@ -1419,20 +1512,6 @@ export default function Form3View({
         submitting={submitting}
       />
 
-      {/* Confirm: PLANNED → COMPLETED */}
-      <ConfirmModal
-        isOpen={!!pendingComplete}
-        onClose={() => setPendingComplete(null)}
-        onConfirm={confirmMarkCompleted}
-        title="Mark as Completed?"
-        message={`This will mark ${
-          pendingComplete?.month || ""
-        } as COMPLETED. You can still clear it later, but Completed usually means the audit has been performed.`}
-        confirmLabel="Mark Completed"
-        confirmBg={COLORS.primary}
-        icon={CheckCircle}
-      />
-
       <ScheduleDetailsModal
         visible={detailsModal.visible}
         onClose={() =>
@@ -1453,7 +1532,20 @@ export default function Form3View({
         schedules={detailsModal.schedules}
       />
 
-      {/* Tooltip only renders in locked (read-only) mode */}
+      {/* Confirm: PLANNED → COMPLETED */}
+      <ConfirmModal
+        isOpen={!!pendingComplete}
+        onClose={() => setPendingComplete(null)}
+        onConfirm={confirmMarkCompleted}
+        title="Mark as Completed?"
+        message={`This will mark ${
+          pendingComplete?.month || ""
+        } as COMPLETED. You can still clear it later, but Completed usually means the audit has been performed.`}
+        confirmLabel="Mark Completed"
+        confirmBg={COLORS.primary}
+        icon={CheckCircle}
+      />
+
       {!canEdit && (
         <MonthCellTooltip
           visible={tooltip.visible}

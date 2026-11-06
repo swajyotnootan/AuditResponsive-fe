@@ -1,4 +1,5 @@
 import { useAuth } from "@/components/context/AuthContext";
+import { usePlantFilter } from "@/components/context/PlantFilterContext";
 import { apiClient, userAPI } from "@/services/api";
 import { ncrService } from "@/services/ncrService";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -47,6 +48,9 @@ export function useAuditManagerData() {
   const params = useLocalSearchParams();
   const { user } = useAuth();
 
+  const { selectedPlantId } = usePlantFilter();
+  const plantIdParam = selectedPlantId ? `&plantId=${selectedPlantId}` : "";
+
   // ── state: core ──────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,13 +78,21 @@ export function useAuditManagerData() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [allNcrs, setAllNcrs] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
+  // ✅ NEW: overdue + reassign-options state
+  const [overdueSchedules, setOverdueSchedules] = useState<any[]>([]);
+  const [reassignOptions, setReassignOptions] = useState({
+    auditors: [] as any[],
+    auditees: [] as any[],
+    current: null as any,
+    plantId: null as number | null,
+    companyId: null as number | null,
+  });
+
   const [form3Status, setForm3Status] = useState({ status: "NOT_STARTED" });
   const [form4Status, setForm4Status] = useState({ status: "NOT_STARTED" });
   const [hasApprovedForm5, setHasApprovedForm5] = useState(false);
   const [allUsersList, setAllUsersList] = useState<any[]>([]);
-  const [selectedPlant] = useState<string | number | null>(
-    () => (user as any)?.plantId ?? null,
-  );
 
   // ── state: modal & team ──────────────────────────────────────────────
   const [showForumModal, setShowForumModal] = useState(false);
@@ -123,45 +135,84 @@ export function useAuditManagerData() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const [statsRes, ncrsRes, reqRes, f3Res, f4Res, f5Res, usersRes] =
-        await Promise.all([
-          apiClient
-            .get(`/api/audit-schedule/year/${selectedYear}?userId=${user.id}`)
-            .catch(() => []),
-          ncrService.getAllNCRs(user.id).catch(() => ({ success: false })),
-          apiClient
-            .get(`/api/audit-schedule/pending-requests?userId=${user.id}`)
-            .catch(() => []),
-          apiClient
-            .get(`/api/audit-plan/${selectedYear}?userId=${user.id}`)
-            .catch(() => null),
-          apiClient
-            .get(`/api/department-plan/${selectedYear}?userId=${user.id}`)
-            .catch(() => null),
-          apiClient
-            .get(
-              `/api/audit-schedule/available-months/${selectedYear}?userId=${user.id}`,
-            )
-            .catch(() => []),
-          userAPI.getAll().catch(() => []),
-        ]);
+      // ✅ CHANGED: added overdueRes to the Promise.all (7th position)
+      const [
+        statsRes,
+        ncrsRes,
+        reqRes,
+        f3Res,
+        f4Res,
+        f5Res,
+        overdueRes,
+        usersRes,
+      ] = await Promise.all([
+        apiClient
+          .get(
+            `/api/audit-schedule/year/${selectedYear}?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => []),
+        ncrService.getAllNCRs(user.id).catch(() => ({ success: false })),
+        apiClient
+          .get(
+            `/api/audit-schedule/pending-requests?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => []),
+        apiClient
+          .get(
+            `/api/audit-plan/${selectedYear}?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => null),
+        apiClient
+          .get(
+            `/api/department-plan/${selectedYear}?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => null),
+        apiClient
+          .get(
+            `/api/audit-schedule/available-months/${selectedYear}?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => []),
+        // ✅ NEW: overdue queue (plant-filtered via query string)
+        apiClient
+          .get(
+            `/api/audit-schedule/overdue-schedules/${selectedYear}?userId=${user.id}${plantIdParam}`,
+          )
+          .catch(() => []),
+        userAPI.getAll().catch(() => []),
+      ]);
 
-      const allSchedules = Array.isArray(statsRes)
-        ? statsRes
-        : (statsRes as any)?.data || [];
+      const allSchedules = (
+        Array.isArray(statsRes) ? statsRes : (statsRes as any)?.data || []
+      ).filter((s: any) =>
+        selectedPlantId ? String(s.plantId) === String(selectedPlantId) : true,
+      );
       const rawNcrs = Array.isArray(ncrsRes)
         ? ncrsRes
         : (ncrsRes as any)?.data || [];
-      const allNcrsData = rawNcrs.filter(
-        (ncr: any) => getNcrYear(ncr) === selectedYear,
-      );
+      const allNcrsData = rawNcrs
+        .filter((ncr: any) => getNcrYear(ncr) === selectedYear)
+        .filter((ncr: any) =>
+          selectedPlantId
+            ? String(ncr.plantId) === String(selectedPlantId)
+            : true,
+        );
       const rawRequests = Array.isArray(reqRes)
         ? reqRes
         : (reqRes as any)?.data || [];
-      const requests = rawRequests.filter((r: any) => {
-        const y = getRequestYear(r);
-        return y === null || y === selectedYear;
-      });
+
+      // ✅ CHANGED: no more year filter (was dropping requests with null requestedAt)
+      const requests = rawRequests.filter((r: any) =>
+        selectedPlantId ? String(r.plantId) === String(selectedPlantId) : true,
+      );
+
+      // ✅ NEW: normalize overdue
+      const overdueList = Array.isArray(overdueRes)
+        ? overdueRes
+        : (overdueRes as any)?.data || [];
+      const filteredOverdue = overdueList.filter((s: any) =>
+        selectedPlantId ? String(s.plantId) === String(selectedPlantId) : true,
+      );
+
       const users = Array.isArray(usersRes)
         ? usersRes
         : (usersRes as any)?.data || [];
@@ -169,6 +220,7 @@ export function useAuditManagerData() {
       setSchedules(allSchedules);
       setAllNcrs(allNcrsData);
       setPendingRequests(requests);
+      setOverdueSchedules(filteredOverdue); // ✅ NEW
       setAllUsersList(users);
 
       const extractApprovalStatus = (res: any): string => {
@@ -185,7 +237,6 @@ export function useAuditManagerData() {
           : false,
       );
 
-      // Count ONLY open/active NCRs (exclude CLOSED, REJECTED, and COMPLETED)
       const activeNcrs = allNcrsData.filter(
         (n: any) =>
           n.status !== "CLOSED" &&
@@ -203,7 +254,7 @@ export function useAuditManagerData() {
             s.approvalStatus === "PENDING_APPROVAL" ||
             (s.approvalStatus === "APPROVED" && s.status === "SCHEDULED"),
         ).length,
-        openNCRs: activeNcrs.length, // ✅ Fixed: Only counts active NCRs
+        openNCRs: activeNcrs.length,
         pendingRequests: requests.length,
         pendingCaVerification: allNcrsData.filter(
           (n: any) =>
@@ -216,7 +267,7 @@ export function useAuditManagerData() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, selectedYear]);
+  }, [user?.id, selectedYear, selectedPlantId]);
 
   useEffect(() => {
     fetchAllData();
@@ -228,7 +279,7 @@ export function useAuditManagerData() {
     setRefreshing(false);
   }, [fetchAllData]);
 
-  // ── fetchDepartmentTeamMembers ───────────────────────────────────────
+  // ── fetchDepartmentTeamMembers (kept for backward compat — unused after step 2) ─
   const fetchDepartmentTeamMembers = async (
     departmentName: string,
     request?: any,
@@ -378,13 +429,48 @@ export function useAuditManagerData() {
     }
   };
 
+  // ✅ NEW: fetchReassignOptions — powers the new ApproveModal
+  const fetchReassignOptions = useCallback(
+    async (scheduleId: number | string) => {
+      if (!scheduleId) return;
+      setLoadingTeamMembers(true);
+      try {
+        const res = await apiClient.get(
+          `/api/audit-schedule/schedule/${scheduleId}/reassign-options`,
+        );
+        const payload = res?.data ?? res ?? {};
+        setReassignOptions({
+          auditors: Array.isArray(payload.auditors) ? payload.auditors : [],
+          auditees: Array.isArray(payload.auditees) ? payload.auditees : [],
+          current: payload.current || null,
+          plantId: payload.plantId ?? null,
+          companyId: payload.companyId ?? null,
+        });
+      } catch (e) {
+        console.error("Failed to load reassign options:", e);
+        setReassignOptions({
+          auditors: [],
+          auditees: [],
+          current: null,
+          plantId: null,
+          companyId: null,
+        });
+      } finally {
+        setLoadingTeamMembers(false);
+      }
+    },
+    [],
+  );
+
   // ── handleViewRequest ────────────────────────────────────────────────
+  // ✅ CHANGED: also load reassign-options so the modal has fresh data
   const handleViewRequest = (request: any) => {
     setSelectedRequest(request);
-    fetchDepartmentTeamMembers(request.department, request);
+    fetchDepartmentTeamMembers(request.department, request); // legacy path (harmless)
+    fetchReassignOptions(request.scheduleId); // new path
   };
 
-  // ── openForumById ────────────────────────────────────────────────────
+  // ── openForumById (unchanged) ────────────────────────────────────────
   const openForumById = (forumId: string) => {
     console.log("📤 [Dashboard] Opening forum by ID:", forumId);
 
@@ -396,12 +482,12 @@ export function useAuditManagerData() {
       const topManagers = allUsersList.filter(
         (u: any) =>
           u.role?.toUpperCase().includes("TOP_MANAGEMENT") &&
-          (!selectedPlant || String(u.plantId) === String(selectedPlant)),
+          (!selectedPlantId || String(u.plantId) === String(selectedPlantId)),
       );
       const auditManagers = allUsersList.filter(
         (u: any) =>
           u.role?.toUpperCase().includes("AUDIT_MANAGER") &&
-          (!selectedPlant || String(u.plantId) === String(selectedPlant)),
+          (!selectedPlantId || String(u.plantId) === String(selectedPlantId)),
       );
 
       const memberEmails: string[] = [];
@@ -417,7 +503,7 @@ export function useAuditManagerData() {
         memberEmails.push(user.email);
       }
 
-      const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+      const resolvedPlantId = selectedPlantId ?? (user as any)?.plantId ?? null;
       const bareGeneralId = forumId.startsWith("AUDIT-")
         ? forumId.replace(/^AUDIT-/, "")
         : resolvedPlantId
@@ -451,7 +537,7 @@ export function useAuditManagerData() {
       const bareId = forumId.startsWith("AUDIT-")
         ? forumId.replace(/^AUDIT-/, "")
         : forumId;
-      const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+      const resolvedPlantId = selectedPlantId ?? (user as any)?.plantId ?? null;
 
       setSelectedAuditForForum({
         id: bareId,
@@ -472,7 +558,7 @@ export function useAuditManagerData() {
       return;
     }
 
-    const resolvedPlantId = selectedPlant ?? (user as any)?.plantId ?? null;
+    const resolvedPlantId = selectedPlantId ?? (user as any)?.plantId ?? null;
 
     if (forumId.startsWith("AUDIT-")) {
       const auditId = forumId.replace("AUDIT-", "");
@@ -518,7 +604,7 @@ export function useAuditManagerData() {
     }
   }, [params?.openForum]);
 
-  // ── chart data memos ─────────────────────────────────────────────────
+  // ── chart data memos (unchanged) ─────────────────────────────────────
   const monthlyTrendData = useMemo(() => {
     const monthNames = [
       "Jan",
@@ -536,7 +622,10 @@ export function useAuditManagerData() {
     ];
     const monthCounts = new Array(12).fill(0);
     schedules
-      .filter((s: any) => !selectedPlant || s.plantId === selectedPlant)
+      .filter(
+        (s: any) =>
+          !selectedPlantId || String(s.plantId) === String(selectedPlantId),
+      )
       .forEach((s: any) => {
         const dateStr = s.auditDate || s.scheduledDate;
         if (dateStr) {
@@ -549,7 +638,7 @@ export function useAuditManagerData() {
       label: name,
       value: monthCounts[idx],
     }));
-  }, [schedules, selectedPlant, selectedYear]);
+  }, [schedules, selectedPlantId, selectedYear]);
 
   const ncrDistributionData = useMemo(() => {
     if (allNcrs.length === 0) return [];
@@ -592,7 +681,6 @@ export function useAuditManagerData() {
       .slice(0, 5);
   }, [allNcrs]);
 
-  // NCR priority data — real values from `allNcrs` (no hardcoded numbers)
   const ncrPriorityData = useMemo(() => {
     if (allNcrs.length === 0) return [];
     const groups = { High: 0, Medium: 0, Low: 0 };
@@ -632,6 +720,19 @@ export function useAuditManagerData() {
     return activities.slice(0, 5);
   }, [pendingRequests, stats]);
 
+  // ✅ NEW: split pending requests vs overdue-without-request
+  const pendingOnly = useMemo(() => pendingRequests, [pendingRequests]);
+
+  const overdueOnly = useMemo(() => {
+    const requestedIds = new Set(
+      pendingRequests.map((r: any) => String(r.scheduleId)),
+    );
+    return overdueSchedules.filter((s: any) => {
+      if (requestedIds.has(String(s.id))) return false;
+      return !s.rescheduleRequested && !s.extensionRequested;
+    });
+  }, [overdueSchedules, pendingRequests]);
+
   return {
     user,
     loading,
@@ -641,7 +742,7 @@ export function useAuditManagerData() {
     selectedYear,
     setSelectedYear,
     availableYears,
-    selectedPlant,
+    selectedPlantId,
     stats,
     schedules,
     allNcrs,
@@ -669,5 +770,12 @@ export function useAuditManagerData() {
     setSelectedAuditForForum,
     selectedRequest,
     setSelectedRequest,
+
+    // ✅ NEW exports
+    overdueSchedules,
+    overdueOnly,
+    pendingOnly,
+    reassignOptions,
+    fetchReassignOptions,
   };
 }
