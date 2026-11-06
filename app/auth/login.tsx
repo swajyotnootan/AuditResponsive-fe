@@ -1591,6 +1591,14 @@ export default function LoginScreen() {
         firstName: user.firstName || user.name?.split(" ")[0] || "",
         lastName: user.lastName || user.name?.split(" ")[1] || "",
         token,
+
+        // ✅ NEW — needed for the plant dropdown in Navbar
+        plantId: user.plantId ?? null,
+        plantName: user.plantName ?? null,
+        plantCode: user.plantCode ?? null,
+        companyId: user.companyId ?? null,
+        companyName: user.companyName ?? null,
+        companyCode: user.companyCode ?? null,
       };
 
       await login(userData);
@@ -1669,6 +1677,14 @@ export default function LoginScreen() {
         firstName: user.firstName || user.name?.split(" ")[0] || "",
         lastName: user.lastName || user.name?.split(" ")[1] || "",
         token,
+
+        // ✅ NEW — needed for the plant dropdown in Navbar
+        plantId: user.plantId ?? null,
+        plantName: user.plantName ?? null,
+        plantCode: user.plantCode ?? null,
+        companyId: user.companyId ?? null,
+        companyName: user.companyName ?? null,
+        companyCode: user.companyCode ?? null,
       };
 
       setConflict(null);
