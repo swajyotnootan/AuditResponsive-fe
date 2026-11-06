@@ -705,10 +705,16 @@ export default function ForumThreadView({
         );
 
         const deliveryStatus = post.deliveryStatus;
-
         const isEdited = post.isEdited === true;
         const updatedAt = post.updatedAt || null;
         const locallyDeleted = deletedPostIdsRef.current.has(String(post.id));
+
+        // ✅ FIX: Try to recover the previously-known state for this post so
+        //          a server response missing broadcast fields doesn't reset them.
+        const previous =
+          (post?.id != null &&
+            posts.find((p) => String(p.id) === String(post.id))) ||
+          null;
 
         return {
           ...post,
@@ -722,10 +728,31 @@ export default function ForumThreadView({
           isEdited,
           updatedAt,
           isDeleted: locallyDeleted || post.isDeleted === true,
+
+          // ✅ FIX: broadcast fields — fall back to previous client state
+          messageType: post.messageType ?? previous?.messageType,
+          title: post.title ?? previous?.title ?? null,
+          broadcastPriority:
+            post.broadcastPriority ?? previous?.broadcastPriority,
+          broadcastPinned: post.broadcastPinned ?? previous?.broadcastPinned,
+          broadcastRequiresAck:
+            post.broadcastRequiresAck ?? previous?.broadcastRequiresAck,
+          broadcastExpiresAt:
+            post.broadcastExpiresAt ?? previous?.broadcastExpiresAt ?? null,
+          broadcastScheduledAt:
+            post.broadcastScheduledAt ?? previous?.broadcastScheduledAt,
+          broadcastRevokedAt:
+            post.broadcastRevokedAt ?? previous?.broadcastRevokedAt,
+          broadcastRevokedReason:
+            post.broadcastRevokedReason ?? previous?.broadcastRevokedReason,
+          broadcastAcknowledgedBy:
+            post.broadcastAcknowledgedBy ??
+            previous?.broadcastAcknowledgedBy ??
+            null,
         };
       });
     },
-    [allUsers, currentUserEmail],
+    [allUsers, currentUserEmail, posts], // ✅ add `posts` to deps
   );
 
   // ========== 1. INITIAL LOAD ==========
@@ -1179,19 +1206,62 @@ export default function ForumThreadView({
       if (res.ok) {
         const savedMsg = await res.json();
 
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === tempId
-              ? {
-                  ...savedMsg,
-                  deliveryStatus: "SENT",
-                  seenBy: savedMsg.seenBy || [userEmail],
-                  deliveredTo: savedMsg.deliveredTo || [userEmail],
-                  createdByName: displayName,
-                }
-              : p,
-          ),
-        );
+        // ✅ FIX #1: advance the poll cursor so the next poll doesn't re-fetch this
+        if (savedMsg?.id != null) {
+          const numericId = Number(savedMsg.id);
+          if (Number.isFinite(numericId) && numericId > newestIdRef.current) {
+            newestIdRef.current = numericId;
+          }
+          lastKnownPostIdsRef.current.add(String(savedMsg.id));
+        }
+
+        // ✅ FIX #2: force-fill every broadcast field so nothing is ever undefined
+        const normalized = {
+          ...savedMsg,
+          deliveryStatus: "SENT" as const,
+          seenBy: savedMsg.seenBy || [userEmail],
+          deliveredTo: savedMsg.deliveredTo || [userEmail],
+          createdByName: displayName,
+
+          // Broadcast fields — ALWAYS populated for broadcast messages
+          messageType:
+            savedMsg.messageType || newPostData.messageType || "TEXT",
+          title: savedMsg.title || newPostData.title || null,
+          broadcastPriority:
+            savedMsg.broadcastPriority ||
+            newPostData.broadcastPriority ||
+            (isBroadcastMsg ? "NORMAL" : undefined),
+          broadcastPinned:
+            savedMsg.broadcastPinned ?? (isBroadcastMsg ? true : undefined),
+          broadcastRequiresAck:
+            savedMsg.broadcastRequiresAck ??
+            (isBroadcastMsg
+              ? (newPostData.broadcastRequiresAck ?? true)
+              : undefined),
+          broadcastExpiresAt:
+            savedMsg.broadcastExpiresAt ??
+            newPostData.broadcastExpiresAt ??
+            null,
+          broadcastAcknowledgedBy:
+            savedMsg.broadcastAcknowledgedBy ||
+            (isBroadcastMsg ? [userEmail] : undefined),
+        };
+
+        setPosts((prev) => prev.map((p) => (p.id === tempId ? normalized : p)));
+
+        // ✅ FIX #3: refresh the session cache so remount sees the same object
+        const cacheKey = String(groupId);
+        const cached = groupPostsCache.get(cacheKey);
+        if (cached) {
+          groupPostsCache.set(
+            cacheKey,
+            cached.map((p) =>
+              String(p.id) === String(savedMsg.id) || p.id === tempId
+                ? normalized
+                : p,
+            ),
+          );
+        }
 
         playNotificationSound("send");
       } else {
@@ -2232,19 +2302,34 @@ export default function ForumThreadView({
   );
 
   const pinnedBroadcasts = useMemo(() => {
+    const now = Date.now();
+
     return visiblePosts
-      .filter(
-        (p) =>
-          p.messageType === "BROADCAST" &&
-          p.broadcastPinned === true &&
-          !p.broadcastRevokedAt &&
-          (!p.broadcastExpiresAt ||
-            new Date(p.broadcastExpiresAt) > new Date()),
-      )
+      .filter((p) => {
+        if (p.messageType !== "BROADCAST") return false;
+
+        // ✅ FIX: accept undefined as "pinned" (backward compat with legacy
+        //    broadcasts created before the pinned flag was sent to the client)
+        if (p.broadcastPinned === false) return false;
+
+        // Revoked → hide
+        if (p.broadcastRevokedAt) return false;
+
+        // ✅ FIX: only treat as expired when we have a REAL, VALID timestamp
+        if (p.broadcastExpiresAt) {
+          const expiresMs = new Date(p.broadcastExpiresAt).getTime();
+          if (Number.isFinite(expiresMs) && expiresMs <= now) {
+            return false;
+          }
+          // If parsing produced NaN, treat as "no expiration" (don't hide)
+        }
+
+        return true;
+      })
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      ); // 👈 SORTS NEWEST FIRST
+      );
   }, [visiblePosts]);
 
   // Clamp index when the list of pinned broadcasts shrinks

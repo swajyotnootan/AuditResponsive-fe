@@ -360,6 +360,29 @@ export const useAuth = (): UseAuthReturn => {
     try {
       console.log("🔴 useAuth - Logging out...");
 
+      // ✅ 1. Get the token BEFORE we delete it
+      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+
+      // ✅ 2. Tell the backend to kill the session
+      if (token) {
+        try {
+          await fetch(`${API_BASE_URL}/api/users/logout`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+          console.log("✅ Backend session revoked");
+        } catch (e) {
+          console.warn(
+            "⚠️ Backend logout failed, but clearing local state anyway:",
+            e,
+          );
+        }
+      }
+
+      // ✅ 3. Now clear the local state
       setUser(null);
       await AsyncStorage.multiRemove([
         AUTH_TOKEN_KEY,

@@ -1425,7 +1425,7 @@ const DailyFeasibilityQueue: React.FC<Props> = ({
       });
       badges.push({
         icon: AlertCircle,
-        label: "Awaiting TM",
+        label: "Awaiting PL",
         bg: COLORS.stateWarningBg,
         bd: COLORS.border,
         tc: COLORS.textMuted,

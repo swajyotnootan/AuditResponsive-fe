@@ -2,28 +2,28 @@
 import { API_BASE_URL } from "@/config/apiConfig";
 import axios from "axios";
 import {
-  AlertCircle,
-  Calendar,
-  Check,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  FileText,
-  UserPlus,
-  X,
+    AlertCircle,
+    Calendar,
+    Check,
+    CheckCircle,
+    ChevronDown,
+    ChevronRight,
+    Clock,
+    FileText,
+    UserPlus,
+    X,
 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  useWindowDimensions,
+    ActivityIndicator,
+    Modal,
+    Platform,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+    useWindowDimensions,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -532,7 +532,7 @@ const FeasibilityConfirmationQueue: React.FC<Props> = ({
       });
       badges.push({
         icon: AlertCircle,
-        label: "Awaiting TM",
+        label: "Awaiting PL",
         bg: COLORS.stateWarningBg,
         bd: COLORS.border,
         tc: COLORS.textMuted,

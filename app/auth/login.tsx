@@ -900,10 +900,22 @@ function ConflictModal({
                 >
                   {d.deviceName || "Unknown device"}
                 </Text>
-                <Text style={{ fontSize: 11, color: "#64748B" }}>
+                <Text
+                  style={{ fontSize: 11, color: "#64748B" }}
+                  numberOfLines={1}
+                  ellipsizeMode="middle"
+                >
                   {d.ipAddress || "—"}
                   {d.loginAt
-                    ? ` · ${new Date(d.loginAt).toLocaleString()}`
+                    ? ` · ${new Date(d.loginAt).toLocaleString("en-IN", {
+                        timeZone: "Asia/Kolkata",
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })} IST`
                     : ""}
                 </Text>
               </View>
